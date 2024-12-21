@@ -1,5 +1,5 @@
 
-# **ASU Discord Research Assistant Bot**
+# **ASU Discord Bot**
 
 A powerful Discord bot designed to assist Arizona State University (ASU) students with streamlined access to resources, including the latest news, events, scholarships, courses, and more. Leveraging cutting-edge technologies, it uses AI-driven techniques to provide accurate, real-time responses to user queries while integrating directly with ASU's online ecosystem.
 
