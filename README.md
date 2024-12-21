@@ -55,8 +55,8 @@ A powerful Discord bot designed to assist Arizona State University (ASU) student
 
 1. **Clone Repository:**  
    ```bash
-   git clone <repository-link>
-   cd <repository-folder>
+   git clone https://github.com/somwrks/SparkyAI.git
+   cd sparkyai
    ```
 
 2. **Set Up Environment:**  
@@ -66,16 +66,15 @@ A powerful Discord bot designed to assist Arizona State University (ASU) student
    ```
 
 3. **Add API Keys:**  
-   Update `config.json` with API keys for Google Search, Discord, and ASU webhooks.
+   Add `config.json` with API keys for Google Search, Discord, and ASU webhooks.
+   Add `clientsecret.json` with for GoogleSheet API.
 
-4. **Run the Bot:**  
+5. **Run the Bot:**  
    Start the bot locally:
    ```bash
    python main.py
    ```
 
-5. **Host on Replit:**  
-   Follow Replit hosting guidelines for deployment.
 
 ---
 
