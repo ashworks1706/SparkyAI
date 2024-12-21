@@ -1,0 +1,5 @@
+/venv
+.vscode
+appConfig.json
+client_secret.json
+train_functions.ipynb
