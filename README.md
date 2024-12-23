@@ -1,161 +1,153 @@
+# ASU Discord Bot
 
-# **ASU Discord Bot**
+A Discord bot designed to assist Arizona State University (ASU) students with access to resources, including news, events, scholarships, courses, and more.
 
-A powerful Discord bot designed to assist Arizona State University (ASU) students with streamlined access to resources, including the latest news, events, scholarships, courses, and more. Leveraging cutting-edge technologies, it uses AI-driven techniques to provide accurate, real-time responses to user queries while integrating directly with ASU's online ecosystem.
+## Key Features
 
----
+The code implements the following key features:
 
-## **Key Features**
+### Web Scraping & Summarization
+
+The `ASUWebScraper` class handles web scraping of ASU pages:
+
+- Uses Selenium for dynamic content and BeautifulSoup for static HTML parsing
+- Implements methods for scraping specific ASU resources like course catalogs, library resources, and job postings
+- Extracts content using both Selenium-based scraping and Jina AI-powered content extraction
+
+The `DataPreprocessor` class handles summarization:
+
+- Cleans and structures scraped text using NLP techniques like tokenization and lemmatization
+- Uses AI agents (likely the Gemini model) to refine and summarize content
+
+### Discord Integration
+
+The `DiscordState` class manages the Discord bot's state and interactions:
+
+- Initializes Discord intents for message content and member access
+- Tracks user information, roles, and channel details
+- Provides methods to update and retrieve bot state
+
+### AI-Driven Information Retrieval
+
+The system uses a Retrieval-Augmented Generation (RAG) architecture:
+
+- The `VectorStore` class manages document storage and retrieval using Qdrant vector database
+- Implements semantic search capabilities using HuggingFace embeddings
+- The `Utils` class contains methods for similarity search and database querying
+
+### Webhooks
+
+The system uses various sets of custom web scraping functions with search query manipulation to fetch most results-
+
+- The `ASUWebScraper` class can be extended to fetch data from different ASU platforms
 
 
-- **Web Scraping & Summarization:** Scrapes relevant ASU web pages, processes data, and provides concise, AI-generated summaries.
-- **Discord Integration:** User-friendly bot interface to answer student queries on various ASU-related topics.
-- **Optimized Search & Retrieval:** Implements advanced RAG (Retrieval-Augmented Generation) techniques for efficient document retrieval and processing.
-- **Custom Workflows:** Provides precise responses in a strict format to ensure clarity and prevent abuse.
-- **AI-Driven Information Retrieval:** Utilizes Retrieval-Augmented Generation (RAG) architecture to combine vector-based database search with LLM responses for accurate and context-aware answers.  
-- **Contextual Summarization:** Employs Gemini and LangChain models for summarizing extensive ASU resources into concise and query-specific formats.  
-- **Web Scraping & Document Ranking:** Integrates advanced scraping techniques with RAPTOR (Relevance-Aware Prioritized Topical Object Ranking) to enhance retrieval accuracy.  
-- **Real-Time AI Interaction:** AI dynamically processes questions and retrieves results based on semantic understanding, leveraging cutting-edge natural language processing.  
-- **Extensive Webhooks:** Dynamic access to the latest ASU clubs, events, news, scholarships, dining options, and shuttle timings.
-- **Analytics Dashboard:** A comprehensive data visualization tool for tracking bot interactions and user activity.
-- **Extensible Design:** Modular implementation to support future features like FaceID verification, action-based responses, and multimedia analysis.
+## Database Integration
 
----
+The ASU Discord Bot utilizes two database systems for different purposes:
 
-## **Technologies Used**
+### Google Sheets Database
 
-- **Programming Languages:** Python, JavaScript
-- **AI & ML Frameworks:** Gemini Vertex AI, LangChain, TensorFlow.  
-- **Vector Search:** Combines RAPTOR and RAG architecture with vector databases for semantic search and ranking.  
-- **Data Handling:** Implements advanced compression techniques for large document processing while preserving query-relevant content.  
-- **Scalable Design:** Ensures seamless integration of AI-driven workflows using modular architectures for future scalability.  
-- **Libraries & Frameworks:** TensorFlow, Firecrawl, Jina AI, Selenium
-- **APIs & Platforms:** Google Search API, Discord API, ASU Webhooks
-- **Database Systems:** Vector DB, Replit-hosted persistent storage
-- **Hosting:** Replit for seamless deployment and accessibility
+The `GoogleSheet` class manages interactions with a Google Sheets database, primarily used for moderator oversight and user tracking.
 
----
+Key features:
+- User Management: Stores and retrieves user information, including Discord IDs, names, and email addresses.
+- Function Call Tracking: Increments counters for various bot function calls, allowing moderators to monitor usage patterns.
+- Data Retrieval: Provides methods to fetch all users or specific user data.
+- Data Updates: Allows updating user-specific information in the spreadsheet.
 
-## **Project Workflow**
+Implementation details:
+- Uses the Google Sheets API for read and write operations.
+- Implements methods like `get_all_users()`, `add_new_user()`, and `update_user_column()`.
+- Provides error handling and logging for database operations.
 
-1. **Keyword Extraction:** AI models extract semantic meanings from user queries.  
-2. **Document Retrieval:** Combines keyword-based search and vector embeddings using a vector database for enhanced contextual matching.  
-3. **RAG Integration:**  
-   - **Retrieval:** Finds and ranks documents using RAPTOR for multi-query synthesis.  
-   - **Augmented Generation:** Merges retrieved content with LLM-generated responses for relevance and detail.  
-4. **Content Summarization:** Summarizes large documents into precise, user-friendly answers using AI models like LangChain and TensorFlow-based LLMs.  
-5. **Discord Response Delivery:** Presents structured results through the bot interface with options for follow-up or refinement.  
-6. **Optimization & Monitoring:** Logs function calls, errors, and warnings while ensuring real-time updates.
+### Firestore Database
 
----
+The `Firestore` class manages interactions with Google's Firestore, used for storing bot-related data and chat histories.
 
-## **Getting Started**
+Key features:
+- Chat History: Stores complete conversation histories between users and the bot.
+- Message Categorization: Organizes messages by different agent types (action, discord, google, live status, search).
+- Real-time Updates: Leverages Firestore's real-time capabilities for instant data synchronization.
 
-### **Installation**
+Implementation details:
+- Initializes a Firestore client using Firebase Admin SDK.
+- Implements methods to update collections, add new messages, and retrieve chat histories.
+- Stores messages with timestamps and user IDs for comprehensive tracking.
 
-1. **Clone Repository:**  
+### Finetune
+
+We are finetuning gemini 1.5 flash model with our custom dataset containing 128,000 examples of different interactions between agents with humans aswell as agents with other agents to increase the accuracy of reasoning aswell as general responses to students:
+
+| **Category**                  | **Description**                             | **Proportion (%)** | **Number of Examples** |
+|--------------------------------|---------------------------------------------|---------------------|-------------------------|
+| **Factual Questions**          | Questions requiring concise, factual answers, such as "What are the library hours?" | 30%                 | 38,400                 |
+| **Action-Based Questions**     | Queries requiring JSON function calls, such as "Find the latest scholarships."      | 25%                 | 32,000                 |
+| **Hybrid Questions**           | Queries needing reasoning + a function call, such as "Can you summarize this and get related events?" | 20%                 | 25,600                 |
+| **Agent Communication Responses** | Multi-agent interaction responses combining reasoning and function calls           | 15%                 | 19,200                 |
+| **Jailbreak Commands**         | Edge-case inputs requiring safe acknowledgment or refusal                            | 10%                 | 12,800                 |
+
+
+### Extensible Design
+
+The modular architecture allows for easy extension:
+
+- Multiple agent classes (e.g., `ActionAgent`, `SearchAgent`, `GoogleAgent`) can be customized for different tasks
+- The `AppConfig` class centralizes configuration management, making it easy to add new features
+- The use of asynchronous programming (async/await) throughout the codebase allows for efficient handling of concurrent operations
+
+
+## Technologies Used
+
+- Python
+- Gemini Vertex AI, LangChain, TensorFlow, Selenium
+- Google Sheets API, Discord API
+- Qdrant Vector DB, Docker, FireStore, Google Cloud Storage, GDE
+
+## Agent Descriptions
+
+
+| Name | Importance | What It Does | Functions |
+|------|------------|--------------|-----------|
+| **Action Agent** | Central coordinator for user interactions | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed. | - `access_search_agent`<br>- `access_discord_agent`<br>- `get_google_results`<br>- `access_live_status_agent`<br>- `get_discord_server_info`<br>- `get_user_profile_details` |
+| **Google Agent** | Specialized search functionality | Performs Google searches for queries; defers to Action Agent for complex queries requiring the Search Agent. | - `google_search_tool` |
+| **Search Agent** | Executes functions for queries from the Action Agent | Executes specific functions to retrieve information based on queries passed by the Action Agent; responds in JSON format. | - `get_latest_club_information`<br>- `get_latest_event_updates`<br>- `get_latest_news_updates`<br>- `get_latest_social_media_updates`<br>- `get_latest_sport_updates`<br>- `get_library_resources`<br>- `get_latest_scholarships`<br>- `get_latest_class_information` |
+| **Live Status Agent** | Manages live status-related queries | Executes live status functions for queries from the Action Agent; responds in JSON format. | - `get_live_library_status`<br>- `get_live_shuttle_status` |
+| **Discord Agent** | Handles Discord-specific functionalities | Executes Discord-related functions for queries from the Action Agent; responds in JSON format. | - `notify_discord_helpers`<br>- `notify_moderators`<br>- `start_recording_discord_call`<br>- `create_discord_forum_post`<br>- `create_discord_announcement`<br>- `create_discord_event`<br>- `create_discord_poll` |
+
+## Getting Started
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/somwrks/SparkyAI.git
    cd sparkyai
    ```
 
-2. **Set Up Environment:**  
-   Install dependencies:
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Add API Keys:**  
-   Add `config.json` with API keys for Google Search, Discord, and ASU webhooks.
-   Add `clientsecret.json` with for GoogleSheet API.
+3. Add API keys:
+   - Create `config.json` with keys for Google Search, Discord, and ASU webhooks.
+   - Add `clientsecret.json` for GoogleSheet API.
 
-5. **Run the Bot:**  
-   Start the bot locally:
+4. Run the bot:
    ```bash
    python main.py
    ```
 
+## Contributing
 
----
+Contributions are welcome! Please open an issue or submit a pull request for any ideas or improvements.
 
-## Roadmap
-
-| Category | Task | Description | Status |
-|----------|------|-------------|--------|
-| Technologies | Setup technologies | Integrate Gemini, LangChain, Google Search API, and Discord API | ✅ Completed |
-| Workflow | Create project workflow diagram | Map out question processing, scraping, and summarization steps | ✅ Completed |
-| Web Scraping | Develop scraping algorithms | Identify keywords, select URLs, and preprocess responses | ✅ Completed |
-| | Use advanced scraping tools | Implement Firecrawl, Jina AI, and Selenium for efficient scraping | ✅ Completed |
-| Model Integration | Experiment with different models | Test and refine LLMs for efficiency and accuracy | ✅ Completed |
-| | Optimize prompt templates | Develop strict, abuse-resistant prompt templates | ✅ Completed |
-| Discord Bot | Setup and host bot | Convert the project into a Discord bot and host it on Replit | ✅ Completed |
-| | Implement Discord parameters | Differentiate bot responses for jobs, scholarships, sports, dining, and more | ✅ Completed |
-| | Add verification and memory features | ASURITE-based verification with FaceID integration | ✅ Completed |
-| Optimizations | Implement generative AI for search queries | Use generative AI like Gemini Vertex for efficient searches | ✅ Completed |
-| | Refine answer formats | Return concise responses in JSON format and improve document metadata handling | ✅ Completed |
-| | Add keyword-based and filter search | Enable efficient keyword and metadata-based document search | ✅ Completed |
-| Data Handling | Update and optimize database | Use proper metadata structures and fetch only useful links | ✅ Completed |
-| | Compress documents for context | Use LLM to compress large documents into question-relevant summaries | ✅ Completed |
-| | Implement RAPTOR ranking | Combine rankings from multiple queries for robust document retrieval | 🔄 In Progress |
-| | Add data analytics board | Track and visualize metrics like response times, query steps, and user activity | 🔄 In Progress |
-| Additional Features | Add ASURITE verification | Implement ASURITE login and dashboard access with FaceID integration | ✅ Completed |
-| | Enhance multimedia capabilities | Enable image-to-text, text-to-image, and audio-to-text capabilities | 🔄 In Progress |
-| | Add advanced response templates | Create reusable response templates for consistent answers | ✅ Completed |
-| | Create voice-call counseling | Enable voice support for personalized responses | ❌ Pending |
-| | Develop math helper | Integrate a module for solving math queries | ❌ Pending |
-| Testing | Final testing and debugging | Test all features, refine functions, and fix bugs | 🔄 In Progress |
-
-### Legend:
-- ✅ Completed: Task is done
-- 🔄 In Progress: Task is being worked on
-- ❌ Pending: Task is yet to be started
-
-### Phase 1: Core Features (Completed)
-- Setup core classes, functions, and workflows
-- Implement scraping, keyword identification, and AI summarization
-- Deploy Discord bot with Replit hosting
-
-### Phase 2: Enhancements (Completed)
-- Integrate webhook functionalities (news, scholarships, sports, dining options)
-- Implement strict prompt templates for LLMs
-- Optimize document meta-data processing with RAPTOR and MIPS
-
-### Phase 3: Advanced Features (In Progress)
-- **AI Agents:** Add functions for announcements, events, polls, and Q&A sessions
-- **Context Management:** Refine memory handling and clear user memory at intervals
-- **Multimedia Capabilities:** Implement image-to-text and text-to-audio conversion
-- **FaceID Verification:** Enable ASURITE-based access with optional facial recognition
-
-### Phase 4: Analytics & Final Testing (In Progress)
-- Create a data analytics dashboard for moderators
-- Test extensively with different LLMs and refine workflows for production readiness
-
-## Post-Funding Goals
-- Implement comprehensive data analytics board on website
-- Create specific agents for jobs, scholarships, library, forums, announcements, clubs, and moderator helper connections
-- Finetune Gemini action model and search model
-- Implement live sports matches webhook
-- Integrate MemGPT for enhanced memory management
-- Develop parking spot information feature
-- Expand multimedia capabilities (image and audio generation/analysis)
-- Conduct final testing and optimization
-
----
-
-## **Contributing**
-
-Contributions are welcome! Please open an issue or submit a pull request for any ideas or improvements. Make sure to follow the project’s coding guidelines and test your changes thoroughly.
-
----
-
-## **License**
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 
----
+## Contact
 
-## **Contact**
+- Author: Ash (Som)
+- Portfolio: [somwrks.com](https://somwrks.com)
+- LinkedIn: [linkedin.com/somwrks](https://linkedin.com/somwrks)
 
-- **Author:** Ash (Som)  
-- **Portfolio:** [somwrks.com](https://somwrks.com)  
-- **LinkedIn:** [linkedin.com/somwrks](https://linkedin.com/somwrks)

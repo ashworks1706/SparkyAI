@@ -2,4 +2,5 @@
 .vscode
 appConfig.json
 client_secret.json
-train_functions.ipynb
+firebase_secret.json
+/logs
