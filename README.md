@@ -1,4 +1,6 @@
-# ASU Discord Bot
+# ASU Discord Bot - (Public)
+
+This repository has been recently made public, the old repository had exposed credential issues.
 
 A Discord bot designed to assist Arizona State University (ASU) students with access to resources, including news, events, scholarships, courses, and more.
 
