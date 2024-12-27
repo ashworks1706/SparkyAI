@@ -90,11 +90,10 @@ We are finetuning gemini 1.5 flash model with our custom dataset containing 128,
 
 | **Category**                  | **Description**                             | **Proportion (%)** | **Number of Examples** |
 |--------------------------------|---------------------------------------------|---------------------|-------------------------|
-| **Factual Questions**          | Questions requiring concise, factual answers, such as "What are the library hours?" | 30%                 | 38,400                 |
-| **Action-Based Questions**     | Queries requiring JSON function calls, such as "Find the latest scholarships."      | 25%                 | 32,000                 |
-| **Hybrid Questions**           | Queries needing reasoning + a function call, such as "Can you summarize this and get related events?" | 20%                 | 25,600                 |
-| **Agent Communication Responses** | Multi-agent interaction responses combining reasoning and function calls           | 15%                 | 19,200                 |
-| **Jailbreak Commands**         | Edge-case inputs requiring safe acknowledgment or refusal                            | 10%                 | 12,800                 |
+| **Factual Questions**          | Questions requiring concise, factual answers, such as "What are the library hours?" | 23.6%                 | 130                 |
+| **Action-Based Questions**     | Queries requiring JSON function calls, such as "Find the latest scholarships."      | 32.7%                 | 180                 |
+| **Hybrid Questions**           | Queries needing reasoning + a function call, such as "Can you summarize this and get related events?" | 32.7%                 | 180                 |
+| **Jailbreak Commands**         | Edge-case inputs requiring safe acknowledgment or refusal                            | 10.9%                 | 60                 |
 
 
 ### Extensible Design
@@ -159,4 +158,7 @@ This project is licensed under the [MIT License](LICENSE).
 - Author: Ash (Som)
 - Portfolio: [somwrks.com](https://somwrks.com)
 - LinkedIn: [linkedin.com/somwrks](https://linkedin.com/somwrks)
+
+- Data Contributor: Karan
+- LinkedIn : [linkedin.com/karanpatelofc](https://www.linkedin.com/in/karanpatelofc/) 
 
