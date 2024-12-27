@@ -86,7 +86,7 @@ Implementation details:
 
 ### Finetune
 
-We are finetuning gemini 1.5 flash model with our custom dataset containing 128,000 examples of different interactions between agents with humans aswell as agents with other agents to increase the accuracy of reasoning aswell as general responses to students:
+We are finetuning gemini 1.5 flash model with our custom dataset containing 560 examples of different interactions between agents with humans aswell as agents with other agents to increase the accuracy of reasoning aswell as general responses to students:
 
 | **Category**                  | **Description**                             | **Proportion (%)** | **Number of Examples** |
 |--------------------------------|---------------------------------------------|---------------------|-------------------------|
