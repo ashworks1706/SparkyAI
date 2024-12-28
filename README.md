@@ -10,6 +10,30 @@ A Discord bot designed to assist Arizona State University (ASU) students with ac
 
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
 
+## Advanced Architecture
+
+SparkyAI leverages a complex architecture to deliver accurate and context-aware responses:
+
+- **Retrieval-Augmented Generation (RAG)**: Combines vector search with large language models for precise information retrieval.
+- **Multi-Agent System**: Utilizes specialized AI agents (Action, Google, Search, Live Status, Discord) for targeted task execution.
+- **Vector Database**: Implements Qdrant for efficient semantic search and document retrieval.
+
+## Advanced Features
+
+- **Maximum Inner Product Search (MIPS)**: Optimized vector similarity search for large-scale datasets.
+- **RAPTOR Retrieval**: Hierarchical document representation for nuanced information retrieval.
+- **Multi-step Reasoning**: Synthesizes information from multiple sources to answer complex queries.
+- **Dynamic Content Extraction**: Combines Selenium-based scraping with AI-powered content refinement.
+- **Automatic Version Control**: Intelligent document updating based on timestamp comparisons.
+- **Custom Embedding Model**: Utilizes the BAAI/bge-large-en-v1.5 model for high-quality text embeddings.
+
+## Performance Optimizations
+
+- **Batch Processing**: Efficient document storage and retrieval in configurable batches.
+- **Caching Mechanisms**: Implements strategic caching for frequently accessed data.
+- **Asynchronous Operations**: Utilizes asyncio for non-blocking I/O operations.
+- **Retry Mechanisms**: Robust error handling with configurable retry attempts for critical operations.
+
 
 ## Key Features
 
@@ -107,10 +131,16 @@ The modular architecture allows for easy extension:
 
 ## Technologies Used
 
-- Python
-- Gemini Vertex AI, LangChain, TensorFlow, Selenium
-- Google Sheets API, Discord API
-- Qdrant Vector DB, Docker, FireStore, Google Cloud Storage, GDE
+- **AI/ML**: Gemini Vertex AI, LangChain, TensorFlow
+- **NLP**: Hugging Face Transformers, NLTK
+- **Embeddings**: BAAI/bge-large-en-v1.5 model
+- **Vector Search**: Qdrant, FAISS
+- **Web Scraping**: Selenium, BeautifulSoup4
+- **APIs**: Discord API, Google Sheets API, Google Cloud Storage
+- **Databases**: Firestore, Google Sheets (for moderation)
+- **Asynchronous Programming**: asyncio
+- **Containerization**: Docker
+
 
 ## Agent Descriptions
 
