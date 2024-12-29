@@ -25,6 +25,9 @@ SparkyAI leverages a complex architecture to deliver accurate and context-aware 
 - **Multi-step Reasoning**: Synthesizes information from multiple sources to answer complex queries.
 - **Dynamic Content Extraction**: Combines Selenium-based scraping with AI-powered content refinement.
 - **Automatic Version Control**: Intelligent document updating based on timestamp comparisons.
+- **Cross-Encoder Reranking**: Implements a cross-encoder model to rerank initial retrieval results, improving the relevance of top results.
+- **HNSWlib Integration**: Incorporates a graph-based approach for efficient in-memory searches, complementing existing vector search methods.
+- **ScaNN Integration**: Utilizes Google's ScaNN library for scalable and efficient handling of large-scale, high-dimensional vector datasets.
 - **Custom Embedding Model**: Utilizes the BAAI/bge-large-en-v1.5 model for high-quality text embeddings.
 
 ## Performance Optimizations
@@ -33,6 +36,8 @@ SparkyAI leverages a complex architecture to deliver accurate and context-aware 
 - **Caching Mechanisms**: Implements strategic caching for frequently accessed data.
 - **Asynchronous Operations**: Utilizes asyncio for non-blocking I/O operations.
 - **Retry Mechanisms**: Robust error handling with configurable retry attempts for critical operations.
+- **Multi-Method Search**: Combines RAPTOR, similarity search, MIPS, and ScaNN for comprehensive and efficient information retrieval.
+- **Result Deduplication**: Implements intelligent merging and deduplication of search results from multiple methods.
 
 
 ## Key Features
@@ -68,6 +73,14 @@ The system uses a Retrieval-Augmented Generation (RAG) architecture:
 - Implements semantic search capabilities using HuggingFace embeddings
 - The `Utils` class contains methods for similarity search and database querying
 
+### Utils Class Enhancements
+
+- **Multi-Method Search**: Orchestrates searches across RAPTOR, similarity, MIPS, and ScaNN methods.
+- **Result Merging**: Intelligently combines and deduplicates results from various search methods.
+- **Ground Source Management**: Tracks and manages unique source URLs for comprehensive information retrieval.
+- **Caching**: Implements query and document ID caching for improved performance.
+
+
 ### Webhooks
 
 The system uses various sets of custom web scraping functions with search query manipulation to fetch most results-
@@ -78,6 +91,13 @@ The system uses various sets of custom web scraping functions with search query 
 ## Database Integration
 
 The ASU Discord Bot utilizes two database systems for different purposes:
+
+### Vector Store Operations
+
+- **Qdrant Integration**: Utilizes Qdrant for efficient vector storage and retrieval.
+- **MIPS Search**: Implements Maximum Inner Product Search for optimized similarity queries.
+- **HNSWlib Indexing**: Builds and uses HNSW indexes for fast approximate nearest neighbor search.
+- **Automatic Index Building**: Dynamically constructs search indexes for improved query performance.
 
 ### Google Sheets Database
 
