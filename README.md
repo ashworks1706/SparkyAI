@@ -171,7 +171,7 @@ The modular architecture allows for easy extension:
 | **Google Agent** | Specialized search functionality | Performs Google searches for queries; defers to Action Agent for complex queries requiring the Search Agent. | - `google_search_tool` |
 | **Search Agent** | Executes functions for queries from the Action Agent | Executes specific functions to retrieve information based on queries passed by the Action Agent; responds in JSON format. | - `get_latest_club_information`<br>- `get_latest_event_updates`<br>- `get_latest_news_updates`<br>- `get_latest_social_media_updates`<br>- `get_latest_sport_updates`<br>- `get_library_resources`<br>- `get_latest_scholarships`<br>- `get_latest_class_information` |
 | **Live Status Agent** | Manages live status-related queries | Executes live status functions for queries from the Action Agent; responds in JSON format. | - `get_live_library_status`<br>- `get_live_shuttle_status` |
-| **Discord Agent** | Handles Discord-specific functionalities | Executes Discord-related functions for queries from the Action Agent; responds in JSON format. | - `notify_discord_helpers`<br>- `notify_moderators`<br>- `start_recording_discord_call`<br>- `create_discord_forum_post`<br>- `create_discord_announcement`<br>- `create_discord_event`<br>- `create_discord_poll` |
+| **Discord Agent** | Handles Discord-specific functionalities | Executes Discord-related functions for queries from the Action Agent; responds in JSON format. | - `notify_discord_helpers`<br>- `notify_moderators` <br>- `create_discord_forum_post`<br>- `create_discord_announcement`<br>- `create_discord_event`<br>- `create_discord_poll` |
 
 ## Getting Started
 
