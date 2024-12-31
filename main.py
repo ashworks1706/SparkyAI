@@ -156,7 +156,7 @@ from unidecode import unidecode  # For Unicode to ASCII conversion
 
 # Lang Chain Imports
 from langchain.text_splitter import RecursiveCharacterTextSplitter 
-from langchain_qdrant import Qdrant, QdrantVectorStore 
+from langchain_qdrant import  QdrantVectorStore 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
@@ -652,7 +652,28 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error during MIPS search: {str(e)}")
             return []
+        
+    def get_all_documents(self):
+        # Implement method to retrieve all documents from Qdrant
+        results = self.client.scroll(
+            collection_name=self.collection_name,
+            limit=10000  # Adjust as needed
+        )
+        return [Document(page_content=item.payload["page_content"], metadata=item.payload["metadata"]) for item in results[0]]
 
+    def get_embeddings(self, documents):
+        return [self.embedding_model.embed_query(self.get_document_content(doc)) for doc in documents]
+
+    def get_document_content(self, doc):
+        if isinstance(doc, str):
+            try:
+                doc_dict = json.loads(doc)
+                return doc_dict.get('page_content', '')
+            except json.JSONDecodeError:
+                return doc
+        else:
+            return getattr(doc, 'page_content', str(doc))
+        
     def build_hnsw_index(self):
         all_docs = self.get_all_documents()
         all_embeddings = self.get_embeddings(all_docs)
@@ -810,6 +831,7 @@ class VectorStore:
             metadata_payload_key="metadata",
             distance=Distance.COSINE
         )
+        
     
     def get_vector_store(self):
         return self.vector_store
@@ -856,29 +878,11 @@ class VectorStore:
             logger.error(f"Document evaluation error: {str(e)}")
             raise
     
-    def get_all_documents(self):
-        # Implement method to retrieve all documents from Qdrant
-        results = self.client.scroll(
-            collection_name=self.collection_name,
-            limit=10000  # Adjust as needed
-        )
-        return [Document(page_content=item.payload["page_content"], metadata=item.payload["metadata"]) for item in results[0]]
-
-    def get_embeddings(self, documents):
-        return [self.embedding_model.embed_query(self.get_document_content(doc)) for doc in documents]
-
-    def get_document_content(self, doc):
-        if isinstance(doc, str):
-            try:
-                doc_dict = json.loads(doc)
-                return doc_dict.get('page_content', '')
-            except json.JSONDecodeError:
-                return doc
-        else:
-            return getattr(doc, 'page_content', str(doc))
+    
 
 # %%
 asu_store = VectorStore(force_recreate=False)
+
 
 # %% [markdown]
 # ## Raptor Cluster Implementation
@@ -946,24 +950,21 @@ asu_store = VectorStore(force_recreate=False)
 # 
 
 # %%
-import numpy as np
-from sklearn.cluster import KMeans
-from sentence_transformers import CrossEncoder
-import logging
-import json
 
-logger = logging.getLogger(__name__)
 
 class RaptorRetriever:
-    def __init__(self, vector_store, num_levels=3, branching_factor=5):
-        self.vector_store = vector_store
+    def __init__(self, vector_store=None, num_levels=3, branching_factor=5):
+        self.vector_store = asu_store
         self.num_levels = num_levels
         self.branching_factor = branching_factor
         self.tree = self.build_raptor_tree()
+        logger.info("RAPTOR Retriever initialized.")
 
     def build_raptor_tree(self):
         tree = {}
-        all_docs = self.vector_store.get_all_documents()
+        logger.info("Building RAPTOR tree...")
+        all_docs = asu_store.get_all_documents()
+        logger.info(f"Retrieved {len(all_docs)} documents for tree construction")
         all_embeddings = self.vector_store.get_embeddings(all_docs)
 
         if not all_embeddings:
@@ -1059,10 +1060,6 @@ class RaptorRetriever:
                 return doc
         else:
             return getattr(doc, 'page_content', str(doc))
-
-
-# %%
-raptor_retriever = RaptorRetriever(asu_store)
 
 
 # %% [markdown]
@@ -1329,7 +1326,7 @@ class Utils:
             self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
             self.cached_queries=[]
             self.vector_store = asu_store.get_vector_store()
-            self.raptor_retriever = RaptorRetriever(self.vector_store)
+            self.raptor_retriever = RaptorRetriever()
             logger.info("\nUtils instance initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Utils: {e}")
