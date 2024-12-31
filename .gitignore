@@ -4,5 +4,6 @@ appConfig.json
 client_secret.json
 firebase_secret.json
 /logs
+
 /sparky_env
 /.venv
