@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
-
+# %% [markdown]
 # # Sparky Discord Bot: AI-Powered ASU Information Assistant
 # 
 # ## Key Features
@@ -10,9 +8,10 @@
 # - **Dynamic User Interaction**: Provides context-aware responses with citation tracking
 # - **Optimized Retrieval**: Implements RAPTOR, MIPS, and ScaNN for efficient information retrieval
 # - **Cross-Encoder Reranking**: Enhances result relevance through advanced reranking techniques
-# 
+# a
 # 
 
+# %% [markdown]
 # ## Description
 # 
 # This code implements a sophisticated Discord bot designed to assist Arizona State University (ASU) students. The bot utilizes Vertex AI (Gemini) agents for intelligent query processing and leverages advanced technologies like Retrieval-Augmented Generation (RAG) for accurate information retrieval. It integrates with Hugging Face Hub for pre-trained models and embeddings, and uses Qdrant vector database for efficient semantic search.
@@ -24,6 +23,7 @@
 # Additionally, it incorporates analytics capabilities for tracking bot interactions and user activity, making it a comprehensive solution for ASU-related inquiries within a Discord environment[1].
 # 
 
+# %% [markdown]
 # ## Components
 # - **AI Agent**: Gemini-powered intelligent response generation
 # - **Vector Database**: Qdrant for efficient semantic search
@@ -33,11 +33,10 @@
 # - **Reranking**: Cross-encoder model for improved result relevance
 # 
 
+# %% [markdown]
 # ## Downloading dependencies
 
-# In[39]:
-
-
+# %%
 # # Upgrade pip to ensure we have the latest version for package management
 # %pip install --upgrade pip
 
@@ -117,12 +116,11 @@
 # %pip install nltk
 
 
+# %% [markdown]
 # ## Importing Libraries
 # 
 
-# In[40]:
-
-
+# %%
 # Standard library imports
 import os  # For operating system related operations
 import json  # For JSON data handling
@@ -215,14 +213,13 @@ from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 
 
 
+# %% [markdown]
 # ## Setting up Environment 
 # 
 # This AppConfig class is the heart of our configuration management. It's designed to load and provide easy access to various configuration settings that our bot needs. We're using a JSON file (appConfig.json by default) to store these settings, which makes it easy to modify without changing the code.
 # 
 
-# In[41]:
-
-
+# %%
 class AppConfig:
     def __init__(self, config_file='appConfig.json'):
         with open(config_file, 'r') as file:
@@ -324,6 +321,7 @@ class AppConfig:
         return self.gmail_pass
 
 
+# %% [markdown]
 # ```python
 #         self.action_agent_prompt = config_data.get('ACTION_AGENT_PROMPT', '')
 #         self.action_agent_instruction = config_data.get('ACTION_AGENT_INSTRUCTION', '')
@@ -343,6 +341,7 @@ class AppConfig:
 # 
 # These getter methods provide a clean interface to access our configuration values. They're particularly useful for values that might change during runtime or need some processing before being used.
 
+# %% [markdown]
 # 
 # ```python
 #         os.environ['NUMEXPR_MAX_THREADS'] = config_data.get('NUMEXPR_MAX_THREADS', '16')
@@ -370,19 +369,15 @@ class AppConfig:
 # Here, we're creating a global instance of our `AppConfig` class. This allows us to access our configuration from anywhere in the code simply by importing `app_config`.
 # 
 
-# In[42]:
-
-
+# %%
 app_config = AppConfig()
 
-
+# %% [markdown]
 # Finally, we set up logging. This is crucial for debugging and monitoring our bot's behavior. We're logging to both a file and the console, which helps in development and production environments. The `tracemalloc.start()` line enables memory allocation tracking, which can be super helpful for optimizing our bot's performance.
 # 
 # This configuration setup allows us to easily manage and update various settings, API keys, and agent behaviors without diving into the core code. It's a crucial part of making our bot flexible and maintainable.
 
-# In[43]:
-
-
+# %%
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -396,8 +391,10 @@ logger = logging.getLogger(__name__)
 
 
 
+# %% [markdown]
 # #### Discord State Variables
 
+# %% [markdown]
 # This setup allows us to maintain a consistent state for our Discord bot and provides easy access to our AI model throughout the application. It's designed to be flexible and easy to manage, which is crucial for a complex bot like ours that interacts with both Discord and AI services.
 # 
 # ```python
@@ -431,7 +428,7 @@ logger = logging.getLogger(__name__)
 # 
 # 
 
-# In[44]:
+# %%
 
 
 class DiscordState:
@@ -468,6 +465,7 @@ class DiscordState:
         return "\n".join([f"{attr}: {getattr(self, attr)}" for attr in vars(self) if not attr.startswith('__')])
 
 
+# %% [markdown]
 # ```python
 #     def get(self, attr):
 #         if hasattr(self, attr):
@@ -485,6 +483,7 @@ class DiscordState:
 # 
 # This `__str__` method gives us a nice string representation of our Discord state, which is super helpful for debugging and logging.
 
+# %% [markdown]
 # 
 # 
 # ```python
@@ -493,14 +492,13 @@ class DiscordState:
 # 
 # Here, we're creating a global instance of our `DiscordState`. This allows us to access and update the Discord state from anywhere in our code.
 
-# In[45]:
-
-
+# %%
 discord_state = DiscordState()
 
-
+# %% [markdown]
 # #### Model and Database Global Variables
 
+# %% [markdown]
 # 
 # Now, let's look at the model initialization:
 # 
@@ -513,20 +511,20 @@ discord_state = DiscordState()
 # 3. Finally, we log a success message to confirm that our global variables for the model and database (if applicable) have been initialized correctly.
 # 
 
-# In[46]:
-
+# %%
 
 genai.configure(api_key=app_config.get_api_key())
 dir_Model = genai.GenerativeModel('gemini-1.5-flash')
 
 logger.info("\nSuccessfully initialized global variables for model and database")
 
-
+# %% [markdown]
 # ## Qdrant Vector Storage
 # 
 # 
 # This class is designed for efficient vector storage and retrieval, with features like automatic version control, duplicate handling, and optimized semantic search capabilities. It's built to be robust and performant, suitable for large-scale document processing and storage operations. The addition of MIPS search and HNSWlib integration further enhances its search capabilities and performance for real-time applications.
 
+# %% [markdown]
 # ### Initialization
 # - The `__init__` method sets up the vector store with configurable parameters like host, port, collection name, and embedding model.
 # - It initializes connections to Qdrant and sets up the embedding model.
@@ -573,7 +571,8 @@ logger.info("\nSuccessfully initialized global variables for model and database"
 # - The `get_embeddings` method generates embeddings for given documents
 # 
 
-# In[47]:
+# %%
+
 
 
 class VectorStore:
@@ -878,17 +877,15 @@ class VectorStore:
         else:
             return getattr(doc, 'page_content', str(doc))
 
-
-# In[48]:
-
-
+# %%
 asu_store = VectorStore(force_recreate=False)
 
-
+# %% [markdown]
 # ## Raptor Cluster Implementation
 # 
 # The `RaptorRetriever` class implements a hierarchical clustering approach for efficient document retrieval. Here's a detailed explanation of its implementation:
 
+# %% [markdown]
 # 
 # 
 # ### Initialization
@@ -948,9 +945,7 @@ asu_store = VectorStore(force_recreate=False)
 # This implementation combines hierarchical clustering for efficient search space reduction with cross-encoder reranking for improved result relevance, making it suitable for large-scale document retrieval tasks.
 # 
 
-# In[49]:
-
-
+# %%
 import numpy as np
 from sklearn.cluster import KMeans
 from sentence_transformers import CrossEncoder
@@ -1066,20 +1061,17 @@ class RaptorRetriever:
             return getattr(doc, 'page_content', str(doc))
 
 
-# In[50]:
-
-
+# %%
 raptor_retriever = RaptorRetriever(asu_store)
 
 
+# %% [markdown]
 # ## Google Sheet Database
 # 
 # This class, `GoogleSheet`, is designed to manage google sheet database storage operations using Google API, with enhanced logging and performance features. 
 # 
 
-# In[51]:
-
-
+# %%
 class UpdateTask:
     def __init__(self, user_id: str, column: str, value: Any):
         self.user_id = user_id
@@ -1213,21 +1205,19 @@ class GoogleSheet:
             self.logger.error(f"Error adding/updating user: {str(e)}")
 
 
+# %% [markdown]
 # ### Initializing Global Instance
 
-# In[52]:
-
-
+# %%
 google_sheet = GoogleSheet('client_secret.json', app_config.get_spreadsheet_id())
 
-
+# %% [markdown]
 # ## Firestore Chat Database
 
+# %% [markdown]
 # We're using firestore to store chats from user's in different channels of servers and direct messages
 
-# In[53]:
-
-
+# %%
 class Firestore:
     def __init__(self):
         if not firebase_admin._apps:
@@ -1272,18 +1262,18 @@ class Firestore:
         return doc_ref.id  # Return the document ID for reference
 
 
+# %% [markdown]
 # ### Creating Global Instance
 
-# In[54]:
-
-
+# %%
 firestore = Firestore()
 
-
+# %% [markdown]
 # ## Utils
 # 
 # This `Utils` class is designed to manage various utility functions for an AI assistant, particularly focusing on task tracking, animation handling, and search operations.
 
+# %% [markdown]
 # 
 # ### Initialization
 # - The `__init__` method initializes task tracking, content management, and connections to the vector store and RaptorRetriever.
@@ -1325,9 +1315,7 @@ firestore = Firestore()
 # This class is designed for efficient task management, multi-method search operations, and user interaction in an AI assistant context. It provides robust error handling, detailed logging, and flexible search capabilities, making it suitable for complex, interactive AI applications in the ASU Discord bot environment.
 # 
 
-# In[55]:
-
-
+# %%
 class Utils:
     def __init__(self):
         """Initialize the Utils class with task tracking and logging."""
@@ -1635,17 +1623,15 @@ class Utils:
         self.ground_sources = []
         return True
 
-
-# In[56]:
-
-
+# %%
 utils = Utils()
 
-
+# %% [markdown]
 # ## Data Preprocessor 
 # 
 # This `DataPreprocessor` is designed for efficient, context-aware document processing, making it ideal for RAG (Retrieval-Augmented Generation) applications. It ensures clean, structured text output with comprehensive metadata, enhancing downstream NLP tasks.
 
+# %% [markdown]
 # 
 # 
 # 
@@ -1680,8 +1666,7 @@ utils = Utils()
 # 
 # 
 
-# In[57]:
-
+# %%
 
 class DataPreprocessor:
     def __init__(self, 
@@ -1849,20 +1834,19 @@ class DataPreprocessor:
 
         return [fallback_doc]
 
-
-# In[58]:
-
-
+# %%
 asu_data_processor = DataPreprocessor()
 
 
 
+# %% [markdown]
 # ## Web Scraper
 # 
 # This `ASUWebScraper` is designed to efficiently retrieve and process information from various ASU-related web sources, providing a comprehensive data collection tool for the ASU Discord Research Assistant Bot.
 # 
 # 
 
+# %% [markdown]
 # ### Initialization
 # - The `__init__` method sets up the scraper with various configurations:
 #   - Initializes a Discord client for potential integration
@@ -1902,9 +1886,7 @@ asu_data_processor = DataPreprocessor()
 # 
 # 
 
-# In[59]:
-
-
+# %%
 class ASUWebScraper:
     def __init__(self):
         self.discord_client = discord_state.get('discord_client')
@@ -3491,22 +3473,21 @@ class ASUWebScraper:
             logger.error(f"Error in search: {str(e)}")
             return []
 
-
+# %% [markdown]
 # ### Global Instance
 
-# In[60]:
-
-
+# %%
 asu_scraper = ASUWebScraper()
-await asu_scraper.__login__(app_config.get_handshake_user(),app_config.get_handshake_pass() )
+
 
 logger.info("\nInitialized ASUWebScraper")
 
-
+# %% [markdown]
 # ## Setting up Gemini Agents
 # 
 # This section outlines the setup for Gemini Agents, focusing on defining function parameters for tool functions and establishing a global instance for action commands.
 
+# %% [markdown]
 # 
 # 
 # ### Types of Function Parameters
@@ -3560,6 +3541,7 @@ logger.info("\nInitialized ASUWebScraper")
 # 
 # 
 
+# %% [markdown]
 # when tool function parameter is a string - 
 # 
 # ```
@@ -3600,27 +3582,27 @@ logger.info("\nInitialized ASUWebScraper")
 # )
 # ```
 
+# %% [markdown]
 # ### Global Action Command Instance
 # 
 # To maintain action commands across different agents:
 # 
 # 
 
-# In[61]:
-
-
+# %%
 global action_command
 action_command = None
 
 
 logger.info("\nInitialized ActionCommands")
 
-
+# %% [markdown]
 # ### Data Model
 # 
 # This `DataModel` class serves as a crucial component for enhancing the quality and structure of text data, particularly useful in the context of the ASU Discord Research Assistant Bot for refining search results and improving information presentation.
 # 
 
+# %% [markdown]
 # #### Initialization
 # - The class is initialized with an optional `model` parameter, which is expected to be an instance of Google's Gemini model.
 # 
@@ -3650,9 +3632,7 @@ logger.info("\nInitialized ActionCommands")
 # 
 # 
 
-# In[62]:
-
-
+# %%
 class DataModel:
     def __init__(self, model=None):
         self.model = model
@@ -3702,21 +3682,21 @@ class DataModel:
             logger.error(f"Unexpected error parsing response: {str(e)}")
             return {'title': '', 'category': ''}
 
-
+# %% [markdown]
 # #### Global Instance 
 
-# In[63]:
-
-
+# %%
 asu_data_agent = DataModel(dir_Model)
 
 logger.info("\nInitialized DataModel")
 
 
+# %% [markdown]
 # ### Live_Status Model
 # 
 # The `Live_Status_Model` class is designed to handle real-time status queries for ASU services, particularly focusing on library and shuttle statuses. 
 
+# %% [markdown]
 # #### Initialization
 # - Initializes with a model (`live_status_model`), functions (`Live_Status_Model_Functions`), and conversation tracking.
 # - Implements rate limiting and request counting.
@@ -3745,9 +3725,7 @@ logger.info("\nInitialized DataModel")
 # 
 # 
 
-# In[64]:
-
-
+# %%
 class Live_Status_Model_Functions:
     def __init__(self):
         self.visited_urls = set()
@@ -3834,12 +3812,10 @@ class Live_Status_Model_Functions:
         except Exception as e:
             return f"Error performing shuttle search: {str(e)}"
 
-
+# %% [markdown]
 # #### Initializing Functions
 
-# In[65]:
-
-
+# %%
 class Live_Status_Model:
     
     def __init__(self):
@@ -3954,12 +3930,10 @@ class Live_Status_Model:
             return "I apologize, but I couldn't generate a response at this time. Please try again."
         
 
-
+# %% [markdown]
 # #### Setting up Model 
 
-# In[66]:
-
-
+# %%
 live_status_model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     generation_config={
@@ -4051,20 +4025,20 @@ live_status_model = genai.GenerativeModel(
 
 
 
+# %% [markdown]
 # #### Global Instance 
 
-# In[67]:
-
-
+# %%
 asu_live_status_agent = Live_Status_Model()
 logger.info("\nInitialized LiveStatusAgent")
 
-
+# %% [markdown]
 # ### Search Model
 # 
 # The `SearchModel` class is designed to handle complex search operations using Google's Generative AI model. 
 # 
 
+# %% [markdown]
 # 
 # #### Initialization
 # - Initializes with configurable rate limiting parameters:
@@ -4096,11 +4070,10 @@ logger.info("\nInitialized LiveStatusAgent")
 # 
 # 
 
+# %% [markdown]
 # #### Setting up Model functions
 
-# In[68]:
-
-
+# %%
 class Search_Model_Functions:
     def __init__(self):
         self.visited_urls = set()
@@ -4696,12 +4669,10 @@ class Search_Model_Functions:
 
         return await utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
 
-
+# %% [markdown]
 # #### Initializing Functions
 
-# In[69]:
-
-
+# %%
 class SearchModel:
     
     def __init__(self, 
@@ -4880,12 +4851,10 @@ class SearchModel:
             return "I'm experiencing technical difficulties. Please try again later."
         
 
-
+# %% [markdown]
 # #### Setting up Model 
 
-# In[70]:
-
-
+# %%
 search_model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     generation_config={
@@ -5351,19 +5320,19 @@ search_model = genai.GenerativeModel(
 
 
 
+# %% [markdown]
 # #### Global Instance 
 
-# In[71]:
-
-
+# %%
 asu_search_agent = SearchModel()
 logger.info("\nInitialized SearchModel Instance")
 
-
+# %% [markdown]
 # ### Discord Model
 # 
 # The `DiscordModel` class is designed to handle Discord-specific interactions and commands using Google's Generative AI model. 
 
+# %% [markdown]
 # 
 # 
 # #### Initialization
@@ -5404,11 +5373,10 @@ logger.info("\nInitialized SearchModel Instance")
 # 
 # 
 
+# %% [markdown]
 # #### Setting up Model functions
 
-# In[72]:
-
-
+# %%
 class Discord_Model_Functions:
     def __init__(self):
         self.discord_client = discord_state.get('discord_client')
@@ -5783,12 +5751,10 @@ class Discord_Model_Functions:
             logger.error(f"Error creating poll: {str(e)}")
             return f"An unexpected error occurred while creating the poll: {str(e)}"
 
-
+# %% [markdown]
 # #### Initializing functions
 
-# In[73]:
-
-
+# %%
 class DiscordModel:
     
     def __init__(self):
@@ -5899,10 +5865,10 @@ class DiscordModel:
             return "I apologize, but I couldn't generate a response at this time. Please try again."
         
 
-
+# %% [markdown]
 # #### Setting up the model 
 
-# In[74]:
+# %%
 
 
 discord_model = genai.GenerativeModel(
@@ -6130,20 +6096,20 @@ system_instruction = f""" {app_config.get_discord_agent_instruction()}
 )
 
 
+# %% [markdown]
 # #### global Instance
 
-# In[75]:
-
-
+# %%
 asu_discord_agent = DiscordModel()
 logger.info("\nInitailized DIscord Model Instance")
 
-
+# %% [markdown]
 # ### Action Model
 # 
 # This `ActionModel` serves as a central component for determining and executing appropriate actions based on user queries, integrating various functions and agents to provide comprehensive responses in the ASU Discord Research Assistant Bot.
 # 
 
+# %% [markdown]
 # #### Initialization
 # - Initializes with a model (`action_model`), functions (`ActionModelFunctions`), and conversation tracking.
 # - Implements rate limiting and request counting.
@@ -6171,11 +6137,10 @@ logger.info("\nInitailized DIscord Model Instance")
 # 
 # 
 
+# %% [markdown]
 # #### Setting up Model Functions
 
-# In[76]:
-
-
+# %%
 class Action_Model_Functions:
     
     def __init__(self):
@@ -6416,12 +6381,10 @@ class Action_Model_Functions:
             logger.info(f"Google Search Exception {e}")
             return responses 
 
-
+# %% [markdown]
 # #### Initializing Functions
 
-# In[77]:
-
-
+# %%
 class ActionModel:
     
     def __init__(self):
@@ -6518,12 +6481,10 @@ class ActionModel:
             logger.error(f"Error in determine_action: {e}")
             return ["I'm sorry, I couldn't generate a response. Please try again."]
 
-
+# %% [markdown]
 # #### Setting up the model
 
-# In[78]:
-
-
+# %%
 action_model = genai.GenerativeModel(
     
     model_name="gemini-1.5-flash",
@@ -6701,20 +6662,20 @@ action_model = genai.GenerativeModel(
 )
 
 
+# %% [markdown]
 # #### Global Instance 
 
-# In[79]:
-
-
+# %%
 asu_action_agent = ActionModel()
 logger.info("\nInitialized ActionAgent Global Instance")
 
-
+# %% [markdown]
 # ## RAG Pipeline
 # 
 # This `RAGPipeline` class serves as a streamlined interface for processing user queries, leveraging the action agent for determining appropriate responses and implementing robust error handling for reliable operation in the ASU Discord Research Assistant Bot.
 # 
 
+# %% [markdown]
 # 
 # 
 # ### Initialization
@@ -6743,8 +6704,7 @@ logger.info("\nInitialized ActionAgent Global Instance")
 # 
 # 
 
-# In[80]:
-
+# %%
 
 class RAGPipeline:                
     async def process_question(self,question: str) -> str:
@@ -6756,19 +6716,17 @@ class RAGPipeline:
             logger.error(f"RAG PIPELINE : Error processing question: {str(e)}")
             raise
 
-
+# %% [markdown]
 # #### Global Instance 
 
-# In[81]:
-
-
+# %%
 asu_rag =  RAGPipeline()
 
 logger.info("\n----------------------------------------------------------------")
 logger.info("\nASU RAG INITIALIZED SUCCESSFULLY")
 logger.info("\n---------------------------------------------------------------")
 
-
+# %% [markdown]
 # The `ASUDiscordBot` class provides Discord integration:
 # - Handles command registration and event management
 # - Implements channel validation and question processing
@@ -6777,6 +6735,7 @@ logger.info("\n---------------------------------------------------------------")
 # - Includes configuration options for customization
 # 
 
+# %% [markdown]
 # ## Verification System
 # 
 # The verification system consists of three main components: VerifyButton, VerificationModal, and OTPVerificationModal. Here's an overview of each:
@@ -6786,8 +6745,7 @@ logger.info("\n---------------------------------------------------------------")
 # 
 # 
 
-# In[82]:
-
+# %%
 
 class VerifyButton(discord.ui.Button):
     def __init__(self):
@@ -6796,7 +6754,7 @@ class VerifyButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_modal(VerificationModal())
 
-
+# %% [markdown]
 # ### VerificationModal
 # 
 # This class extends `discord.ui.Modal` and handles the initial step of the verification process.
@@ -6804,15 +6762,14 @@ class VerifyButton(discord.ui.Button):
 # 
 # 
 
+# %% [markdown]
 # 
 # - Prompts users to enter their ASU email
 # - Validates the email format
 # - Generates and sends a one-time password (OTP) to the provided email
 # - Creates a button for users to proceed to OTP verification
 
-# In[83]:
-
-
+# %%
 class VerificationModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="ASU Email Verification")
@@ -6864,22 +6821,21 @@ class VerificationModal(discord.ui.Modal):
             server.sendmail(sender_email, email, message.as_string())
           
 
-
+# %% [markdown]
 # ### OTPVerificationModal
 # 
 # This class extends `discord.ui.Modal` and handles the final step of the verification process.
 # 
 # 
 
+# %% [markdown]
 # 
 # - Prompts users to enter the OTP sent to their email
 # - Verifies the entered OTP
 # - Assigns the "verified" role to the user upon successful verification
 # - Updates the Google Sheet with user information
 
-# In[84]:
-
-
+# %%
 class OTPVerificationModal(discord.ui.Modal):
     def __init__(self, correct_otp, email,spreadsheet_id,creds,service):
         super().__init__(title="Enter OTP")
@@ -6913,16 +6869,19 @@ class OTPVerificationModal(discord.ui.Modal):
     
 
 
+# %% [markdown]
 # ## ASUDiscordBot Class
 # 
 # This class serves as the main interface between Discord and the bot's backend systems, managing user interactions, command processing, and response delivery.
 # 
 
+# %% [markdown]
 # #### BotConfig Class
 # 
 # This dataclass defines the configuration for the Discord bot:
 # 
 
+# %% [markdown]
 # 
 # - `command_name`: Name of the bot command (default: "ask")
 # - `command_description`: Description of the bot command
@@ -6934,8 +6893,7 @@ class OTPVerificationModal(discord.ui.Modal):
 # 
 # 
 
-# In[85]:
-
+# %%
 
 @dataclass
 class BotConfig:
@@ -6950,6 +6908,7 @@ class BotConfig:
 
 
 
+# %% [markdown]
 # 
 # #### Initialization
 # - Initializes with a RAG pipeline and optional configuration
@@ -6970,9 +6929,7 @@ class BotConfig:
 # 
 # 
 
-# In[86]:
-
-
+# %%
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
@@ -7057,7 +7014,7 @@ class ASUDiscordBot:
                     
             except discord.NotFound:
                 return "You are not part of Sparky Discord Server. Access to command is restricted."
-
+        await asu_scraper.__login__(app_config.get_handshake_user(),app_config.get_handshake_pass() )
         discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id)
         firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
@@ -7242,4 +7199,5 @@ if __name__ == "__main__":
         token=app_config.get_discord_bot_token(),
     )
     run_discord_bot(asu_rag, config)
+
 
