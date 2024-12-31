@@ -8,7 +8,7 @@
 # - **Dynamic User Interaction**: Provides context-aware responses with citation tracking
 # - **Optimized Retrieval**: Implements RAPTOR, MIPS, and ScaNN for efficient information retrieval
 # - **Cross-Encoder Reranking**: Enhances result relevance through advanced reranking techniques
-# a
+# 
 # 
 
 # %% [markdown]
@@ -1328,8 +1328,8 @@ class Utils:
             # self.scann_store = None
             self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
             self.cached_queries=[]
-            self.raptor_retriever = RaptorRetriever(self.vector_store)
             self.vector_store = asu_store.get_vector_store()
+            self.raptor_retriever = RaptorRetriever(self.vector_store)
             logger.info("\nUtils instance initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Utils: {e}")
