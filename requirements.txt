@@ -25,9 +25,7 @@ PyNaCl
 unidecode
 html2text
 html2markdown
-google-cloud-aiplatform
 sentence-transformers
-hnswlib
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
