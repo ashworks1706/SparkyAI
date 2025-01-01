@@ -10,7 +10,6 @@ qdrant-client
 scikit-learn
 numpy
 chromadb
-faiss-gpu
 discord.py
 requests
 beautifulsoup4
@@ -22,10 +21,10 @@ asyncio
 nest_asyncio
 selenium
 webdriver-manager
-urllib
 PyNaCl
 unidecode
 html2text
+html2markdown
 google-cloud-aiplatform
 sentence-transformers
 hnswlib
