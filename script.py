@@ -584,7 +584,8 @@ class VectorStore:
                  host: str = "10.10.0.9",
                  port: int = 6333,
                  collection_name: str = "asu_docs",
-                 model_name: str = "BAAI/bge-large-en-v1.5",
+                 model_name: str = "BAAI/bge-small-en-v1.5",
+                #  model_name: str = "BAAI/bge-small-en-v1.5",
                  batch_size: int = 100,
                  max_retry_attempts: int = 3,
                  retry_delay: int = 2):
