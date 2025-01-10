@@ -221,5 +221,3 @@ This project is licensed under the [MIT License](LICENSE).
 - Author: Ash (Som)
 - Portfolio: [somwrks.com](https://somwrks.com)
 - LinkedIn: [linkedin.com/somwrks](https://linkedin.com/somwrks)
-- Data Contributor: Karan
-- LinkedIn : [linkedin.com/karanpatelofc](https://www.linkedin.com/in/karanpatelofc/)
