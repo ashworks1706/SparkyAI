@@ -227,6 +227,6 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Contact
 
-- Author: Ash (Som)
-- Portfolio: [somwrks.com](https://somwrks.com)
-- LinkedIn: [linkedin.com/somwrks](https://linkedin.com/somwrks)
+- Author: Ash
+- Portfolio: [ashworks.dev](https://ashworks.dev)
+- LinkedIn: [linkedin.com/ashworks](https://linkedin.com/ashworks)
