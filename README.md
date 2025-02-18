@@ -12,6 +12,15 @@ A Discord bot designed to assist Arizona State University (ASU) students with ac
 
 ## Advanced Architecture
 
+![image](https://github.com/user-attachments/assets/18e2c5fc-b777-4b22-b63e-5bd97ffde5cd)
+
+![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
+
+![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
+
+![image](https://github.com/user-attachments/assets/1ab12d43-3e37-4020-bec1-0dc8dc4ea1db)
+
+
 SparkyAI leverages a complex architecture to deliver accurate and context-aware responses:
 
 - **Retrieval-Augmented Generation (RAG)**: Combines vector search with large language models for precise information retrieval.
