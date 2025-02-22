@@ -1,5 +1,5 @@
 class Firestore:
-    def __init__(self):
+    def __init__(self,discord_state):
         if not firebase_admin._apps:
             cred = credentials.Certificate("firebase_secret.json")
             firebase_admin.initialize_app(cred)
@@ -16,6 +16,7 @@ class Firestore:
             "time": "",
             "category": []
         }
+        self.discord_state = discord_state
 
     def update_collection(self, collection):
         self.collection = collection
@@ -33,7 +34,7 @@ class Firestore:
         if not self.collection:
             raise ValueError("Collection not set. Use update_collection() first.")
         
-        self.document["user_id"] = discord_state.get('user_id')
+        self.document["user_id"] = self.discord_state.get('user_id')
         self.document["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         doc_ref = self.db.collection(self.collection).document()

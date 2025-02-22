@@ -3,7 +3,7 @@ class DataPreprocessor:
     def __init__(self, 
                  chunk_size: int = 1024, 
                  chunk_overlap: int = 200, 
-                 max_processing_attempts: int = 3, utils):
+                 max_processing_attempts: int = 3):
         """Initialize DataPreprocessor with configurable text splitting and retry mechanism."""
         self.max_processing_attempts = max_processing_attempts
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -12,7 +12,6 @@ class DataPreprocessor:
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
-        self.utils = utils
         self.doc_title = None
         self.doc_category = None
         nltk.download('punkt_tab', quiet=True)
@@ -32,7 +31,6 @@ class DataPreprocessor:
                                 title: str = None, 
                                 category: str = None) -> List[Document]:
         """Process documents with advanced error handling and multiple retry mechanism."""
-        await self.utils.update_text("Understanding Results...")
         logger.info(f"Processing documents with title={title} category={category}")
         self.doc_title = title
         self.doc_category = category

@@ -23,7 +23,6 @@ class OTPVerificationModal(discord.ui.Modal):
         verified_role = discord.utils.get(interaction.guild.roles, name="verified")
         if verified_role:
             await interaction.user.add_roles(verified_role)
-            await (google_sheet.add_new_user(interaction.user, email))
             await interaction.response.send_message("You have been verified!", ephemeral=True)
         else:
             await interaction.response.send_message("Verification role not found. Please contact an administrator.", ephemeral=True)

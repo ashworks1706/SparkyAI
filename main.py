@@ -95,10 +95,6 @@ from utils.utils import Utils
 from rag.data_preprocessor import DataPreprocessor
 from agents.agent_tools import AgentTools
 
-
-app_config = AppConfig()
-
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -108,42 +104,27 @@ logging.basicConfig(
     ]
 )
 tracemalloc.start()
-logger = logging.getLogger(__name__)
-google_sheet = GoogleSheet('client_secret.json', app_config.get_spreadsheet_id())
-discord_state = DiscordState()
-firestore = Firestore(discord_state)
-asu_store = VectorStore(force_recreate=False)
-utils = Utils(asu_store,asu_data_processor,asu_scraper)
-asu_data_processor = DataPreprocessor(utils)
-agent_tools = AgentTools(firestore,discord_state,google_sheet,utils,app_config)
-genai.configure(api_key=app_config.get_api_key())
-dir_Model = genai.GenerativeModel('gemini-1.5-flash')
 
-logger.info("\nSuccessfully initialized global variables for model and database")
+logger = logging.getLogger(__name__)
+
+app_config = AppConfig()
+
+genai.configure(api_key=app_config.get_api_key())
+
+asu_store = VectorStore(force_recreate=False)
+
+discord_state = DiscordState()
+
+firestore = Firestore(discord_state)
+
+asu_data_processor = DataPreprocessor()
+
+utils = Utils(asu_store,asu_data_processor,asu_scraper)
 
 asu_scraper = ASUWebScraper(discord_state,utils)
 
+agents = Agents(firestore,genai,app_config, discord_state,utils)
 
-logger.info("\nInitialized ASUWebScraper")
-
-global action_command
-action_command = None
-
-agents = Agents(firestore,genai,app_config)
-
-
-
-class RAGPipeline:                
-    async def process_question(self,question: str) -> str:
-        try:
-            response = await asu_action_agent.determine_action(question)
-            logger.info("\nRAG Pipeline called")
-            return response
-        except Exception as e:
-            logger.error(f"RAG PIPELINE : Error processing question: {str(e)}")
-            raise
-        
-asu_rag =  RAGPipeline()
 
 logger.info("\n----------------------------------------------------------------")
 logger.info("\nASU RAG INITIALIZED SUCCESSFULLY")
@@ -152,7 +133,7 @@ logger.info("\n---------------------------------------------------------------")
 
 def run_discord_bot(rag_pipeline, config: Optional[BotConfig] = None):
     """Run the Discord bot"""
-    bot = ASUDiscordBot(firestore,rag_pipeline, config,discord_state,google_sheet,utils)
+    bot = ASUDiscordBot(agents,firestore,rag_pipeline, config,discord_state,utils)
     
     async def run():
         try:

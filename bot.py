@@ -139,12 +139,7 @@ class ASUDiscordBot:
             await self._send_chunked_response(interaction, response)
             logger.info(f"Successfully processed question for {interaction.user.name}")
             await asu_store.store_to_vector_db()
-            await (google_sheet.increment_function_call(discord_state.get('user_id'), 'G'))
-            await (google_sheet.increment_function_call(discord_state.get('user_id'), 'N'))
-            await (google_sheet.update_user_column(interaction.user.id, 'E', question))
-            await (google_sheet.update_user_column(interaction.user.id, 'F', response))
             
-            await google_sheet.perform_updates()
             
             firestore.update_message("user_message", question)
             document_id = await firestore.push_message()

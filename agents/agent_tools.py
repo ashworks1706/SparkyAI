@@ -1,10 +1,9 @@
 class AgentTools:
-    def __init__(self,firestore,discord_state,google_sheet,utils,app_config):
+    def __init__(self,firestore,discord_state,utils,app_config, asu_live_status_agent,asu_search_agent,asu_discord_agent):
         self.visited_urls = set()
         self.max_depth = 2
         self.max_links_per_page = 3
         self.discord_state = discord_state
-        self.google_sheet = google_sheet
         self.utils = utils
         self.firestore = firestore
         self.discord_client = self.discord_state.get('discord_client')
@@ -1063,10 +1062,8 @@ class AgentTools:
 
     async def access_search_agent(self, instruction_to_agent: str, special_instructions: str):
         logger.info(f"Action Model : accessing search agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'H'))
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'N'))
         try:
-            response = await asu_search_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.asu_search_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
             logger.error(f"Error in access search agent: {str(e)}")
@@ -1074,10 +1071,8 @@ class AgentTools:
          
     async def access_discord_agent(self, instruction_to_agent: str,special_instructions: str):
         logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'J'))
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'N'))
         try:
-            response = await asu_discord_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.asu_discord_agent.determine_action(instruction_to_agent,special_instructions)
             
             return response
         except Exception as e:
@@ -1145,11 +1140,9 @@ class AgentTools:
     
     async def access_live_status_agent(self, instruction_to_agent: str, special_instructions: str):
         logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'K'))
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'N'))
         
         try:
-            response = await asu_live_status_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.asu_live_status_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
             logger.error(f"Error in deep search agent: {str(e)}")
@@ -1207,8 +1200,6 @@ class AgentTools:
 
     async def access_google_agent(self, original_query: str, detailed_query: str, generalized_query: str, relative_query: str, categories: list):
         self.firestore.update_message("category", categories)
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'L'))
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'M'))
         
         user_id = self.discord_state.get('user_id')
         responses=[]
@@ -1283,8 +1274,6 @@ class AgentTools:
         
 
         self.firestore.update_message("category", categories)
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'L'))
-        await (self.google_sheet.increment_function_call(self.discord_state.get('user_id'), 'M'))
         
         user_id = self.discord_state.get('user_id')
         responses=[]
