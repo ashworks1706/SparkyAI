@@ -1,3 +1,4 @@
+from utils.common_imports import *
 class SuperiorModel:
     
     def __init__(self, firestore,genai,app_config):

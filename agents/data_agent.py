@@ -1,4 +1,5 @@
-class DataModel:
+from utils.common_imports import *
+classDataModel:
     def __init__(self, model=None):
         self.model = genai.GenerativeModel('gemini-1.5-flash')
   

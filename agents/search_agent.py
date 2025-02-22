@@ -1,3 +1,4 @@
+from utils.common_imports import *
 class RagSearchModel:
     
     def __init__(self, 
@@ -375,7 +376,8 @@ class RagSearchModel:
                                 
                                     "class_seat_availability": content.Schema(
                                         type=content.Type.STRING,
-                                        description="Class Availability : Open | All",
+                                        description="from utils.common_imports import *
+classAvailability : Open | All",
                                         enum=[
                                             "Open",
                                             "All"
@@ -383,7 +385,8 @@ class RagSearchModel:
                                     ),
                                     "class_term": content.Schema(
                                         type=content.Type.STRING,
-                                        description="Pick from this list for Class Term",
+                                        description="Pick from this list for from utils.common_imports import *
+classTerm",
                                         enum=[
                                         "Fall 2026",
                                         "Summer 2026",
@@ -414,7 +417,8 @@ class RagSearchModel:
                                                 "7",
                                             ]
                                         ),
-                                        description="Pick from the List of Class Credits"
+                                        description="Pick from the List of from utils.common_imports import *
+classCredits"
                                     ),
                                     "class_session": content.Schema(
                                         type=content.Type.ARRAY,
@@ -427,7 +431,8 @@ class RagSearchModel:
                                                 "Other", 
                                             ]
                                         ),
-                                        description="Pick from the List of Class Sessions"
+                                        description="Pick from the List of from utils.common_imports import *
+classSessions"
                                     ),
                                     "class_days": content.Schema(
                                         type=content.Type.ARRAY,
@@ -443,7 +448,8 @@ class RagSearchModel:
                                                 "Sunday", 
                                             ]
                                         ),
-                                        description="Pick from the List of Class Sessions"
+                                        description="Pick from the List of from utils.common_imports import *
+classSessions"
                                     ),
                                     "class_location": content.Schema(
                                         type=content.Type.ARRAY,
@@ -462,7 +468,8 @@ class RagSearchModel:
                                                 "ICOURSE"
                                                 ]
                                         ),
-                                        description="Pick from the List of Class Locations"
+                                        description="Pick from the List of from utils.common_imports import *
+classLocations"
                                     ),
                                 
                                 },

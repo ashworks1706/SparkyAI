@@ -1,3 +1,4 @@
+from utils.common_imports import *
 class AgentTools:
     def __init__(self,firestore,discord_state,utils,app_config, live_status_agent,rag_rag_search_agent,discord_agent):
         self.visited_urls = set()
@@ -538,13 +539,16 @@ class AgentTools:
     class_seat_availability : Optional[str] = None,
     ) -> str:
         """
-        Optimized function to generate a search URL for ASU class catalog with flexible input handling.
+        Optimized function to generate a search URL for ASU from utils.common_imports import *
+classcatalog with flexible input handling.
         
         Args:
-            Multiple optional parameters for filtering class search
+            Multiple optional parameters for filtering from utils.common_imports import *
+classsearch
         
         Returns:
-            Constructed search URL for class catalog
+            Constructed search URL for from utils.common_imports import *
+classcatalog
         """
         
         # Helper function to convert input to query string

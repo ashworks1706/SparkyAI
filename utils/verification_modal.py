@@ -1,3 +1,4 @@
+from utils.common_imports import *
 class VerificationModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="ASU Email Verification")

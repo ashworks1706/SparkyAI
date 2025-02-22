@@ -1,12 +1,13 @@
 from utils.otp_verification import OTPVerificationModal
 from utils.verify_button import VerifyButton
-from utisl.verification_modal import VerificationModal
+from utils.verification_modal import VerificationModal
 
+from utils.common_imports import *
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
-    def __init__(self, config: Optional[BotConfig] = None, agents, firestore, discord_state, utils,asu_store ):
+    def __init__(self, config, agents, firestore, discord_state, utils,asu_store ):
         """
         Initialize the Discord bot.
         

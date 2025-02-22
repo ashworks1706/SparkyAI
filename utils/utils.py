@@ -1,6 +1,8 @@
+from utils.common_imports import *
 class Utils:
     def __init__(self,asu_store,asu_data_processor,asu_scraper):
-        """Initialize the Utils class with task tracking and logging."""
+        """Initialize the Utils from utils.common_imports import *
+classwith task tracking and logging."""
         try:
             self.tasks = []
             self.asu_store = asu_store

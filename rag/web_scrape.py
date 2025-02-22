@@ -1,3 +1,4 @@
+from utils.common_imports import *
 class ASUWebScraper:
     def __init__(self,discord_state,utils):
         self.discord_client = self.discord_state.get('discord_client')
