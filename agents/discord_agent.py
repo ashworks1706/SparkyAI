@@ -3,7 +3,8 @@ class DiscordModel:
     
 
 
-    def __init__(self, firestore,genai,app_config):
+    def __init__(self, firestore,genai,app_config,logger):
+        self.logger= logger
         self.app_config = app_config
         self.firestore = firestore
 
@@ -238,7 +239,7 @@ class DiscordModel:
         
     def _initialize_model(self):
         if not self.model:
-            return logger.error("Model not initialized at ActionFunction")
+            return self.logger.error("Model not initialized at ActionFunction")
             
         # Rate limiting check
         current_time = time.time()
@@ -261,7 +262,7 @@ class DiscordModel:
             # self._save_message(user_id, "model", f"""(Only Visible to You) System Tools - Discord Agent Response: {func_response}""")
             return func_response
         else:
-            logger.error(f"Error extracting text from response: {e}")
+            self.logger.error(f"Error extracting text from response: {e}")
             return "Error processing response"
                 
     
@@ -298,6 +299,6 @@ class DiscordModel:
             return final_response if final_response else "Hi! How can I help you with ASU or the Discord server today?"
             
         except Exception as e:
-            logger.error(f"Discord Model : Error in determine_action: {str(e)}")
+            self.logger.error(f"Discord Model : Error in determine_action: {str(e)}")
             return "I apologize, but I couldn't generate a response at this time. Please try again."
         

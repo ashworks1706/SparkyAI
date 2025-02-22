@@ -7,3 +7,5 @@ firebase_secret.json
 
 /sparky_env
 /.venv
+
+**/__pycache__/

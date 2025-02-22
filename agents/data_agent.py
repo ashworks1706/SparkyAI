@@ -1,6 +1,7 @@
 from utils.common_imports import *
-classDataModel:
-    def __init__(self, model=None):
+class DataModel:
+    def __init__(self, model=None, logger=None):
+        self.logger = logger
         self.model = genai.GenerativeModel('gemini-1.5-flash')
   
     def refine(self, search_context: str, text: str) -> tuple[str, str, str]:
@@ -11,7 +12,7 @@ classDataModel:
         """
 
         try:
-            logger.info(f"Data Model: Refining Data with context : {search_context} \n and data : {text}")
+            self.logger.info(f"Data Model: Refining Data with context : {search_context} \n and data : {text}")
             response = self.model.generate_content(prompt)
             if response and hasattr(response, 'text'):
                 parsed = self.parse_json_response(response.text)
@@ -21,7 +22,7 @@ classDataModel:
                 )
             return None, None, None
         except Exception as e:
-            logger.error(f"Gemini refinement error: {str(e)}")
+            self.logger.error(f"Gemini refinement error: {str(e)}")
             return None, None, None
 
     def parse_json_response(self, response_text: str) -> dict:
@@ -36,14 +37,14 @@ classDataModel:
             # Validate required fields
             required_fields = { 'title'}
             if not all(field in parsed_data for field in required_fields):
-                logger.error("Missing required fields in JSON response")
+                self.logger.error("Missing required fields in JSON response")
                 return { 'title': ''}
 
             return parsed_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {str(e)}")
+            self.logger.error(f"JSON parsing error: {str(e)}")
             return { 'title': '', 'category': ''}
         except Exception as e:
-            logger.error(f"Unexpected error parsing response: {str(e)}")
+            self.logger.error(f"Unexpected error parsing response: {str(e)}")
             return {'title': '', 'category': ''}

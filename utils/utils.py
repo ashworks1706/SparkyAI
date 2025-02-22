@@ -1,6 +1,7 @@
 from utils.common_imports import *
+from rag.raptor import RaptorRetriever
 class Utils:
-    def __init__(self,asu_store,asu_data_processor,asu_scraper):
+    def __init__(self,asu_store,asu_data_processor,asu_scraper,logger):
         """Initialize the Utils from utils.common_imports import *
 classwith task tracking and logging."""
         try:
@@ -16,18 +17,19 @@ classwith task tracking and logging."""
             self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
             self.cached_queries=[]
             self.vector_store = self.asu_store.get_vector_store()
-            self.raptor_retriever = RaptorRetriever()
-            logger.info("\nUtils instance initialized successfully")
+            self.logger=logger
+            self.raptor_retriever = RaptorRetriever(logger=self.logger)
+            self.logger.info("\nUtils instance initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Utils: {e}")
+            self.logger.error(f"Failed to initialize Utils: {e}")
 
     async def start_animation(self, message):
         """Start the loading animation using Discord's built-in thinking indicator"""
         try:
             self.message = message
-            logger.info(f"Animation started for message: {message.id}")
+            self.logger.info(f"Animation started for message: {message.id}")
         except Exception as e:
-            logger.error(f"Failed to start animation: {e}")
+            self.logger.error(f"Failed to start animation: {e}")
 
     async def update_text(self, new_content):
         """Update text while maintaining task history"""
@@ -35,11 +37,11 @@ classwith task tracking and logging."""
             # Append previous content to tasks
             if self.current_content:
                 self.tasks.append(self.current_content)
-                logger.debug(f"Added task to history: {self.current_content}")
+                self.logger.debug(f"Added task to history: {self.current_content}")
 
             # Update current content
             self.current_content = new_content
-            logger.debug(f"Updated current content to: {new_content}")
+            self.logger.debug(f"Updated current content to: {new_content}")
 
             # Format and display all tasks
             display_lines = []
@@ -53,10 +55,10 @@ classwith task tracking and logging."""
             content="\n".join(display_lines)
             # Update the message content
             await self.message.edit(content=content)
-            logger.info(f"Message updated with {len(display_lines)} tasks")
+            self.logger.info(f"Message updated with {len(display_lines)} tasks")
 
         except Exception as e:
-            logger.error(f"Failed to update text: {e}")
+            self.logger.error(f"Failed to update text: {e}")
             # Optionally, you could re-raise the exception or handle it differently
 
     async def stop_animation(self, message=None, final_content=None,View=None):
@@ -67,16 +69,16 @@ classwith task tracking and logging."""
                 if View:
                     await message.edit(content=final_content,view=View)
                 await message.edit(content=final_content)
-                logger.info(f"Final content set: {final_content}")
+                self.logger.info(f"Final content set: {final_content}")
 
             # Reset internal state
             self.tasks = []
             self.current_content = ""
             self.message = None
-            logger.info("\nAnimation stopped and state reset")
+            self.logger.info("\nAnimation stopped and state reset")
 
         except Exception as e:
-            logger.error(f"Error stopping animation: {e}")
+            self.logger.error(f"Error stopping animation: {e}")
 
     def format_search_results(self, engine_context):
         """Format search results into a readable string."""
@@ -115,13 +117,13 @@ classwith task tracking and logging."""
             return formatted_results
 
         except Exception as e:
-            logger.error(f"Error formatting search results: {str(e)}")
+            self.logger.error(f"Error formatting search results: {str(e)}")
             return "Error formatting search results."
 
     async def perform_web_search(self,search_url:str =None,  optional_query : str = None, doc_title : str =None, doc_category : str = None):
         try:
             # Initial search
-            logger.info("\nPerforming Web Search")
+            self.logger.info("\nPerforming Web Search")
 
             documents = await self.asu_scraper.engine_search(search_url, optional_query)
 
@@ -129,9 +131,9 @@ classwith task tracking and logging."""
                 raise ValueError("No documents found matching the query")
                 return "No results found on web"
             
-            logger.info(documents)
+            self.logger.info(documents)
             global action_command
-            logger.info("\nPreprocessing documents...")
+            self.logger.info("\nPreprocessing documents...")
             
             processed_docs = await self.asu_data_processor.process_documents(
                 documents=documents, 
@@ -162,15 +164,15 @@ classwith task tracking and logging."""
             return results
 
         except Exception as e:
-            logger.error(f"Error in web search: {str(e)}")
+            self.logger.error(f"Error in web search: {str(e)}")
             return "No results found on web"
 
     async def perform_similarity_search(self, query: str, categories: list):
         try:
-            logger.info(f"Action Model: Performing similarity search with query: {query}")
+            self.logger.info(f"Action Model: Performing similarity search with query: {query}")
             self.vector_store = self.asu_store.get_vector_store()
             if not self.vector_store:
-                logger.info("\nVector Store not initialized")
+                self.logger.info("\nVector Store not initialized")
                 raise ValueError("Vector store not properly initialized")
 
             # Correct filter construction using Qdrant's Filter class
@@ -195,7 +197,7 @@ classwith task tracking and logging."""
 
             # Check if results are empty
             if not results:
-                logger.info("\nNo documents found in vector store")
+                self.logger.info("\nNo documents found in vector store")
                 return None
 
             documents = []
@@ -209,16 +211,16 @@ classwith task tracking and logging."""
                 }
                 documents.append(doc_info)
 
-            logger.info(f"Retrieved {len(documents)} documents from vector store")
+            self.logger.info(f"Retrieved {len(documents)} documents from vector store")
             return documents
 
         except Exception as e:
-            logger.error(f"Error during similarity search: {str(e)}")
+            self.logger.error(f"Error during similarity search: {str(e)}")
             return None
 
     async def perform_mips_search(self, query: str, categories: list):
         try:
-            logger.info(f"Action Model: Performing MIPS search with query: {query}")
+            self.logger.info(f"Action Model: Performing MIPS search with query: {query}")
             query_vector = self.vector_store.embedding_model.embed_query(query)
             
             filter_conditions = None
@@ -243,10 +245,10 @@ classwith task tracking and logging."""
                 }
                 documents.append(doc_info)
             
-            logger.info(f"Retrieved {len(documents)} documents from MIPS search")
+            self.logger.info(f"Retrieved {len(documents)} documents from MIPS search")
             return documents
         except Exception as e:
-            logger.error(f"Error during MIPS search: {str(e)}")
+            self.logger.error(f"Error during MIPS search: {str(e)}")
             return None
     
     def merge_search_results(self, raptor_results, similarity_results, mips_results):

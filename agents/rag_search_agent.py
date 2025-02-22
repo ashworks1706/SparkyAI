@@ -1,10 +1,10 @@
 from utils.common_imports import *
 class RagSearchModel:
     
-    def __init__(self, 
+    def __init__(self, firestore,genai,app_config,logger,
                  rate_limit_window: float = 1.0, 
                  max_requests: int = 100,
-                 retry_attempts: int = 3, firestore,genai,app_config):
+                 retry_attempts: int = 3):
         """
         Initialize RagSearchModel with advanced configuration options.
         
@@ -13,6 +13,7 @@ class RagSearchModel:
             max_requests (int): Maximum number of requests allowed in the window
             retry_attempts (int): Number of retry attempts for function calls
         """
+        self.logger=logger
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             generation_config={
@@ -376,8 +377,7 @@ class RagSearchModel:
                                 
                                     "class_seat_availability": content.Schema(
                                         type=content.Type.STRING,
-                                        description="from utils.common_imports import *
-classAvailability : Open | All",
+                                        description="Pick from the List of classAvailability : Open | All",
                                         enum=[
                                             "Open",
                                             "All"
@@ -385,8 +385,7 @@ classAvailability : Open | All",
                                     ),
                                     "class_term": content.Schema(
                                         type=content.Type.STRING,
-                                        description="Pick from this list for from utils.common_imports import *
-classTerm",
+                                        description="Pick from this list from the list",
                                         enum=[
                                         "Fall 2026",
                                         "Summer 2026",
@@ -417,8 +416,7 @@ classTerm",
                                                 "7",
                                             ]
                                         ),
-                                        description="Pick from the List of from utils.common_imports import *
-classCredits"
+                                        description="Pick from the List of from classCredits"
                                     ),
                                     "class_session": content.Schema(
                                         type=content.Type.ARRAY,
@@ -431,8 +429,7 @@ classCredits"
                                                 "Other", 
                                             ]
                                         ),
-                                        description="Pick from the List of from utils.common_imports import *
-classSessions"
+                                        description="Pick from the List of from classSessions"
                                     ),
                                     "class_days": content.Schema(
                                         type=content.Type.ARRAY,
@@ -448,8 +445,7 @@ classSessions"
                                                 "Sunday", 
                                             ]
                                         ),
-                                        description="Pick from the List of from utils.common_imports import *
-classSessions"
+                                        description="Pick from the List of from classSessions"
                                     ),
                                     "class_location": content.Schema(
                                         type=content.Type.ARRAY,
@@ -468,8 +464,7 @@ classSessions"
                                                 "ICOURSE"
                                                 ]
                                         ),
-                                        description="Pick from the List of from utils.common_imports import *
-classLocations"
+                                        description="Pick from the List of from classLocations"
                                     ),
                                 
                                 },
@@ -490,7 +485,7 @@ classLocations"
         self.max_requests = max_requests
         self.retry_attempts = retry_attempts
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
-        logger.info(f"RagSearchModel initialized with rate limit: {rate_limit_window}s, max requests: {max_requests}")
+        self.logger.info(f"RagSearchModel initialized with rate limit: {rate_limit_window}s, max requests: {max_requests}")
 
     async def execute_function(self, function_call):
         """
@@ -509,18 +504,18 @@ classLocations"
             try:
                 func_response = await super().execute_function(function_call)
                 
-                logger.info(f"Function '{function_name}' response (Attempt {attempt + 1}): {func_response}")
+                self.logger.info(f"Function '{function_name}' response (Attempt {attempt + 1}): {func_response}")
                 
                 if func_response:
                     return func_response
                 
-                logger.warning(f"Empty response from {function_name}")
+                self.logger.warning(f"Empty response from {function_name}")
                 
             except Exception as e:
-                logger.error(f"Function call error (Attempt {attempt + 1}): {str(e)}")
+                self.logger.error(f"Function call error (Attempt {attempt + 1}): {str(e)}")
                 
                 if attempt == self.retry_attempts - 1:
-                    logger.critical(f"All retry attempts failed for {function_name}")
+                    self.logger.critical(f"All retry attempts failed for {function_name}")
                     return f"Error processing {function_name}"
                 
                 # Exponential backoff
@@ -533,7 +528,7 @@ classLocations"
         Initialize the search model with advanced rate limiting and error checking.
         """
         if not self.model:
-            logger.critical("Model not initialized")
+            self.logger.critical("Model not initialized")
             raise RuntimeError("Search model is not configured")
         
         current_time = time.time()
@@ -542,7 +537,7 @@ classLocations"
             self.request_counter += 1
             if self.request_counter > self.max_requests:
                 wait_time = self.rate_limit_window - (current_time - self.last_request_time)
-                logger.warning(f"Rate limit exceeded. Waiting {wait_time:.2f} seconds")
+                self.logger.warning(f"Rate limit exceeded. Waiting {wait_time:.2f} seconds")
                 raise Exception(f"Rate limit exceeded. Please wait {wait_time:.2f} seconds")
         else:
             # Reset counter if outside the rate limit window
@@ -552,9 +547,9 @@ classLocations"
         try:
             user_id = discord_state.get('user_id')
             self.chat = self.model.start_chat(history=self._get_chat_history(user_id),enable_automatic_function_calling=True)
-            logger.info("\nSearch model chat session initialized successfully")
+            self.logger.info("\nSearch model chat session initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize chat session: {str(e)}")
+            self.logger.error(f"Failed to initialize chat session: {str(e)}")
             raise RuntimeError("Could not start chat session")
         
     def _get_chat_history(self, user_id: str) -> List[Dict[str, str]]:
@@ -586,11 +581,11 @@ classLocations"
                 
                 """
                 
-            logger.debug(f"Generated prompt: {prompt}")
+            self.logger.debug(f"Generated prompt: {prompt}")
             
             try:
                 response = await self.chat.send_message_async(prompt)
-                logger.info(self._get_chat_history)
+                self.logger.info(self._get_chat_history)
                 for part in response.parts:
                     if hasattr(part, 'function_call') and part.function_call: 
                         final_response = await self.execute_function(part.function_call)
@@ -602,12 +597,12 @@ classLocations"
                             final_response = text.strip()
             
             except Exception as response_error:
-                logger.error(f"Response generation error: {str(response_error)}")
+                self.logger.error(f"Response generation error: {str(response_error)}")
                 final_response = "Unable to generate a complete response"
             
             return final_response or "Search agent encountered an unexpected issue"
         
         except Exception as critical_error:
-            logger.critical(f"Critical error in determine_action: {str(critical_error)}")
+            self.logger.critical(f"Critical error in determine_action: {str(critical_error)}")
             return "I'm experiencing technical difficulties. Please try again later."
         

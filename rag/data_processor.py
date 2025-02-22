@@ -4,7 +4,7 @@ class DataPreprocessor:
     def __init__(self, 
                  chunk_size: int = 1024, 
                  chunk_overlap: int = 200, 
-                 max_processing_attempts: int = 3):
+                 max_processing_attempts: int = 3, logger=False):
         """Initialize DataPreprocessor with configurable text splitting and retry mechanism."""
         self.max_processing_attempts = max_processing_attempts
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -22,9 +22,9 @@ class DataPreprocessor:
         self.LINK_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
         self.SPECIAL_CHAR_PATTERN = re.compile(r'[^a-zA-Z0-9\s.,!?;:()\-"\'$]')
 
+        self.logger= logger
 
-
-        logger.info(f"DataPreprocessor initialized with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
+        self.logger.info(f"DataPreprocessor initialized with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
 
     async def process_documents(self, 
                                 documents: List[Dict[str, str]], 
@@ -32,44 +32,44 @@ class DataPreprocessor:
                                 title: str = None, 
                                 category: str = None) -> List[Document]:
         """Process documents with advanced error handling and multiple retry mechanism."""
-        logger.info(f"Processing documents with title={title} category={category}")
+        self.logger.info(f"Processing documents with title={title} category={category}")
         self.doc_title = title
         self.doc_category = category
 
         for attempt in range(self.max_processing_attempts):
             try:
                 start_time = time.time()
-                logger.info(f"Starting document processing for {len(documents)} documents")
+                self.logger.info(f"Starting document processing for {len(documents)} documents")
                 try:
                     consolidated_text = await self._consolidate_documents(documents)
                 except Exception as e:
-                    logger.error(f"Document consolidation failed: {str(e)}")
+                    self.logger.error(f"Document consolidation failed: {str(e)}")
                     raise
                 if not self.doc_title:
                     try:
                         self.doc_title = await self._refine_content(search_context, consolidated_text)
                     except Exception as e:
-                        logger.error(f"Title refinement failed: {str(e)}")
+                        self.logger.error(f"Title refinement failed: {str(e)}")
                         raise
                 try:
                     document = self._create_processed_document(consolidated_text, documents)
                 except Exception as e:
-                    logger.error(f"Document creation failed: {str(e)}")
+                    self.logger.error(f"Document creation failed: {str(e)}")
                     raise
                 try:
                     processed_documents = self._split_and_annotate_document(document)
                 except  Exception as e:
-                    logger.error(f"Document splitting failed: {str(e)}")
+                    self.logger.error(f"Document splitting failed: {str(e)}")
                     raise
                 
                 processing_time = time.time() - start_time
-                logger.info(f"Document processing completed in {processing_time:.2f} seconds. "
+                self.logger.info(f"Document processing completed in {processing_time:.2f} seconds. "
                             f"Generated {len(processed_documents)} document chunks.")
 
                 return processed_documents
 
             except Exception as e:
-                logger.error(f"Document processing attempt {attempt + 1} failed: {str(e)}")
+                self.logger.error(f"Document processing attempt {attempt + 1} failed: {str(e)}")
                 if attempt == self.max_processing_attempts - 1:
                     return await self._generate_fallback_document(documents, e)
 
@@ -114,7 +114,7 @@ class DataPreprocessor:
         try:
             return await asu_data_agent.refine(search_context, consolidated_text)
         except Exception as e:
-            logger.warning(f"Content refinement agent failed: {str(e)}")
+            self.logger.warning(f"Content refinement agent failed: {str(e)}")
             return None
 
     def _create_processed_document(self, 

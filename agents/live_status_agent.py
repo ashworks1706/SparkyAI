@@ -1,7 +1,9 @@
 from utils.common_imports import *
 class Live_Status_Model:
     
-    def __init__(self,firestore,genai,app_config):
+    def __init__(self,firestore,genai,app_config,logger):
+        self.logger = logger
+        self.app_config= app_config
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             generation_config={
@@ -91,13 +93,12 @@ class Live_Status_Model:
             tool_config={'function_calling_config': 'ANY'},
         )
         self.firestore = firestore
-        self.app_config = app_config
         self.chat=None
         self.last_request_time = time.time()
         self.request_counter = 0
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
         
-      async def execute_function(self, function_call):
+    async def execute_function(self, function_call):
         """Execute the called function and return its result"""
         func_response = super().execute_function(function_call)
     
@@ -106,12 +107,12 @@ class Live_Status_Model:
             # self._save_message(user_id, "model", f"""(Only Visible to You) System Tools - Discord Agent Response: {func_response}""")
             return func_response
         else:
-            logger.error(f"Error extracting text from response: {e}")
+            self.logger.error(f"Error extracting text from response: {e}")
             return "Error processing response"
         
     def _initialize_model(self):
         if not self.model:
-            return logger.error("Model not initialized at ActionFunction")
+            return self.logger.error("Model not initialized at ActionFunction")
             
         # Rate limiting check
         current_time = time.time()
@@ -146,8 +147,8 @@ class Live_Status_Model:
                 """
 
             response = await self.chat.send_message_async(prompt)
-            logger.info(self._get_chat_history)
-            logger.info(f"Internal response @ Live Status Model : {response}")
+            self.logger.info(self._get_chat_history)
+            self.logger.info(f"Internal response @ Live Status Model : {response}")
             
             for part in response.parts:
                 if hasattr(part, 'function_call') and part.function_call:
@@ -159,12 +160,12 @@ class Live_Status_Model:
                     self.firestore.update_message("live_status_agent_message", f"Text Response : {text}")
                     if not text.startswith("This query") and not "can be answered directly" in text:
                         final_response = text.strip()
-                        logger.info(f"text response : {final_response}")
+                        self.logger.info(f"text response : {final_response}")
         
         # Return only the final message
             return final_response if final_response else "Live Status agent fell off! Error 404"
             
         except Exception as e:
-            logger.error(f"Internal Error @ Live Status Model : {str(e)}")
+            self.logger.error(f"Internal Error @ Live Status Model : {str(e)}")
             return "I apologize, but I couldn't generate a response at this time. Please try again."
         

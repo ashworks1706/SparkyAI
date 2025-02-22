@@ -1,7 +1,8 @@
 from utils.common_imports import *
 class SuperiorModel:
     
-    def __init__(self, firestore,genai,app_config):
+    def __init__(self, firestore,genai,app_config,logger):
+        self.logger = logger
         self.model = genai.GenerativeModel(model_name="gemini-1.5-flash",
     
             generation_config={
@@ -196,7 +197,7 @@ class SuperiorModel:
         text_response = ""
         has_function_call = False
         function_call = None
-        logger.info(response)
+        self.logger.info(response)
 
         for part in response.parts:
             if hasattr(part, 'text') and part.text.strip():
@@ -228,7 +229,7 @@ class SuperiorModel:
             """
             
             response = await self.chat.send_message_async(prompt)
-            logger.info(f"RAW TEST RESPONSE : {response}")
+            self.logger.info(f"RAW TEST RESPONSE : {response}")
             
             while True:
                 text_response, has_function_call, function_call = await self.process_gemini_response(response)
@@ -238,7 +239,7 @@ class SuperiorModel:
                     break
                 function_result = await super().execute_function(function_call)
                 self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
-                logger.info("\nAction Model @ Function result is: %s", function_result)
+                self.logger.info("\nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
                 
             final_response = " ".join(response.strip() for response in responses if response.strip())
@@ -246,5 +247,5 @@ class SuperiorModel:
             return final_response.strip()
         
         except Exception as e:
-            logger.error(f"Error in determine_action: {e}")
+            self.logger.error(f"Error in determine_action: {e}")
             return ["I'm sorry, I couldn't generate a response. Please try again."]

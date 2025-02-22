@@ -504,10 +504,10 @@ ASU's admission process emphasizes demonstrating competency in key subject areas
 *   **GPA:** While there isn't a strict minimum GPA requirement, a higher GPA generally strengthens an application. ASU considers the rigor of coursework when evaluating GPA.
 *   **Test Scores (Optional for Most Students):** ASU has been test-optional for most students. This means that submitting ACT or SAT scores is not required for admission consideration. However, students can still submit scores if they believe it will enhance their application. Specific programs or scholarships may still require test scores.
 
-**from utils.common_imports import *
+**from  *
 classRank:**
 
-from utils.common_imports import *
+from  *
 classrank is considered but is not a primary factor in admission decisions.
 
 **Alternative Pathways for Admission:**
@@ -1673,7 +1673,7 @@ Other ASU campuses also have fitness facilities, though the offerings may vary. 
 **Key Points:**
 
 *   **SDFC Access:** Access is often included in student fees.
-*   **Check the Website for Hours and Schedules:** (Link to the ASU Recreation or Fitness website) This is the best place to find current hours, from utils.common_imports import *
+*   **Check the Website for Hours and Schedules:** (Link to the ASU Recreation or Fitness website) This is the best place to find current hours, from  *
 classschedules, and other information.
 
 Stay active and have fun!"
@@ -1718,7 +1718,7 @@ SAILS works with students to provide reasonable accommodations based on their in
 *   **Contact SAILS:** (Provide link to the SAILS website) This is the best place to get detailed information about the registration process, required documentation, and available services.
 
 ASU is dedicated to creating an inclusive learning environment for all students. Contact SAILS to learn more about how they can support your academic success."
-What is the student-to-faculty ratio at ASU?,"ASU's student-to-faculty ratio is a general indicator of the average number of students per faculty member. It's important to understand this is an *average* across the entire university, and actual from utils.common_imports import *
+What is the student-to-faculty ratio at ASU?,"ASU's student-to-faculty ratio is a general indicator of the average number of students per faculty member. It's important to understand this is an *average* across the entire university, and actual from  *
 classsizes can vary significantly.
 
 **Current Student-to-Faculty Ratio:**
@@ -1727,29 +1727,29 @@ classsizes can vary significantly.
 
 **What This Means:**
 
-A 20:1 ratio (for example) means that, on average, there are 20 students for every faculty member at ASU. However, this doesn't mean every from utils.common_imports import *
+A 20:1 ratio (for example) means that, on average, there are 20 students for every faculty member at ASU. However, this doesn't mean every from  *
 classhas 20 students.
 
 *   **Large Lecture Classes:** Some introductory courses, especially in popular majors, may have large lecture classes with hundreds of students.
-*   **Smaller Upper-Division Classes:** Upper-division courses, specialized electives, and graduate-level courses typically have much smaller from utils.common_imports import *
+*   **Smaller Upper-Division Classes:** Upper-division courses, specialized electives, and graduate-level courses typically have much smaller from  *
 classsizes, often with 20-30 students or even fewer.
 *   **Labs and Recitations:** Many science and engineering courses have smaller lab or recitation sections led by teaching assistants or faculty members, providing more individualized attention.
 
 **Student-Professor Interactions:**
 
-While large lecture classes might limit direct interaction with the professor during from utils.common_imports import *
+While large lecture classes might limit direct interaction with the professor during from  *
 classtime, ASU offers other ways to connect with faculty:
 
 *   **Office Hours:** Professors hold regular office hours where students can ask questions, discuss course material, and get individual help.
 *   **Teaching Assistants (TAs):** TAs often lead lab or recitation sections and provide additional support to students.
-*   **Smaller from utils.common_imports import *
-classSettings:** In smaller classes, there are more opportunities for from utils.common_imports import *
+*   **Smaller from  *
+classSettings:** In smaller classes, there are more opportunities for from  *
 classdiscussions and direct interaction with the professor.
 *   **Research Opportunities:** Many faculty members involve undergraduate students in their research, providing valuable hands-on experience and mentorship.
 
 **Key Point:**
 
-While the student-to-faculty ratio provides a general overview, it's essential to consider the specific courses and programs you are interested in to get a better understanding of potential from utils.common_imports import *
+While the student-to-faculty ratio provides a general overview, it's essential to consider the specific courses and programs you are interested in to get a better understanding of potential from  *
 classsizes and opportunities for student-professor interaction. Check the course catalog or contact the relevant academic department for more information about specific courses."
 What are the costs of attendance for in-state and out-of-state students at ASU?,"Understanding the cost of attendance is important for planning your education. Here's a general overview of costs at ASU, but remember these are *estimates* and can vary.
 
@@ -1808,13 +1808,13 @@ What is the process for registering for classes at ASU?,"Registering for classes
 1.  **Meet with Your Academic Advisor:** Before registration opens, it's highly recommended to meet with your academic advisor. They can help you plan your courses, ensure you're meeting degree requirements, and address any questions you have.
 2.  **Check Your Priority Enrollment Appointment:** ASU uses a priority enrollment system, which assigns students a specific date and time when they can begin registering. You can find your enrollment appointment in your MyASU account. This is based on academic standing, completed credits, and other factors.
 3.  **Access MyASU:** Log in to your MyASU account (my.asu.edu).
-4.  **Use the from utils.common_imports import *
-classSearch/Schedule Builder:** Use the from utils.common_imports import *
+4.  **Use the from  *
+classSearch/Schedule Builder:** Use the from  *
 classsearch or schedule builder tool in MyASU to find available courses. You can search by subject, course number, instructor, time, and other criteria.
 5.  **Add Classes to Your Cart/Schedule:** Once you find the classes you want, add them to your shopping cart or build your schedule. This does *not* mean you are registered yet.
 6.  **Register for Classes During Your Enrollment Appointment:** At your assigned enrollment appointment time, log in to MyASU and complete the registration process by confirming your selected classes. This officially registers you for the courses.
-7.  **Review Your from utils.common_imports import *
-classSchedule:** After registering, review your from utils.common_imports import *
+7.  **Review Your from  *
+classSchedule:** After registering, review your from  *
 classschedule in MyASU to confirm that everything is correct.
 
 **Important Deadlines:**
@@ -1825,7 +1825,7 @@ classschedule in MyASU to confirm that everything is correct.
 
 **Key Points:**
 
-*   **MyASU:** MyASU (my.asu.edu) is the central hub for from utils.common_imports import *
+*   **MyASU:** MyASU (my.asu.edu) is the central hub for from  *
 classregistration and other student services.
 *   **Academic Calendar:** The academic calendar (found on the ASU website) is an essential resource for important dates and deadlines, including registration deadlines, add/drop deadlines, and tuition payment deadlines. (Link to the academic calendar if available)
 *   **Check with Your Advisor:** If you have any questions or need assistance with registration, contact your academic advisor.
@@ -1863,9 +1863,9 @@ What features does the ASU Mobile app offer?,"The ASU Mobile app is a valuable t
 
 **Key Features and How They Enhance the Student Experience:**
 
-*   **from utils.common_imports import *
-classSchedule:** View your from utils.common_imports import *
-classschedule, including times, locations, and instructor information. *This helps you stay organized and get to from utils.common_imports import *
+*   **from  *
+classSchedule:** View your from  *
+classschedule, including times, locations, and instructor information. *This helps you stay organized and get to from  *
 classon time.*
 *   **Grades:** Check your grades and academic progress. *This allows you to monitor your performance in your courses.*
 *   **MyASU Access:** Provides direct access to MyASU, where you can manage your student account, register for classes, view financial aid information, and more. *This puts all your essential student information in one place.*
@@ -2156,7 +2156,7 @@ What is ASU's policy on technology in the classroom?,"ASU doesn't have a single,
 While there isn't a universal policy, here are some common practices and considerations:
 
 *   **Instructor's Discretion:** Instructors have the authority to set their own policies regarding technology use in their classrooms. This might include:
-    *   **Permitted Use:** Allowing laptops, tablets, or phones for note-taking, accessing course materials, or participating in from utils.common_imports import *
+    *   **Permitted Use:** Allowing laptops, tablets, or phones for note-taking, accessing course materials, or participating in from  *
 classactivities.
     *   **Restricted Use:** Restricting the use of devices during lectures or exams to minimize distractions.
     *   **Prohibited Use:** Prohibiting the use of devices altogether.
@@ -2169,7 +2169,7 @@ classactivities.
 **How to Find the Specific Policy for a Class:**
 
 *   **Course Syllabus:** The course syllabus is the primary source for information about the instructor's technology policy. It should clearly state whether and how technology can be used in the classroom.
-*   **Instructor's Communication:** The instructor may also communicate their technology policy verbally in from utils.common_imports import *
+*   **Instructor's Communication:** The instructor may also communicate their technology policy verbally in from  *
 classor through online course platforms like Canvas.
 
 **Key Points:**
@@ -2483,9 +2483,9 @@ What features are available on the My ASU homepage?,"The MyASU portal is designe
 **Key Sections and Features:**
 
 *   **Priority Tasks/Action Items:** This section often highlights important tasks or action items that require your attention, such as registration holds, financial aid requirements, or upcoming deadlines.
-*   **from utils.common_imports import *
-classSchedule:** A quick view of your current from utils.common_imports import *
-classschedule, including days, times, and locations. Clicking on a from utils.common_imports import *
+*   **from  *
+classSchedule:** A quick view of your current from  *
+classschedule, including days, times, and locations. Clicking on a from  *
 classmay provide more details, such as instructor information and links to course materials.
 *   **Grades/Academic Progress:** Access to your grades, unofficial transcript, and academic progress reports (DARS/Degree Audit). This allows you to track your academic performance and progress toward your degree.
 *   **Financial Aid:** Information about your financial aid awards, including grants, loans, and scholarships. You can often view your financial aid status, accept or decline awards, and access other financial aid resources.
@@ -2504,21 +2504,21 @@ classmay provide more details, such as instructor information and links to cours
 *   **Layout May Change:** The layout and specific features of MyASU may be updated over time to improve user experience.
 
 By familiarizing yourself with the features of the MyASU homepage, you can effectively manage your student experience and access the resources you need."
-How can I check my from utils.common_imports import *
-classschedule on My ASU?,"You can easily access your from utils.common_imports import *
+How can I check my from  *
+classschedule on My ASU?,"You can easily access your from  *
 classschedule on MyASU. Here's how:
 
-**Steps to View Your from utils.common_imports import *
+**Steps to View Your from  *
 classSchedule:**
 
 1.  **Log in to MyASU:** Go to my.asu.edu and log in with your ASUrite ID and password.
 2.  **Look for a ""Classes"" or ""Schedule"" Section:** On the MyASU homepage, look for a section or tab labeled ""Classes,"" ""Schedule,"" ""My Classes,"" or something similar. This is usually prominently displayed on the main page or within a menu.
-3.  **Click on the Relevant Link/Tab:** Click on the link or tab to access your from utils.common_imports import *
+3.  **Click on the Relevant Link/Tab:** Click on the link or tab to access your from  *
 classschedule.
 
 **Viewing Your Schedule:**
 
-Once you are in the from utils.common_imports import *
+Once you are in the from  *
 classschedule section, you should be able to view your schedule in different formats:
 
 *   **Weekly View:** This view shows your classes for the current week, with days and times clearly displayed.
@@ -2527,7 +2527,7 @@ classschedule section, you should be able to view your schedule in different for
 
 **Information Typically Shown:**
 
-Your from utils.common_imports import *
+Your from  *
 classschedule will typically show:
 
 *   **Course Name and Number:** (e.g., ENG 101 - First-Year Composition)
@@ -2539,14 +2539,14 @@ classschedule will typically show:
 
 **Key Points:**
 
-*   **MyASU is the Central Location:** Your from utils.common_imports import *
+*   **MyASU is the Central Location:** Your from  *
 classschedule is managed and displayed through MyASU.
-*   **Layout May Vary:** The exact layout and labels may vary slightly, but the general location of the from utils.common_imports import *
+*   **Layout May Vary:** The exact layout and labels may vary slightly, but the general location of the from  *
 classschedule should be prominent.
-*   **Check Regularly:** It's a good idea to check your from utils.common_imports import *
+*   **Check Regularly:** It's a good idea to check your from  *
 classschedule regularly, especially at the beginning of the semester, to confirm meeting times and locations.
 
-By following these steps, you can easily view your from utils.common_imports import *
+By following these steps, you can easily view your from  *
 classschedule on MyASU."
 Where can I find my grades on My ASU?,"You can access your grades on MyASU, typically after the end of the semester or session. While some instructors may use Canvas to post in-progress grades during the semester, official grades are recorded in MyASU.
 
@@ -2937,7 +2937,7 @@ How do I access tutoring services through My ASU?,"While MyASU is a central port
 *   **Tutoring Center Websites:** Many tutoring centers have their own websites with information about available subjects, schedules, and how to schedule appointments.
 *   **Online Scheduling Systems:** Some tutoring centers use online scheduling systems that allow you to book appointments online.
 *   **Drop-in Tutoring:** Some centers offer drop-in tutoring during certain hours, where you can get help without an appointment.
-*   **Supplemental Instruction (SI):** For some courses, ASU offers Supplemental Instruction (SI), which are peer-led study sessions. Information about SI sessions is usually provided in from utils.common_imports import *
+*   **Supplemental Instruction (SI):** For some courses, ASU offers Supplemental Instruction (SI), which are peer-led study sessions. Information about SI sessions is usually provided in from  *
 classor through course websites.
 
 **Why Tutoring Isn't Usually Directly Within MyASU:**
@@ -2953,14 +2953,14 @@ classor through course websites.
 *   **MyASU May Have Links:** Check MyASU for potential shortcuts to tutoring resources.
 
 By following these steps, you can find the appropriate tutoring services and access the academic support you need."
-Can I view my from utils.common_imports import *
+Can I view my from  *
 classtextbook requirements on My ASU?,"While MyASU is a central portal, textbook information is typically found through other sources, primarily the course syllabus or the ASU Bookstore website. MyASU may provide links to these resources, but the detailed textbook information is usually housed elsewhere.
 
 **Typical Ways to Find Textbook Information:**
 
 1.  **Course Syllabus:** The course syllabus is the most reliable source for required and recommended textbooks. Instructors usually list the textbook information, including title, author, edition, and ISBN, in the syllabus. You can often access syllabi through Canvas (ASU's learning management system) or from your instructor directly.
 2.  **ASU Bookstore Website:** The ASU Bookstore website (usually a separate website, often operated by a third-party vendor) allows you to search for textbooks by course and section. This is a very common method.
-3.  **(Potential Links in MyASU):** MyASU *might* have links that take you to the ASU Bookstore website or to course information that includes textbook details. Look for links within your from utils.common_imports import *
+3.  **(Potential Links in MyASU):** MyASU *might* have links that take you to the ASU Bookstore website or to course information that includes textbook details. Look for links within your from  *
 classschedule or course details in MyASU.
 
 **Why Textbook Information Is Usually Not Fully Integrated into MyASU:**
@@ -2973,7 +2973,7 @@ classschedule or course details in MyASU.
 
 1.  **Check Your Course Syllabus First:** This is the most reliable source. Look for a section labeled ""Required Texts,"" ""Course Materials,"" or something similar.
 2.  **Visit the ASU Bookstore Website:** If the syllabus doesn't have the information or you prefer to search online, visit the ASU Bookstore website.
-3.  **Check MyASU for Links (If Available):** Check your from utils.common_imports import *
+3.  **Check MyASU for Links (If Available):** Check your from  *
 classschedule or course details in MyASU for any links to textbook information or the bookstore website.
 
 **Key Points:**
@@ -3078,7 +3078,7 @@ Can I grant parent/guest access to My ASU?,"ASU, like most universities, is boun
 4.  **Add Guest Information:** You will typically need to provide the guest's name and email address.
 5.  **Set Permissions/Access Levels:** This is a crucial step. You will choose what information your guest can access. Common options include:
     *   **Financial Information:** Access to tuition bills, payment history, and financial aid information.
-    *   **Academic Information:** Access to grades, from utils.common_imports import *
+    *   **Academic Information:** Access to grades, from  *
 classschedule, and academic progress reports.
     *   **Both Financial and Academic Information:**
 6.  **Save/Confirm Changes:** Once you have set the permissions, save or confirm the changes. Your guest will usually receive an email with instructions on how to access the designated information.
@@ -3383,7 +3383,7 @@ However, there are other ways to connect with classmates:
     * **Announcements:** Instructors can send announcements to the entire class.
     * **Inbox/Messaging:** Some instructors may enable direct messaging between students within Canvas.
 
-2. **Class-Specific Communication Platforms (Instructor Preference):** Some instructors may use other communication platforms like Slack, Discord, or GroupMe for from utils.common_imports import *
+2. **Class-Specific Communication Platforms (Instructor Preference):** Some instructors may use other communication platforms like Slack, Discord, or GroupMe for from  *
 classdiscussions and announcements. They will usually inform students about this at the beginning of the course.
 
 3. **Student Organizations and Clubs:** Joining student organizations or clubs related to your major or interests is a great way to connect with classmates who share similar interests.
@@ -3391,11 +3391,11 @@ classdiscussions and announcements. They will usually inform students about this
 4. **Study Groups (Organized Independently):** Students often form study groups independently using various messaging apps or social media platforms.
 
 While My ASU doesn't offer a direct group chat feature, Canvas and other communication platforms used by instructors, along with student organizations and independently organized study groups, are the primary ways students connect and communicate with each other."
-How do I purchase from utils.common_imports import *
-classmaterials through My ASU?,"While My ASU doesn't directly sell or process payments for all from utils.common_imports import *
+How do I purchase from  *
+classmaterials through My ASU?,"While My ASU doesn't directly sell or process payments for all from  *
 classmaterials, it provides links and resources to help you find and purchase them. The primary resources are the ASU Bookstore and online retailers.
 
-Here's how you typically purchase from utils.common_imports import *
+Here's how you typically purchase from  *
 classmaterials:
 
 1. **Check Your Course Syllabus:** Your course syllabus, usually available on Canvas or provided by your instructor, will list the required and recommended materials for the course. This includes textbooks, access codes, software, and other items.
@@ -3411,7 +3411,7 @@ classmaterials:
 
 5. **Financial Aid for Books:** If you have financial aid, you may be able to use a portion of it to purchase books and supplies at the ASU Bookstore. Check with the Financial Aid office for details.
 
-In summary, My ASU primarily acts as a starting point by potentially providing links to the ASU Bookstore. The actual purchase of from utils.common_imports import *
+In summary, My ASU primarily acts as a starting point by potentially providing links to the ASU Bookstore. The actual purchase of from  *
 classmaterials happens either through the ASU Bookstore website or other online retailers. Always refer to your course syllabus for the required materials for each course."
 Where can I make library room reservations on My ASU?,"Library room reservations are generally handled through the ASU Library website, not directly within My ASU. My ASU may provide links to the library website, but the reservation system resides on the library's site.
 
@@ -3471,7 +3471,7 @@ Key differences between My ASU and the ASU mobile app:
 
 *   **Access Method:** My ASU is accessed through a web browser (on a computer or mobile device), while the ASU mobile app is a dedicated application.
 *   **User Interface:** The user interface is different, optimized for web browsing versus mobile use.
-*   **Functionality:** While both offer access to many of the same features (grades, from utils.common_imports import *
+*   **Functionality:** While both offer access to many of the same features (grades, from  *
 classschedules, etc.), some features might be more easily accessible or presented differently in each platform.
 
 In summary, you don't access the ASU mobile app *through* My ASU. You download and install the app separately from your device's app store. Both platforms provide access to important ASU information and resources, but they are distinct applications."

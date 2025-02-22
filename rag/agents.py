@@ -1,31 +1,39 @@
 from utils.common_imports import *
+from agents.data_agent import DataModel
+from agents.live_status_agent import Live_Status_Model
+from agents.rag_search_agent import RagSearchModel
+from agents.discord_agent import DiscordModel
+from agents.superior_agent import SuperiorModel
+from agents.agent_tools import AgentTools
+
 class Agents:
-    def __init__(self, firestore, genai, discord_state, utils, app_config):
+    def __init__(self, firestore, genai, discord_state, utils, app_config,logger):
         self.firestore = firestore
         self.genai = genai
         self.app_config = app_config
+        self.logger = logger
         
-        self.asu_data_agent = DataModel( self.firestore,self.genai,self.app_config)
+        self.asu_data_agent = DataModel( self.genai,self.logger)
 
-        logger.info("\nInitialized DataModel")
+        self.logger.info("\nInitialized DataModel")
 
-        self.live_status_agent = Live_Status_Model( self.firestore,self.genai,self.app_config)
-        logger.info("\nInitialized LiveStatusAgent")
+        self.live_status_agent = Live_Status_Model( self.firestore,self.genai,self.app_config,self.logger)
+        self.logger.info("\nInitialized LiveStatusAgent")
 
  
-        self.rag_rag_search_agent = RagSearchModel( self.firestore,self.genai,self.app_config)
-        logger.info("\nInitialized RagSearchModel Instance")
+        self.rag_rag_search_agent = RagSearchModel( self.firestore,self.genai,self.app_config,self.logger)
+        self.logger.info("\nInitialized RagSearchModel Instance")
 
 
-        self.discord_agent = DiscordModel( self.firestore,self.genai,self.app_config)
-        logger.info("\nInitailized DIscord Model Instance")
+        self.discord_agent = DiscordModel( self.firestore,self.genai,self.app_config,self.logger)
+        self.logger.info("\nInitailized DIscord Model Instance")
 
 
-        self.superior_agent = SuperiorModel( self.firestore,self.genai,self.app_config)
-        logger.info("\nInitialized ActionAgent Global Instance")
+        self.superior_agent = SuperiorModel( self.firestore,self.genai,self.app_config,self.logger)
+        self.logger.info("\nInitialized ActionAgent Global Instance")
         
-        self.agent_tools = AgentTools(firestore,discord_state,utils,app_config, self.live_status_agent, self.rag_rag_search_agent, self.discord_agent)
-        logger.info("\nInitialized Agent Tools")
+        self.agent_tools = AgentTools(firestore,discord_state,utils,app_config, self.live_status_agent, self.rag_rag_search_agent, self.discord_agent,self.logger)
+        self.logger.info("\nInitialized Agent Tools")
     
     async def execute_function(self, function_call: Any) -> str:
         function_mapping = {

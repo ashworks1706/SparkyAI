@@ -1,18 +1,19 @@
 from utils.common_imports import *
 class AgentTools:
-    def __init__(self,firestore,discord_state,utils,app_config, live_status_agent,rag_rag_search_agent,discord_agent):
+    def __init__(self,firestore,discord_state,utils,app_config, live_status_agent,rag_rag_search_agent,discord_agent, logger):
         self.visited_urls = set()
         self.max_depth = 2
         self.max_links_per_page = 3
         self.discord_state = discord_state
         self.utils = utils
+        self.logger = logger
         self.firestore = firestore
         self.discord_client = self.discord_state.get('discord_client')
-        logger.info(f"Initialized Discord Client : {self.discord_client}")
+        self.logger.info(f"Initialized Discord Client : {self.discord_client}")
         self.guild = self.discord_state.get('target_guild')
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
         self.conversations = {}
         self.app_config= app_config
         self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
@@ -82,10 +83,10 @@ class AgentTools:
         doc_title = " ".join(shuttle_route)
         search_url="https://asu-shuttles.rider.peaktransit.com/"
 
-        logger.info(shuttle_route)
+        self.logger.info(shuttle_route)
         
         if len(shuttle_route) == 1:
-            logger.info("\nOnly one route")
+            self.logger.info("\nOnly one route")
             route = next(iter(shuttle_route))
             return await self.utils.perform_web_search(search_url, optional_query=route,doc_title=doc_title, doc_category ="shuttles_status")
 
@@ -94,7 +95,7 @@ class AgentTools:
         try:
             for route in shuttle_route:
                 result += await self.utils.perform_web_search(search_url, optional_query=route,doc_title=doc_title, doc_category ="shuttles_status")
-            logger.info("\nDone")
+            self.logger.info("\nDone")
             return result
         except Exception as e:
             return f"Error performing shuttle search: {str(e)}"
@@ -514,7 +515,7 @@ class AgentTools:
         search_url = "https://app.joinhandshake.com/stu/postings"
         
         results = []
-        logger.info(f"Requested search query : {query}")
+        self.logger.info(f"Requested search query : {query}")
         doc_title = ""
         if search_bar_query:
             doc_title = " ".join(search_bar_query) if isinstance(search_bar_query, list) else search_bar_query
@@ -657,7 +658,7 @@ classcatalog
             'units': _convert_to_query_string(num_of_credit_units, CREDIT_UNITS_MAP)
         }
         
-        logger.info(params)
+        self.logger.info(params)
 
         # Remove None values and construct URL
         search_url = 'https://catalog.apps.asu.edu/catalog/classes/classlist?' + '&'.join(
@@ -695,14 +696,14 @@ classcatalog
         self.guild = self.discord_state.get('target_guild')
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
 
         if not request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
         await self.utils.update_text("Checking available discord helpers...")
 
-        logger.info("Contact Model: Handling contact request for helper notification")
+        self.logger.info("Contact Model: Handling contact request for helper notification")
 
         try:
 
@@ -750,7 +751,7 @@ classcatalog
             return f"Server Helper Assigned: {selected_helper.name}\n"
 
         except Exception as e:
-            logger.error(f"Error notifying helpers: {str(e)}")
+            self.logger.error(f"Error notifying helpers: {str(e)}")
             return f"An error occurred while notifying helpers: {str(e)}"
 
     async def notify_moderators(self, short_message_to_moderator: str) -> str:
@@ -758,7 +759,7 @@ classcatalog
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
         
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
 
 
         if not self.discord_state.get('request_in_dm'):
@@ -766,7 +767,7 @@ classcatalog
 
         await self.utils.update_text("Checking available discord moderators...")
 
-        logger.info("Contact Model: Handling contact request for moderator notification")
+        self.logger.info("Contact Model: Handling contact request for moderator notification")
 
         try:
             if not self.guild:
@@ -812,13 +813,13 @@ classcatalog
             return f"Moderator Assigned: {selected_helper.name}"
 
         except Exception as e:
-            logger.error(f"Error notifying moderators: {str(e)}")
+            self.logger.error(f"Error notifying moderators: {str(e)}")
             return f"An error occurred while notifying moderators: {str(e)}"
 
     async def start_recording_discord_call(self,channel_id:Any) -> str: 
 
         
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
         await self.utils.update_text("Checking user permissions...")
        
         if not self.discord_state.get('user_has_mod_role'):
@@ -830,21 +831,21 @@ classcatalog
         if not self.discord_state.get('user_voice_channel_id'):
             return "User is not in a voice channel. User needs to be in a voice channel to start recording. Exiting command..."
 
-        logger.info("Discord Model: Handling recording request")
+        self.logger.info("Discord Model: Handling recording request")
 
         return f"Recording started!"
 
     async def create_discord_forum_post(self, title: str, category: str, body_content_1: str, body_content_2: str, body_content_3: str, link:str=None) -> str:
         self.guild = self.discord_state.get('target_guild')
         
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
         await self.utils.update_text("Checking user permissions...")
 
 
         if not self.discord_state.get('request_in_dm'):
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
-        logger.info("Discord Model: Handling discord forum request with context")
+        self.logger.info("Discord Model: Handling discord forum request with context")
 
         try:
             if not self.guild:
@@ -854,7 +855,7 @@ classcatalog
                 # Find the forum channel 
                 forum_channel = discord.self.utils.get(self.guild.forums, name='qna')  # Replace with your forum channel name
             except Exception as e:
-                logger.error(f"Error finding forum channel: {str(e)}")
+                self.logger.error(f"Error finding forum channel: {str(e)}")
                 return f"An error occurred while finding the forum channel: {str(e)}"
             if not forum_channel:
                 return "Forum channel not found. Please ensure the forum exists."
@@ -864,7 +865,7 @@ classcatalog
             if link:
                 content+=f"\n[Link]({link})"
             try:
-                logger.info(f"Forum channel ID: {forum_channel.id if forum_channel else 'None'}")
+                self.logger.info(f"Forum channel ID: {forum_channel.id if forum_channel else 'None'}")
                 
                 thread = await forum_channel.create_thread(
                     name=title,
@@ -873,9 +874,9 @@ classcatalog
 
             except Exception as e:
                 
-                logger.error(f"Error creating forum thread: {str(e)}")
+                self.logger.error(f"Error creating forum thread: {str(e)}")
                 return f"An error occurred while creating the forum thread: {str(e)}"
-            logger.info(f"Created forum thread {thread.message.id} {type(thread)}")
+            self.logger.info(f"Created forum thread {thread.message.id} {type(thread)}")
             
             self.utils.update_ground_sources([f"https://discord.com/channels/1256076931166769152/{thread.id}"])
             return f"Forum post created successfully.\nTitle: {title}\nDescription: {content[:100]}...\n"
@@ -884,10 +885,10 @@ classcatalog
         except discord.errors.Forbidden:
             return "The bot doesn't have permission to create forum posts. Please contact an administrator."
         except discord.errors.HTTPException as e:
-            logger.error(f"HTTP error creating forum post: {str(e)}")
+            self.logger.error(f"HTTP error creating forum post: {str(e)}")
             return f"An error occurred while creating the forum post: {str(e)}"
         except Exception as e:
-            logger.error(f"Error creating forum post: {str(e)}")
+            self.logger.error(f"Error creating forum post: {str(e)}")
             return f"An unexpected error occurred while creating the forum post: {str(e)}"
     
     async def create_discord_announcement(self, ping: str, title: str, category: str, body_content_1: str, body_content_2: str, body_content_3: str, link:str = None) -> str:
@@ -897,7 +898,7 @@ classcatalog
         await self.utils.update_text("Checking user permissions...")
 
 
-        logger.info(f"Discord Model: Handling discord announcement request with context")
+        self.logger.info(f"Discord Model: Handling discord announcement request with context")
 
         if not self.discord_state.get('request_in_dm'):
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
@@ -928,13 +929,13 @@ classcatalog
             return f"Announcement created successfully."
 
         except Exception as e:
-            logger.error(f"Error creating announcement: {str(e)}")
+            self.logger.error(f"Error creating announcement: {str(e)}")
             return f"An error occurred while creating the announcement: {str(e)}"
   
     async def create_discord_event(self, title: str, time_start: str, time_end: str, description: str, img_provided: Any = None) -> str:
         self.guild = self.discord_state.get('target_guild')
         
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
         await self.utils.update_text("Checking user permissions...")
 
 
@@ -944,7 +945,7 @@ classcatalog
         if not self.discord_state.get('user_has_mod_role'):
             return "User does not have enough permissions to create an event. This command is only accessible by moderators. Exiting command..."
 
-        logger.info("Discord Model: Handling discord event creation request")
+        self.logger.info("Discord Model: Handling discord event creation request")
 
         try:
             if self.guild:
@@ -989,7 +990,7 @@ classcatalog
         except ValueError as e:
             return f"Invalid date format: {str(e)}"
         except Exception as e:
-            logger.error(f"Error creating event: {str(e)}")
+            self.logger.error(f"Error creating event: {str(e)}")
             return f"An unexpected error occurred while creating the event: {str(e)}"
     
     async def search_discord(self,query:str):
@@ -1008,7 +1009,7 @@ classcatalog
         if not self.discord_state.get('user_has_mod_role'):
             return "User does not have enough permissions to create a poll. This command is only accessible by moderators. Exiting command..."
 
-        logger.info("Discord Model: Handling discord poll creation request")
+        self.logger.info("Discord Model: Handling discord poll creation request")
 
         try:
             if not self.guild:
@@ -1027,14 +1028,14 @@ classcatalog
                     poll_message += f"{emoji_options[i]} {option}\n"
                     
             except Exception as e:
-                logger.error(f"Error creating poll options: {str(e)}")
+                self.logger.error(f"Error creating poll options: {str(e)}")
                 return f"An unexpected error occurred while creating poll options: {str(e)}"
             
             # Send the poll message
             try:
                 poll = await channel.send(poll_message)
             except Exception as e:
-                logger.error(f"Error sending poll message: {str(e)}")
+                self.logger.error(f"Error sending poll message: {str(e)}")
                 return  f"An unexpected error occurred while sending poll: {str(e)}"
             
             self.utils.update_ground_sources([poll.jump_url])  
@@ -1045,7 +1046,7 @@ classcatalog
                 for i in range(len(options)):
                     await poll.add_reaction(emoji_options[i])
             except Exception as e:
-                logger.error(f"Error adding reactions to poll: {str(e)}")
+                self.logger.error(f"Error adding reactions to poll: {str(e)}")
                 return f"An unexpected error occurred while adding reactions to poll: {str(e)}"
             
             return f"Poll created successfully in channel '{channel_name}'.\nQuestion: {question}\nOptions: {', '.join(options)}"
@@ -1053,7 +1054,7 @@ classcatalog
         except discord.errors.Forbidden:
             return "The bot doesn't have permission to create polls or send messages in the specified channel. Please contact an administrator."
         except Exception as e:
-            logger.error(f"Error creating poll: {str(e)}")
+            self.logger.error(f"Error creating poll: {str(e)}")
             return f"An unexpected error occurred while creating the poll: {str(e)}"
             
     def get_final_url(self,url):
@@ -1061,33 +1062,33 @@ classcatalog
             response = requests.get(url, allow_redirects=True)
             return response.url
         except Exception as e:
-            logger.error(e)
+            self.logger.error(e)
             return e  
 
     async def access_rag_search_agent(self, instruction_to_agent: str, special_instructions: str):
-        logger.info(f"Action Model : accessing search agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"Action Model : accessing search agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         try:
             response = await self.rag_rag_search_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
-            logger.error(f"Error in access search agent: {str(e)}")
+            self.logger.error(f"Error in access search agent: {str(e)}")
             return f"Search Agent Not Responsive"
          
     async def access_discord_agent(self, instruction_to_agent: str,special_instructions: str):
-        logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         try:
             response = await self.discord_agent.determine_action(instruction_to_agent,special_instructions)
             
             return response
         except Exception as e:
-            logger.error(f"Error in access discord agent: {str(e)}")
+            self.logger.error(f"Error in access discord agent: {str(e)}")
             return f"Discord Agent Not Responsive"
         
     async def get_user_profile_details(self) -> str:
         """Retrieve user profile details from the Discord server"""
         self.guild = self.discord_state.get('target_guild')
         self.user_id = self.discord_state.get('user_id')
-        logger.info(f"Discord Model: Handling user profile details request for user ID: {user_id}")
+        self.logger.info(f"Discord Model: Handling user profile details request for user ID: {user_id}")
 
         if not request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
@@ -1123,33 +1124,33 @@ classcatalog
         except discord.errors.NotFound:
             return f"User with ID {user_id} not found in the server."
         except Exception as e:
-            logger.error(f"Error retrieving user profile: {str(e)}")
+            self.logger.error(f"Error retrieving user profile: {str(e)}")
             return f"An error occurred while retrieving the user profile: {str(e)}"
     
     async def get_discord_server_info(self) -> str:
              
         self.discord_client = self.discord_state.get('discord_client')
-        logger.info(f"Initialized Discord Client : {self.discord_client}")
+        self.logger.info(f"Initialized Discord Client : {self.discord_client}")
         self.guild = self.discord_state.get("target_guild")
         
-        logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"Initialized Discord Guild : {self.guild}")
         """Create discord forum post callable by model"""
 
         
-        logger.info(f"Discord Model : Handling discord server info request with context")
+        self.logger.info(f"Discord Model : Handling discord server info request with context")
                 
         
         return f"""1.Sparky Discord Server - Sparky Discord Server is a place where ASU Alumni's or current students join to hangout together, have fun and learn things about ASU together and quite frankly!
         2. Sparky Discord Bot -  AI Agent built to help people with their questions regarding ASU related information and sparky's discord server. THis AI Agent can also perform discord actions for users upon request."""
     
     async def access_live_status_agent(self, instruction_to_agent: str, special_instructions: str):
-        logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         
         try:
             response = await self.live_status_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
-            logger.error(f"Error in deep search agent: {str(e)}")
+            self.logger.error(f"Error in deep search agent: {str(e)}")
             return "I apologize, but I couldn't retrieve the information at this time."
               
     async def send_bot_feedback(self, feedback: str) -> str:
@@ -1158,7 +1159,7 @@ classcatalog
         
         await self.utils.update_text("Opening feedbacks...")
         
-        logger.info("Contact Model: Handling contact request for server feedback")
+        self.logger.info("Contact Model: Handling contact request for server feedback")
 
         try:
             # Find the feedbacks channel
@@ -1183,7 +1184,7 @@ classcatalog
             return f"Your feedback has been successfully submitted."
 
         except Exception as e:
-            logger.error(f"Error sending feedback: {str(e)}")
+            self.logger.error(f"Error sending feedback: {str(e)}")
             return f"An error occurred while sending your feedback: {str(e)}"
     
     def _get_chat_history(self, user_id):
@@ -1207,7 +1208,7 @@ classcatalog
         
         user_id = self.discord_state.get('user_id')
         responses=[]
-        logger.info(f"Action Model: accessing Google Search with instruction {original_query}")
+        self.logger.info(f"Action Model: accessing Google Search with instruction {original_query}")
         try:
             # Perform database search
             queries = [
@@ -1222,7 +1223,7 @@ classcatalog
 
             responses = [resp for resp in responses if resp]
         except:
-            logger.error("No results found in database")
+            self.logger.error("No results found in database")
             pass
         # Get chat history
         
@@ -1266,14 +1267,14 @@ classcatalog
             self._save_message(user_id, "user", original_query)
             self._save_message(user_id, "model", response_text)
 
-            logger.info(response_text)
+            self.logger.info(response_text)
 
             if not response_text:
-                logger.error("No response from Google Search")
+                self.logger.error("No response from Google Search")
                 return None
             return response_text
         except Exception as e:
-            logger.info(f"Google Search Exception {e}")
+            self.logger.info(f"Google Search Exception {e}")
             return responses 
         
 
@@ -1281,7 +1282,7 @@ classcatalog
         
         user_id = self.discord_state.get('user_id')
         responses=[]
-        logger.info(f"Action Model: accessing Google Search with instruction {original_query}")
+        self.logger.info(f"Action Model: accessing Google Search with instruction {original_query}")
         try:
             # Perform database search
             queries = [
@@ -1296,7 +1297,7 @@ classcatalog
 
             responses = [resp for resp in responses if resp]
         except:
-            logger.error("No results found in database")
+            self.logger.error("No results found in database")
             pass
         # Get chat history
         
@@ -1340,12 +1341,12 @@ classcatalog
             self._save_message(user_id, "user", original_query)
             self._save_message(user_id, "model", response_text)
 
-            logger.info(response_text)
+            self.logger.info(response_text)
 
             if not response_text:
-                logger.error("No response from Google Search")
+                self.logger.error("No response from Google Search")
                 return None
             return response_text
         except Exception as e:
-            logger.info(f"Google Search Exception {e}")
+            self.logger.info(f"Google Search Exception {e}")
             return responses 
