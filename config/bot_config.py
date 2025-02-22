@@ -1,5 +1,5 @@
+from config.app_config import AppConfig
 
-@dataclass
 class BotConfig:
     """Configuration for Discord bot"""
     command_name: str = "ask"
@@ -7,6 +7,5 @@ class BotConfig:
     max_question_length: int = 300
     max_response_length: int = 2000
     chunk_size: int = 1900
-    token: str = app_config.get_discord_bot_token()  
+    token: str = AppConfig().get_discord_bot_token()  
     thinking_timeout: int = 60
-
