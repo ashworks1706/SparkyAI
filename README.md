@@ -191,12 +191,19 @@ The modular architecture allows for easy extension:
 2. Install dependencies:
 
    ```bash
+   python -m venv venv
+   source venv/bin/activate
    pip install -r requirements.txt
    ```
 3. Add API keys:
 
    - Create `config.json` with keys for Google Search, Discord, and ASU webhooks.
    - Add `clientsecret.json` for GoogleSheet API.
+4. Setup Qdrant Vector Database:
+
+  ```bash
+  docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+  ```
 4. Run the bot:
 
    ```bash
@@ -222,144 +229,146 @@ These papers have significantly contributed to the field of vector similarity se
 
 ## Future Timeline
 
-* [X] Financial Research
-  * [X] calculate possible costs as of right now (APIs , Hosting, etc)
-  * [X] calculate required average users
-  * [X] determine costs average per day/month including all parameters
-  * [X] research alternative services ( GCP, Gemini)
-  * [X] research alternative methods (Self hosting, AI APIs)
-  * [X] Compare costs
-  * [X] pick appropriate model for architecutre
-    * [ ] gpt → reasoning superior agent
-    * [ ] deepseek → deep reasoning search agent
-    * [ ] gemini → function calling sub agent
-    * [ ] research gemini search tool
-    * [X] restructured agent workflow
-* [X] Architecture Performance Review
-  * [X] Identify flaws in system architecture for the bot
-  * [X] Research possible solutions for fix without making sacrifices to performance
-  * [X] Create a visual diagram showcasing workflow of the architecture
-* [X] Product Vision Research
-  * [X] Brainstorm better ideas for Sparky AI Use
-  * [X] Figure out how to implement them in current architecture
-  * [X] research their costs x value function
-* [ ] Development
-  * [ ] **Code Refactoring and Technical Debt**
-    * [X] Restructure codebase
-      * [X] Convert Jupyter notebook to modular Python scripts
-      * [X] Split `utils.py` into `retrieval/`, `preprocessing/`, and `agents/` modules
-    * [ ] Clean up code
-      * [X] Remove Jupyter-specific async workarounds
-      * [ ] develop agent sync chain with group chat like communication and calls
-      * [ ] Eliminate dead code (unused KMeans imports, tracemalloc hooks)
-      * [ ] Resolve `googlesearchtool` vs `GoogleSearch` implementation divergences
-      * [ ] combine google and search agent response to respond
-    * [ ] Improve code quality
-      * [ ] Add MyPy type checking CI step
-      * [ ] Implement more specific exception handling
-  * [ ] **Model and Agent Improvements**
-    * [ ] Optimize Gemini usage
-      * [ ] Implement Gemini 2.0 thinking model
-      * [ ] Fine-tune Gemini action model
-        * [ ] Fix inter-agent communication using native function calling
-        * [ ] Continue dataset creation and modification
-        * [ ] Train the model
-    * [ ] Implement DeepSeek R1 reinforcement learning technique
-    * [ ] Implement Adaptive Computation for efficient resource allocation
-    * [ ] Make agents prompt more scalable for robust customer service and scalable expansion
-  * [ ] **RAG and Search Improvements**
-    * [ ] Enhance document preprocessing
-      * [ ] Implement layout-aware PDF chunking using `unstructured.io` library
-      * [ ] Improve sequential chunking strategy for nested ASU documents
-    * [ ] Optimize vector search
-      * [ ] Implement hybrid search with BM25+SPLADE in Qdrant
-      * [ ] Add content drift detection in `shouldstoredocument` using checksum comparison
-    * [ ] Implement caching mechanisms
-      * [ ] Add FP16 embedding cache with Redis
-      * [ ] Implement RAG Cache
-    * [ ] Implement Self improvement
-      * [ ] CRAG → update documents after retrieval if more functions are called
-    * [ ] Enhance retrieval methods
-      * [ ] Implement SOAR (sparse retrieval methods)
-      * [ ] Implement graph RAG
-    * [ ] Improve query processing
-      * [ ] Add query intent classifier to bypass RAG for simple searches
-      * [ ] Implement "lost in the middle" solutions
-  * [ ] **Performance Optimization**
-    * [ ] Optimize agent communication
-      * [ ] Convert blocking Gemini calls in `ActionAgent` to asynchronous using `asyncio.to_thread()`
-      * [ ] Implement thread safety in `DiscordState` class using `RLock()`
-    * [ ] Enhance error handling and reliability
-      * [ ] Implement dead letter queue using Redis for failed agent requests
-      * [ ] Add circuit breakers using `pybreaker` for API calls
-      * [ ] Implement structured error logging with OpenTelemetry tracing
-    * [ ] Optimize Selenium usage
-      * [ ] Implement request coalescing for duplicate Selenium jobs
-      * [ ] Migrate from Selenium to Jina Reader for efficient web scraping
-  * [ ] **Security Enhancements (Critical)**
-    * [ ] Implement encrypted credential management
-      * [ ] Migrate `clientsecret.json`, Discord tokens, and Handshake credentials to Google Cloud Secret Manager
-      * [ ] Remove plaintext credentials from config files
-    * [ ] Enhance endpoint security
-      * [ ] Implement rate limiting for Discord webhooks and Google Cloud endpoints
-      * [ ] Set up IP whitelisting for sensitive endpoints
-    * [ ] Improve web scraping security
-      * [ ] Implement secure credential handling for Handshake login
-      * [ ] Add input sanitization for web scraping using BeautifulSoup's `cleaner` module
-  * [ ] **Data Management and Pipeline**
-    * [ ] Improve Firestore integration
-      * [ ] Add schema versioning to Firestore collections
-      * [ ] Delete Google sheet and use Firestore entirely
-    * [ ] Enhance data refinement
-      * [ ] Develop data refiner agent to process data before RAG storage
-      * [ ] Implement storage of only useful data
-    * [ ] Implement User Profile AI Agent
-      * [ ] Store user personality and behavior information in Firebase
-      * [ ] Add user context to action agent
-      * [ ] Integrate user information option in RAG database search function
-  * [ ] **Website launch**
-    * [ ] **Live Chat Implementation**
-      * [ ] Implement WebSocket API for real-time chat
-        * [ ] Use FastAPI+WebSockets
-        * [ ] Add JWT authentication for ASU IDs
-      * [ ] Build chat interface components
-        * [ ] Create responsive chat UI
-        * [ ] Implement message threading
-        * [ ] Add file attachment support
-      * [ ] Add enterprise features
-        * [ ] Session transfer between agents
-        * [ ] Proactive assistance prompts
-        * [ ] Screen sharing integration
-    * [ ] **Analytics and Monitoring**
-      * [ ] Develop Next.js website for analytics
-        * [ ] Fetch and display content from Firebase
-        * [ ] Implement chat, metrics, and analytics visualizations
-        * [ ] Set up system for deploying fetched chats as training dataset
-        * [ ] Add data engineering tools for editing dataset chat and converting csv, downladable
-    * [ ] **Compliance & Accessibility**
-      * [ ] Implement WCAG 2.2 compliance
-      * [ ] Add FERPA/GDPR data purge automation
-      * [ ] Create session recording system
-  * [ ] **Infrastructure and Deployment**
-    * [ ] Configure premium services
-      * [ ] Update Google Cloud premium settings
-      * [ ] Finalize decision between Llama and DeepSeek
-    * [ ] Optimize cloud resource usage
-      * [ ] Implement efficient management of Selenium instances
-      * [ ] Set up auto-scaling for compute resources
-  * [ ] **Specific Feature Improvements**
-    * [ ] Enhance job search function
-      * [ ] Refine query parameters
-      * [ ] Implement secure web scraper login for Workday
-    * [ ] Improve Discord integration
-      * [ ] Configure specific channels for data fetching
-      * [ ] Implement reranking with LongContextOrder Document Transformer and Cross Encoder
-  * [ ] **Team Expansion**
-    * [ ] Recruit developers with expertise in:
-      * [ ] Web/software development
-      * [ ] Python data structures
-      * [ ] LLMs and AI
-      * [ ] Specific requirements: Interest in AI, web scraping, LangChain, [Discord.py](http://Discord.py)
+- [x]  Financial Research
+    - [x]  calculate possible costs as of right now (APIs , Hosting, etc)
+    - [x]  calculate required average users
+    - [x]  determine costs average per day/month including all parameters
+    - [x]  research alternative services ( GCP, Gemini)
+    - [x]  research alternative methods (Self hosting, AI APIs)
+    - [x]  Compare costs
+    - [x]  pick appropriate model for architecutre
+        - [ ]  gpt → reasoning superior agent
+        - [ ]  deepseek → deep reasoning search agent
+        - [ ]  gemini → function calling sub agent
+        - [ ]  research gemini search tool
+        - [x]  restructured agent workflow
+- [x]  Architecture Performance Review
+    - [x]  Identify flaws in system architecture for the bot
+    - [x]  Research possible solutions for fix without making sacrifices to performance
+    - [x]  Create a visual diagram showcasing workflow of the architecture
+- [x]  Product Vision Research
+    - [x]  Brainstorm better ideas for Sparky AI Use
+    - [x]  Figure out how to implement them in current architecture
+    - [x]  research their costs x value function
+- [ ]  Development
+    - [ ]  **Code Refactoring and Technical Debt**
+        - [x]  Restructure codebase
+            - [x]  Convert Jupyter notebook to modular Python scripts
+            - [x]  Split `utils.py` into `retrieval/`, `preprocessing/`, and `agents/` modules
+        - [ ]  Clean up code
+            - [x]  Remove Jupyter-specific async workarounds
+            - [ ]  convert to linux based environment
+            - [ ]  create working, train and deployment branches
+            - [ ]  Eliminate dead code (unused KMeans imports, tracemalloc hooks)
+            - [ ]  Resolve `googlesearchtool` vs `GoogleSearch` implementation divergences
+            - [ ]  combine google and search agent response to respond
+        - [ ]  Improve code quality
+            - [ ]  Add MyPy type checking CI step
+            - [ ]  Implement more specific exception handling
+    - [ ]  **Model and Agent Improvements**
+    - [ ]  develop agent sync chain with group chat like communication and calls
+    - [ ]  Optimize Gemini usage
+        - [ ]  Implement Gemini 2.0 thinking model
+        - [ ]  Fine-tune Gemini action model
+            - [ ]  Fix inter-agent communication using native function calling
+            - [ ]  Continue dataset creation and modification
+            - [ ]  Train the model
+    - [ ]  Implement DeepSeek R1 reinforcement learning technique
+    - [ ]  Implement Adaptive Computation for efficient resource allocation
+    - [ ]  Make agents prompt more scalable for robust customer service and scalable expansion
+    - [ ]  **RAG and Search Improvements**
+        - [ ]  Enhance document preprocessing
+            - [ ]  Implement layout-aware PDF chunking using `unstructured.io` library
+            - [ ]  Improve sequential chunking strategy for nested ASU documents
+        - [ ]  Optimize vector search
+            - [ ]  Implement hybrid search with BM25+SPLADE in Qdrant
+            - [ ]  Add content drift detection in `shouldstoredocument` using checksum comparison
+        - [ ]  Implement caching mechanisms
+            - [ ]  Add FP16 embedding cache with Redis
+            - [ ]  Implement RAG Cache
+        - [ ]  Implement Self improvement
+            - [ ]  CRAG → update documents after retrieval if more functions are called
+        - [ ]  Enhance retrieval methods
+            - [ ]  Implement SOAR (sparse retrieval methods)
+            - [ ]  Implement graph RAG
+        - [ ]  Improve query processing
+            - [ ]  Add query intent classifier to bypass RAG for simple searches
+            - [ ]  Implement "lost in the middle" solutions
+    - [ ]  **Performance Optimization**
+        - [ ]  Optimize agent communication
+            - [ ]  Convert blocking Gemini calls in `ActionAgent` to asynchronous using `asyncio.to_thread()`
+            - [ ]  Implement thread safety in `DiscordState` class using `RLock()`
+        - [ ]  Enhance error handling and reliability
+            - [ ]  Implement dead letter queue using Redis for failed agent requests
+            - [ ]  Add circuit breakers using `pybreaker` for API calls
+            - [ ]  Implement structured error logging with OpenTelemetry tracing
+        - [ ]  Optimize Selenium usage
+            - [ ]  Implement request coalescing for duplicate Selenium jobs
+            - [ ]  Migrate from Selenium to Jina Reader for efficient web scraping
+    - [ ]  **Security Enhancements (Critical)**
+        - [ ]  Implement encrypted credential management
+            - [ ]  Migrate `clientsecret.json`, Discord tokens, and Handshake credentials to Google Cloud Secret Manager
+            - [ ]  Remove plaintext credentials from config files
+        - [ ]  Enhance endpoint security
+            - [ ]  Implement rate limiting for Discord webhooks and Google Cloud endpoints
+            - [ ]  Set up IP whitelisting for sensitive endpoints
+        - [ ]  Improve web scraping security
+            - [ ]  Implement secure credential handling for Handshake login
+            - [ ]  Add input sanitization for web scraping using BeautifulSoup's `cleaner` module
+    - [ ]  **Data Management and Pipeline**
+        - [ ]  Improve Firestore integration
+            - [ ]  Add schema versioning to Firestore collections
+            - [ ]  Delete Google sheet and use Firestore entirely
+        - [ ]  Enhance data refinement
+            - [ ]  Develop data refiner agent to process data before RAG storage
+            - [ ]  Implement storage of only useful data
+        - [ ]  Implement User Profile AI Agent
+            - [ ]  Store user personality and behavior information in Firebase
+            - [ ]  Add user context to action agent
+            - [ ]  Integrate user information option in RAG database search function
+    - [ ]  **Website launch**
+        - [ ]  **Live Chat Implementation**
+            - [ ]  Implement WebSocket API for real-time chat
+                - [ ]  Use FastAPI+WebSockets
+                - [ ]  Add JWT authentication for ASU IDs
+            - [ ]  Build chat interface components
+                - [ ]  Create responsive chat UI
+                - [ ]  Implement message threading
+                - [ ]  Add file attachment support
+            - [ ]  Add enterprise features
+                - [ ]  Session transfer between agents
+                - [ ]  Proactive assistance prompts
+                - [ ]  Screen sharing integration
+        - [ ]  **Analytics and Monitoring**
+            - [ ]  Develop Next.js website for analytics
+                - [ ]  Fetch and display content from Firebase
+                - [ ]  Implement chat, metrics, and analytics visualizations
+                - [ ]  Set up system for deploying fetched chats as training dataset
+                - [ ]  Add data engineering tools for editing dataset chat and converting csv, downladable
+        - [ ]  **Compliance & Accessibility**
+            - [ ]  Implement WCAG 2.2 compliance
+            - [ ]  Add FERPA/GDPR data purge automation
+            - [ ]  Create session recording system
+    - [ ]  **Infrastructure and Deployment**
+        - [ ]  Configure premium services
+            - [ ]  Update Google Cloud premium settings
+            - [ ]  Finalize decision between Llama and DeepSeek
+        - [ ]  Optimize cloud resource usage
+            - [ ]  Implement efficient management of Selenium instances
+            - [ ]  Set up auto-scaling for compute resources
+    - [ ]  **Specific Feature Improvements**
+        - [ ]  Enhance job search function
+            - [ ]  Refine query parameters
+            - [ ]  Implement secure web scraper login for Workday
+        - [ ]  Improve Discord integration
+            - [ ]  Configure specific channels for data fetching
+            - [ ]  Implement reranking with LongContextOrder Document Transformer and Cross Encoder
+    - [ ]  **Team Expansion**
+        - [ ]  Recruit developers with expertise in:
+            - [ ]  Web/software development
+            - [ ]  Python data structures
+            - [ ]  LLMs and AI
+            - [ ]  Specific requirements: Interest in AI, web scraping, LangChain, Discord.py
 
 ## License
 
