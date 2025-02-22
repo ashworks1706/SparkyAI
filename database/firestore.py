@@ -6,11 +6,11 @@ class Firestore:
         self.db = firestore.client()
         self.collection = None
         self.document = {
-            "action_agent_message": [],
+            "superior_agent_message": [],
             "discord_agent_message": [],
             "google_agent_message": [],
             "live_status_agent_message": [],
-            "search_agent_message": [],
+            "rag_search_agent_message": [],
             "user_id": "",
             "user_message": "",
             "time": "",

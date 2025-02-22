@@ -1,16 +1,13 @@
 class OTPVerificationModal(discord.ui.Modal):
-    def __init__(self, correct_otp, email,spreadsheet_id,creds,service):
+    def __init__(self, correct_otp, email):
         super().__init__(title="Enter OTP")
         self.correct_otp = correct_otp
         self.email = email
-        self.spreadsheet_id = spreadsheet_id
         self.otp = discord.ui.TextInput(
             label="ENTER OTP",
             placeholder="Enter the 6-digit OTP sent to your email",
             custom_id="otp_input"
         )
-        self.service = service
-        self.creds = creds
         self.add_item(self.otp)
 
     async def on_submit(self, interaction: discord.Interaction):

@@ -83,17 +83,23 @@ import google.generativeai as genai
 from google.ai.generativelanguage_v1beta.types import content
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-from google import genai as genai2
+from google import genai as genai_vertex
 from google.genai import types
 from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 
 from config.app_config import AppConfig
-from utils.discord_state import DiscordState 
-from rag.vector_store import VectorStore
+from config.bot_config import BotConfig
+
+from rag.data_processor import DataPreprocessor
+from rag.agents import Agents
 from database.firestore import Firestore
+from utils.discord_state import DiscordState
 from utils.utils import Utils
-from rag.data_preprocessor import DataPreprocessor
-from agents.agent_tools import AgentTools
+from discord_bot import ASUDiscordBot
+from rag.web_scrape import ASUWebScraper
+from rag.vector_store import VectorStore
+
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -107,17 +113,22 @@ tracemalloc.start()
 
 logger = logging.getLogger(__name__)
 
+
+
+
 app_config = AppConfig()
+
+asu_data_processor = DataPreprocessor()
+
+discord_state = DiscordState()
+
+
 
 genai.configure(api_key=app_config.get_api_key())
 
 asu_store = VectorStore(force_recreate=False)
 
-discord_state = DiscordState()
-
 firestore = Firestore(discord_state)
-
-asu_data_processor = DataPreprocessor()
 
 utils = Utils(asu_store,asu_data_processor,asu_scraper)
 
@@ -131,9 +142,12 @@ logger.info("\nASU RAG INITIALIZED SUCCESSFULLY")
 logger.info("\n---------------------------------------------------------------")
 
 
-def run_discord_bot(rag_pipeline, config: Optional[BotConfig] = None):
+def run_discord_bot(config: Optional[BotConfig] = None):
     """Run the Discord bot"""
-    bot = ASUDiscordBot(agents,firestore,rag_pipeline, config,discord_state,utils)
+    bot = ASUDiscordBot(config,agents,firestore,discord_state,utils,asu_store)
+    
+    await asu_scraper.__login__(app_config.get_handshake_user(),app_config.get_handshake_pass() )
+
     
     async def run():
         try:
@@ -152,4 +166,4 @@ if __name__ == "__main__":
     config = BotConfig(
         token=app_config.get_discord_bot_token(),app_config
     )
-    run_discord_bot(asu_rag, config)
+    run_discord_bot(config)

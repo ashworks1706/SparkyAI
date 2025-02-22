@@ -3,16 +3,10 @@ class VerificationModal(discord.ui.Modal):
         super().__init__(title="ASU Email Verification")
         self.email = discord.ui.TextInput(
             label="ENTER YOUR ASU EMAIL",
-            placeholder="yourname@asu.edu",
+            placeholder="ASURITE@asu.edu",
             custom_id="email_input"
         )
-        self.creds = Credentials.from_service_account_file(
-            'client_secret.json',
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
-        self.service = build('sheets', 'v4', credentials=self.creds)
         self.stored_otp = None
-        self.spreadsheet_id = app_config.get_spreadsheet_id()
         self.add_item(self.email)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -23,7 +17,7 @@ class VerificationModal(discord.ui.Modal):
                 view = discord.ui.View()
                 button = discord.ui.Button(label="Enter OTP", style=discord.ButtonStyle.primary)
                 async def button_callback(button_interaction):
-                    await button_interaction.response.send_modal(OTPVerificationModal(self.stored_otp, self.email.value, self.spreadsheet_id, self.creds, self.service))
+                    await button_interaction.response.send_modal(OTPVerificationModal(self.stored_otp, self.email.value))
                 button.callback = button_callback
                 view.add_item(button)
                 await interaction.response.send_message("OTP has been sent to your email. Click the button below to enter it.", view=view, ephemeral=True)

@@ -8,27 +8,27 @@ class Agents:
 
         logger.info("\nInitialized DataModel")
 
-        self.asu_live_status_agent = Live_Status_Model( self.firestore,self.genai,self.app_config)
+        self.live_status_agent = Live_Status_Model( self.firestore,self.genai,self.app_config)
         logger.info("\nInitialized LiveStatusAgent")
 
  
-        self.asu_search_agent = SearchModel( self.firestore,self.genai,self.app_config)
-        logger.info("\nInitialized SearchModel Instance")
+        self.rag_rag_search_agent = RagSearchModel( self.firestore,self.genai,self.app_config)
+        logger.info("\nInitialized RagSearchModel Instance")
 
 
-        self.asu_discord_agent = DiscordModel( self.firestore,self.genai,self.app_config)
+        self.discord_agent = DiscordModel( self.firestore,self.genai,self.app_config)
         logger.info("\nInitailized DIscord Model Instance")
 
 
-        self.asu_action_agent = ActionModel( self.firestore,self.genai,self.app_config)
+        self.superior_agent = SuperiorModel( self.firestore,self.genai,self.app_config)
         logger.info("\nInitialized ActionAgent Global Instance")
         
-        self.agent_tools = AgentTools(firestore,discord_state,utils,app_config, self.asu_live_status_agent, self.asu_search_agent, self.asu_discord_agent)
+        self.agent_tools = AgentTools(firestore,discord_state,utils,app_config, self.live_status_agent, self.rag_rag_search_agent, self.discord_agent)
         logger.info("\nInitialized Agent Tools")
     
     async def execute_function(self, function_call: Any) -> str:
         function_mapping = {
-            'access_search_agent': self.agent_tools.access_search_agent,
+            'access_rag_search_agent': self.agent_tools.access_rag_search_agent,
             'access_google_agent': self.agent_tools.access_google_agent,
             'access_discord_agent': self.agent_tools.access_discord_agent,
             'send_bot_feedback': self.agent_tools.send_bot_feedback,
@@ -62,3 +62,5 @@ class Agents:
         
         function_to_call = function_mapping[function_name]
         return await function_to_call(**function_args)
+    async def process_question(self, question: str) -> str:
+        return self.superior_agent.process_question(question)

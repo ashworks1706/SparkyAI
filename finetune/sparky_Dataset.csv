@@ -3587,7 +3587,7 @@ User's question,Function call
 }
 
 "", ""ASU offers comprehensive counseling services for students through ASU Counseling Services. They provide confidential personal counseling and crisis services, with a focus on immediate access. You can reach out to counselors anytime through their Open Call/Open Chat system. To schedule an appointment, simply call (480) 965-6146. It's important to note that this is a confidential resource, so any information you share will be kept private. Whether you need same-day services or ongoing support, ASU Counseling Services is readily available to help you with your mental health needs.""]"
-"[""What are the current hours for the Hayden Library at ASU?,""(User cannot see this response) System Generated - \n{access_google_agent}\nResponse: ""The search results do not provide specific current hours for Hayden Library at ASU. While there is information about ASU Counseling Services and other resources, the exact operating hours for Hayden Library are not mentioned in the given search results.""\nAnalyze the response and answer the user's question."",""(User cannot see this response) System Generated - \n{access_search_agent}\nResponse: ""Hayden Library at ASU is currently open 24 hours a day, 7 days a week during the fall and spring semesters. This 24/7 schedule applies to the first through fourth floors. The fifth floor, which houses special collections, has different hours: Monday to Friday from 9 AM to 5 PM, and it's closed on weekends. During summer sessions and semester breaks, the library operates on reduced hours, typically 7 AM to 10 PM on weekdays and 9 AM to 10 PM on weekends. It's always best to check the ASU Library website for any recent changes or holiday schedules.""]","[""{
+"[""What are the current hours for the Hayden Library at ASU?,""(User cannot see this response) System Generated - \n{access_google_agent}\nResponse: ""The search results do not provide specific current hours for Hayden Library at ASU. While there is information about ASU Counseling Services and other resources, the exact operating hours for Hayden Library are not mentioned in the given search results.""\nAnalyze the response and answer the user's question."",""(User cannot see this response) System Generated - \n{access_rag_search_agent}\nResponse: ""Hayden Library at ASU is currently open 24 hours a day, 7 days a week during the fall and spring semesters. This 24/7 schedule applies to the first through fourth floors. The fifth floor, which houses special collections, has different hours: Monday to Friday from 9 AM to 5 PM, and it's closed on weekends. During summer sessions and semester breaks, the library operates on reduced hours, typically 7 AM to 10 PM on weekdays and 9 AM to 10 PM on weekends. It's always best to check the ASU Library website for any recent changes or holiday schedules.""]","[""{
   ""function_call"": {
     ""name"": ""access_google_agent"",
     ""args"": {
@@ -3601,7 +3601,7 @@ User's question,Function call
 }
 ,{
   ""function_call"": {
-    ""name"": ""access_search_agent"",
+    ""name"": ""access_rag_search_agent"",
     ""args"": {
       ""instruction_to_agent"": ""Find the current operating hours for Hayden Library at Arizona State University. Include any variations for weekdays, weekends, and special periods if available."",
       ""special_instructions"": ""The previous Google search did not yield specific information about Hayden Library hours. Please check ASU's official library website or recent announcements for the most up-to-date information.""

@@ -1,5 +1,5 @@
 class AgentTools:
-    def __init__(self,firestore,discord_state,utils,app_config, asu_live_status_agent,asu_search_agent,asu_discord_agent):
+    def __init__(self,firestore,discord_state,utils,app_config, live_status_agent,rag_rag_search_agent,discord_agent):
         self.visited_urls = set()
         self.max_depth = 2
         self.max_links_per_page = 3
@@ -14,7 +14,7 @@ class AgentTools:
         logger.info(f"Initialized Discord Guild : {self.guild}")
         self.conversations = {}
         self.app_config= app_config
-        self.client = genai2.Client(api_key=self.app_config.get_api_key())
+        self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
         self.model_id = "gemini-2.0-flash-exp"
         self.google_search_tool = Tool(google_search=GoogleSearch())    
                 
@@ -1060,10 +1060,10 @@ class AgentTools:
             logger.error(e)
             return e  
 
-    async def access_search_agent(self, instruction_to_agent: str, special_instructions: str):
+    async def access_rag_search_agent(self, instruction_to_agent: str, special_instructions: str):
         logger.info(f"Action Model : accessing search agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         try:
-            response = await self.asu_search_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.rag_rag_search_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
             logger.error(f"Error in access search agent: {str(e)}")
@@ -1072,7 +1072,7 @@ class AgentTools:
     async def access_discord_agent(self, instruction_to_agent: str,special_instructions: str):
         logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         try:
-            response = await self.asu_discord_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.discord_agent.determine_action(instruction_to_agent,special_instructions)
             
             return response
         except Exception as e:
@@ -1142,7 +1142,7 @@ class AgentTools:
         logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         
         try:
-            response = await self.asu_live_status_agent.determine_action(instruction_to_agent,special_instructions)
+            response = await self.live_status_agent.determine_action(instruction_to_agent,special_instructions)
             return response
         except Exception as e:
             logger.error(f"Error in deep search agent: {str(e)}")

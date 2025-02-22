@@ -1,4 +1,4 @@
-class ActionModel:
+class SuperiorModel:
     
     def __init__(self, firestore,genai,app_config):
         self.model = genai.GenerativeModel(model_name="gemini-1.5-flash",
@@ -15,14 +15,14 @@ class ActionModel:
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
             
-            system_instruction = f""" {self.app_config.get_action_agent_instruction()}""",
+            system_instruction = f""" {self.app_config.get_superior_agent_instruction()}""",
             
             tools=[
                 genai.protos.Tool(
                     function_declarations=[
                                     
                         genai.protos.FunctionDeclaration(
-                            name="access_search_agent",
+                            name="access_rag_search_agent",
                             description="Has ability to search for ASU-specific Targeted , real-time information extraction related to Jobs, Scholarships, Library Catalog, News, Events, Social Media, Sport Updates, Clubs",
                             parameters=content.Schema(
                                 type=content.Type.OBJECT,
@@ -200,7 +200,7 @@ class ActionModel:
         for part in response.parts:
             if hasattr(part, 'text') and part.text.strip():
                 text_response += f"\n{part.text.strip()}"
-                self.firestore.update_message("action_agent_message", f"Text Response : {text_response} ")
+                self.firestore.update_message("superior_agent_message", f"Text Response : {text_response} ")
             if hasattr(part, 'function_call') and part.function_call:
                 has_function_call = True
                 function_call = part.function_call
@@ -210,7 +210,7 @@ class ActionModel:
                     "args": dict(part.function_call.args)
                     }
                 }
-                self.firestore.update_message("action_agent_message", json.dumps(temp_func, indent=2))
+                self.firestore.update_message("superior_agent_message", json.dumps(temp_func, indent=2))
 
         return text_response, has_function_call, function_call
 
@@ -223,7 +223,7 @@ class ActionModel:
             ### Context:
             - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
             - User Query: {query}
-            {self.app_config.get_action_agent_prompt()}
+            {self.app_config.get_superior_agent_prompt()}
             """
             
             response = await self.chat.send_message_async(prompt)
@@ -236,7 +236,7 @@ class ActionModel:
                 if not has_function_call:
                     break
                 function_result = await super().execute_function(function_call)
-                self.firestore.update_message("action_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
+                self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
                 logger.info("\nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
                 

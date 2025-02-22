@@ -10,7 +10,6 @@ class AppConfig:
         self.handshake_pass = config_data.get('HANDSHAKE_PASS', '')
         self.gmail = config_data.get('GMAIL', '')
         self.gmail_pass = config_data.get('GMAIL_PASS', '')
-        self.spreadsheet_id = config_data.get('SPREADSHEET_ID', '')
         
         self.main_agent_prompt = config_data.get('MAIN_AGENT_PROMPT', '')
         
@@ -20,15 +19,15 @@ class AppConfig:
         self.discord_agent_prompt = config_data.get('DISCORD_AGENT_PROMPT', '')
         self.discord_agent_instruction = config_data.get('DISCORD_AGENT_INSTRUCTION', '')
         
-        self.search_agent_prompt = config_data.get('SEARCH_AGENT_PROMPT', '')
-        self.search_agent_instruction = config_data.get('SEARCH_AGENT_INSTRUCTION', '')
+        self.rag_search_agent_prompt = config_data.get('RAG_SEARCH_AGENT_PROMPT', '')
+        self.rag_search_agent_instruction = config_data.get('RAG_SEARCH_AGENT_INSTRUCTION', '')
         
-        self.action_agent_prompt = config_data.get('ACTION_AGENT_PROMPT', '')
-        self.action_agent_instruction = config_data.get('ACTION_AGENT_INSTRUCTION', '')
+        self.superior_agent_prompt = config_data.get('superior_agent_PROMPT', '')
+        self.superior_agent_instruction = config_data.get('superior_agent_INSTRUCTION', '')
         
         
-        self.search_agent_prompt = config_data.get('SEARCH_AGENT_PROMPT', '')
-        self.search_agent_instruction = config_data.get('SEARCH_AGENT_INSTRUCTION', '')
+        self.rag_search_agent_prompt = config_data.get('RAG_SEARCH_AGENT_PROMPT', '')
+        self.rag_search_agent_instruction = config_data.get('RAG_SEARCH_AGENT_INSTRUCTION', '')
         
         self.discord_agent_prompt = config_data.get('DISCORD_AGENT_PROMPT', '')
         self.discord_agent_instruction = config_data.get('DISCORD_AGENT_INSTRUCTION', '')
@@ -69,16 +68,16 @@ class AppConfig:
     def get_discord_agent_instruction(self):
         return self.discord_agent_instruction
     
-    def get_search_agent_prompt(self):
-        return self.search_agent_prompt
-    def get_search_agent_instruction(self):
-        return self.search_agent_instruction
+    def get_rag_search_agent_prompt(self):
+        return self.rag_search_agent_prompt
+    def get_rag_search_agent_instruction(self):
+        return self.rag_search_agent_instruction
     
     
-    def get_action_agent_prompt(self):
-        return self.action_agent_prompt
-    def get_action_agent_instruction(self):
-        return self.action_agent_instruction
+    def get_superior_agent_prompt(self):
+        return self.superior_agent_prompt
+    def get_superior_agent_instruction(self):
+        return self.superior_agent_instruction
     
     def get_google_agent_prompt(self):
         return self.google_agent_prompt
@@ -93,7 +92,5 @@ class AppConfig:
         return self.handshake_pass
     def get_gmail(self):
         return self.gmail
-    def get_spreadsheet_id(self):
-        return self.spreadsheet_id
     def get_gmail_pass(self):
         return self.gmail_pass

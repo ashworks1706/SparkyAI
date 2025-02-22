@@ -1,19 +1,22 @@
+from utils.otp_verification import OTPVerificationModal
+from utils.verify_button import VerifyButton
+from utisl.verification_modal import VerificationModal
 
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
-    def __init__(self, rag_pipeline, config: Optional[BotConfig] = None):
+    def __init__(self, config: Optional[BotConfig] = None, agents, firestore, discord_state, utils,asu_store ):
         """
         Initialize the Discord bot.
         
         Args:
-            rag_pipeline: RAG pipeline instance
+            agents: RAG pipeline instance
             config: Optional bot configuration
         """
         logger.info("\nInitializing ASUDiscordBot")
         self.config = config or BotConfig(app_config)
-        self.rag_pipeline = rag_pipeline
+        self.agents = agents
         
         # Initialize Discord client
         
@@ -83,9 +86,8 @@ class ASUDiscordBot:
                     
             except discord.NotFound:
                 return "You are not part of Sparky Discord Server. Access to command is restricted."
-        await asu_scraper.__login__(app_config.get_handshake_user(),app_config.get_handshake_pass() )
-        discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id)
-        firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
+        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id)
+        self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:
             if not await self._validate_channel(interaction):
@@ -102,7 +104,7 @@ class ASUDiscordBot:
 
     async def _validate_channel(self, interaction: discord.Interaction) -> bool:
         """Validate if command is used in correct channel"""
-        if not discord_state.get('request_in_dm') and interaction.channel.id != 1323387010886406224:
+        if not self.discord_state.get('request_in_dm') and interaction.channel.id != 1323387010886406224:
             await interaction.response.send_message(
                 "Please use this command in the designated channel: #general",
                 ephemeral=True
@@ -134,15 +136,15 @@ class ASUDiscordBot:
             await interaction.response.defer(thinking=True)
             global task_message
             task_message = await interaction.edit_original_response(content="⋯ Understanding your question")
-            await utils.start_animation(task_message)
-            response = await self.rag_pipeline.process_question(question)
+            await self.utils.start_animation(task_message)
+            response = await self.agents.process_question(question)
             await self._send_chunked_response(interaction, response)
             logger.info(f"Successfully processed question for {interaction.user.name}")
-            await asu_store.store_to_vector_db()
+            await self.asu_store.store_to_vector_db()
             
             
-            firestore.update_message("user_message", question)
-            document_id = await firestore.push_message()
+            self.firestore.update_message("user_message", question)
+            document_id = await self.firestore.push_message()
             logger.info(f"Message pushed with document ID: {document_id}")
 
         except asyncio.TimeoutError:
@@ -165,7 +167,7 @@ class ASUDiscordBot:
     async def _send_chunked_response( self,interaction: discord.Interaction,response: str) -> None:
         """Send response in chunks if needed"""
         try:
-            ground_sources = utils.get_ground_sources()
+            ground_sources = self.utils.get_ground_sources()
             # Create buttons for each URL
             buttons = []
             for url in ground_sources:
@@ -186,14 +188,14 @@ class ASUDiscordBot:
                     for i in range(0, len(response), self.config.chunk_size)
                 ]
                 global task_message
-                await utils.stop_animation(task_message, chunks[0])
+                await self.utils.stop_animation(task_message, chunks[0])
                 for chunk in chunks[1:-1]:
                     await interaction.followup.send(content=chunk)
                 await interaction.followup.send(content=chunks[-1], view=view)
             else:
-                await utils.stop_animation(task_message, response,View=view)
+                await self.utils.stop_animation(task_message, response,View=view)
             
-            utils.clear_ground_sources()
+            self.utils.clear_ground_sources()
 
         except Exception as e:
             logger.error(f"Error sending response: {str(e)}", exc_info=True)

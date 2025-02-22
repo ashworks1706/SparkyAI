@@ -2,7 +2,6 @@ class ASUWebScraper:
     def __init__(self,discord_state,utils):
         self.discord_client = self.discord_state.get('discord_client')
         self.visited_urls = set()
-        self.discord_state = discord_state
         self.utils = utils
         self.text_content = []
         self.optionalLinks = []

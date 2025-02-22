@@ -1,11 +1,11 @@
-class SearchModel:
+class RagSearchModel:
     
     def __init__(self, 
                  rate_limit_window: float = 1.0, 
                  max_requests: int = 100,
                  retry_attempts: int = 3, firestore,genai,app_config):
         """
-        Initialize SearchModel with advanced configuration options.
+        Initialize RagSearchModel with advanced configuration options.
         
         Args:
             rate_limit_window (float): Time window for rate limiting
@@ -26,7 +26,7 @@ class SearchModel:
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
             system_instruction = f"""
-            {self.app_config.get_search_agent_instruction()}
+            {self.app_config.get_rag_search_agent_instruction()}
             """,
 
             tools=[
@@ -483,7 +483,7 @@ class SearchModel:
         self.max_requests = max_requests
         self.retry_attempts = retry_attempts
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
-        logger.info(f"SearchModel initialized with rate limit: {rate_limit_window}s, max requests: {max_requests}")
+        logger.info(f"RagSearchModel initialized with rate limit: {rate_limit_window}s, max requests: {max_requests}")
 
     async def execute_function(self, function_call):
         """
@@ -575,7 +575,7 @@ class SearchModel:
                 - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
                 - Superior Agent Instruction: {action_command}
                 - Superior Agent Remarks: {special_instructions}
-                {self.app_config.get_search_agent_prompt()}
+                {self.app_config.get_rag_search_agent_prompt()}
                 
                 """
                 
@@ -587,10 +587,10 @@ class SearchModel:
                 for part in response.parts:
                     if hasattr(part, 'function_call') and part.function_call: 
                         final_response = await self.execute_function(part.function_call)
-                        self.firestore.update_message("search_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                        self.firestore.update_message("rag_search_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
                     elif hasattr(part, 'text') and part.text.strip():
                         text = part.text.strip()
-                        self.firestore.update_message("search_agent_message", f"Text Response : {text} ")
+                        self.firestore.update_message("rag_search_agent_message", f"Text Response : {text} ")
                         if not text.startswith("This query") and "can be answered directly" not in text:
                             final_response = text.strip()
             
