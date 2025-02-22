@@ -20,7 +20,6 @@ A Discord bot designed to assist Arizona State University (ASU) students with ac
 
 ![image](https://github.com/user-attachments/assets/1ab12d43-3e37-4020-bec1-0dc8dc4ea1db)
 
-
 SparkyAI leverages a complex architecture to deliver accurate and context-aware responses:
 
 - **Retrieval-Augmented Generation (RAG)**: Combines vector search with large language models for precise information retrieval.
@@ -173,13 +172,13 @@ The modular architecture allows for easy extension:
 
 ## Agent Descriptions
 
-| Name                        | Importance                                           | What It Does                                                                                                              | Functions                                                                                                                                                                                                                                                                            |
-| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Superior Agent**      | Central coordinator for user interactions            | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed.   | -`access_rag_search_agent<br>`- `access_discord_agent<br>`- `access_google_agent<br>`- `access_live_status_agent<br>`- `get_discord_server_info<br>`- `get_user_profile_details`                                                                                             |
-| **Google Agent**      | Specialized search functionality                     | Performs Google searches for queries; defers to Superior Agent for complex queries requiring the Rag Search Agent.              | -`google_search_tool`                                                                                                                                                                                                                                                              |
-| **Rag Search Agent**      | Executes functions for queries from the Superior Agent | Executes specific functions to retrieve information based on queries passed by the Superior Agent; responds in JSON format. | -`get_latest_club_information<br>`- `get_latest_event_updates<br>`- `get_latest_news_updates<br>`- `get_latest_social_media_updates<br>`- `get_latest_sport_updates<br>`- `get_library_resources<br>`- `get_latest_scholarships<br>`- `get_latest_class_information` |
-| **Live Status Agent** | Manages live status-related queries                  | Executes live status functions for queries from the Superior Agent; responds in JSON format.                                | -`get_live_library_status<br>`- `get_live_shuttle_status`                                                                                                                                                                                                                        |
-| **Discord Agent**     | Handles Discord-specific functionalities             | Executes Discord-related functions for queries from the Superior Agent; responds in JSON format.                            | -`notify_discord_helpers<br>`- `notify_moderators` `<br>`- `create_discord_forum_post<br>`- `create_discord_announcement<br>`- `create_discord_event<br>`- `create_discord_poll`                                                                                       |
+| Name                        | Importance                                             | What It Does                                                                                                                | Functions                                                                                                                                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Superior Agent**    | Central coordinator for user interactions              | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed.     | -`access_rag_search_agent<br>`- `access_discord_agent<br>`- `access_google_agent<br>`- `access_live_status_agent<br>`- `get_discord_server_info<br>`- `get_user_profile_details`                                                                                         |
+| **Google Agent**      | Specialized search functionality                       | Performs Google searches for queries; defers to Superior Agent for complex queries requiring the Rag Search Agent.          | -`google_search_tool`                                                                                                                                                                                                                                                              |
+| **Rag Search Agent**  | Executes functions for queries from the Superior Agent | Executes specific functions to retrieve information based on queries passed by the Superior Agent; responds in JSON format. | -`get_latest_club_information<br>`- `get_latest_event_updates<br>`- `get_latest_news_updates<br>`- `get_latest_social_media_updates<br>`- `get_latest_sport_updates<br>`- `get_library_resources<br>`- `get_latest_scholarships<br>`- `get_latest_class_information` |
+| **Live Status Agent** | Manages live status-related queries                    | Executes live status functions for queries from the Superior Agent; responds in JSON format.                                | -`get_live_library_status<br>`- `get_live_shuttle_status`                                                                                                                                                                                                                        |
+| **Discord Agent**     | Handles Discord-specific functionalities               | Executes Discord-related functions for queries from the Superior Agent; responds in JSON format.                            | -`notify_discord_helpers<br>`- `notify_moderators` `<br>`- `create_discord_forum_post<br>`- `create_discord_announcement<br>`- `create_discord_event<br>`- `create_discord_poll`                                                                                       |
 
 ## Getting Started
 
@@ -220,6 +219,147 @@ This project draws inspiration from and builds upon the following research paper
 6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
 
 These papers have significantly contributed to the field of vector similarity search, maximum inner product search (MIPS), and efficient indexing techniques, which are fundamental to this project's approach.
+
+## Future Timeline
+
+* [X] Financial Research
+  * [X] calculate possible costs as of right now (APIs , Hosting, etc)
+  * [X] calculate required average users
+  * [X] determine costs average per day/month including all parameters
+  * [X] research alternative services ( GCP, Gemini)
+  * [X] research alternative methods (Self hosting, AI APIs)
+  * [X] Compare costs
+  * [X] pick appropriate model for architecutre
+    * [ ] gpt → reasoning superior agent
+    * [ ] deepseek → deep reasoning search agent
+    * [ ] gemini → function calling sub agent
+    * [ ] research gemini search tool
+    * [X] restructured agent workflow
+* [X] Architecture Performance Review
+  * [X] Identify flaws in system architecture for the bot
+  * [X] Research possible solutions for fix without making sacrifices to performance
+  * [X] Create a visual diagram showcasing workflow of the architecture
+* [X] Product Vision Research
+  * [X] Brainstorm better ideas for Sparky AI Use
+  * [X] Figure out how to implement them in current architecture
+  * [X] research their costs x value function
+* [ ] Development
+  * [ ] **Code Refactoring and Technical Debt**
+    * [X] Restructure codebase
+      * [X] Convert Jupyter notebook to modular Python scripts
+      * [X] Split `utils.py` into `retrieval/`, `preprocessing/`, and `agents/` modules
+    * [ ] Clean up code
+      * [X] Remove Jupyter-specific async workarounds
+      * [ ] develop agent sync chain with group chat like communication and calls
+      * [ ] Eliminate dead code (unused KMeans imports, tracemalloc hooks)
+      * [ ] Resolve `googlesearchtool` vs `GoogleSearch` implementation divergences
+      * [ ] combine google and search agent response to respond
+    * [ ] Improve code quality
+      * [ ] Add MyPy type checking CI step
+      * [ ] Implement more specific exception handling
+  * [ ] **Model and Agent Improvements**
+    * [ ] Optimize Gemini usage
+      * [ ] Implement Gemini 2.0 thinking model
+      * [ ] Fine-tune Gemini action model
+        * [ ] Fix inter-agent communication using native function calling
+        * [ ] Continue dataset creation and modification
+        * [ ] Train the model
+    * [ ] Implement DeepSeek R1 reinforcement learning technique
+    * [ ] Implement Adaptive Computation for efficient resource allocation
+    * [ ] Make agents prompt more scalable for robust customer service and scalable expansion
+  * [ ] **RAG and Search Improvements**
+    * [ ] Enhance document preprocessing
+      * [ ] Implement layout-aware PDF chunking using `unstructured.io` library
+      * [ ] Improve sequential chunking strategy for nested ASU documents
+    * [ ] Optimize vector search
+      * [ ] Implement hybrid search with BM25+SPLADE in Qdrant
+      * [ ] Add content drift detection in `shouldstoredocument` using checksum comparison
+    * [ ] Implement caching mechanisms
+      * [ ] Add FP16 embedding cache with Redis
+      * [ ] Implement RAG Cache
+    * [ ] Implement Self improvement
+      * [ ] CRAG → update documents after retrieval if more functions are called
+    * [ ] Enhance retrieval methods
+      * [ ] Implement SOAR (sparse retrieval methods)
+      * [ ] Implement graph RAG
+    * [ ] Improve query processing
+      * [ ] Add query intent classifier to bypass RAG for simple searches
+      * [ ] Implement "lost in the middle" solutions
+  * [ ] **Performance Optimization**
+    * [ ] Optimize agent communication
+      * [ ] Convert blocking Gemini calls in `ActionAgent` to asynchronous using `asyncio.to_thread()`
+      * [ ] Implement thread safety in `DiscordState` class using `RLock()`
+    * [ ] Enhance error handling and reliability
+      * [ ] Implement dead letter queue using Redis for failed agent requests
+      * [ ] Add circuit breakers using `pybreaker` for API calls
+      * [ ] Implement structured error logging with OpenTelemetry tracing
+    * [ ] Optimize Selenium usage
+      * [ ] Implement request coalescing for duplicate Selenium jobs
+      * [ ] Migrate from Selenium to Jina Reader for efficient web scraping
+  * [ ] **Security Enhancements (Critical)**
+    * [ ] Implement encrypted credential management
+      * [ ] Migrate `clientsecret.json`, Discord tokens, and Handshake credentials to Google Cloud Secret Manager
+      * [ ] Remove plaintext credentials from config files
+    * [ ] Enhance endpoint security
+      * [ ] Implement rate limiting for Discord webhooks and Google Cloud endpoints
+      * [ ] Set up IP whitelisting for sensitive endpoints
+    * [ ] Improve web scraping security
+      * [ ] Implement secure credential handling for Handshake login
+      * [ ] Add input sanitization for web scraping using BeautifulSoup's `cleaner` module
+  * [ ] **Data Management and Pipeline**
+    * [ ] Improve Firestore integration
+      * [ ] Add schema versioning to Firestore collections
+      * [ ] Delete Google sheet and use Firestore entirely
+    * [ ] Enhance data refinement
+      * [ ] Develop data refiner agent to process data before RAG storage
+      * [ ] Implement storage of only useful data
+    * [ ] Implement User Profile AI Agent
+      * [ ] Store user personality and behavior information in Firebase
+      * [ ] Add user context to action agent
+      * [ ] Integrate user information option in RAG database search function
+  * [ ] **Website launch**
+    * [ ] **Live Chat Implementation**
+      * [ ] Implement WebSocket API for real-time chat
+        * [ ] Use FastAPI+WebSockets
+        * [ ] Add JWT authentication for ASU IDs
+      * [ ] Build chat interface components
+        * [ ] Create responsive chat UI
+        * [ ] Implement message threading
+        * [ ] Add file attachment support
+      * [ ] Add enterprise features
+        * [ ] Session transfer between agents
+        * [ ] Proactive assistance prompts
+        * [ ] Screen sharing integration
+    * [ ] **Analytics and Monitoring**
+      * [ ] Develop Next.js website for analytics
+        * [ ] Fetch and display content from Firebase
+        * [ ] Implement chat, metrics, and analytics visualizations
+        * [ ] Set up system for deploying fetched chats as training dataset
+        * [ ] Add data engineering tools for editing dataset chat and converting csv, downladable
+    * [ ] **Compliance & Accessibility**
+      * [ ] Implement WCAG 2.2 compliance
+      * [ ] Add FERPA/GDPR data purge automation
+      * [ ] Create session recording system
+  * [ ] **Infrastructure and Deployment**
+    * [ ] Configure premium services
+      * [ ] Update Google Cloud premium settings
+      * [ ] Finalize decision between Llama and DeepSeek
+    * [ ] Optimize cloud resource usage
+      * [ ] Implement efficient management of Selenium instances
+      * [ ] Set up auto-scaling for compute resources
+  * [ ] **Specific Feature Improvements**
+    * [ ] Enhance job search function
+      * [ ] Refine query parameters
+      * [ ] Implement secure web scraper login for Workday
+    * [ ] Improve Discord integration
+      * [ ] Configure specific channels for data fetching
+      * [ ] Implement reranking with LongContextOrder Document Transformer and Cross Encoder
+  * [ ] **Team Expansion**
+    * [ ] Recruit developers with expertise in:
+      * [ ] Web/software development
+      * [ ] Python data structures
+      * [ ] LLMs and AI
+      * [ ] Specific requirements: Interest in AI, web scraping, LangChain, [Discord.py](http://Discord.py)
 
 ## License
 
