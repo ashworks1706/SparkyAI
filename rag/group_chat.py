@@ -3,7 +3,7 @@ class GroupChat:
         self.text = text
     def update_text(self, text):
         self.text = text
-    def get_text(self, text):
-        self.text = text
+    def get_text(self):
+        return self.text
     
 # TODO: Implement the GroupChat class

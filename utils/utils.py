@@ -6,7 +6,7 @@ class Utils:
 classwith task tracking and logging."""
         try:
             self.tasks = []
-            self.vector_store = vector_store
+            self.vector_store_class = vector_store
             self.asu_data_processor = asu_data_processor
             self.asu_scraper = asu_scraper
             self.current_content = "Understanding your question"
@@ -18,7 +18,7 @@ classwith task tracking and logging."""
             self.cached_queries=[]
             self.vector_store = vector_store.get_vector_store()
             self.logger=logger
-            self.raptor_retriever = RaptorRetriever(vector_store=self.vector_store,logger=logger)
+            self.raptor_retriever = RaptorRetriever(vector_store=self.vector_store_class,logger=self.logger)
             self.group_chat=group_chat
             self.logger.info(f"Group Chat setup successfully {group_chat}")
 
@@ -144,7 +144,7 @@ classwith task tracking and logging."""
                 title = doc_title, category = doc_category
             )
 
-            store = self.vector_store.queue_documents(processed_docs)
+            store = self.vector_store_class.queue_documents(processed_docs)
 
             results = []
             extracted_urls=[]
@@ -162,7 +162,7 @@ classwith task tracking and logging."""
 
             self.update_ground_sources(extracted_urls)
 
-            results = utils.format_search_results(results)
+            results = self.format_search_results(results)
 
             return results
 

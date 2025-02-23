@@ -2,14 +2,19 @@
 
 from utils.common_imports import *
 class RaptorRetriever:
-    def __init__(self, vector_store=None, logger=None,num_levels=3, branching_factor=5):
-        self.vector_store = vector_store
-        self.num_levels = num_levels
-        self.branching_factor = branching_factor
-        self.tree = self.build_raptor_tree()
-        self.logger= logger
-        self.logger.info("RAPTOR Retriever initialized.")
-
+    def __init__(self, vector_store, logger,num_levels=3, branching_factor=5):
+        try:
+            
+            self.logger = logger
+            self.vector_store = vector_store
+            self.num_levels = num_levels
+            self.branching_factor = branching_factor
+            self.tree = self.build_raptor_tree()
+            logger.info("RAPTOR Retriever initialized.")
+        except Exception as e:
+            logger.error(f"Error initializing RAPTOR Retriever: {str(e)}")
+            raise e
+        
     def build_raptor_tree(self):
         tree = {}
         self.logger.info("Building RAPTOR tree...")
@@ -22,36 +27,40 @@ class RaptorRetriever:
             return tree
 
         all_embeddings = np.array(all_embeddings)
+        try:
+            
+            for level in range(self.num_levels):
+                n_clusters = min(self.branching_factor ** (level + 1), len(all_embeddings))
+                kmeans = KMeans(n_clusters=n_clusters)
+                cluster_labels = kmeans.fit_predict(all_embeddings)
+                
+                clusters = {}
+                for i, label in enumerate(cluster_labels):
+                    if label not in clusters:
+                        clusters[label] = []
+                    clusters[label].append(all_docs[i])
+                
+                summaries = {label: self.generate_summary(docs) for label, docs in clusters.items()}
+                self.logger.info(f"Generated summaries for level {level + 1}")
+                tree[f"level_{level}"] = {
+                    "clusters": clusters,
+                    "summaries": summaries
+                }
+                self.logger.info(f"Built tree for level {level + 1}")
+                
+                all_docs = list(summaries.values())
+                self.logger.info(f"Retrieved {len(all_docs)} documents for next level")
+                all_embeddings = self.vector_store.get_embeddings(all_docs)
+                self.logger.info(f"Retrieved embeddings for next level")
+                
+                if not all_embeddings:
+                    self.logger.warning(f"No embeddings found for level {level + 1}. Stopping tree construction.")
+                    break
 
-        for level in range(self.num_levels):
-            n_clusters = min(self.branching_factor ** (level + 1), len(all_embeddings))
-            kmeans = KMeans(n_clusters=n_clusters)
-            cluster_labels = kmeans.fit_predict(all_embeddings)
-            
-            clusters = {}
-            for i, label in enumerate(cluster_labels):
-                if label not in clusters:
-                    clusters[label] = []
-                clusters[label].append(all_docs[i])
-            
-            summaries = {label: self.generate_summary(docs) for label, docs in clusters.items()}
-            self.logger.info(f"Generated summaries for level {level + 1}")
-            tree[f"level_{level}"] = {
-                "clusters": clusters,
-                "summaries": summaries
-            }
-            self.logger.info(f"Built tree for level {level + 1}")
-            
-            all_docs = list(summaries.values())
-            self.logger.info(f"Retrieved {len(all_docs)} documents for next level")
-            all_embeddings = self.vector_store.get_embeddings(all_docs)
-            self.logger.info(f"Retrieved embeddings for next level")
-            
-            if not all_embeddings:
-                self.logger.warning(f"No embeddings found for level {level + 1}. Stopping tree construction.")
-                break
-
-            all_embeddings = np.array(all_embeddings)
+                all_embeddings = np.array(all_embeddings)
+        except Exception as e:
+            self.logger.error(f"Error building RAPTOR tree: {str(e)}")
+            raise e
         
         self.logger.info("Building RAPTOR tree completed.")
         return tree

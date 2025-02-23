@@ -156,7 +156,7 @@ class ASUWebScraper:
                     loader = WebBaseLoader(url)
                     documents = loader.load()
                     
-                    if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content:
+                    if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content.lower():
                         self.text_content.append({
                                 'content': documents[0].page_content,
                                 'metadata': {
@@ -177,7 +177,7 @@ class ASUWebScraper:
                     response.raise_for_status()
                     
                     text = response.text
-                    if "LOADING" in text :
+                    if "LOADING" in text.upper() or "requires javascript to be enabled" in documents[0].page_content.lower():
                         self.logger.warning(f"LOADING response detected for {url}. Retry attempt {attempt + 1}")
                         await asyncio.sleep(3)  # Wait before retrying
                         continue
@@ -1268,7 +1268,8 @@ class ASUWebScraper:
         try:
             search_results = []
             await self.utils.update_text(f"Searching for {search_url}")
-            await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
+            # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
+            # disabled temprarily
             self.driver = webdriver.Chrome(options=self.chrome_options)
             driver = self.driver
             wait = WebDriverWait(driver, 10)
