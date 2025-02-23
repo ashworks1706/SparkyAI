@@ -1,12 +1,12 @@
 from utils.common_imports import *
 class DiscordModel:
     
-
-
-    def __init__(self, firestore,genai,app_config,logger):
+    def __init__(self, firestore,genai,app_config,logger, discord_agent_tools, discord_state):
+        self.discord_state = discord_state
         self.logger= logger
         self.app_config = app_config
         self.firestore = firestore
+        self.agent_tools = discord_agent_tools
 
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
@@ -248,35 +248,54 @@ class DiscordModel:
             
         self.last_request_time = current_time
         self.request_counter += 1
-        user_id = discord_state.get("user_id")
+        user_id = self.discord_state.get("user_id")
         self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
         
 
         
     async def execute_function(self, function_call):
         """Execute the called function and return its result"""
-        func_response = super().execute_function(function_call)
-    
-        # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
-        if func_response:
-            # self._save_message(user_id, "model", f"""(Only Visible to You) System Tools - Discord Agent Response: {func_response}""")
-            return func_response
+        function_name = function_call.name
+        function_args = function_call.args
+        
+        function_mapping = {
+            'notify_moderators': self.agent_tools.notify_moderators,
+            'notify_discord_helpers': self.agent_tools.notify_discord_helpers,
+            'create_discord_forum_post': self.agent_tools.create_discord_forum_post,
+            'create_discord_announcement': self.agent_tools.create_discord_announcement,
+            'create_discord_poll': self.agent_tools.create_discord_poll,
+            'search_discord': self.agent_tools.search_discord,
+        }
+        
+        if function_name in function_mapping:
+            function_to_call = function_mapping[function_name]
+            func_response = await function_to_call(**function_args)
+            # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
+            
+            if func_response:
+                # self._save_message(user_id, "model", f"""(Only Visible to You) System Tools - Discord Agent Response: {func_response}""")
+                return func_response
+            else:
+                self.logger.error(f"Error extracting text from response: {e}")
+                return "Error processing response"
+                
+                
         else:
-            self.logger.error(f"Error extracting text from response: {e}")
-            return "Error processing response"
+            raise ValueError(f"Unknown function: {function_name}")
+    
                 
     
-    async def determine_action(self, query: str,special_instructions:str) -> str:
+    async def determine_action(self, instruction_to_agent: str,special_instructions:str) -> str:
         """Determines and executes the appropriate action based on the user query"""
         try:
             self._initialize_model()
-            user_id = discord_state.get("user_id")
+            user_id = self.discord_state.get("user_id")
             final_response = ""
             # Simplified prompt that doesn't encourage analysis verbosity
             prompt = f"""
             ### Context:
             - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
-            - Superior Agent Instruction: {query}
+            - Superior Agent Instruction: {instruction_to_agent}
             - Superior Agent Remarks (if any): {special_instructions}
             {self.app_config.get_discord_agent_prompt()}
             """

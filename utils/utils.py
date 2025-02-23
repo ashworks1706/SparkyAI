@@ -1,12 +1,12 @@
 from utils.common_imports import *
 from rag.raptor import RaptorRetriever
 class Utils:
-    def __init__(self,asu_store,asu_data_processor,asu_scraper,logger):
+    def __init__(self,vector_store,asu_data_processor,asu_scraper,logger,group_chat):
         """Initialize the Utils from utils.common_imports import *
 classwith task tracking and logging."""
         try:
             self.tasks = []
-            self.asu_store = asu_store
+            self.vector_store = vector_store
             self.asu_data_processor = asu_data_processor
             self.asu_scraper = asu_scraper
             self.current_content = "Understanding your question"
@@ -16,9 +16,12 @@ classwith task tracking and logging."""
             # self.scann_store = None
             self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
             self.cached_queries=[]
-            self.vector_store = self.asu_store.get_vector_store()
+            self.vector_store = vector_store.get_vector_store()
             self.logger=logger
-            self.raptor_retriever = RaptorRetriever(logger=self.logger)
+            self.raptor_retriever = RaptorRetriever(vector_store=self.vector_store,logger=logger)
+            self.group_chat=group_chat
+            self.logger.info(f"Group Chat setup successfully {group_chat}")
+
             self.logger.info("\nUtils instance initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize Utils: {e}")
@@ -132,16 +135,16 @@ classwith task tracking and logging."""
                 return "No results found on web"
             
             self.logger.info(documents)
-            global action_command
+            
             self.logger.info("\nPreprocessing documents...")
             
             processed_docs = await self.asu_data_processor.process_documents(
                 documents=documents, 
-                search_context=action_command,
+                search_context= self.group_chat.get_text(),
                 title = doc_title, category = doc_category
             )
 
-            store = self.asu_store.queue_documents(processed_docs)
+            store = self.vector_store.queue_documents(processed_docs)
 
             results = []
             extracted_urls=[]
@@ -166,11 +169,12 @@ classwith task tracking and logging."""
         except Exception as e:
             self.logger.error(f"Error in web search: {str(e)}")
             return "No results found on web"
-
+    
+       
     async def perform_similarity_search(self, query: str, categories: list):
         try:
             self.logger.info(f"Action Model: Performing similarity search with query: {query}")
-            self.vector_store = self.asu_store.get_vector_store()
+            self.vector_store = self.vector_store.get_vector_store()
             if not self.vector_store:
                 self.logger.info("\nVector Store not initialized")
                 raise ValueError("Vector store not properly initialized")

@@ -2,8 +2,8 @@
 
 from utils.common_imports import *
 class RaptorRetriever:
-    def __init__(self, vector_store=None, num_levels=3, branching_factor=5,logger=False):
-        self.vector_store = asu_store
+    def __init__(self, vector_store=None, logger=None,num_levels=3, branching_factor=5):
+        self.vector_store = vector_store
         self.num_levels = num_levels
         self.branching_factor = branching_factor
         self.tree = self.build_raptor_tree()
@@ -13,7 +13,7 @@ class RaptorRetriever:
     def build_raptor_tree(self):
         tree = {}
         self.logger.info("Building RAPTOR tree...")
-        all_docs = asu_store.get_all_documents()
+        all_docs = self.vector_store.get_all_documents()
         self.logger.info(f"Retrieved {len(all_docs)} documents for tree construction")
         all_embeddings = self.vector_store.get_embeddings(all_docs)
 

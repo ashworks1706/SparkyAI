@@ -1,8 +1,11 @@
 from utils.common_imports import *
 class SuperiorModel:
     
-    def __init__(self, firestore,genai,app_config,logger):
+    def __init__(self, firestore,genai,app_config,logger,superior_agent_tools):
         self.logger = logger
+        self.firestore = firestore
+        self.app_config = app_config
+        self.agent_tools=superior_agent_tools
         self.model = genai.GenerativeModel(model_name="gemini-1.5-flash",
     
             generation_config={
@@ -177,8 +180,7 @@ class SuperiorModel:
             tool_config={'function_calling_config': 'AUTO'},
         )
         self.chat = None
-        self.firestore = firestore
-        self.app_config = app_config
+        
         self.last_request_time = time.time()
         self.request_counter = 0
 
@@ -192,6 +194,25 @@ class SuperiorModel:
         self.request_counter += 1
         self.chat = self.model.start_chat(enable_automatic_function_calling=True)
 
+    async def execute_function(self, function_call: Any) -> str:
+        function_mapping = {
+            'access_rag_search_agent': self.agent_tools.access_rag_search_agent,
+            'access_google_agent': self.agent_tools.access_google_agent,
+            'access_discord_agent': self.agent_tools.access_discord_agent,
+            'send_bot_feedback': self.agent_tools.send_bot_feedback,
+            'access_live_status_agent': self.agent_tools.access_live_status_agent,
+            'get_user_profile_details': self.agent_tools.get_user_profile_details,
+            'get_discord_server_info': self.agent_tools.get_discord_server_info,
+        }
+
+        function_name = function_call.name
+        function_args = function_call.args
+
+        if function_name not in function_mapping:
+            raise ValueError(f"Unknown function: {function_name}")
+        
+        function_to_call = function_mapping[function_name]
+        return await function_to_call(**function_args)
 
     async def process_gemini_response(self, response: Any) -> tuple[str, bool, Any]:
         text_response = ""
@@ -237,7 +258,7 @@ class SuperiorModel:
                 final_response += text_response
                 if not has_function_call:
                     break
-                function_result = await super().execute_function(function_call)
+                function_result = await self.execute_function(function_call)
                 self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
                 self.logger.info("\nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")

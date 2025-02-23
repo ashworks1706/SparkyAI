@@ -7,7 +7,7 @@ class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
-    def __init__(self, config, agents, firestore, discord_state, utils,asu_store,logger ):
+    def __init__(self, config, agents, firestore, discord_state, utils,vector_store,logger ):
         """
         Initialize the Discord bot.
         
@@ -19,9 +19,12 @@ class ASUDiscordBot:
         self.logger.info("\nInitializing ASUDiscordBot")
         self.config = config or BotConfig(app_config)
         self.agents = agents
+        self.firestore = firestore
+        self.utils = utils
+        self.vector_store = vector_store
         
         # Initialize Discord client
-        
+        self.discord_state = discord_state
         self.client = discord_state.get('discord_client')
         self.tree = app_commands.CommandTree(self.client)
         self.guild = self.client.get_guild(1256076931166769152)
@@ -142,7 +145,7 @@ class ASUDiscordBot:
             response = await self.agents.process_question(question)
             await self._send_chunked_response(interaction, response)
             self.logger.info(f"Successfully processed question for {interaction.user.name}")
-            await self.asu_store.store_to_vector_db()
+            await self.vector_store.store_to_vector_db()
             
             
             self.firestore.update_message("user_message", question)

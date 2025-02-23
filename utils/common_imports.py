@@ -98,3 +98,4 @@ from utils.utils import Utils
 from discord_bot import ASUDiscordBot
 from rag.web_scrape import ASUWebScraper
 from rag.vector_store import VectorStore
+from rag.group_chat import GroupChat

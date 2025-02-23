@@ -1,8 +1,10 @@
 from utils.common_imports import *
 class Live_Status_Model:
     
-    def __init__(self,firestore,genai,app_config,logger):
+    def __init__(self,firestore,genai,app_config,logger,live_status_agent_tools,discord_state):
         self.logger = logger
+        self.agent_tools= live_status_agent_tools
+        self.discord_state = discord_state
         self.app_config= app_config
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
@@ -100,15 +102,32 @@ class Live_Status_Model:
         
     async def execute_function(self, function_call):
         """Execute the called function and return its result"""
-        func_response = super().execute_function(function_call)
-    
-        # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
-        if func_response:
-            # self._save_message(user_id, "model", f"""(Only Visible to You) System Tools - Discord Agent Response: {func_response}""")
-            return func_response
+        function_name = function_call.name
+        function_args = function_call.args
+        
+        function_mapping = {
+            
+            'get_live_library_status': self.agent_tools.get_live_library_status,
+            'get_live_shuttle_status': self.agent_tools.get_live_shuttle_status,
+        }
+        
+            
+        if function_name in function_mapping:
+            function_to_call = function_mapping[function_name]
+            func_response = await function_to_call(**function_args)
+            # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
+            self.logger.info(f"Live Status : Function loop response : {func_response}")
+            
+            if func_response:
+                return func_response
+            else:
+                self.logger.error(f"Error extracting text from response: {e}")
+                return "Error processing response"
+            
+            
         else:
-            self.logger.error(f"Error extracting text from response: {e}")
-            return "Error processing response"
+            raise ValueError(f"Unknown function: {function_name}")
+   
         
     def _initialize_model(self):
         if not self.model:
@@ -121,25 +140,23 @@ class Live_Status_Model:
             
         self.last_request_time = current_time
         self.request_counter += 1
-        user_id = discord_state.get("user_id")
+        user_id = self.discord_state.get("user_id")
         self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
 
 
         
-    async def determine_action(self, query: str,special_instructions:str) -> str:
+    async def determine_action(self,instruction_to_agent:str,special_instructions:str) -> str:
         """Determines and executes the appropriate action based on the user query"""
         try:
             self._initialize_model()
-            user_id = discord_state.get("user_id")
+            user_id = self.discord_state.get("user_id")
             final_response = ""
             
-            global action_command
-            action_command = query
 
             prompt = f"""
                 ### Context:
                 - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
-                - Superior Agent Instruction: {action_command}
+                - Superior Agent Instruction: {instruction_to_agent}
                 - Superior Agent Remarks: {special_instructions}
 
                 {self.app_config.get_live_status_agent_prompt()}
@@ -147,7 +164,6 @@ class Live_Status_Model:
                 """
 
             response = await self.chat.send_message_async(prompt)
-            self.logger.info(self._get_chat_history)
             self.logger.info(f"Internal response @ Live Status Model : {response}")
             
             for part in response.parts:

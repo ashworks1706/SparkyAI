@@ -1,7 +1,8 @@
 from utils.common_imports import *
+
 class RagSearchModel:
     
-    def __init__(self, firestore,genai,app_config,logger,
+    def __init__(self, firestore,genai,app_config,logger,rag_search_agent_tools,discord_state,
                  rate_limit_window: float = 1.0, 
                  max_requests: int = 100,
                  retry_attempts: int = 3):
@@ -14,6 +15,10 @@ class RagSearchModel:
             retry_attempts (int): Number of retry attempts for function calls
         """
         self.logger=logger
+        self.firestore = firestore
+        self.app_config = app_config
+        self.discord_state= discord_state
+        self.agent_tools= rag_search_agent_tools
         self.model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             generation_config={
@@ -477,8 +482,6 @@ class RagSearchModel:
             tool_config={'function_calling_config': 'AUTO'},
         )
         self.chat = None
-        self.firestore = firestore
-        self.app_config = app_config
         self.last_request_time = time.time()
         self.request_counter = 0
         self.rate_limit_window = rate_limit_window
@@ -497,12 +500,30 @@ class RagSearchModel:
         Returns:
             str: Processed function response
         """
+        function_name = function_call.name
+        function_args = function_call.args
         
+        function_mapping = {
+            'get_latest_club_information': self.agent_tools.get_latest_club_information,
+            'get_latest_event_updates': self.agent_tools.get_latest_event_updates,
+            'get_latest_news_updates': self.agent_tools.get_latest_news_updates,
+            'get_latest_social_media_updates': self.agent_tools.get_latest_social_media_updates,
+            'get_latest_sport_updates': self.agent_tools.get_latest_sport_updates,
+           'get_library_resources': self.agent_tools.get_library_resources,
+              'get_latest_scholarships': self.agent_tools.get_latest_scholarships,
+            'get_latest_job_updates': self.agent_tools.get_latest_job_updates,
+            'get_latest_class_information': self.agent_tools.get_latest_class_information
+        }
         
+        if function_name not in function_mapping:
+            self.logger.error(f"Unknown function: {function_name}")
+            raise ValueError(f"Unknown function: {function_name}")
+        
+        function_to_call = function_mapping[function_name]
         
         for attempt in range(self.retry_attempts):
             try:
-                func_response = await super().execute_function(function_call)
+                func_response = await function_to_call(**function_args)
                 
                 self.logger.info(f"Function '{function_name}' response (Attempt {attempt + 1}): {func_response}")
                 
@@ -522,7 +543,7 @@ class RagSearchModel:
                 await asyncio.sleep(2 ** attempt)
         
         return "No valid response from function"
-    
+        
     def _initialize_model(self):
         """
         Initialize the search model with advanced rate limiting and error checking.
@@ -545,18 +566,16 @@ class RagSearchModel:
             self.last_request_time = current_time
         
         try:
-            user_id = discord_state.get('user_id')
-            self.chat = self.model.start_chat(history=self._get_chat_history(user_id),enable_automatic_function_calling=True)
+            user_id = self.discord_state.get('user_id')
+            self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
             self.logger.info("\nSearch model chat session initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize chat session: {str(e)}")
             raise RuntimeError("Could not start chat session")
         
-    def _get_chat_history(self, user_id: str) -> List[Dict[str, str]]:
-        return self.conversations.get(user_id, [])
 
         
-    async def determine_action(self, query: str,special_instructions:str) -> str:
+    async def determine_action(self,instruction_to_agent:str,special_instructions:str) -> str:
         """
         Advanced query processing with comprehensive error handling and logging.
         
@@ -567,15 +586,14 @@ class RagSearchModel:
             str: Processed query response
         """
         try:
-            user_id = discord_state.get("user_id")
+            user_id = self.discord_state.get("user_id")
             self._initialize_model()
             final_response = ""
-            action_command = query
             
             prompt = f"""
              ### Context:
                 - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
-                - Superior Agent Instruction: {action_command}
+                - Superior Agent Instruction: {instruction_to_agent}
                 - Superior Agent Remarks: {special_instructions}
                 {self.app_config.get_rag_search_agent_prompt()}
                 
@@ -585,7 +603,6 @@ class RagSearchModel:
             
             try:
                 response = await self.chat.send_message_async(prompt)
-                self.logger.info(self._get_chat_history)
                 for part in response.parts:
                     if hasattr(part, 'function_call') and part.function_call: 
                         final_response = await self.execute_function(part.function_call)

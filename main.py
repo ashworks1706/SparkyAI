@@ -16,23 +16,24 @@ class Main:
         self.discord_state = DiscordState()
         
         try:
-            self.asu_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
+            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
+            self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")
-            self.asu_store = None
+            self.vector_store = None
             raise e
 
-        self.asu_data_processor = DataPreprocessor(logger=self.logger)
+        genai.configure(api_key=self.app_config.get_api_key())
+        self.group_chat = GroupChat("")
+        self.asu_data_processor = DataPreprocessor(genai=genai,logger=self.logger)
         self.firestore = Firestore(self.discord_state)
-        self.utils = Utils(self.asu_store, self.asu_data_processor, None, logger= self.logger)
+        self.utils = Utils(vector_store=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger= self.logger,group_chat=self.group_chat)
         self.asu_scraper = ASUWebScraper(self.discord_state, self.utils, self.logger)
         self.utils.asu_scraper = self.asu_scraper
+        self.agents = Agents(self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, group_chat=self.group_chat)
 
-        self.agents = Agents(self.firestore, genai, self.app_config, self.discord_state, self.utils, self.logger)
 
-        genai.configure(api_key=self.app_config.get_api_key())
-
-        if self.asu_store:
+        if self.vector_store:
             self.logger.info("\n----------------------------------------------------------------")
             self.logger.info("\nASU RAG INITIALIZED SUCCESSFULLY")
             self.logger.info("\n---------------------------------------------------------------")
@@ -44,11 +45,10 @@ class Main:
 
     async def run_discord_bot(self, config: Optional[BotConfig] = None):
         """Run the Discord bot"""
-        if not self.asu_store:
+        if not self.vector_store:
             self.logger.error("Cannot start bot: VectorStore not initialized")
             return
-
-        bot = ASUDiscordBot(config, self.agents, self.firestore, self.discord_state, self.utils, self.asu_store, self.logger)
+        bot = ASUDiscordBot(config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger)
         
         await self.initialize_scraper()
         
@@ -63,7 +63,7 @@ class Main:
 
 if __name__ == "__main__":
     asu_system = Main()
-    if asu_system.asu_store:
+    if asu_system.vector_store:
         config = BotConfig(
             token=asu_system.app_config.get_discord_bot_token(),
             app_config=asu_system.app_config

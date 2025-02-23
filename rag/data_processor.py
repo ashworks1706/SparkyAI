@@ -1,7 +1,9 @@
 
 from utils.common_imports import *
+from agents.data_agent import DataModel
+
 class DataPreprocessor:
-    def __init__(self, 
+    def __init__(self, genai,
                  chunk_size: int = 1024, 
                  chunk_overlap: int = 200, 
                  max_processing_attempts: int = 3, logger=False):
@@ -15,6 +17,7 @@ class DataPreprocessor:
         )
         self.doc_title = None
         self.doc_category = None
+        self.asu_data_agent = DataModel( genai,logger)
         nltk.download('punkt_tab', quiet=True)
         nltk.download('wordnet', quiet=True)
         self.lemmatizer = WordNetLemmatizer()
