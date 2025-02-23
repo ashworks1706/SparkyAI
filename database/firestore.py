@@ -2,7 +2,7 @@ from utils.common_imports import *
 class Firestore:
     def __init__(self,discord_state):
         if not firebase_admin._apps:
-            cred = credentials.Certificate("firebase_secret.json")
+            cred = credentials.Certificate("config/firebase_secret.json")
             firebase_admin.initialize_app(cred)
         self.db = firestore.client()
         self.collection = None

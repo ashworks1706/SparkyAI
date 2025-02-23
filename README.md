@@ -180,57 +180,142 @@ The modular architecture allows for easy extension:
 | **Live Status Agent** | Manages live status-related queries                    | Executes live status functions for queries from the Superior Agent; responds in JSON format.                                | -`get_live_library_status<br>`- `get_live_shuttle_status`                                                                                                                                                                                                                        |
 | **Discord Agent**     | Handles Discord-specific functionalities               | Executes Discord-related functions for queries from the Superior Agent; responds in JSON format.                            | -`notify_discord_helpers<br>`- `notify_moderators` `<br>`- `create_discord_forum_post<br>`- `create_discord_announcement<br>`- `create_discord_event<br>`- `create_discord_poll`                                                                                       |
 
+
 ## Getting Started
 
-1. Clone the repository:
+Follow these steps to set up and run the ASU Discord Bot on your local machine.
 
-   ```bash
-   git clone https://github.com/somwrks/SparkyAI.git
-   cd sparkyai
-   ```
-2. Install dependencies:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. Add API keys:
-
-   - Create `config.json` with keys for Google Search, Discord, and ASU webhooks.
-   - Add `clientsecret.json` for GoogleSheet API.
-4. Setup Qdrant Vector Database:
+### 1. Clone the Repository
+First, clone the repository to your local machine using Git.
 
 ```bash
-  docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+git clone https://github.com/somwrks/SparkyAI.git
+cd sparkyai
 ```
 
-5. Run the bot:
+---
 
-   ```bash
-   python main.py
+### 2. Set Up a Virtual Environment
+Create and activate a Python virtual environment to isolate dependencies.
+
+#### On Linux/Mac:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+#### On Windows:
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+---
+
+### 3. Install Dependencies
+Install all required Python packages from the `requirements.txt` file.
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### 4. Configure API Keys and Credentials
+The bot requires several API keys and configuration files to function properly.
+
+1. **Create a `config.json` file** in the `config/` folder with the following structure [Example](/__sample__appConfig.json):
+   ```json
+   {
+       "discord_bot_token": "your-discord-bot-token",
+       "google_search_api_key": "your-google-api-key",
+       "google_cse_id": "your-custom-search-engine-id",
+       "handshake_user": "your-handshake-username",
+       "handshake_pass": "your-handshake-password"
+   }
    ```
 
-6. Ensure chromedependencies are installed for webscraping:
+2. **Add Firebase API credentials** [Example](/__sample_firebase_secret.json):
+   - Download the `firebase_secret.json` file from your Firebase Cloud Console.
+   - Place it in the `config/` folder.
 
-    ```bash
+---
 
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb 
+### 5. Set Up Qdrant Vector Database
+The bot uses Qdrant for vector-based similarity search. Run Qdrant using Docker.
 
-    sudo apt install ./google-chrome-stable_current_amd64.deb 
+#### Install Docker (if not installed):
+Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system.
 
-    wget https://chromedriver.storage.googleapis.com/133.0.6943.126/chromedriver_linux64.zip
-    
-    unzip chromedriver_linux64.zip
-    
-    sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
-    
-    sudo chmod +x /usr/local/bin/chromedriver
+#### Start Qdrant:
+Run the following command to start Qdrant on port `6333`:
 
+```bash
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+```
 
-    sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libgconf-2-4 libatk1.0-0 libgtk-3-0
+> **Note:** On Windows, replace `$(pwd)` with `%cd%` or `${PWD}` if using PowerShell.
 
-    ```
+---
+
+### 6. Install Chrome Dependencies (for Web Scraping)
+The bot uses Selenium for web scraping. Ensure Chrome and Chromedriver are installed.
+
+#### On Linux:
+```bash
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb 
+sudo apt install ./google-chrome-stable_current_amd64.deb 
+
+wget https://chromedriver.storage.googleapis.com/133.0.6943.126/chromedriver_linux64.zip
+unzip chromedriver_linux64.zip
+sudo mv chromedriver /usr/local/bin/
+sudo chmod +x /usr/local/bin/chromedriver
+
+sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libgconf-2-4 libatk1.0-0 libgtk-3-0
+```
+
+#### On Windows:
+1. Download and install [Google Chrome](https://www.google.com/chrome/).
+2. Download the appropriate Chromedriver version from [Chromedriver Downloads](https://chromedriver.chromium.org/downloads).
+3. Add Chromedriver to your system PATH.
+
+---
+
+### 7. Run the Bot
+Start the bot by running the `main.py` script:
+
+```bash
+python main.py
+```
+
+If everything is set up correctly, you should see logs indicating that the bot has started successfully.
+
+---
+
+### Troubleshooting Common Issues
+
+1. **Qdrant Not Running:**
+   - Ensure Docker is installed and running.
+   - Verify that port `6333` is available on your system.
+   - Check Qdrant logs for errors by running:
+     ```bash
+     docker logs 
+     ```
+
+2. **Missing API Keys:**
+   - Double-check that your `config.json` file is correctly formatted and placed in the `config/` folder.
+   - Ensure all required keys are present.
+
+3. **Chromedriver Errors:**
+   - Make sure you have installed a compatible version of Chromedriver for your version of Chrome.
+   - Verify that Chromedriver is in your system PATH.
+
+4. **Dependency Issues:**
+   - If you encounter dependency errors, try upgrading pip and reinstalling requirements:
+     ```bash
+     pip install --upgrade pip
+     pip install -r requirements.txt --force-reinstall
+     ```
 
 ## Contributing
 

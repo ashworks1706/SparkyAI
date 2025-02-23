@@ -1,6 +1,6 @@
 from utils.common_imports import *
 class AppConfig:
-    def __init__(self, config_file='appConfig.json'):
+    def __init__(self, config_file='config/appConfig.json'):
         with open(config_file, 'r') as file:
             config_data = json.load(file)
         
