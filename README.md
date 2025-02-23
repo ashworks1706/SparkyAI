@@ -214,7 +214,22 @@ The modular architecture allows for easy extension:
 6. Ensure chromedependencies are installed for webscraping:
 
     ```bash
-    sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3
+
+    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb 
+
+    sudo apt install ./google-chrome-stable_current_amd64.deb 
+
+    wget https://chromedriver.storage.googleapis.com/133.0.6943.126/chromedriver_linux64.zip
+    
+    unzip chromedriver_linux64.zip
+    
+    sudo mv chromedriver-linux64/chromedriver /usr/local/bin/
+    
+    sudo chmod +x /usr/local/bin/chromedriver
+
+
+    sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libgconf-2-4 libatk1.0-0 libgtk-3-0
+
     ```
 
 ## Contributing
@@ -264,7 +279,7 @@ These papers have significantly contributed to the field of vector similarity se
             - [x]  Split `utils.py` into `retrieval/`, `preprocessing/`, and `agents/` modules
         - [ ]  Clean up code
             - [x]  Remove Jupyter-specific async workarounds
-            - [ ]  convert to linux based environment
+            - [x]  convert to linux based environment
             - [ ]  Eliminate dead code (unused KMeans imports, tracemalloc hooks)
             - [ ]  create working, train and deployment branches
             - [ ]  Resolve `googlesearchtool` vs `GoogleSearch` implementation divergences
