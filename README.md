@@ -213,7 +213,7 @@ venv\Scripts\activate
 ---
 
 ### 3. Install Dependencies
-Install all required Python packages from the `requirements.txt` file.
+Install all required Python.12.3 packages from the `requirements.txt` file.
 
 ```bash
 pip install -r requirements.txt
