@@ -1,3 +1,4 @@
+from config import app_config
 from utils.otp_verification import OTPVerificationModal
 from utils.verify_button import VerifyButton
 from utils.verification_modal import VerificationModal
@@ -30,13 +31,10 @@ class ASUDiscordBot:
         self.guild = self.client.get_guild(1256076931166769152)
         self.service = Service(ChromeDriverManager().install())
         
-        # Register commands and events
-        self._register_commands()
-        self._register_events()
-   
-    def _register_commands(self) -> None:
-        """Register Discord commands"""
-        
+        @self.client.event
+        async def on_ready():
+            await self._handle_ready()
+            
         @self.tree.command(
             name=self.config.command_name,
             description=self.config.command_description
@@ -44,12 +42,6 @@ class ASUDiscordBot:
         async def ask(interaction: discord.Interaction, question: str):
             await self._handle_ask_command(interaction, question)
         
-    def _register_events(self) -> None:
-        """Register Discord events"""
-        
-        @self.client.event
-        async def on_ready():
-            await self._handle_ready()
             
     async def _handle_ask_command(
         self,
@@ -146,8 +138,6 @@ class ASUDiscordBot:
             await self._send_chunked_response(interaction, response)
             self.logger.info(f"Successfully processed question for {interaction.user.name}")
             await self.vector_store.store_to_vector_db()
-            
-            
             self.firestore.update_message("user_message", question)
             document_id = await self.firestore.push_message()
             self.logger.info(f"Message pushed with document ID: {document_id}")

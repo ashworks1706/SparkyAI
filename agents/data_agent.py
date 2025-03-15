@@ -5,7 +5,7 @@ class DataModel:
         self.model = genai.GenerativeModel('gemini-1.5-flash')
   
     def refine(self, search_context: str, text: str) -> tuple[str, str, str]:
-        prompt = f"""{app_config.get_data_agent_prompt()}        
+        prompt = f"""{AppConfig.get_data_agent_prompt()}        
         Search Context: {search_context}
         Input Text: {text}
 

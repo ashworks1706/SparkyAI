@@ -572,9 +572,7 @@ class RagSearchModel:
         except Exception as e:
             self.logger.error(f"Failed to initialize chat session: {str(e)}")
             raise RuntimeError("Could not start chat session")
-        
-
-        
+    
     async def determine_action(self,instruction_to_agent:str,special_instructions:str) -> str:
         """
         Advanced query processing with comprehensive error handling and logging.

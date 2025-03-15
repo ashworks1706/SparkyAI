@@ -19,7 +19,7 @@ class Discord_Agent_Tools:
         self.user=self.discord_state.get('user')
         self.logger.info(f"Initialized Discord Guild : {self.guild}")
 
-        if not request_in_dm:
+        if not self.request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
         await self.utils.update_text("Checking available discord helpers...")
@@ -52,7 +52,7 @@ class Discord_Agent_Tools:
             # Create a private channel
             overwrites = {
                 self.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                self.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
                 selected_helper: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
             
@@ -63,7 +63,7 @@ class Discord_Agent_Tools:
             channel = await self.guild.create_text_channel(f"help-{self.user_id}", category=category, overwrites=overwrites)
 
             # Send messages
-            await channel.send(f"{user.mention} and {selected_helper.mention}, this is your help channel.")
+            await channel.send(f"{self.user.mention} and {selected_helper.mention}, this is your help channel.")
             await channel.send(f"User's message: {short_message_to_helper}")
 
             # Notify the helper via DM

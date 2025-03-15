@@ -132,7 +132,6 @@ classwith task tracking and logging."""
 
             if not documents:
                 raise ValueError("No documents found matching the query")
-                return "No results found on web"
             
             self.logger.info(documents)
             
@@ -221,8 +220,6 @@ classwith task tracking and logging."""
             self.logger.error(f"Error during similarity search: {str(e)}")
             return None
 
-
-    
     def merge_search_results(self, raptor_results, similarity_results):
         combined_results = raptor_results + similarity_results 
         
@@ -268,7 +265,7 @@ classwith task tracking and logging."""
         formatted_context = self.format_search_results(combined_results[:5])
         return formatted_context
 
-    def update_ground_sources(self,extracted_urls:[]):
+    def update_ground_sources(self,extracted_urls:list):
         self.ground_sources.extend(extracted_urls)
         self.ground_sources = list(set(self.ground_sources))
     
