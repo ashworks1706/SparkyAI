@@ -48,7 +48,8 @@ import numpy as np
 from sklearn.cluster import KMeans
 from qdrant_client.http.models import Filter, FieldCondition, MatchAny
 
-## Google APIs
+## Google 
+from google.protobuf.json_format import MessageToDict
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request

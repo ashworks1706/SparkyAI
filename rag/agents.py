@@ -22,18 +22,18 @@ class Agents:
         self.rag_search_agent_tools = Rag_Search_Agent_Tools(firestore,utils, app_config,logger)
         self.live_status_agent_tools = Live_Status_Agent_Tools(firestore, utils,logger)
         
-        self.logger.info("\nInitialized Agent Tools")
+        self.logger.info("Initialized Agent Tools")
         
         
         self.asu_data_agent = DataModel( self.genai,logger)
 
-        self.logger.info("\nInitialized DataModel")
+        self.logger.info("Initialized DataModel")
 
         self.live_status_agent = Live_Status_Model( self.firestore,self.genai,self.app_config,logger,self.live_status_agent_tools,discord_state)
-        self.logger.info("\nInitialized LiveStatusAgent")
+        self.logger.info("Initialized LiveStatusAgent")
 
         self.rag_search_agent = RagSearchModel( self.firestore,self.genai,self.app_config,logger,self.rag_search_agent_tools,discord_state)
-        self.logger.info("\nInitialized RagSearchModel Instance")
+        self.logger.info("Initialized RagSearchModel Instance")
 
 
         self.discord_agent = DiscordModel( self.firestore,self.genai,self.app_config,logger,self.discord_agent_tools,discord_state)
@@ -42,7 +42,7 @@ class Agents:
 
         self.superior_agent_tools = Superior_Agent_Tools(firestore,discord_state,utils, app_config, self.live_status_agent, self.rag_search_agent, self.discord_agent,logger,self.group_chat)
         self.superior_agent = SuperiorModel( self.firestore,self.genai,self.app_config,self.logger,self.superior_agent_tools)
-        self.logger.info("\nInitialized ActionAgent Global Instance")
+        self.logger.info("Initialized ActionAgent Global Instance")
     
     async def process_question(self, question: str) -> str:
         return await self.superior_agent.determine_action(question)

@@ -212,6 +212,7 @@ class SuperiorModel:
             raise ValueError(f"Unknown function: {function_name}")
         
         function_to_call = function_mapping[function_name]
+        self.logger.info(f"Function called : {function_name}")
         return await function_to_call(**function_args)
 
     async def process_gemini_response(self, response: Any) -> tuple[str, bool, Any]:
@@ -219,22 +220,27 @@ class SuperiorModel:
         has_function_call = False
         function_call = None
         self.logger.info(response)
-
+        self.logger.info(f"processgeminiresponse {response}")
+        
         for part in response.parts:
             if hasattr(part, 'text') and part.text.strip():
                 text_response += f"\n{part.text.strip()}"
+                self.logger.info(f"text response : {text_response}")
                 self.firestore.update_message("superior_agent_message", f"Text Response : {text_response} ")
             if hasattr(part, 'function_call') and part.function_call:
                 has_function_call = True
                 function_call = part.function_call
+                self.logger.info(f"function response : {part.function_call}")
                 temp_func =  {
                 "function_call": {
                     "name": part.function_call.name,
                     "args": dict(part.function_call.args)
                     }
                 }
-                self.firestore.update_message("superior_agent_message", json.dumps(temp_func, indent=2))
-
+                self.logger.info(f"@ Action Agent formed function call : {temp_func}")
+                self.firestore.update_message("superior_agent_message", f"{temp_func}")
+                self.logger.info("Updated Firestore message")
+        self.logger.info(f"@Action Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
         return text_response, has_function_call, function_call
 
     async def determine_action(self, query: str) -> List[str]:
@@ -257,7 +263,9 @@ class SuperiorModel:
                 responses.append(text_response)
                 final_response += text_response
                 if not has_function_call:
+                    self.logger.info("@ Action Agent : not function call requested")
                     break
+                self.logger.info("@ Action Agent : function call requested")
                 function_result = await self.execute_function(function_call)
                 self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
                 self.logger.info("\nAction Model @ Function result is: %s", function_result)
