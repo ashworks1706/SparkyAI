@@ -3,7 +3,7 @@
 appConfig.json
 client_secret.json
 firebase_secret.json
-/logs
+**/data_processor.log
 
 /sparky_env
 /.venv

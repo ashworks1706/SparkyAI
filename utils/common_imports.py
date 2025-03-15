@@ -43,7 +43,6 @@ from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams, OptimizersConfigDiff
 from huggingface_hub import login
-import hnswlib
 from sentence_transformers import CrossEncoder
 import numpy as np
 from sklearn.cluster import KMeans

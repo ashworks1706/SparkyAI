@@ -23,6 +23,10 @@ class ASUWebScraper:
         self.chrome_options.add_argument('--no-first-run')
         self.logger= logger
         
+        # logger.info("Enter Chrome binary location")
+        logger.info('/usr/bin/google-chrome-stable # Standard Linux path')
+        logger.info('/mnt/c/Program Files/Google/Chrome/Application/chrome.exe # Standard WSL path')
+        
         if platform.system() == 'Linux':
             self.chrome_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
         elif 'microsoft' in platform.uname().release.lower():  # WSL detection

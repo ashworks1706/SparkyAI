@@ -9,7 +9,6 @@ langchain-community
 qdrant-client
 scikit-learn
 numpy
-chromadb
 discord.py
 requests
 beautifulsoup4
