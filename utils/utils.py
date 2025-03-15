@@ -169,7 +169,6 @@ classwith task tracking and logging."""
         except Exception as e:
             self.logger.error(f"Error in web search: {str(e)}")
             return "No results found on web"
-    
        
     async def perform_similarity_search(self, query: str, categories: list):
         try:
@@ -222,41 +221,10 @@ classwith task tracking and logging."""
             self.logger.error(f"Error during similarity search: {str(e)}")
             return None
 
-    async def perform_mips_search(self, query: str, categories: list):
-        try:
-            self.logger.info(f"Action Model: Performing MIPS search with query: {query}")
-            query_vector = self.vector_store.embedding_model.embed_query(query)
-            
-            filter_conditions = None
-            if categories and len(categories) > 0:
-                filter_conditions = models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="metadata.category",
-                            match=models.MatchAny(any=categories)
-                        )
-                    ]
-                )
-            
-            results = self.vector_store.mips_search(query_vector, filter=filter_conditions)
-            
-            documents = []
-            for doc in results:
-                doc_info = {
-                    'content': doc['payload']['page_content'],
-                    'metadata': doc['payload']['metadata'],
-                    'score': doc['score']
-                }
-                documents.append(doc_info)
-            
-            self.logger.info(f"Retrieved {len(documents)} documents from MIPS search")
-            return documents
-        except Exception as e:
-            self.logger.error(f"Error during MIPS search: {str(e)}")
-            return None
+
     
-    def merge_search_results(self, raptor_results, similarity_results, mips_results):
-        combined_results = raptor_results + similarity_results + mips_results
+    def merge_search_results(self, raptor_results, similarity_results):
+        combined_results = raptor_results + similarity_results 
         
         deduplicated_results = []
         seen_urls = set()
@@ -281,14 +249,9 @@ classwith task tracking and logging."""
         # Perform similarity search
         similarity_results = await self.perform_similarity_search(query, categories)
         
-        # Perform MIPS search
-        mips_results = await self.perform_mips_search(query, categories)
-        query_embedding = self.vector_store.embedding_model.embed_query(query)
-
-
 
         # Combine and deduplicate results
-        combined_results = self.merge_search_results(raptor_results, similarity_results, mips_results)
+        combined_results = self.merge_search_results(raptor_results, similarity_results)
         
         # Process results
         extracted_urls = []
@@ -315,3 +278,4 @@ classwith task tracking and logging."""
     def clear_ground_sources(self):
         self.ground_sources = []
         return True
+    

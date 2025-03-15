@@ -11,21 +11,15 @@ class AppConfig:
         self.handshake_pass = config_data.get('HANDSHAKE_PASS', '')
         self.gmail = config_data.get('GMAIL', '')
         self.gmail_pass = config_data.get('GMAIL_PASS', '')
-        
         self.main_agent_prompt = config_data.get('MAIN_AGENT_PROMPT', '')
-        
         self.live_status_agent_prompt = config_data.get('LIVE_STATUS_AGENT_PROMPT', '')
         self.live_status_agent_instruction = config_data.get('LIVE_STATUS_AGENT_INSTRUCTION', '')
-        
         self.discord_agent_prompt = config_data.get('DISCORD_AGENT_PROMPT', '')
         self.discord_agent_instruction = config_data.get('DISCORD_AGENT_INSTRUCTION', '')
-        
         self.rag_search_agent_prompt = config_data.get('RAG_SEARCH_AGENT_PROMPT', '')
         self.rag_search_agent_instruction = config_data.get('RAG_SEARCH_AGENT_INSTRUCTION', '')
-        
-        self.superior_agent_prompt = config_data.get('superior_agent_PROMPT', '')
-        self.superior_agent_instruction = config_data.get('superior_agent_INSTRUCTION', '')
-        
+        self.superior_agent_prompt = config_data.get('SUPERIOR_AGENT_PROMPT', '')
+        self.superior_agent_instruction = config_data.get('SUPERIOR_AGENT_INSTRUCTION', '')
         
         self.rag_search_agent_prompt = config_data.get('RAG_SEARCH_AGENT_PROMPT', '')
         self.rag_search_agent_instruction = config_data.get('RAG_SEARCH_AGENT_INSTRUCTION', '')
@@ -42,49 +36,36 @@ class AppConfig:
 
     def get_numexpr_max_threads(self):
         return os.environ['NUMEXPR_MAX_THREADS']
-
     def get_huggingfacehub_api_token(self):
         return os.environ['HUGGINGFACEHUB_API_TOKEN']
-
     def get_qdrant_api_key(self):
         return self.qdrant_api_key
-    
     def get_discord_bot_token(self):
         return self.discord_bot_token
-
     def get_kubernetes_api_key(self):
         return self.kubernetes_api_key
-    
     def get_data_agent_prompt(self):
         return self.data_agent_prompt
-    
-    
     def get_live_status_agent_prompt(self):
         return self.live_status_agent_prompt
     def get_live_status_agent_instruction(self):
         return self.live_status_agent_instruction
-    
     def get_discord_agent_prompt(self):
         return self.discord_agent_prompt
     def get_discord_agent_instruction(self):
         return self.discord_agent_instruction
-    
     def get_rag_search_agent_prompt(self):
         return self.rag_search_agent_prompt
     def get_rag_search_agent_instruction(self):
         return self.rag_search_agent_instruction
-    
-    
     def get_superior_agent_prompt(self):
         return self.superior_agent_prompt
     def get_superior_agent_instruction(self):
         return self.superior_agent_instruction
-    
     def get_google_agent_prompt(self):
         return self.google_agent_prompt
     def get_google_agent_instruction(self):
         return self.google_agent_instruction
-    
     def get_api_key(self):
         return self._api_key
     def get_handshake_user(self):

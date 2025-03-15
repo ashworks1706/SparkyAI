@@ -8,14 +8,10 @@ class ASUWebScraper:
         self.visited_urls = set()
         self.utils = utils
         self.text_content = []
-        self.optionalLinks = []
         self.logged_in_driver= None
         self.driver= None
         self.chrome_options = Options()
-        # if platform.system() == 'Linux':
-        self.chrome_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
-        # elif 'microsoft' in platform.uname().release.lower():  # WSL detection
-        #     self.chrome_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
+        
 
         self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
@@ -26,6 +22,13 @@ class ASUWebScraper:
         self.chrome_options.add_argument('--disable-extensions')
         self.chrome_options.add_argument('--no-first-run')
         self.logger= logger
+        
+        if platform.system() == 'Linux':
+            self.chrome_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
+        elif 'microsoft' in platform.uname().release.lower():  # WSL detection
+            self.chrome_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
+            
+            
         try:
             # Get Chrome version (3rd element in output)
             chrome_out = subprocess.check_output(
@@ -47,12 +50,6 @@ class ASUWebScraper:
         except IndexError as e:
             logger.error(f"Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
             raise
-
-
-
-        
-        # if chrome_version != driver_version:
-        #     raise RuntimeError(f"Version mismatch: Chrome {chrome_version} vs Chromedriver {driver_version}")
 
         
         self.headers = {
@@ -659,8 +656,7 @@ class ASUWebScraper:
                         self.logger.info("\nAuthors fetched")
                         
                     except Exception as e:
-                        
-                        author = 'N/A'
+                        authors = 'N/A'
 
                     
                     try:
@@ -924,11 +920,7 @@ class ASUWebScraper:
 
             except Exception as e:
                 return f"Error retrieving library status: {str(e)}" 
-                        
-        
-            
-            return False
-            
+                                    
         elif 'asu.libcal.com' in url:
             # Navigate to the URL
             self.driver.get(url)
@@ -976,8 +968,6 @@ class ASUWebScraper:
             except Exception as e:
                 self.logger.error(f"Error extracting study room data: {e}")
                 return "No Study Rooms Open Today"
-                
-            
             return True
         
         elif 'asu-shuttles.rider.peaktransit.com' in url:
@@ -1389,7 +1379,6 @@ class ASUWebScraper:
                                         )
                                     except Exception as e:
                                         self.logger.warning(f"Timeout waiting for tweets to load {str(e)}")
-                                    page_source = driver.page_source
                                     
                                     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                                     time.sleep(3)

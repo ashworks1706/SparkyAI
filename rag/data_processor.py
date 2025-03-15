@@ -115,7 +115,7 @@ class DataPreprocessor:
     async def _refine_content(self, search_context: str, consolidated_text: str) -> Optional[str]:
         """Attempt to refine document content with error handling."""
         try:
-            return await asu_data_agent.refine(search_context, consolidated_text)
+            return await self.asu_data_agent.refine(search_context, consolidated_text)
         except Exception as e:
             self.logger.warning(f"Content refinement agent failed: {str(e)}")
             return None

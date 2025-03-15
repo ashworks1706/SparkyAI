@@ -1,4 +1,6 @@
+from config import app_config
 from utils.common_imports import *
+from utils.otp_verification import OTPVerificationModal
 class VerificationModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="ASU Email Verification")

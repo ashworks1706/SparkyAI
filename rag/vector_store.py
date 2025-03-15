@@ -1,6 +1,3 @@
-
-
-
 from utils.common_imports import *
 class VectorStore:
     
@@ -13,7 +10,6 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
                  host: str = "localhost",
                  port: int = 6333,
                  collection_name: str = "asu_docs",
-                #  model_name: str = "BAAI/bge-small-en-v1.5",
                  model_name: str = "BAAI/bge-large-en-v1.5",
                  batch_size: int = 100,
                  max_retry_attempts: int = 3,
@@ -30,58 +26,32 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
             batch_size (int): Size of batches for document processing
             max_retry_attempts (int): Maximum number of retry attempts for operations
             retry_delay (int): Delay between retry attempts in seconds
-        """
-        self.vector_store: Optional[QdrantVectorStore] = None
-        self.collection_name = collection_name
-        self.batch_size = batch_size
-        self.max_retry_attempts = max_retry_attempts
-        self.retry_delay = retry_delay
-        self.corpus = []
-        self.hnsw_index = None
-        self.app_config = app_config
-        self.logger= logger
-        
-        self.logger.info(f"Initializing VectorStore with collection: {collection_name}")
-        self.logger.info(f"Configuration: host={host}, port={port}, model={model_name}")
-        
+        """    
         try:
+            self.vector_store: Optional[QdrantVectorStore] = None
+            self.collection_name = collection_name
+            self.batch_size = batch_size
+            self.max_retry_attempts = max_retry_attempts
+            self.retry_delay = retry_delay
+            self.corpus = []
+            self.app_config = app_config
+            self.logger= logger
+            
+            self.logger.info(f"Initializing VectorStore with collection: {collection_name}")
+            self.logger.info(f"Configuration: host={host}, port={port}, model={model_name}")
+            
             self.client = self._create_qdrant_client(host, port)
             self._initialize_embedding_model(model_name)
             self._setup_collection(force_recreate)
             self._initialize_vector_store()
+            
             
         except Exception as e:
             self.logger.error(f"Critical VectorStore initialization error: {str(e)}", exc_info=True)
             self._log_detailed_error(e)
             raise RuntimeError(f"VectorStore initialization failed: {str(e)}")
     
-    def mips_search(self, query_vector: List[float], top_k: int = 5):
-        try:
-            if not self.vector_store:
-                self.logger.error("Vector store not initialized.")
-                raise ValueError("Vector store not properly initialized.")
-            
-            if self.hnsw_index is None:
-                self.build_hnsw_index()
-            
-            labels, distances = self.hnsw_index.knn_query(query_vector, k=top_k)
-            results = []
-            for label, distance in zip(labels[0], distances[0]):
-                doc = self.get_document_by_id(int(label))
-                results.append({
-                    "id": doc.metadata.get('id'),
-                    "score": 1 - distance,  # Convert distance to similarity score
-                    "payload": {
-                        "page_content": doc.page_content,
-                        "metadata": doc.metadata
-                    }
-                })
-            
-            self.logger.info(f"MIPS search retrieved {len(results)} results.")
-            return results
-        except Exception as e:
-            self.logger.error(f"Error during MIPS search: {str(e)}")
-            return []
+
         
     def get_all_documents(self):
         # Implement method to retrieve all documents from Qdrant
@@ -104,14 +74,6 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         else:
             return getattr(doc, 'page_content', str(doc))
         
-    def build_hnsw_index(self):
-        all_docs = self.get_all_documents()
-        all_embeddings = self.get_embeddings(all_docs)
-        
-        self.hnsw_index = hnswlib.Index(space='cosine', dim=self.vector_size)
-        self.hnsw_index.init_index(max_elements=len(all_docs), ef_construction=200, M=16)
-        self.hnsw_index.add_items(all_embeddings, np.arange(len(all_docs)))
-        self.hnsw_index.set_ef(50)  # Adjust for speed/accuracy trade-off
 
     def _initialize_embedding_model(self, model_name: str) -> None:
         """Initialize the embedding model."""
@@ -217,6 +179,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         if self.vector_store is None and self.corpus is None:
             self.logger.critical("Vector store not initialized - cannot proceed")
             raise ValueError("Vector store not properly initialized")
+                #  model_name: str = "BAAI/bge-small-en-v1.5",
 
         total_docs = len(self.corpus)
         self.logger.info(f"Document storage initiated: {total_docs} documents to process")

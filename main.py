@@ -2,6 +2,7 @@ from utils.common_imports import *
 
 class Main:
     def __init__(self):
+        # Initializing common logger
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -12,10 +13,13 @@ class Main:
         )
         tracemalloc.start()
         self.logger = logging.getLogger(__name__)
+        # Initializing app_config to get prompts, agent details and important secrets
         self.app_config = AppConfig()
+        # Initializing discord state class to dynamically update discord states since the server starts later
         self.discord_state = DiscordState()
         
         try:
+            # initializing vector store for qdrant vector database
             self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
             self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
