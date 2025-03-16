@@ -100,7 +100,7 @@ class Discord_Agent_Tools:
                 self.utils.update_ground_sources([existing_channel.jump_url])
                 return f"User already has an open support channel."
             # Find helpers/moderators
-            helper_role = discord.self.utils.get(self.guild.roles, name="mod")
+            helper_role = discord.self.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
             if not helper_role:
                 return "Unable to find helpers. Please contact an administrator."
 
@@ -174,7 +174,7 @@ class Discord_Agent_Tools:
             try:
                 
                 # Find the forum channel 
-                forum_channel = discord.self.utils.get(self.guild.forums, name='qna')  # Replace with your forum channel name
+                forum_channel = discord.self.utils.get(self.guild.forums, name=self.discord_state("discord_post_channel_name"))  # Replace with your forum channel name
             except Exception as e:
                 self.logger.error(f"Error finding forum channel: {str(e)}")
                 return f"An error occurred while finding the forum channel: {str(e)}"
@@ -199,7 +199,7 @@ class Discord_Agent_Tools:
                 return f"An error occurred while creating the forum thread: {str(e)}"
             self.logger.info(f"Created forum thread {thread.message.id} {type(thread)}")
             
-            self.utils.update_ground_sources([f"https://discord.com/channels/1256076931166769152/{thread.id}"])
+            self.utils.update_ground_sources([f"https://discord.com/channels/{self.guild}/{thread.id}"])
             return f"Forum post created successfully.\nTitle: {title}\nDescription: {content[:100]}...\n"
         
 

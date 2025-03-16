@@ -1,4 +1,3 @@
-from config import app_config
 from utils.otp_verification import OTPVerificationModal
 from utils.verify_button import VerifyButton
 from utils.verification_modal import VerificationModal
@@ -8,7 +7,7 @@ class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
-    def __init__(self, config, agents, firestore, discord_state, utils,vector_store,logger ):
+    def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger ):
         """
         Initialize the Discord bot.
         
@@ -19,6 +18,7 @@ class ASUDiscordBot:
         self.logger= logger
         self.logger.info("\nInitializing ASUDiscordBot")
         self.config = config or BotConfig(app_config)
+        self.app_config= app_config
         self.agents = agents
         self.firestore = firestore
         self.utils = utils
@@ -28,7 +28,6 @@ class ASUDiscordBot:
         self.discord_state = discord_state
         self.client = discord_state.get('discord_client')
         self.tree = app_commands.CommandTree(self.client)
-        self.guild = self.client.get_guild(1256076931166769152)
         self.service = Service(ChromeDriverManager().install())
         
         @self.client.event
@@ -58,8 +57,8 @@ class ASUDiscordBot:
         user = interaction.user
         user_id= interaction.user.id
         request_in_dm = isinstance(interaction.channel, discord.DMChannel)
-        self.guild = self.client.get_guild(1256076931166769152)
-        target_guild = self.client.get_guild(1256076931166769152)
+    
+        target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
         user_has_mod_role= None
         member = None
         user_voice_channel_id=None
@@ -69,7 +68,7 @@ class ASUDiscordBot:
             try:
                 member = await target_guild.fetch_member(interaction.user.id)
                 if member:
-                    required_role_name = "mod" 
+                    required_role_name = self.app_config.get_discord_mod_role_name() 
                     user_has_mod_role = any(
                         role.name == required_role_name for role in member.roles
                     )
@@ -83,7 +82,7 @@ class ASUDiscordBot:
                     
             except discord.NotFound:
                 return "You are not part of Sparky Discord Server. Access to command is restricted."
-        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id)
+        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name)
         self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:
@@ -101,7 +100,7 @@ class ASUDiscordBot:
 
     async def _validate_channel(self, interaction: discord.Interaction) -> bool:
         """Validate if command is used in correct channel"""
-        if not self.discord_state.get('request_in_dm') and interaction.channel.id != 1323387010886406224:
+        if not self.discord_state.get('request_in_dm') and interaction.channel.id != self.app_config.get_discord_allowed_chat_id():
             await interaction.response.send_message(
                 "Please use this command in the designated channel: #general",
                 ephemeral=True
@@ -155,10 +154,11 @@ class ASUDiscordBot:
             await self._send_error_response(interaction)
 
     async def setup_verify_button(self):
-        channel = self.client.get_channel(1323386003896926248)  # Verify channel ID
+        self.logger.info(self.app_config.get_discord_target_guild_id())
+        channel = self.client.get_channel(self.app_config.get_discord_verification_id())  # Verify channel ID
         if channel:
             view = discord.ui.View(timeout=None)
-            view.add_item(VerifyButton(self.config))
+            view.add_item(VerifyButton(self.app_config))
             await channel.send("Click here to verify", view=view)
 
     async def _send_chunked_response( self,interaction: discord.Interaction,response: str) -> None:
@@ -172,7 +172,7 @@ class ASUDiscordBot:
                 button = discord.ui.Button(label=domain, url=url, style=discord.ButtonStyle.link)
                 buttons.append(button)
             # Custom link for feedbacks
-            button = discord.ui.Button(label="Feedback", url="https://discord.com/channels/1256076931166769152/1323386415337177150", style=discord.ButtonStyle.link)
+            button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.link)
             buttons.append(button)
 
             view = discord.ui.View()

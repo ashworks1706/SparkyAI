@@ -16,7 +16,7 @@ class Main:
         # Initializing app_config to get prompts, agent details and important secrets
         self.app_config = AppConfig() 
         # Initializing discord state class to dynamically update discord states since the server starts later
-        self.discord_state = DiscordState()
+        self.discord_state = DiscordState(self.app_config)
         
         try:
             # initializing vector store for qdrant vector database
@@ -47,12 +47,12 @@ class Main:
     async def initialize_scraper(self):
         await self.asu_scraper.__login__(self.app_config.get_handshake_user(), self.app_config.get_handshake_pass())
 
-    async def run_discord_bot(self, config: Optional[BotConfig] = None):
+    async def run_discord_bot(self,config: Optional[BotConfig] = None, app_config=None):
         """Run the Discord bot"""
         if not self.vector_store:
             self.logger.error("Cannot start bot: VectorStore not initialized")
             return
-        bot = ASUDiscordBot(config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger)
+        bot = ASUDiscordBot(config,app_config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger)
         
         await self.initialize_scraper()
         
@@ -72,6 +72,6 @@ if __name__ == "__main__":
             token=asu_system.app_config.get_discord_bot_token(),
             app_config=asu_system.app_config
         )
-        asyncio.run(asu_system.run_discord_bot(config))
+        asyncio.run(asu_system.run_discord_bot(config,asu_system.app_config))
     else:
         print("Bot initialization failed due to VectorStore error. Check logs for details.")

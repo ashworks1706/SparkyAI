@@ -1,6 +1,6 @@
 from utils.common_imports import *
 class DiscordState:
-    def __init__(self):
+    def __init__(self,config):
         nest_asyncio.apply()
         self.intents = discord.Intents.default()
         self.intents.message_content = True
@@ -15,6 +15,7 @@ class DiscordState:
         self.user_voice_channel_id = None
         self.discord_client = discord.Client(intents=self.intents)
         self.task_message = None
+        self.discord_post_channel_name= None
 
     def update(self, **kwargs):
         for key, value in kwargs.items():

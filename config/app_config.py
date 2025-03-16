@@ -33,6 +33,12 @@ class AppConfig:
         self.discord_bot_token = config_data.get('DISCORD_BOT_TOKEN', '')
         self.kubernetes_api_key = config_data.get('KUBERNETES_SECRET', '')
         self.qdrant_api_key = config_data.get('QDRANT_API_KEY', '')
+        self.discord_target_guild_id = config_data.get('TARGET_GUILD_ID', '')
+        self.discord_allowed_chat_id = config_data.get('ALLOWED_CHAT_ID', '')
+        self.discord_verification_id = config_data.get('VERIFY_CHANNEL_ID', '')
+        self.discord_feedback_id = config_data.get('FEEDBACK_CHANNEL_ID', '')
+        self.discord_mod_role_name = config_data.get('DISCORD_MOD_ROLE_NAME', '')
+        self.discord_post_channel_name = config_data.get('DISCORD_POST_CHANNEL_NAME', '')
 
     def get_numexpr_max_threads(self):
         return os.environ['NUMEXPR_MAX_THREADS']
@@ -40,6 +46,18 @@ class AppConfig:
         return os.environ['HUGGINGFACEHUB_API_TOKEN']
     def get_qdrant_api_key(self):
         return self.qdrant_api_key
+    def get_discord_target_guild_id(self):
+        return int(self.discord_target_guild_id)
+    def get_discord_mod_role_name(self):
+        return self.discord_mod_role_name
+    def get_discord_post_channel_name(self):
+        return self.discord_post_channel_name
+    def get_discord_allowed_chat_id(self):
+        return int(self.discord_allowed_chat_id)
+    def get_discord_verification_id(self):
+        return int(self.discord_verification_id)
+    def get_discord_feedback_id(self):
+        return int(self.discord_feedback_id)
     def get_discord_bot_token(self):
         return self.discord_bot_token
     def get_kubernetes_api_key(self):
