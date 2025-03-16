@@ -16,7 +16,7 @@ class Main:
         # Initializing app_config to get prompts, agent details and important secrets
         self.app_config = AppConfig() 
         # Initializing discord state class to dynamically update discord states since the server starts later
-        self.discord_state = DiscordState(self.app_config)
+        self.discord_state = DiscordState()
         
         try:
             # initializing vector store for qdrant vector database

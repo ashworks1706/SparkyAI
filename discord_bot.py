@@ -82,7 +82,7 @@ class ASUDiscordBot:
                     
             except discord.NotFound:
                 return "You are not part of Sparky Discord Server. Access to command is restricted."
-        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name)
+        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
         self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:

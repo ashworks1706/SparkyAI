@@ -102,7 +102,7 @@ class Discord_Agent_Tools:
             # Find helpers/moderators
             helper_role = discord.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
             if not helper_role:
-                return "Unable to find helpers. Please contact an administrator."
+                return "Unable to find moderators. Please contact an administrator."
 
             helpers = [member for member in self.guild.members if helper_role in member.roles]
             if not helpers:
