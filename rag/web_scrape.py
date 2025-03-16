@@ -11,7 +11,8 @@ class ASUWebScraper:
         self.logged_in_driver= None
         self.driver= None
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless')  
+        # if you want to start chrome supressed enable this comment
+        # self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
@@ -201,9 +202,11 @@ class ASUWebScraper:
                                 }
                             })
                         return True
+                    else:
+                        self.logger.info("Langchain method failed")
                 except Exception as e:
                     self.logger.error(f"Error fetching content from {url}: {str(e)}")
-                    await asyncio.sleep(3) 
+                    await asyncio.sleep(8) 
                     continue  
                 else:
                     jina_url = f"https://r.jina.ai/{url}"
@@ -211,9 +214,11 @@ class ASUWebScraper:
                     response.raise_for_status()
                     
                     text = response.text
+                    self.logger.info(f"Raw text response for https://r.jina.ai/{url}\n{text}")
+                    
                     if "LOADING" in text.upper() or "requires javascript to be enabled" in documents[0].page_content.lower():
                         self.logger.warning(f"LOADING response detected for {url}. Retry attempt {attempt + 1}")
-                        await asyncio.sleep(3)  # Wait before retrying
+                        await asyncio.sleep(8)  # Wait before retrying
                         continue
                     
                     if text and len(text.strip()) > 50:
