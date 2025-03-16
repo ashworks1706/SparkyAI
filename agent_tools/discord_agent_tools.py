@@ -32,13 +32,13 @@ class Discord_Agent_Tools:
                 return "Unable to find the server. Please try again later."
 
             # Check if user is already connected to a helper
-            existing_channel = discord.self.utils.get(self.guild.channels, name=f"help-{self.user_id}")
+            existing_channel = discord.utils.get(self.guild.channels, name=f"help-{self.user_id}")
             if existing_channel:
                 self.utils.update_ground_sources([existing_channel.jump_url])
                 return f"User already has an open help channel."
 
             # Find helpers
-            helper_role = discord.self.utils.get(self.guild.roles, name="Helper")
+            helper_role = discord.utils.get(self.guild.roles, name="Helper")
             if not helper_role:
                 return "Unable to find helpers. Please contact an administrator."
 
@@ -56,7 +56,7 @@ class Discord_Agent_Tools:
                 selected_helper: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
             
-            category = discord.self.utils.get(self.guild.categories, name="Customer Service")
+            category = discord.utils.get(self.guild.categories, name="Customer Service")
             if not category:
                 return "Unable to find the Customer Service category. Please contact an administrator."
 
@@ -95,12 +95,12 @@ class Discord_Agent_Tools:
                 return "Unable to find the server. Please try again later."
 
             # Check if user is already connected to a helper
-            existing_channel = discord.self.utils.get(self.guild.channels, name=f"support-{self.user_id}")
+            existing_channel = discord.utils.get(self.guild.channels, name=f"support-{self.user_id}")
             if existing_channel:
                 self.utils.update_ground_sources([existing_channel.jump_url])
                 return f"User already has an open support channel."
             # Find helpers/moderators
-            helper_role = discord.self.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
+            helper_role = discord.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
             if not helper_role:
                 return "Unable to find helpers. Please contact an administrator."
 
@@ -118,7 +118,7 @@ class Discord_Agent_Tools:
                 selected_helper: discord.PermissionOverwrite(read_messages=True, send_messages=True)
             }
             
-            category = discord.self.utils.get(self.guild.categories, name="Customer Service")
+            category = discord.utils.get(self.guild.categories, name="Customer Service")
             if not category:
                 return "Unable to find the Customer Service category. Please contact an administrator."
 
@@ -174,7 +174,7 @@ class Discord_Agent_Tools:
             try:
                 
                 # Find the forum channel 
-                forum_channel = discord.self.utils.get(self.guild.forums, name=self.discord_state("discord_post_channel_name"))  # Replace with your forum channel name
+                forum_channel = discord.utils.get(self.guild.forums, name=self.discord_state("discord_post_channel_name"))  # Replace with your forum channel name
             except Exception as e:
                 self.logger.error(f"Error finding forum channel: {str(e)}")
                 return f"An error occurred while finding the forum channel: {str(e)}"
@@ -229,7 +229,7 @@ class Discord_Agent_Tools:
 
         try:
             # Find the announcements channel
-            announcements_channel = discord.self.utils.get(self.discord_client.get_all_channels(), name='announcements')
+            announcements_channel = discord.utils.get(self.discord_client.get_all_channels(), name='announcements')
             if not announcements_channel:
                 return "Announcements channel not found. Please ensure the channel exists."
 
@@ -299,7 +299,7 @@ class Discord_Agent_Tools:
             embed.set_footer(text=f"Event ID: {event.id}")
 
             # Send the announcement to the announcements channel
-            announcements_channel = discord.self.utils.get(self.guild.text_channels, name="announcements")
+            announcements_channel = discord.utils.get(self.guild.text_channels, name="announcements")
             if announcements_channel:
                 await announcements_channel.send(embed=embed)
             
@@ -338,7 +338,7 @@ class Discord_Agent_Tools:
                 return "Unable to find the server. Please try again later."
 
             # Find the specified channel
-            channel = discord.self.utils.get(self.guild.text_channels, name=channel_name)
+            channel = discord.utils.get(self.guild.text_channels, name=channel_name)
             if not channel:
                 return f"Channel '{channel_name}' not found. Please check the channel name and try again."
 

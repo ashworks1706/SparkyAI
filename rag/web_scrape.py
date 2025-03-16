@@ -12,7 +12,7 @@ class ASUWebScraper:
         self.driver= None
         self.chrome_options = Options()
         # if you want to start chrome supressed enable this comment
-        # self.chrome_options.add_argument('--headless')  
+        self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
@@ -216,7 +216,7 @@ class ASUWebScraper:
                     text = response.text
                     self.logger.info(f"Raw text response for https://r.jina.ai/{url}\n{text}")
                     
-                    if "LOADING" in text.upper() or "requires javascript to be enabled" in documents[0].page_content.lower():
+                    if "LOADING" in text.upper() or "requires javascript to be enabled" in text.lower():
                         self.logger.warning(f"LOADING response detected for {url}. Retry attempt {attempt + 1}")
                         await asyncio.sleep(8)  # Wait before retrying
                         continue
