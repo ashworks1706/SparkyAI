@@ -7,7 +7,7 @@ class Live_Status_Model:
         self.discord_state = discord_state
         self.app_config= app_config
         self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             generation_config={
                 "temperature": 0.0,
                 "top_p": 0.1,

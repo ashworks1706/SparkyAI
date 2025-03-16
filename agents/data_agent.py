@@ -2,7 +2,7 @@ from utils.common_imports import *
 class DataModel:
     def __init__(self, model=None, logger=None):
         self.logger = logger
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
   
     def refine(self, search_context: str, text: str) -> tuple[str, str, str]:
         prompt = f"""{AppConfig.get_data_agent_prompt()}        

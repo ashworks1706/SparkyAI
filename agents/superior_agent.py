@@ -6,176 +6,339 @@ class SuperiorModel:
         self.firestore = firestore
         self.app_config = app_config
         self.agent_tools=superior_agent_tools
-        self.model = genai.GenerativeModel(model_name="gemini-1.5-flash",
-    
+        self.model = genai.GenerativeModel(model_name="gemini-2.0-flash",
+        
             generation_config={
-                "temperature": 0.0, 
-                "top_p": 0.1,
-                "top_k": 40,
-                "max_output_tokens": 3100,
-                "response_mime_type": "text/plain",
+            "temperature": 0.0, 
+            "top_p": 0.1,
+            "top_k": 40,
+            "max_output_tokens": 3100,
+            "response_mime_type": "text/plain",
             },
             safety_settings={
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
             
             system_instruction = f""" {self.app_config.get_superior_agent_instruction()}""",
             
             tools=[
-                genai.protos.Tool(
-                    function_declarations=[
-                                    
-                        genai.protos.FunctionDeclaration(
-                            name="access_rag_search_agent",
-                            description="Has ability to search for ASU-specific Targeted , real-time information extraction related to Jobs, Scholarships, Library Catalog, News, Events, Social Media, Sport Updates, Clubs",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "instruction_to_agent": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Tasks for the agent"
-                                    ),
-                                    "special_instructions": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Remarks about previous search or Special Instructions to Agent"
-                                    ),
-                                },
-                                required= ["instruction_to_agent","special_instructions"],
-                            ),
-                        ),
+            genai.protos.Tool(
+                function_declarations=[
                         
-                        genai.protos.FunctionDeclaration(
-                            name="access_discord_agent",
-                            description="Has ability to post announcement/event/poll and connect user to moderator/helper request",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "instruction_to_agent": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Tasks for the agent"
-                                    ),
-                                    "special_instructions": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Remarks about previous search or Special Instructions to Agent"
-                                    ),
-                                },
-                                required= ["instruction_to_agent","special_instructions"]
-                            ),   
+                # genai.protos.FunctionDeclaration(
+                #     name="access_rag_search_agent",
+                #     description="Has ability to search for ASU-specific Targeted , real-time information extraction related to Jobs, Scholarships, Library Catalog, News, Events, Social Media, Sport Updates, Clubs",
+                #     parameters=content.Schema(
+                #     type=content.Type.OBJECT,
+                #     properties={
+                #         "instruction_to_agent": content.Schema(
+                #         type=content.Type.STRING,
+                #         description="Tasks for the agent"
+                #         ),
+                #         "special_instructions": content.Schema(
+                #         type=content.Type.STRING,
+                #         description="Remarks about previous search or Special Instructions to Agent"
+                #         ),
+                #     },
+                #     required= ["instruction_to_agent","special_instructions"],
+                #     ),
+                # ),
+                
+                genai.protos.FunctionDeclaration(
+                    name="access_discord_agent",
+                    description="Has ability to post announcement/event/poll and connect user to moderator/helper request",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
                         ),
-                        
-                        genai.protos.FunctionDeclaration(
-                            name="send_bot_feedback",
-                            description="Submits user's feedbacks about sparky",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "feedback": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Feedback by the user"
-                                    ),
-                                },
-                            required=["feedback"]
-                            ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
                         ),
-                        
-                        genai.protos.FunctionDeclaration(
-                            name="get_discord_server_info",
-                            description="Get Sparky Discord Server related Information",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "context": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Context of Information"
-                                    ),
-                                },
-                                
-                            ),
-                        ),
-                        
-                        genai.protos.FunctionDeclaration(
-                            name="access_live_status_agent",
-                            description="Has ability to fetch realtime live shuttle/bus, library and StudyRooms status.",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "instruction_to_agent": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Tasks for Live Status Agent"
-                                    ),
-                                    "special_instructions": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Special Instructions to the agent"
-                                    ),
-                                },
-                                required= ["instruction_to_agent","special_instructions"],
-                            ),
-                        ),
-                        
-                        genai.protos.FunctionDeclaration(
-                            name="get_user_profile_details",
-                            description="Get Sparky Discord Server related Information",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "context": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Context of Information"
-                                    ),
-                                },
-                                
-                            ),
-                        ),
-
-                        genai.protos.FunctionDeclaration(
-                            name="access_google_agent",
-                            description="Performs Google Search to provide rapid result summary",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-                                    "original_query": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Original Query to Search"
-                                    ),
-                                    "detailed_query": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Detailed query related to the question"
-                                    ),
-                                    "generalized_query": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="General query related to the question"
-                                    ),
-                                    "relative_query": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="Other query related to the question"
-                                    ),
-                                    "categories": content.Schema(
-                                        type=content.Type.ARRAY,
-                                        items=content.Schema(
-                                            type=content.Type.STRING,
-                                            enum=[
-                                                "libraries_status", 
-                                                "shuttles_status", 
-                                                "clubs_info", 
-                                                "scholarships_info", 
-                                                "job_updates", 
-                                                "library_resources",  
-                                                "classes_info", 
-                                                "events_info", 
-                                                "news_info", 
-                                                "social_media_updates", 
-                                            ]
-                                        ),
-                                        description="Documents Category Filter"
-                                    ),
-
-                                },
-                                required=["original_query","detailed_query","generalized_query","relative_query","categories"]
-                            ),
-                        ),    
-                    ],
+                    },
+                    required= ["instruction_to_agent","special_instructions"]
+                    ),   
                 ),
+                     genai.protos.FunctionDeclaration(
+                    name="access_google_agent",
+                    description="Performs Google Search to provide rapid result summary",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "original_query": content.Schema(
+                        type=content.Type.STRING,
+                        description="Original Query to Search"
+                        ),
+                        "detailed_query": content.Schema(
+                        type=content.Type.STRING,
+                        description="Detailed query related to the question"
+                        ),
+                        "generalized_query": content.Schema(
+                        type=content.Type.STRING,
+                        description="General query related to the question"
+                        ),
+                        "relative_query": content.Schema(
+                        type=content.Type.STRING,
+                        description="Other query related to the question"
+                        ),
+                        "categories": content.Schema(
+                        type=content.Type.ARRAY,
+                        items=content.Schema(
+                            type=content.Type.STRING,
+                            enum=[
+                            "libraries_status", 
+                            "shuttles_status", 
+                            "clubs_info", 
+                            "scholarships_info", 
+                            "job_updates", 
+                            "library_resources",  
+                            "classes_info", 
+                            "events_info", 
+                            "news_info", 
+                            "social_media_updates", 
+                            ]
+                        ),
+                        description="Documents Category Filter"
+                        ),
+
+                    },
+                    required=["original_query","detailed_query","generalized_query","relative_query","categories"]
+                    ),
+                ),    
+                
+                genai.protos.FunctionDeclaration(
+                    name="send_bot_feedback",
+                    description="Submits user's feedbacks about sparky",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "feedback": content.Schema(
+                        type=content.Type.STRING,
+                        description="Feedback by the user"
+                        ),
+                    },
+                    required=["feedback"]
+                    ),
+                ),
+                
+                genai.protos.FunctionDeclaration(
+                    name="get_discord_server_info",
+                    description="Get Sparky Discord Server related Information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "context": content.Schema(
+                        type=content.Type.STRING,
+                        description="Context of Information"
+                        ),
+                    },
+                    
+                    ),
+                ),
+                
+                genai.protos.FunctionDeclaration(
+                    name="access_live_status_agent",
+                    description="Has ability to fetch realtime live shuttle/bus, library and StudyRooms status.",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for Live Status Agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Special Instructions to the agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                
+                genai.protos.FunctionDeclaration(
+                    name="get_user_profile_details",
+                    description="Get Sparky Discord Server related Information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "context": content.Schema(
+                        type=content.Type.STRING,
+                        description="Context of Information"
+                        ),
+                    },
+                    
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_courses_agent",
+                    description="Has ability to search for ASU courses information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_events_agent",
+                    description="Has ability to search for ASU events information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_library_agent",
+                    description="Has ability to search for ASU library information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_news_agent",
+                    description="Has ability to search for ASU news information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_scholarship_agent",
+                    description="Has ability to search for ASU scholarship information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_social_media_agent",
+                    description="Has ability to search for ASU social media information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_sports_agent",
+                    description="Has ability to search for ASU sports information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_student_club_agent",
+                    description="Has ability to search for ASU student club information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="access_student_jobs_agent",
+                    description="Has ability to search for ASU student jobs information",
+                    parameters=content.Schema(
+                    type=content.Type.OBJECT,
+                    properties={
+                        "instruction_to_agent": content.Schema(
+                        type=content.Type.STRING,
+                        description="Tasks for the agent"
+                        ),
+                        "special_instructions": content.Schema(
+                        type=content.Type.STRING,
+                        description="Remarks about previous search or Special Instructions to Agent"
+                        ),
+                    },
+                    required= ["instruction_to_agent","special_instructions"],
+                    ),
+                ),
+
+               
+                ],
+            ),
             ],
             tool_config={'function_calling_config': 'AUTO'},
         )
@@ -196,13 +359,21 @@ class SuperiorModel:
 
     async def execute_function(self, function_call: Any) -> str:
         function_mapping = {
-            'access_rag_search_agent': self.agent_tools.access_rag_search_agent,
             'access_google_agent': self.agent_tools.access_google_agent,
             'access_discord_agent': self.agent_tools.access_discord_agent,
-            'send_bot_feedback': self.agent_tools.send_bot_feedback,
             'access_live_status_agent': self.agent_tools.access_live_status_agent,
             'get_user_profile_details': self.agent_tools.get_user_profile_details,
             'get_discord_server_info': self.agent_tools.get_discord_server_info,
+            'send_bot_feedback': self.agent_tools.send_bot_feedback,
+            'access_courses_agent': self.agent_tools.access_courses_agent,
+            'access_events_agent': self.agent_tools.access_events_agent,
+            'access_library_agent': self.agent_tools.access_library_agent,
+            'access_news_agent': self.agent_tools.access_news_agent,
+            'access_scholarship_agent': self.agent_tools.access_scholarship_agent,
+            'access_social_media_agent': self.agent_tools.access_social_media_agent,
+            'access_sports_agent': self.agent_tools.access_sports_agent,
+            'access_student_club_agent': self.agent_tools.access_student_club_agent,
+            'access_student_jobs_agent': self.agent_tools.access_student_jobs_agent,
         }
 
         function_name = function_call.name

@@ -20,7 +20,7 @@ class RagSearchModel:
         self.discord_state= discord_state
         self.agent_tools= rag_search_agent_tools
         self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             generation_config={
                 "temperature": 0.0,
                 "top_p": 0.1,

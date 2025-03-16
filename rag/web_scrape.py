@@ -1040,21 +1040,60 @@ class ASUWebScraper:
                 
                 time.sleep(2)
                 
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@style, 'z-index: 106')]"))
-                )
+                # WebDriverWait(self.driver, 10).until(
+                #     EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@style, 'z-index: 106')]"))
+                # )
                 
+                # try:
+                #     zoom_out_button = WebDriverWait(self.driver, 10).until(
+                #         EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Zoom out']"))
+                #     )
+                    
+                #     for _ in range(button_times):
+                #         zoom_out_button.click()
+                #         time.sleep(0.5)  # Short pause between clicks
+                
+                # except Exception as e:
+                #     self.logger.info(f"Error clicking zoom out button: {e}")
+                
+                # Replace the existing zoom control code with:
+
                 try:
+                    # First click on map camera controls button
+                    camera_controls = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Map camera controls']"))
+                    )
+                    camera_controls.click()
+                    time.sleep(0.5)  # Short pause to let controls expand
+
+                    # Then find and click the zoom out button
                     zoom_out_button = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Zoom out']"))
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Zoom out']"))
                     )
                     
+                    # Click zoom out button multiple times based on button_times parameter
                     for _ in range(button_times):
                         zoom_out_button.click()
                         time.sleep(0.5)  # Short pause between clicks
-                
+
                 except Exception as e:
-                    self.logger.info(f"Error clicking zoom out button: {e}")
+                    self.logger.info(f"Error with map controls: {e}")
+                    # Try alternative method using JavaScript
+                    try:
+                        zoom_script = """
+                        var controls = document.querySelector('button[aria-label="Map camera controls"]');
+                        if(controls) controls.click();
+                        var zoomOut = document.querySelector('button[aria-label="Zoom out"]');
+                        if(zoomOut) {
+                            for(var i = 0; i < arguments[0]; i++) {
+                                zoomOut.click();
+                                await new Promise(r => setTimeout(r, 500));
+                            }
+                        }
+                        """
+                        self.driver.execute_script(zoom_script, button_times)
+                    except Exception as e:
+                        self.logger.info(f"Failed to zoom using JavaScript: {e}")
 
                 map_div = None
                 try:
@@ -1240,45 +1279,45 @@ class ASUWebScraper:
             
         return False
     
-    async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
-        if not self.discord_client:
-            self.logger.info(f"Could not initialize discord_client {self.discord_client}")
-            return []
+    # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
+    #     if not self.discord_client:
+    #         self.logger.info(f"Could not initialize discord_client {self.discord_client}")
+    #         return []
         
-        messages = []
-        await self.utils.update_text("Searching the Sparky Discord Server")
+    #     messages = []
+    #     await self.utils.update_text("Searching the Sparky Discord Server")
         
-        for channel_id in channel_ids:
-            channel = self.discord_client.get_channel(channel_id)
+    #     for channel_id in channel_ids:
+    #         channel = self.discord_client.get_channel(channel_id)
             
-            if not channel:
-                self.logger.info(f"Could not access channel with ID {channel_id}")
-                continue
+    #         if not channel:
+    #             self.logger.info(f"Could not access channel with ID {channel_id}")
+    #             continue
             
-            if isinstance(channel, discord.TextChannel):
-                async for message in channel.history(limit=limit):
-                    messages.append(self._format_message(message))
-            elif isinstance(channel, discord.ForumChannel):
-                async for thread in channel.archived_threads(limit=limit):
-                    async for message in thread.history(limit=limit):
-                        messages.append(self._format_message(message))
+    #         if isinstance(channel, discord.TextChannel):
+    #             async for message in channel.history(limit=limit):
+    #                 messages.append(self._format_message(message))
+    #         elif isinstance(channel, discord.ForumChannel):
+    #             async for thread in channel.archived_threads(limit=limit):
+    #                 async for message in thread.history(limit=limit):
+    #                     messages.append(self._format_message(message))
             
-            if len(messages) >= limit:
-                break
+    #         if len(messages) >= limit:
+    #             break
             
-        print(messages)
+    #     print(messages)
         
-        for message in messages[:limit]:
-            self.text_content.append({
-                'content': message['content'],
-                'metadata': {
-                    'url': message['url'],
-                    'timestamp': message['timestamp'],
-                }
-            })
+    #     for message in messages[:limit]:
+    #         self.text_content.append({
+    #             'content': message['content'],
+    #             'metadata': {
+    #                 'url': message['url'],
+    #                 'timestamp': message['timestamp'],
+    #             }
+    #         })
 
         
-        return True
+    #     return True
 
     def _format_message(self, message: discord.Message) -> Dict[str, str]:
         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")

@@ -9,3 +9,4 @@ firebase_secret.json
 /.venv
 
 **/__pycache__/
+/qdrant_storage

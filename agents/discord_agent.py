@@ -9,7 +9,7 @@ class DiscordModel:
         self.agent_tools = discord_agent_tools
 
         self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             generation_config={
                 "temperature": 0.0, 
                 "top_p": 0.1,
@@ -67,21 +67,6 @@ class DiscordModel:
                             ),
                         ),
                         
-                    
-                        # genai.protos.FunctionDeclaration(
-                        #     name="start_recording_discord_call",
-                        #     description="Starts recording a voice call (Allowed to special roles only)",
-                        #     parameters=content.Schema(
-                        #         type=content.Type.OBJECT,
-                        #         properties={
-                        #             "channel_id": content.Schema(
-                        #                 type=content.Type.STRING,
-                        #                 description="Voice channel ID to record"
-                        #             ),
-                        #         },
-                                
-                        #     ),
-                        # ),
                         genai.protos.FunctionDeclaration(
                             name="create_discord_poll",
                             description="Creates a poll in a specified Discord channel (Allowed only in Private Channels)",
@@ -289,7 +274,6 @@ class DiscordModel:
         """Determines and executes the appropriate action based on the user query"""
         try:
             self._initialize_model()
-            user_id = self.discord_state.get("user_id")
             final_response = ""
             # Simplified prompt that doesn't encourage analysis verbosity
             prompt = f"""
