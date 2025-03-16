@@ -100,6 +100,8 @@ class Discord_Agent_Tools:
                 self.utils.update_ground_sources([existing_channel.jump_url])
                 return f"User already has an open support channel."
             # Find helpers/moderators
+            self.logger.info(f"Searching for users wtih {self.discord_state.get("discord_mod_role_name")} role")
+            self.logger.info(f"from {self.guild.roles}")
             helper_role = discord.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
             if not helper_role:
                 return "Unable to find moderators. Please contact an administrator."

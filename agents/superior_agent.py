@@ -267,9 +267,9 @@ class SuperiorModel:
                     break
                 self.logger.info("@ Action Agent : function call requested")
                 function_result = await self.execute_function(function_call)
-                self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
+                self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
                 self.logger.info("\nAction Model @ Function result is: %s", function_result)
-                response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question.""")
+                response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
                 
             final_response = " ".join(response.strip() for response in responses if response.strip())
             
