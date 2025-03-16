@@ -130,7 +130,7 @@ class SuperiorModel:
 
                         genai.protos.FunctionDeclaration(
                             name="access_google_agent",
-                            description="Performs Google Search through to provide rapid result summary",
+                            description="Performs Google Search to provide rapid result summary",
                             parameters=content.Schema(
                                 type=content.Type.OBJECT,
                                 properties={
@@ -238,7 +238,7 @@ class SuperiorModel:
                     }
                 }
                 self.logger.info(f"@ Action Agent formed function call : {temp_func}")
-                self.firestore.update_message("superior_agent_message", f"{temp_func}")
+                self.firestore.update_message("superior_agent_message", f"temp_func")
                 self.logger.info("Updated Firestore message")
         self.logger.info(f"@Action Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
         return text_response, has_function_call, function_call

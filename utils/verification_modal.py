@@ -1,14 +1,14 @@
-from config import app_config
 from utils.common_imports import *
 from utils.otp_verification import OTPVerificationModal
 class VerificationModal(discord.ui.Modal):
-    def __init__(self):
-        super().__init__(title="ASU Email Verification")
-        self.email = discord.ui.TextInput(
+    def __init__(self,config):
+        super().__init__(title="ASU Email Verification") 
+        self.email = discord.ui.TextInput( 
             label="ENTER YOUR ASU EMAIL",
             placeholder="ASURITE@asu.edu",
             custom_id="email_input"
         )
+        self.app_config = config 
         self.stored_otp = None
         self.add_item(self.email)
 
@@ -34,8 +34,8 @@ class VerificationModal(discord.ui.Modal):
         return ''.join(str(random.randint(0, 9)) for _ in range(6))
 
     def send_otp_email(self, email, otp):
-        sender_email = app_config.get_gmail()
-        sender_password = app_config.get_gmail_pass()
+        sender_email = self.app_config.get_gmail()
+        sender_password = self.app_config.get_gmail_pass()
         message = MIMEText(f"Your OTP for ASU Discord verification is {otp}")
         message['Subject'] = "ASU Discord Verification OTP"
         message['From'] = sender_email

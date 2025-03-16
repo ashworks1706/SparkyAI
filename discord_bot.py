@@ -137,6 +137,8 @@ class ASUDiscordBot:
             response = await self.agents.process_question(question)
             await self._send_chunked_response(interaction, response)
             self.logger.info(f"Successfully processed question for {interaction.user.name}")
+            
+            
             await self.vector_store.store_to_vector_db()
             self.firestore.update_message("user_message", question)
             document_id = await self.firestore.push_message()
@@ -156,7 +158,7 @@ class ASUDiscordBot:
         channel = self.client.get_channel(1323386003896926248)  # Verify channel ID
         if channel:
             view = discord.ui.View(timeout=None)
-            view.add_item(VerifyButton())
+            view.add_item(VerifyButton(self.config))
             await channel.send("Click here to verify", view=view)
 
     async def _send_chunked_response( self,interaction: discord.Interaction,response: str) -> None:

@@ -13,8 +13,6 @@ classwith task tracking and logging."""
             self.message = None
             self.cached_doc_ids = []
             self.ground_sources =[]
-            # self.scann_store = None
-            self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
             self.cached_queries=[]
             self.vector_store = vector_store.get_vector_store()
             self.logger=logger

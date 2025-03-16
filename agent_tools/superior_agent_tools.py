@@ -220,7 +220,7 @@ class Superior_Agent_Tools:
                     max_output_tokens=600
                 )
             )
-            
+            self.logger.info(f"GOogle search agent response : {response}")
             grounding_sources = [self.get_final_url(chunk.web.uri) for candidate in response.candidates if candidate.grounding_metadata and candidate.grounding_metadata.grounding_chunks for chunk in candidate.grounding_metadata.grounding_chunks if chunk.web]
             
             self.utils.update_ground_sources(grounding_sources)

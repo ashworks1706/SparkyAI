@@ -11,8 +11,6 @@ class ASUWebScraper:
         self.logged_in_driver= None
         self.driver= None
         self.chrome_options = Options()
-        
-
         self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
@@ -125,7 +123,6 @@ class ASUWebScraper:
         
     def handle_feedback_popup(self,driver):
                 if self.popup:
-                    
                     pass
                 else:
                     try:

@@ -14,7 +14,7 @@ class Main:
         tracemalloc.start()
         self.logger = logging.getLogger(__name__)
         # Initializing app_config to get prompts, agent details and important secrets
-        self.app_config = AppConfig()
+        self.app_config = AppConfig() 
         # Initializing discord state class to dynamically update discord states since the server starts later
         self.discord_state = DiscordState()
         
@@ -28,7 +28,7 @@ class Main:
             raise e
 
         genai.configure(api_key=self.app_config.get_api_key())
-        self.group_chat = GroupChat("")
+        self.group_chat = GroupChat("") 
         self.asu_data_processor = DataPreprocessor(genai=genai,logger=self.logger)
         self.firestore = Firestore(self.discord_state)
         self.utils = Utils(vector_store=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger= self.logger,group_chat=self.group_chat)

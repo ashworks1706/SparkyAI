@@ -9,7 +9,7 @@ class Live_Status_Agent_Tools:
         self.max_depth = 2
         self.max_links_per_page = 3
                 
-    async def get_live_library_status(self, status_type : [] = None, date : str = None, library_names: [] = None):
+    async def get_live_library_status(self, status_type : list = None, date : str = None, library_names: list = None):
         """
         Retrieve ASU Library Status using ASU Library Search with robust parameter handling.
 
@@ -63,7 +63,7 @@ class Live_Status_Agent_Tools:
             
         return result
         
-    async def get_live_shuttle_status(self, shuttle_route: [] = None):
+    async def get_live_shuttle_status(self, shuttle_route: list = None):
         if not shuttle_route:
             return "Error: At least one route is required"
         
