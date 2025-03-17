@@ -17,7 +17,7 @@ class DataModel:
             if response and hasattr(response, 'text'):
                 parsed = self.parse_json_response(response.text)
                 return (
-                    # parsed.get('refined_content', ''),
+                    parsed.get('refined_content', ''),
                     parsed.get('title', ''),
                 )
             return None, None, None
