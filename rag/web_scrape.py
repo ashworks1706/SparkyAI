@@ -1338,7 +1338,7 @@ class ASUWebScraper:
         
         try:
             search_results = []
-            await self.utils.update_text(f"Searching for {search_url}")
+            await self.utils.update_text(f"Searching for [{urlparse(search_url).netloc}]({search_url})")
             # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
             # disabled temprarily
             self.driver = webdriver.Chrome(options=self.chrome_options)

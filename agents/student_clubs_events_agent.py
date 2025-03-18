@@ -1,9 +1,9 @@
 from utils.common_imports import *
-class StudentClubModel:
+class StudentClubsEventsModel:
     
-    def __init__(self,firestore,genai,app_config,logger,student_club_agent_tools,discord_state):
+    def __init__(self,firestore,genai,app_config,logger,student_clubs_events_agent_tools,discord_state):
         self.logger = logger
-        self.agent_tools= student_club_agent_tools
+        self.agent_tools= student_clubs_events_agent_tools
         self.discord_state = discord_state
         self.app_config= app_config
         self.model = genai.GenerativeModel(
@@ -20,7 +20,7 @@ class StudentClubModel:
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
             system_instruction = f"""
-            {self.app_config.get_student_club_agent_instruction()}
+            {self.app_config.get_student_clubs_events_agent_instruction()}
             """,
             tools=[
                 genai.protos.Tool(
@@ -87,7 +87,95 @@ class StudentClubModel:
                                     required=["search_bar_query", "organization_category"]
                             )
                         ),
-                    ],
+                         genai.protos.FunctionDeclaration(
+                              name="get_latest_event_updates",
+                              description="Searches for events information with Sun Devil Search Engine",
+                              parameters=content.Schema(
+                                  type=content.Type.OBJECT,
+                                  properties={
+                                      "search_bar_query": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Search Query"
+                                      ),
+                                      "event_campus": content.Schema(
+                                          type=content.Type.ARRAY,
+                                          items=content.Schema(
+                                              type=content.Type.STRING,
+                                              enum=[
+                                                "ASU Downtown",
+                                                "ASU Online",
+                                                "ASU Polytechnic",
+                                                "ASU Tempe",
+                                                "ASU West Valley",
+                                                "Fraternity & Sorority Life",
+                                                "Housing & Residential Life"
+                                            ]
+                                          ),
+                                          description="Event campus pick from [ASU Downtown, ASU Online, ASU Polytechnic, ASU Tempe, ASU West Valley, Fraternity & Sorority Life, Housing & Residential Life]"
+                                      ),
+                                      "event_category": content.Schema(
+                                          type=content.Type.ARRAY,
+                                          items=content.Schema(
+                                              type=content.Type.STRING,
+                                              enum=[
+                                                "ASU New Student Experience",
+                                                "ASU Sync",
+                                                "ASU Welcome Event",
+                                                "Barrett Student Organization",
+                                                "Career and Professional Development",
+                                                "Club Meetings",
+                                                "Community Service",
+                                                "Cultural",
+                                                "DeStress Fest",
+                                                "Entrepreneurship & Innovation",
+                                                "Graduate",
+                                                "International",
+                                                "Social",
+                                                "Sports/Recreation",
+                                                "Sustainability"
+                                            ]
+                                          ),
+                                          description="Event Category, pick from [ASU New Student Experience, ASU Sync, ASU Welcome Event, Barrett Student Organization, Career and Professional Development, Club Meetings, Community Service, Cultural, DeStress Fest, Entrepreneurship & Innovation, Graduate, International, Social, Sports/Recreation, Sustainability]"
+                                      ),
+                                      "event_theme": content.Schema(
+                                          type=content.Type.ARRAY,
+                                          items=content.Schema(
+                                              type=content.Type.STRING,
+                                              enum=[
+                                                "Arts",
+                                                "Athletics",
+                                                "Community Service",
+                                                "Cultural",
+                                                "Fundraising",
+                                                "GroupBusiness",
+                                                "Social",
+                                                "Spirituality",
+                                                "ThoughtfulLearning"
+                                            ]
+                                          ),
+                                          description="Event Theme, pick from [Arts, Athletics, Community Service, Cultural, Fundraising, GroupBusiness, Social, Spirituality, ThoughtfulLearning]"
+                                      ),
+                                      "event_perk": content.Schema(
+                                          type=content.Type.ARRAY,
+                                          items=content.Schema(
+                                              type=content.Type.STRING,
+                                              enum=[
+                                                "Credit",
+                                                "Free Food",
+                                                "Free Stuff"
+                                            ]
+                                          ),
+                                          description="Event Perk, pick from [Credit, Free Food, Free Stuff]"
+                                      ),
+                                      "shortcut_date": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Event Shortcut date, pick from [tomorrow, this_weekend]"
+                                      ),
+                                  },
+                                  required=["search_bar_query", "event_category"]
+                              ),
+                          ),
+                  ],
                 ),
             ],
             tool_config={'function_calling_config': 'ANY'},
@@ -106,6 +194,7 @@ class StudentClubModel:
         function_mapping = {
             
             'get_latest_club_information': self.agent_tools.get_latest_club_information,
+            'get_latest_event_updates': self.agent_tools.get_latest_event_updates,
         }
         
             
@@ -156,7 +245,7 @@ class StudentClubModel:
                 - Superior Agent Instruction: {instruction_to_agent}
                 - Superior Agent Remarks: {special_instructions}
 
-                {self.app_config.get_student_club_agent_prompt()}
+                {self.app_config.get_student_clubs_events_agent_prompt()}
                 
                 """
 

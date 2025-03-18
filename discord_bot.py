@@ -172,7 +172,7 @@ class ASUDiscordBot:
                 button = discord.ui.Button(label=domain, url=url, style=discord.ButtonStyle.link)
                 buttons.append(button)
             # Custom link for feedbacks
-            button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.link)
+            button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.blurple)
             buttons.append(button)
 
             view = discord.ui.View()

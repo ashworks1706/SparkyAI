@@ -24,8 +24,6 @@ class AppConfig:
         self.live_status_agent_instruction = config_data.get('LIVE_STATUS_AGENT_INSTRUCTION', '')
         self.discord_agent_prompt = config_data.get('DISCORD_AGENT_PROMPT', '')
         self.discord_agent_instruction = config_data.get('DISCORD_AGENT_INSTRUCTION', '')
-        # self.rag_search_agent_prompt = config_data.get('RAG_SEARCH_AGENT_PROMPT', '')
-        # self.rag_search_agent_instruction = config_data.get('RAG_SEARCH_AGENT_INSTRUCTION', '')
         self.superior_agent_prompt = config_data.get('SUPERIOR_AGENT_PROMPT', '')
         self.superior_agent_instruction = config_data.get('SUPERIOR_AGENT_INSTRUCTION', '')
         
@@ -36,6 +34,7 @@ class AppConfig:
         self.google_agent_prompt = config_data.get('GOOGLE_AGENT_PROMPT', '')
         self.google_agent_instruction = config_data.get('GOOGLE_AGENT_INSTRUCTION', '')
         self.data_agent_prompt = config_data.get('DATA_AGENT_PROMPT', '')
+        self.data_agent_instruction = config_data.get('DATA_AGENT_INSTRUCTION', '')
         self.discord_bot_token = config_data.get('DISCORD_BOT_TOKEN', '')
         self.kubernetes_api_key = config_data.get('KUBERNETES_SECRET', '')
         self.qdrant_api_key = config_data.get('QDRANT_API_KEY', '')
@@ -45,10 +44,8 @@ class AppConfig:
         self.discord_feedback_id = config_data.get('FEEDBACK_CHANNEL_ID', '')
         self.discord_mod_role_name = config_data.get('DISCORD_MOD_ROLE_NAME', '')
         self.discord_post_channel_name = config_data.get('DISCORD_POST_CHANNEL_NAME', '')
-        self.student_club_agent_prompt = config_data.get('STUDENT_CLUB_AGENT_PROMPT', '')
-        self.student_club_agent_instruction = config_data.get('STUDENT_CLUB_AGENT_INSTRUCTION', '')
-        self.events_agent_prompt = config_data.get('EVENTS_AGENT_PROMPT', '')
-        self.events_agent_instruction = config_data.get('EVENTS_AGENT_INSTRUCTION', '')
+        self.student_clubs_events_agent_prompt = config_data.get('STUDENT_CLUBS_EVENTS_AGENT_PROMPT', '')
+        self.student_clubs_events_agent_instruction = config_data.get('STUDENT_CLUBS_EVENTS_AGENT_INSTRUCTION', '')
         self.news_agent_prompt = config_data.get('NEWS_AGENT_PROMPT', '')
         self.news_agent_instruction = config_data.get('NEWS_AGENT_INSTRUCTION', '')
         self.sports_agent_prompt = config_data.get('SPORTS_AGENT_PROMPT', '')
@@ -88,6 +85,8 @@ class AppConfig:
         return self.kubernetes_api_key
     def get_data_agent_prompt(self):
         return self.data_agent_prompt
+    def get_data_agent_instruction(self):
+        return self.data_agent_instruction
     def get_live_status_agent_prompt(self):
         return self.live_status_agent_prompt
     def get_live_status_agent_instruction(self):
@@ -96,10 +95,6 @@ class AppConfig:
         return self.discord_agent_prompt
     def get_discord_agent_instruction(self):
         return self.discord_agent_instruction
-    # def get_rag_search_agent_prompt(self):
-    #     return self.rag_search_agent_prompt
-    # def get_rag_search_agent_instruction(self):
-    #     return self.rag_search_agent_instruction
     def get_superior_agent_prompt(self):
         return self.superior_agent_prompt
     def get_superior_agent_instruction(self):
@@ -119,15 +114,11 @@ class AppConfig:
     def get_gmail_pass(self):
         return self.gmail_pass
     
-    def get_student_club_agent_prompt(self):
-        return self.student_club_agent_prompt
-    def get_student_club_agent_instruction(self):
-        return self.student_club_agent_instruction
+    def get_student_clubs_events_agent_prompt(self):
+        return self.student_clubs_events_agent_prompt
+    def get_student_clubs_events_agent_instruction(self):
+        return self.student_clubs_events_agent_instruction
     
-    def get_events_agent_prompt(self):
-        return self.events_agent_prompt
-    def get_events_agent_instruction(self):
-        return self.events_agent_instruction
     
     def get_news_agent_prompt(self):
         return self.news_agent_prompt

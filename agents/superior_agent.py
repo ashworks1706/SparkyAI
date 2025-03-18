@@ -25,26 +25,7 @@ class SuperiorModel:
             tools=[
             genai.protos.Tool(
                 function_declarations=[
-                        
-                # genai.protos.FunctionDeclaration(
-                #     name="access_rag_search_agent",
-                #     description="Has ability to search for ASU-specific Targeted , real-time information extraction related to Jobs, Scholarships, Library Catalog, News, Events, Social Media, Sport Updates, Clubs",
-                #     parameters=content.Schema(
-                #     type=content.Type.OBJECT,
-                #     properties={
-                #         "instruction_to_agent": content.Schema(
-                #         type=content.Type.STRING,
-                #         description="Tasks for the agent"
-                #         ),
-                #         "special_instructions": content.Schema(
-                #         type=content.Type.STRING,
-                #         description="Remarks about previous search or Special Instructions to Agent"
-                #         ),
-                #     },
-                #     required= ["instruction_to_agent","special_instructions"],
-                #     ),
-                # ),
-                
+                     
                 genai.protos.FunctionDeclaration(
                     name="access_discord_agent",
                     description="Has ability to post announcement/event/poll and connect user to moderator/helper request",
@@ -63,7 +44,7 @@ class SuperiorModel:
                     required= ["instruction_to_agent","special_instructions"]
                     ),   
                 ),
-                     genai.protos.FunctionDeclaration(
+                genai.protos.FunctionDeclaration(
                     name="access_google_agent",
                     description="Performs Google Search to provide rapid result summary",
                     parameters=content.Schema(
@@ -112,7 +93,7 @@ class SuperiorModel:
                 
                 genai.protos.FunctionDeclaration(
                     name="send_bot_feedback",
-                    description="Submits user's feedbacks about sparky",
+                    description="Submits any feedback or errors about sparky to mods",
                     parameters=content.Schema(
                     type=content.Type.OBJECT,
                     properties={
@@ -125,20 +106,6 @@ class SuperiorModel:
                     ),
                 ),
                 
-                genai.protos.FunctionDeclaration(
-                    name="get_discord_server_info",
-                    description="Get Sparky Discord Server related Information",
-                    parameters=content.Schema(
-                    type=content.Type.OBJECT,
-                    properties={
-                        "context": content.Schema(
-                        type=content.Type.STRING,
-                        description="Context of Information"
-                        ),
-                    },
-                    
-                    ),
-                ),
                 
                 genai.protos.FunctionDeclaration(
                     name="access_live_status_agent",
@@ -192,8 +159,8 @@ class SuperiorModel:
                     ),
                 ),
                 genai.protos.FunctionDeclaration(
-                    name="access_events_agent",
-                    description="Has ability to search for ASU events information",
+                    name="access_student_clubs_events_agent",
+                    description="Has ability to search for ASU events information and ASU student clubs information",
                     parameters=content.Schema(
                     type=content.Type.OBJECT,
                     properties={
@@ -300,24 +267,6 @@ class SuperiorModel:
                     ),
                 ),
                 genai.protos.FunctionDeclaration(
-                    name="access_student_club_agent",
-                    description="Has ability to search for ASU student club information",
-                    parameters=content.Schema(
-                    type=content.Type.OBJECT,
-                    properties={
-                        "instruction_to_agent": content.Schema(
-                        type=content.Type.STRING,
-                        description="Tasks for the agent"
-                        ),
-                        "special_instructions": content.Schema(
-                        type=content.Type.STRING,
-                        description="Remarks about previous search or Special Instructions to Agent"
-                        ),
-                    },
-                    required= ["instruction_to_agent","special_instructions"],
-                    ),
-                ),
-                genai.protos.FunctionDeclaration(
                     name="access_student_jobs_agent",
                     description="Has ability to search for ASU student jobs information",
                     parameters=content.Schema(
@@ -363,16 +312,14 @@ class SuperiorModel:
             'access_discord_agent': self.agent_tools.access_discord_agent,
             'access_live_status_agent': self.agent_tools.access_live_status_agent,
             'get_user_profile_details': self.agent_tools.get_user_profile_details,
-            'get_discord_server_info': self.agent_tools.get_discord_server_info,
             'send_bot_feedback': self.agent_tools.send_bot_feedback,
             'access_courses_agent': self.agent_tools.access_courses_agent,
-            'access_events_agent': self.agent_tools.access_events_agent,
+            'access_student_clubs_events_agent': self.agent_tools.access_student_clubs_events_agent,
             'access_library_agent': self.agent_tools.access_library_agent,
             'access_news_agent': self.agent_tools.access_news_agent,
             'access_scholarship_agent': self.agent_tools.access_scholarship_agent,
             'access_social_media_agent': self.agent_tools.access_social_media_agent,
             'access_sports_agent': self.agent_tools.access_sports_agent,
-            'access_student_club_agent': self.agent_tools.access_student_club_agent,
             'access_student_jobs_agent': self.agent_tools.access_student_jobs_agent,
         }
 
@@ -390,8 +337,6 @@ class SuperiorModel:
         text_response = ""
         has_function_call = False
         function_call = None
-        self.logger.info(response)
-        self.logger.info(f"processgeminiresponse {response}")
         
         for part in response.parts:
             if hasattr(part, 'text') and part.text.strip():
@@ -427,13 +372,15 @@ class SuperiorModel:
             """
             
             response = await self.chat.send_message_async(prompt)
-            self.logger.info(f"RAW TEST RESPONSE : {response}")
             
             while True:
                 text_response, has_function_call, function_call = await self.process_gemini_response(response)
                 responses.append(text_response)
                 final_response += text_response
-                if not has_function_call:
+                if not has_function_call and "send_bot_feedback" not in final_response:
+                    self.logger.info("@ Action Agent : not function call requested")
+                    break
+                if not has_function_call and "send_bot_feedback" in final_response:
                     self.logger.info("@ Action Agent : not function call requested")
                     break
                 self.logger.info("@ Action Agent : function call requested")

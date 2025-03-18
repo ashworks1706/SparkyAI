@@ -29,7 +29,7 @@ class Main:
 
         genai.configure(api_key=self.app_config.get_api_key())
         self.group_chat = GroupChat("") 
-        self.asu_data_processor = DataPreprocessor(genai=genai,logger=self.logger)
+        self.asu_data_processor = DataPreprocessor(self.app_config,genai=genai,logger=self.logger)
         self.firestore = Firestore(self.discord_state)
         self.utils = Utils(vector_store=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger= self.logger,group_chat=self.group_chat)
         self.asu_scraper = ASUWebScraper(self.discord_state, self.utils, self.logger)

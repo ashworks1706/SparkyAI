@@ -1,12 +1,11 @@
-
 from utils.common_imports import *
 from agents.data_agent import DataModel
 
 class DataPreprocessor:
-    def __init__(self, genai,
+    def __init__(self, app_config, genai,
                  chunk_size: int = 1024, 
                  chunk_overlap: int = 200, 
-                 max_processing_attempts: int = 3, logger=False):
+                 max_processing_attempts: int = 3,  logger=False):
         """Initialize DataPreprocessor with configurable text splitting and retry mechanism."""
         self.max_processing_attempts = max_processing_attempts
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -17,7 +16,7 @@ class DataPreprocessor:
         )
         self.doc_title = None
         self.doc_category = None
-        self.asu_data_agent = DataModel( genai,logger)
+        self.asu_data_agent = DataModel( app_config, genai,logger)
         nltk.download('punkt_tab', quiet=True)
         nltk.download('wordnet', quiet=True)
         self.lemmatizer = WordNetLemmatizer()
@@ -44,16 +43,18 @@ class DataPreprocessor:
                 start_time = time.time()
                 self.logger.info(f"Starting document processing for {len(documents)} documents")
                 try:
-                    consolidated_text = await self._consolidate_documents(documents)
+                    consolidated_text = await self._consolidate_documents(documents, search_context)
                 except Exception as e:
                     self.logger.error(f"Document consolidation failed: {str(e)}")
                     raise
-                if not self.doc_title:
-                    try:
-                        self.doc_title = await self._refine_content(search_context, consolidated_text)
-                    except Exception as e:
-                        self.logger.error(f"Title refinement failed: {str(e)}")
-                        raise
+                
+                try:
+                    refined_content, refined_title = await self.asu_data_agent.refine(search_context, consolidated_text)
+                    self.doc_title = refined_title
+                    consolidated_text = refined_content
+                except Exception as e:
+                    self.logger.error(f"Content refinement failed: {str(e)}")
+                    raise
                 try:
                     document = self._create_processed_document(consolidated_text, documents)
                 except Exception as e:
@@ -105,20 +106,21 @@ class DataPreprocessor:
 
         return text
 
-    async def _consolidate_documents(self, documents: List[Dict[str, str]]) -> str:
-        """Consolidate and clean documents into a single text corpus."""
-        return '\n\n'.join([
-            self.clean_and_structure_text(doc['content']) 
-            for doc in documents
-        ]).strip()
+    async def _consolidate_documents(self, documents: List[Dict[str, str]], search_context: str) -> str:
+        """Consolidate and clean documents into a single text corpus using DataModel."""
+        all_content = ""
+        for doc in documents:
+            content = doc['content']
+            # Use DataModel to refine each document's content
+            refined_content, refined_title = await self.asu_data_agent.refine(search_context, content)
+            if refined_content:
+                all_content += refined_content + "\n\n"
+            else:
+                all_content += content + "\n\n"  # Fallback to original content if refinement fails
 
-    async def _refine_content(self, search_context: str, consolidated_text: str) -> Optional[str]:
-        """Attempt to refine document content with error handling."""
-        try:
-            return await self.asu_data_agent.refine(search_context, consolidated_text)
-        except Exception as e:
-            self.logger.warning(f"Content refinement agent failed: {str(e)}")
-            return None
+        return all_content.strip()
+
+
 
     def _create_processed_document(self, 
                                    consolidated_text: str, 

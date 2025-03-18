@@ -2,7 +2,7 @@ from utils.common_imports import *
 
 class Superior_Agent_Tools:
     
-    def __init__(self, firestore, discord_state, utils, app_config, live_status_agent, discord_agent, courses_agent, events_agent, library_agent, news_agent, scholarship_agent, social_media_agent, sports_agent, student_club_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, firestore, discord_state, utils, app_config, live_status_agent, discord_agent, courses_agent, library_agent, news_agent, scholarship_agent, social_media_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
@@ -13,13 +13,12 @@ class Superior_Agent_Tools:
         self.live_status_agent = live_status_agent
         self.discord_agent = discord_agent
         self.courses_agent = courses_agent
-        self.events_agent = events_agent
         self.library_agent = library_agent
         self.news_agent = news_agent
         self.scholarship_agent = scholarship_agent
         self.social_media_agent = social_media_agent
         self.sports_agent = sports_agent
-        self.student_club_agent = student_club_agent
+        self.student_clubs_events_agent = student_clubs_events_agent
         self.student_jobs_agent = student_jobs_agent
         self.logger = logger
         self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
@@ -37,17 +36,6 @@ class Superior_Agent_Tools:
         except Exception as e:
             self.logger.error(e)
             return e  
-
-    # async def access_rag_search_agent(self, instruction_to_agent: str, special_instructions: str):
-    #     self.logger.info(f"Action Model : accessing search agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-    #     self.group_chat.update_text(instruction_to_agent)
-        
-    #     try:
-    #         response = await self.rag_search_agent.determine_action(instruction_to_agent, special_instructions)
-    #         return response
-    #     except Exception as e:
-    #         self.logger.error(f"Error in access search agent: {str(e)}")
-    #         return "Search Agent Not Responsive"
          
     async def access_discord_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
@@ -66,7 +54,7 @@ class Superior_Agent_Tools:
         self.user_id = self.discord_state.get('user_id')
         self.logger.info(f"Discord Model: Handling user profile details request for user ID: {self.user_id}")
 
-        if not request_in_dm:
+        if not self.request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
         try:
@@ -97,19 +85,6 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error retrieving user profile: {str(e)}")
             return f"An error occurred while retrieving the user profile: {str(e)}"
     
-    async def get_discord_server_info(self) -> str:
-        self.discord_client = self.discord_state.get('discord_client')
-        self.logger.info(f"Initialized Discord Client : {self.discord_client}")
-        self.guild = self.discord_state.get("target_guild")
-        
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
-        """Create discord forum post callable by model"""
-
-        self.logger.info(f"Discord Model : Handling discord server info request with context")
-                
-        return f"""1. Sparky Discord Server - Sparky Discord Server is a place where ASU Alumni's or current students join to hangout together, have fun and learn things about ASU together and quite frankly!
-        2. Sparky Discord Bot - AI Agent built to help people with their questions regarding ASU related information and sparky's discord server. This AI Agent can also perform discord actions for users upon request."""
-    
     async def access_live_status_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
@@ -132,16 +107,16 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error in access courses agent: {str(e)}")
             return "Courses Agent Not Responsive"
     
-    async def access_events_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing events agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+    async def access_student_clubs_events_agent(self, instruction_to_agent: str, special_instructions: str):
+        self.logger.info(f"Action Model : accessing studentclubsevents agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
-            response = await self.events_agent.determine_action(instruction_to_agent, special_instructions)
+            response = await self.student_clubs_events_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access events agent: {str(e)}")
-            return "Events Agent Not Responsive"
+            self.logger.error(f"Error in access studentclubsevents agent: {str(e)}")
+            return "Studentclubsevents Agent Not Responsive"
     
     async def access_library_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing library agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
@@ -198,16 +173,7 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error in access sports agent: {str(e)}")
             return "Sports Agent Not Responsive"
     
-    async def access_student_club_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing student club agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-        self.group_chat.update_text(instruction_to_agent)
-        
-        try:
-            response = await self.student_club_agent.determine_action(instruction_to_agent, special_instructions)
-            return response
-        except Exception as e:
-            self.logger.error(f"Error in access student club agent: {str(e)}")
-            return "Student Club Agent Not Responsive"
+
     
     async def access_student_jobs_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing student jobs agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
@@ -223,6 +189,7 @@ class Superior_Agent_Tools:
     async def send_bot_feedback(self, feedback: str) -> str:
         self.user = self.discord_state.get('user') 
         self.discord_client = self.discord_state.get('discord_client')
+        self.guild = self.discord_state.get('target_guild')
         
         await self.utils.update_text("Opening feedbacks...")
         
@@ -230,7 +197,7 @@ class Superior_Agent_Tools:
 
         try:
             # Find the feedbacks channel
-            feedbacks_channel = discord.utils.get(self.discord_client.get_all_channels(), name='feedback')
+            feedbacks_channel = discord.utils.get(self.guild.channels, name='feedback')
             if not feedbacks_channel:
                 return "feedbacks channel not found. Please ensure the channel exists."
 
