@@ -5,11 +5,12 @@ class Courses_Agent_Tools:
         self.firestore = firestore
         self.utils = utils
         self.visited_urls = set()
+        self.logger= logger
         self.max_depth = 2
         self.max_links_per_page = 3
         
    
-    async def get_latest_class_information(self,search_bar_query: Optional[str] = None,class_term: Optional[str] = None,subject_name: Optional[Union[str, List[str]]] = None, 
+    async def get_latest_class_information(self,search_bar_query: Optional[str] = None,class_term: Optional[str] = None,
     num_of_credit_units: Optional[Union[str, List[str]]] = None, 
     class_level: Optional[Union[str, List[str]]] = None,
     class_session: Optional[Union[str, List[str]]] = None,
@@ -87,7 +88,7 @@ class Courses_Agent_Tools:
         unmapped_items = []
         
         def _convert_to_query_string(input_value: Optional[Union[str, List[str]]], mapping: Dict[str, str]) -> str:
-            global unmapped_items
+            nonlocal unmapped_items
             unmapped_items = []
             
             # Handle None input
@@ -114,13 +115,12 @@ class Courses_Agent_Tools:
         
         
         search_bar_query = (search_bar_query or '') + ' ' + ' '.join(unmapped_items)
-        search_bar_query+=subject_name
         search_bar_query = search_bar_query.strip().replace(" ", "%20")
         
         
         params = {
             'advanced': 'true',
-            'campus': _convert_to_query_string(class_location, LOCATION_MAP),
+            'campus': class_location,
             'campusOrOnlineSelection': 'A',
             'daysOfWeek': _convert_to_query_string(class_days, DAYS_MAP),
             'honors': 'F',
@@ -136,17 +136,19 @@ class Courses_Agent_Tools:
         self.logger.info(params)
 
         # Remove None values and construct URL
-        search_url = 'https://catalog.apps.asu.edu/catalog/classes/classlist?' + '&'.join(
-            f'{key}={value}' 
-            for key, value in params.items() 
-            if value is not None and value != ''
-        )
+        try:
+            search_url = 'https://catalog.apps.asu.edu/catalog/classes/classlist?' + '&'.join(
+                f'{key}={value}' 
+                for key, value in params.items() 
+                if value is not None and value != ''
+            )
+        except Exception as e:
+            self.logger.error(f"Error constructing search URL: {e}", exc_info=True)
+            return "An error occurred while constructing the search URL. Please check the logs for more details."
         
         doc_title=""
         if search_bar_query:
             doc_title = search_bar_query
-        elif subject_name:
-            doc_title = " ".join(subject_name) if isinstance(subject_name, list) else subject_name
         elif class_term:
             doc_title = class_term
         elif class_level:
@@ -164,5 +166,10 @@ class Courses_Agent_Tools:
             doc_title = class_seat_availability
         else:
             doc_title = None
-
-        return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
+        try:
+            result = await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
+            self.logger.info(f"Web search successful for URL: {search_url}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error during web search for URL {search_url}: {e}", exc_info=True)
+            return "An error occurred while performing the web search. Please check the logs for more details."

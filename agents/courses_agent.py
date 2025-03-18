@@ -58,11 +58,7 @@ class CoursesModel:
                                         ]
 
                                     ),
-                                    "subject_name": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="""Class/Course Name """,
-                                        
-                                    ),
+                              
                                     
                                     "num_of_credit_units": content.Schema(
                                         type=content.Type.ARRAY,
@@ -130,8 +126,10 @@ class CoursesModel:
                                     ),
                                 
                                 },
+                                 required=["search_bar_query"]
                                     
                             )
+                            
                         ),
                     ],
                 ),

@@ -34,13 +34,13 @@ class Main:
         self.utils = Utils(vector_store=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger= self.logger,group_chat=self.group_chat)
         self.asu_scraper = ASUWebScraper(self.discord_state, self.utils, self.logger)
         self.utils.asu_scraper = self.asu_scraper
-        self.agents = Agents(self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, group_chat=self.group_chat)
+        self.agents = Agents(self.vector_store, self.asu_data_processor, self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, group_chat=self.group_chat)
 
 
         if self.vector_store:
-            self.logger.info("\n----------------------------------------------------------------")
-            self.logger.info("\nASU RAG INITIALIZED SUCCESSFULLY")
-            self.logger.info("\n---------------------------------------------------------------")
+            self.logger.info("----------------------------------------------------------------")
+            self.logger.info("ASU RAG INITIALIZED SUCCESSFULLY")
+            self.logger.info("---------------------------------------------------------------")
         else:
             self.logger.warning("\nASU RAG INITIALIZED WITH ERRORS - VectorStore not available")
 

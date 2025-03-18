@@ -2,15 +2,17 @@ from utils.common_imports import *
 
 class Superior_Agent_Tools:
     
-    def __init__(self, firestore, discord_state, utils, app_config, live_status_agent, discord_agent, courses_agent, library_agent, news_agent, scholarship_agent, social_media_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_agent, scholarship_agent, social_media_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
+        self.vector_store = vector_store
+        self.asu_data_processor = asu_data_processor
         self.app_config = app_config
         self.firestore = firestore
         self.discord_state = discord_state
         self.utils = utils
-        self.live_status_agent = live_status_agent
+        self.shuttle_status_agent = shuttle_status_agent
         self.discord_agent = discord_agent
         self.courses_agent = courses_agent
         self.library_agent = library_agent
@@ -85,12 +87,12 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error retrieving user profile: {str(e)}")
             return f"An error occurred while retrieving the user profile: {str(e)}"
     
-    async def access_live_status_agent(self, instruction_to_agent: str, special_instructions: str):
+    async def access_shuttle_status_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
-            response = await self.live_status_agent.determine_action(instruction_to_agent, special_instructions)
+            response = await self.shuttle_status_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
             self.logger.error(f"Error in deep search agent: {str(e)}")
@@ -197,7 +199,7 @@ class Superior_Agent_Tools:
 
         try:
             # Find the feedbacks channel
-            feedbacks_channel = discord.utils.get(self.guild.channels, name='feedback')
+            feedbacks_channel = discord.utils.get(self.guild.channels, name='feedbacks')
             if not feedbacks_channel:
                 return "feedbacks channel not found. Please ensure the channel exists."
 
@@ -293,6 +295,21 @@ class Superior_Agent_Tools:
             self._save_message(user_id, "model", response_text)
 
             self.logger.info(response_text)
+            
+            if 'search agent' not in response_text.lower():
+                processed_docs = await self.asu_data_processor.process_documents(
+                    documents=[{
+                                'content': response_text,
+                                'metadata': {
+                                    'url': grounding_sources,
+                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                }
+                            }], 
+                    search_context= self.group_chat.get_text(),
+                    title = detailed_query, category = categories[0]
+                )
+
+                self.vector_store.queue_documents(processed_docs)
 
             if not response_text:
                 self.logger.error("No response from Google Search")

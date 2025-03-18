@@ -25,7 +25,47 @@ class LibraryModel:
             tools=[
                 genai.protos.Tool(
                     function_declarations=[
+  genai.protos.FunctionDeclaration(
+                            name="get_live_library_status",
+                            description="Retrieves Latest Information regarding ASU Library Status",
+                            parameters=content.Schema(
+                                type=content.Type.OBJECT,
+                                properties={
 
+                                    "status_type": content.Schema(
+                                        type=content.Type.ARRAY,
+                                        items=content.Schema(
+                                            type=content.Type.STRING,
+                                            enum=[
+                                                "Availability", 
+                                                "StudyRoomsAvailability", 
+                                            ]
+                                        ),
+                                        description="Checks if library is open or close and study rooms availability"
+                                    ),
+                                    "library_names": content.Schema(
+                                        type=content.Type.ARRAY,
+                                        items=content.Schema(
+                                            type=content.Type.STRING,
+                                            enum=[
+                                        "Tempe Campus - Noble Library",
+                                        "Tempe Campus - Hayden Library",
+                                        "Downtown Phoenix Campus - Fletcher Library",
+                                        "West Campus - Library",
+                                        "Polytechnic Campus - Library",      
+                                        ]
+                                        ),
+                                        description="Library Name"
+                                    ),
+                                    "date": content.Schema(
+                                        type=content.Type.STRING,
+                                        description="[ Month Prefix + Date ] (ex. DEC 09, JAN 01, FEB 21, MAR 23)",
+                                    ),
+                                },
+                                    required=["status_type","library_names","date"]
+                            )
+                        ),
+                      
                         genai.protos.FunctionDeclaration(
                             name="get_library_resources",
                             description="Searches for Books, Articles, Journals, Etc Within ASU Library",
@@ -74,7 +114,7 @@ class LibraryModel:
         function_args = function_call.args
         
         function_mapping = {
-            
+                        'get_live_library_status': self.agent_tools.get_live_library_status,
             'get_library_resources': self.agent_tools.get_library_resources,
         }
         

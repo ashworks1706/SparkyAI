@@ -112,8 +112,9 @@ class DataPreprocessor:
         for doc in documents:
             content = doc['content']
             # Use DataModel to refine each document's content
-            refined_content, refined_title = await self.asu_data_agent.refine(search_context, content)
-            if refined_content:
+            refine_result = await self.asu_data_agent.refine(search_context, content)
+            if refine_result:
+                refined_content, refined_title = refine_result
                 all_content += refined_content + "\n\n"
             else:
                 all_content += content + "\n\n"  # Fallback to original content if refinement fails
@@ -126,12 +127,18 @@ class DataPreprocessor:
                                    consolidated_text: str, 
                                    documents: List[Dict[str, str]]) -> Document:
         """Create a processed document with comprehensive metadata."""
+        
+        urls = []
+        for doc in documents:
+            if 'metadata' in doc and 'url' in doc['metadata']:
+                urls.append(doc['metadata']['url'])
+        
         return Document(
             page_content=consolidated_text,
             metadata={
                 'title': self.doc_title or 'Untitled',
                 'category': self.doc_category or "google_results",
-                'url': [doc['metadata']["url"] for doc in documents[:5]],
+                'url': urls[:5],  # Use the extracted URLs
                 'timestamp': datetime.now(),
                 'total_source_documents': len(documents),
                 'cluster': None
@@ -140,17 +147,30 @@ class DataPreprocessor:
 
     def _split_and_annotate_document(self, document: Document) -> List[Document]:
         """Split document into chunks and annotate with metadata."""
-        splits = self.text_splitter.split_documents([document])
+        min_chunk_length = 500  # Define the minimum length for chunking
 
-        for i, split in enumerate(splits):
-            split.metadata.update({
+        if len(document.page_content) < min_chunk_length:
+            # If the document is too short, don't split it
+            document.metadata.update({
                 'id': str(uuid.uuid4()),
                 'chunk_id': str(uuid.uuid4()),
-                'chunk_index': i,
-                'total_chunks': len(splits)
+                'chunk_index': 0,
+                'total_chunks': 1  # Indicate that it's a single chunk
             })
+            return [document]
+        else:
+            # Proceed with splitting if the document is long enough
+            splits = self.text_splitter.split_documents([document])
 
-        return splits
+            for i, split in enumerate(splits):
+                split.metadata.update({
+                    'id': str(uuid.uuid4()),
+                    'chunk_id': str(uuid.uuid4()),
+                    'chunk_index': i,
+                    'total_chunks': len(splits)
+                })
+
+            return splits
 
     async def _generate_fallback_document(self, 
                                           documents: List[Dict[str, str]], 

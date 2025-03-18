@@ -1,9 +1,9 @@
 from utils.common_imports import *
-class Live_Status_Model:
+class Shuttle_Status_Model:
     
-    def __init__(self,firestore,genai,app_config,logger,live_status_agent_tools,discord_state):
+    def __init__(self,firestore,genai,app_config,logger,shuttle_status_agent_tools,discord_state):
         self.logger = logger
-        self.agent_tools= live_status_agent_tools
+        self.agent_tools= shuttle_status_agent_tools
         self.discord_state = discord_state
         self.app_config= app_config
         self.model = genai.GenerativeModel(
@@ -20,52 +20,12 @@ class Live_Status_Model:
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
             system_instruction = f"""
-            {self.app_config.get_live_status_agent_instruction}
+            {self.app_config.get_shuttle_status_agent_instruction}
             """,
             tools=[
                 genai.protos.Tool(
                     function_declarations=[
 
-                        genai.protos.FunctionDeclaration(
-                            name="get_live_library_status",
-                            description="Retrieves Latest Information regarding ASU Library Status",
-                            parameters=content.Schema(
-                                type=content.Type.OBJECT,
-                                properties={
-
-                                    "status_type": content.Schema(
-                                        type=content.Type.ARRAY,
-                                        items=content.Schema(
-                                            type=content.Type.STRING,
-                                            enum=[
-                                                "Availability", 
-                                                "StudyRoomsAvailability", 
-                                            ]
-                                        ),
-                                        description="Checks if library is open or close and study rooms availability"
-                                    ),
-                                    "library_names": content.Schema(
-                                        type=content.Type.ARRAY,
-                                        items=content.Schema(
-                                            type=content.Type.STRING,
-                                            enum=[
-                                        "Tempe Campus - Noble Library",
-                                        "Tempe Campus - Hayden Library",
-                                        "Downtown Phoenix Campus - Fletcher Library",
-                                        "West Campus - Library",
-                                        "Polytechnic Campus - Library",      
-                                        ]
-                                        ),
-                                        description="Library Name"
-                                    ),
-                                    "date": content.Schema(
-                                        type=content.Type.STRING,
-                                        description="[ Month Prefix + Date ] (ex. DEC 09, JAN 01, FEB 21, MAR 23)",
-                                    ),
-                                },
-                                    required=["status_type","library_names","date"]
-                            )
-                        ),
                         genai.protos.FunctionDeclaration(
                             name="get_live_shuttle_status",
                             description="Searches for shuttle status and routes",
@@ -107,7 +67,6 @@ class Live_Status_Model:
         
         function_mapping = {
             
-            'get_live_library_status': self.agent_tools.get_live_library_status,
             'get_live_shuttle_status': self.agent_tools.get_live_shuttle_status,
         }
         
@@ -159,7 +118,7 @@ class Live_Status_Model:
                 - Superior Agent Instruction: {instruction_to_agent}
                 - Superior Agent Remarks: {special_instructions}
 
-                {self.app_config.get_live_status_agent_prompt()}
+                {self.app_config.get_shuttle_status_agent_prompt()}
                 
                 """
 
@@ -170,10 +129,10 @@ class Live_Status_Model:
                 if hasattr(part, 'function_call') and part.function_call:
                     
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message("live_status_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                    self.firestore.update_message("shuttle_status_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
                 elif hasattr(part, 'text') and part.text.strip():
                     text = part.text.strip()
-                    self.firestore.update_message("live_status_agent_message", f"Text Response : {text}")
+                    self.firestore.update_message("shuttle_status_agent_message", f"Text Response : {text}")
                     if not text.startswith("This query") and not "can be answered directly" in text:
                         final_response = text.strip()
                         self.logger.info(f"text response : {final_response}")

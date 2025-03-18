@@ -501,22 +501,76 @@ class ASUWebScraper:
                     # Extract additional details
                     course_info = {
                         'title': course_title,
-                        'description': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Description')]/following-sibling::p").text,
-                        'enrollment_requirements': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Enrollment Requirements')]/following-sibling::p").text,
-                        'location': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Location')]/following-sibling::p").text,
-                        'number': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Number')]/following-sibling::p").text,
-                        'units': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Units')]/following-sibling::p").text,
-                        'dates': details_element.find_element(By.CLASS_NAME, "text-nowrap").text,
-                        'offered_by': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Offered By')]/following-sibling::p").text,
-                        'repeatable_for_credit': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Repeatable for credit')]/following-sibling::p").text,
-                        'component': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Component')]/following-sibling::p").text,
-                        'last_day_to_enroll': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Last day to enroll')]/following-sibling::p").text,
-                        'drop_deadline': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Drop deadline')]/following-sibling::p").text,
-                        'course_withdrawal_deadline': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course withdrawal deadline')]/following-sibling::p").text,
-                        'consent': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Consent')]/following-sibling::p").text,
-                        'course_notes': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Notes')]/following-sibling::p").text,
-                        'fees': details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Fees')]/following-sibling::p").text
                     }
+                    try:
+                        course_info['description'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Description')]/following-sibling::p").text
+                    except:
+                        course_info['description'] = 'N/A'
+                    try:
+                        course_info['enrollment_requirements'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Enrollment Requirements')]/following-sibling::p").text
+                    except:
+                        course_info['enrollment_requirements'] = 'N/A'
+                    try:
+                        location_element = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Location')]/following-sibling::p")
+                        location_link = location_element.find_element(By.TAG_NAME, "a")
+                        course_info['location'] = location_link.text
+                    except Exception as e:
+                        self.logger.info(f"Error in web_scrap course location : {e}")
+                        course_info['location'] = 'N/A'
+                    try:
+                        course_info['number'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Number')]/following-sibling::p").text
+                    except:
+                        course_info['number'] = 'N/A'
+                    try:
+                        course_info['units'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Units')]/following-sibling::p").text
+                    except:
+                        course_info['units'] = 'N/A'
+                    try:
+                        course_info['dates'] = details_element.find_element(By.CLASS_NAME, "text-nowrap").text
+                    except:
+                        course_info['dates'] = 'N/A'
+                    try:
+                        course_info['offered_by'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Offered By')]/following-sibling::p").text
+                    except:
+                        course_info['offered_by'] = 'N/A'
+                    try:
+                        course_info['repeatable_for_credit'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Repeatable for credit')]/following-sibling::p").text
+                    except:
+                        course_info['repeatable_for_credit'] = 'N/A'
+                    try:
+                        course_info['component'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Component')]/following-sibling::p").text
+                    except:
+                        course_info['component'] = 'N/A'
+                    try:
+                        course_info['last_day_to_enroll'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Last day to enroll')]/following-sibling::p").text
+                    except:
+                        course_info['last_day_to_enroll'] = 'N/A'
+                    try:
+                        course_info['drop_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Drop deadline')]/following-sibling::p").text
+                    except:
+                        course_info['drop_deadline'] = 'N/A'
+                    try:
+                        course_info['course_withdrawal_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course withdrawal deadline')]/following-sibling::p").text
+                    except:
+                        course_info['course_withdrawal_deadline'] = 'N/A'
+                    try:
+                        course_info['consent'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Consent')]/following-sibling::p").text
+                    except:
+                        course_info['consent'] = 'N/A'
+                    try:
+                        course_info['course_notes'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Notes')]/following-sibling::p").text
+                    except:
+                        course_info['course_notes'] = 'N/A'
+                    try:
+                        course_info['fees'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Fees')]/following-sibling::p").text
+                    except:
+                        course_info['fees'] = 'N/A'
+                        
+                    try:
+                        course_info['instructor'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Instructor')]/following-sibling::a").text
+                    except:
+                        course_info['instructor'] = 'N/A'
+                    
                     
                     # Extract reserved seats information
                     try:
@@ -546,7 +600,7 @@ class ASUWebScraper:
                 for course in detailed_courses:
                     course_string = f"Title: {course['title']}\n"
                     course_string += f"Description: {course['description']}\n"
-                    course_string += f"Enrollment Requirements: {course['enrollment_requirements']}\n"
+                    course_string += f"Enrollment Requirements: {course['enrollment_requirements']}\n"                    
                     course_string += f"Instructor: {course['instructor']}\n"
                     course_string += f"Location: {course['location']}\n"
                     course_string += f"Course Number: {course['number']}\n"
@@ -796,18 +850,29 @@ class ASUWebScraper:
             try:
                 driver = self.driver
                 # Navigate to library hours page
-                self.driver.get(url)
+                try:
+                    self.driver.get(url)
+                except Exception as e:
+                    self.logger.error(f"Error navigating to URL: {e}")
+                    return f"Error navigating to URL: {str(e)}"
 
                 # Wait for page to load
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "s-lc-whw"))
-                )
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, "s-lc-whw"))
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error waiting for page to load: {e}")
+                    return f"Error waiting for page to load: {str(e)}"
                 
                 # Handle cookie popup
-                cookie_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CLASS_NAME, "accept-btn"))
-                )
-                cookie_button.click()
+                try:
+                    cookie_button = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.CLASS_NAME, "accept-btn"))
+                    )
+                    cookie_button.click()
+                except Exception as e:
+                    self.logger.warning(f"Error handling cookie popup: {e}")
 
                 # Map library names to their row identifiers
                 library_map = {
@@ -828,23 +893,39 @@ class ASUWebScraper:
 
                         while not is_date_present:
                             # Find all date headers in the thead
-                            date_headers = self.driver.find_elements(
-                                By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
-                            )
+                            try:
+                                date_headers = self.driver.find_elements(
+                                    By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
+                                )
+                            except Exception as e:
+                                self.logger.error(f"Error finding date headers: {e}")
+                                return f"Error finding date headers: {str(e)}"
                             
                             # Extract text from date headers
-                            header_dates = [header.text.strip() for header in date_headers]
+                            try:
+                                header_dates = [header.text.strip() for header in date_headers]
+                            except Exception as e:
+                                self.logger.error(f"Error extracting text from date headers: {e}")
+                                return f"Error extracting text from date headers: {str(e)}"
                             
                             # Remove line breaks and additional whitespace
-                            header_dates = [date.lower().split('\n')[0] for date in header_dates]
+                            try:
+                                header_dates = [date.lower().split('\n')[0] for date in header_dates]
+                            except Exception as e:
+                                self.logger.error(f"Error processing date headers: {e}")
+                                return f"Error processing date headers: {str(e)}"
                                 
                             # Check if requested date is in the list of header dates
                             is_date_present = date.lower() in header_dates
                             
                             if not is_date_present:
-                                next_button = self.driver.find_element(By.ID, "s-lc-whw-next-0")
-                                next_button.click()
-                                time.sleep(0.2)  # Allow page to load
+                                try:
+                                    next_button = self.driver.find_element(By.ID, "s-lc-whw-next-0")
+                                    next_button.click()
+                                    time.sleep(0.2)  # Allow page to load
+                                except Exception as e:
+                                    self.logger.error(f"Error clicking next button: {e}")
+                                    return f"Error clicking next button: {str(e)}"
                             
                             iterations += 1
                         
@@ -859,15 +940,23 @@ class ASUWebScraper:
                         self.logger.info(f"Mapped library names: {mapped_library_names}")
                         
                         # Find library row
-                        library_row = self.driver.find_element(
-                            By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
-                        )
+                        try:
+                            library_row = self.driver.find_element(
+                                By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
+                            )
+                        except Exception as e:
+                            self.logger.error(f"Error finding library row: {e}")
+                            return f"Error finding library row: {str(e)}"
                         
                         
                         self.logger.info("\nFound library row")
 
                         # Find date column index
-                        date_headers = self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
+                        try:
+                            date_headers = self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
+                        except Exception as e:
+                            self.logger.error(f"Error finding date headers: {e}")
+                            return f"Error finding date headers: {str(e)}"
                         
                         self.logger.info(f"Found date_headers")
                         
@@ -886,8 +975,12 @@ class ASUWebScraper:
                         
                         self.logger.info(f"Found date column index {date_column_index}")
                         # Extract status
-                        status_cell = library_row.find_elements(By.TAG_NAME, "td")[date_column_index]
-                        self.logger.info(f"Found library row elements : {status_cell}")
+                        try:
+                            status_cell = library_row.find_elements(By.TAG_NAME, "td")[date_column_index]
+                            self.logger.info(f"Found library row elements : {status_cell}")
+                        except Exception as e:
+                            self.logger.error(f"Error finding status cell: {e}")
+                            return f"Error finding status cell: {str(e)}"
                         try:
                             status = status_cell.find_element(By.CSS_SELECTOR, "span").text
                             self.logger.info(f"Found library status elements : {status}")
@@ -925,8 +1018,7 @@ class ASUWebScraper:
                 return True
 
             except Exception as e:
-                return f"Error retrieving library status: {str(e)}" 
-                                    
+                return f"Error retrieving library status: {str(e)}"
         elif 'asu.libcal.com' in url:
             # Navigate to the URL
             self.driver.get(url)

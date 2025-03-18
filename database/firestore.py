@@ -10,7 +10,7 @@ class Firestore:
             "superior_agent_message": [],
             "discord_agent_message": [],
             "google_agent_message": [],
-            "live_status_agent_message": [],
+            "shuttle_status_agent_message": [],
             "courses_agent_message": [],
             "events_agent_message": [],
             "library_agent_message": [],

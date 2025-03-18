@@ -23,8 +23,8 @@ class DataModel:
             ],
             tool_config={'function_calling_config': 'ANY'},
         )
-        
-    def refine(self, search_context: str, text: str) -> tuple[str, str]:
+        self.chat = self.model.start_chat(enable_automatic_function_calling=True)
+    async def refine(self, search_context: str, text: str) -> tuple[str, str]:
         prompt = f"""{self.app_config.get_data_agent_prompt()}
 
         Search Context: {search_context}
@@ -34,7 +34,7 @@ class DataModel:
 
         try:
             self.logger.info(f"Data Model: Refining Data with context : {search_context} \n and data : {text}")
-            response = self.model.generate_content(prompt)
+            response = await self.chat.send_message_async(prompt)
             if response and hasattr(response, 'text'):
                 parsed = self.parse_json_response(response.text)
                 return (

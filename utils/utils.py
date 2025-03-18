@@ -125,7 +125,7 @@ classwith task tracking and logging."""
         try:
             # Initial search
             self.logger.info("\nPerforming Web Search")
-
+ 
             documents = await self.asu_scraper.engine_search(search_url, optional_query)
 
             if not documents:

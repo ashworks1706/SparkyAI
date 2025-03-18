@@ -20,8 +20,8 @@ class AppConfig:
         self.gmail = config_data.get('GMAIL', '')
         self.gmail_pass = config_data.get('GMAIL_PASS', '')
         self.main_agent_prompt = config_data.get('MAIN_AGENT_PROMPT', '')
-        self.live_status_agent_prompt = config_data.get('LIVE_STATUS_AGENT_PROMPT', '')
-        self.live_status_agent_instruction = config_data.get('LIVE_STATUS_AGENT_INSTRUCTION', '')
+        self.shuttle_status_agent_prompt = config_data.get('Shuttle_Status_Agent_PROMPT', '')
+        self.shuttle_status_agent_instruction = config_data.get('Shuttle_Status_Agent_INSTRUCTION', '')
         self.discord_agent_prompt = config_data.get('DISCORD_AGENT_PROMPT', '')
         self.discord_agent_instruction = config_data.get('DISCORD_AGENT_INSTRUCTION', '')
         self.superior_agent_prompt = config_data.get('SUPERIOR_AGENT_PROMPT', '')
@@ -87,10 +87,10 @@ class AppConfig:
         return self.data_agent_prompt
     def get_data_agent_instruction(self):
         return self.data_agent_instruction
-    def get_live_status_agent_prompt(self):
-        return self.live_status_agent_prompt
-    def get_live_status_agent_instruction(self):
-        return self.live_status_agent_instruction
+    def get_shuttle_status_agent_prompt(self):
+        return self.shuttle_status_agent_prompt
+    def get_shuttle_status_agent_instruction(self):
+        return self.shuttle_status_agent_instruction
     def get_discord_agent_prompt(self):
         return self.discord_agent_prompt
     def get_discord_agent_instruction(self):
