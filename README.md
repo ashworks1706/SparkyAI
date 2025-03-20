@@ -40,14 +40,9 @@ SparkyAI leverages a complex architecture to deliver accurate and context-aware 
 
 ## Advanced Architecture
 
-![image](https://github.com/user-attachments/assets/18e2c5fc-b777-4b22-b63e-5bd97ffde5cd)
-
 ![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
 
 ![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
-
-![image](https://github.com/user-attachments/assets/1ab12d43-3e37-4020-bec1-0dc8dc4ea1db)
-
 
 ## Key Features
 
@@ -161,18 +156,18 @@ Implementation details:
 
 ## Agent Descriptions
 
-| Name                                 | What It Does                                                                                                            |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| **Superior Agent**             | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed. |
-| **RAG Search Agent**           | Performs search over RAG knowledge base, has also access to general Google search utilityfor queries                   |
-| **News Media Agent**           | Access to asu social media and asu news                                                                                 |
-| **Shuttle Status Agent**       | access to asu campus rider portal                                                                                       |
-| **Discord Agent**              | access to discord channels : announcements, feedbacks, customer service, polls, posts,                                  |
+| Name                                      | What It Does                                                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Superior Agent**                  | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed. |
+| **RAG Search Agent**                | Performs search over RAG knowledge base, has also access to general Google search utilityfor queries                   |
+| **News Media Agent**                | Access to asu social media and asu news                                                                                 |
+| **Shuttle Status Agent**            | access to asu campus rider portal                                                                                       |
+| **Discord Agent**                   | access to discord channels : announcements, feedbacks, customer service, polls, posts,                                  |
 | **Library Agent**                   | access to library.asu and live rooms status asu                                                                         |
 | **Sports Agent**                    | access to sundevilathletics.asu                                                                                         |
 | **Student Jobs Agent**              | access to workday.asu                                                                                                   |
 | **Student Clubs Events<br />Agent** | access to sundevilsync.asu                                                                                              |
-| **Scholarship Agent**               | access to scholarships.asu                                                                                              |
+|                                           | access to scholarships.asu                                                                                              |
 
 ### Finetune
 
