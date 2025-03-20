@@ -1,4 +1,4 @@
-# ASU Discord Bot - (Public)
+# SparkyAI - University Copilot
 
 This repository has been recently made public, the old repository had exposed credential issues.
 
@@ -10,23 +10,13 @@ A Discord bot designed to assist Arizona State University (ASU) students with ac
 
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
 
-## Advanced Architecture
-
-![image](https://github.com/user-attachments/assets/18e2c5fc-b777-4b22-b63e-5bd97ffde5cd)
-
-![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
-
-![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
-
-![image](https://github.com/user-attachments/assets/1ab12d43-3e37-4020-bec1-0dc8dc4ea1db)
-
 SparkyAI leverages a complex architecture to deliver accurate and context-aware responses:
 
 - **Retrieval-Augmented Generation (RAG)**: Combines vector search with large language models for precise information retrieval.
-- **Multi-Agent System**: Utilizes specialized AI agents (Action, Google, Search, Live Status, Discord) for targeted task execution.
+- **Multi-Agent System**: Utilizes specialized AI agents or targeted task execution.
 - **Vector Database**: Implements Qdrant for efficient semantic search and document retrieval.
 
-## Advanced Features
+## Features
 
 - **Maximum Inner Product Search (MIPS)**: Optimized vector similarity search for large-scale datasets.
 - **RAPTOR Retrieval**: Hierarchical document representation for nuanced information retrieval.
@@ -47,6 +37,17 @@ SparkyAI leverages a complex architecture to deliver accurate and context-aware 
 - **Retry Mechanisms**: Robust error handling with configurable retry attempts for critical operations.
 - **Multi-Method Search**: Combines RAPTOR, similarity search, MIPS, and ScaNN for comprehensive and efficient information retrieval.
 - **Result Deduplication**: Implements intelligent merging and deduplication of search results from multiple methods.
+
+## Advanced Architecture
+
+![image](https://github.com/user-attachments/assets/18e2c5fc-b777-4b22-b63e-5bd97ffde5cd)
+
+![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
+
+![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
+
+![image](https://github.com/user-attachments/assets/1ab12d43-3e37-4020-bec1-0dc8dc4ea1db)
+
 
 ## Key Features
 
@@ -80,10 +81,11 @@ The system uses a Retrieval-Augmented Generation (RAG) architecture:
 - The `VectorStore` class manages document storage and retrieval using Qdrant vector database
 - Implements semantic search capabilities using HuggingFace embeddings
 - The `Utils` class contains methods for similarity search and database querying
+- The `RAPTOR ` class reranks and creates a tree of documents
 
 ### Utils Class Enhancements
 
-- **Multi-Method Search**: Orchestrates searches across RAPTOR, similarity, MIPS, and ScaNN methods.
+- **Multi-Method Search**: Orchestrates searches across RAPTOR, similarity, and MIPS methods.
 - **Result Merging**: Intelligently combines and deduplicates results from various search methods.
 - **Ground Source Management**: Tracks and manages unique source URLs for comprehensive information retrieval.
 - **Caching**: Implements query and document ID caching for improved performance.
@@ -138,6 +140,40 @@ Implementation details:
 - Implements methods to update collections, add new messages, and retrieve chat histories.
 - Stores messages with timestamps and user IDs for comprehensive tracking.
 
+### The modular architecture allows for easy extension:
+
+- Multiple agent classes (e.g., `SuperiorAgent`,  `RAGSearchAgent`, `ShuttleStatusAgent`) can be customized for different tasks
+- The `AppConfig` class centralizes configuration management, making it easy to add new features
+- The use of asynchronous programming (async/await) throughout the codebase allows for efficient handling of concurrent operations
+
+## Technologies Used
+
+- **AI/ML**: Gemini, LangChain, TensorFlow
+- **NLP**: Hugging Face Transformers, NLTK
+- **Embeddings**: BAAI/bge-large-en-v1.5 model
+- **Cross Encoder**:  cross-encoder/ms-marco-MiniLM-L-6-v2
+- **Vector Search**: Qdrant
+- **Web Scraping**: Selenium, BeautifulSoup4
+- **APIs**: Discord API, Firebase API
+- **Databases**: Firestore, Notion
+- **Asynchronous Programming**: asyncio
+- **Containerization**: Docker
+
+## Agent Descriptions
+
+| Name                                 | What It Does                                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Superior Agent**             | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed. |
+| **RAG Search Agent**           | Performs search over RAG knowledge base, has also access to general Google search utilityfor queries                   |
+| **News Media Agent**           | Access to asu social media and asu news                                                                                 |
+| **Shuttle Status Agent**       | access to asu campus rider portal                                                                                       |
+| **Discord Agent**              | access to discord channels : announcements, feedbacks, customer service, polls, posts,                                  |
+| **Library Agent**                   | access to library.asu and live rooms status asu                                                                         |
+| **Sports Agent**                    | access to sundevilathletics.asu                                                                                         |
+| **Student Jobs Agent**              | access to workday.asu                                                                                                   |
+| **Student Clubs Events<br />Agent** | access to sundevilsync.asu                                                                                              |
+| **Scholarship Agent**               | access to scholarships.asu                                                                                              |
+
 ### Finetune
 
 We are finetuning gemini 1.5 flash model (Superior Agent) with our custom dataset containing 560 examples of different interactions between agents with humans aswell as agents with other agents to increase the accuracy of reasoning aswell as general responses to students:
@@ -151,60 +187,34 @@ We are finetuning gemini 1.5 flash model (Superior Agent) with our custom datase
 
 ### Extensible Design
 
-The modular architecture allows for easy extension:
-
-- Multiple agent classes (e.g., `ActionAgent`, `SearchAgent`, `GoogleAgent`) can be customized for different tasks
-- The `AppConfig` class centralizes configuration management, making it easy to add new features
-- The use of asynchronous programming (async/await) throughout the codebase allows for efficient handling of concurrent operations
-
-## Technologies Used
-
-- **AI/ML**: Gemini Vertex AI, LangChain, TensorFlow
-- **NLP**: Hugging Face Transformers, NLTK
-- **Embeddings**: BAAI/bge-large-en-v1.5 model
-- **Cross Encoder**:  cross-encoder/ms-marco-MiniLM-L-6-v2
-- **Vector Search**: Qdrant, FAISS
-- **Web Scraping**: Selenium, BeautifulSoup4
-- **APIs**: Discord API, Google Sheets API, Google Cloud Storage
-- **Databases**: Firestore, Google Sheets (for moderation)
-- **Asynchronous Programming**: asyncio
-- **Containerization**: Docker
-
-## Agent Descriptions
-
-| Name                        | Importance                                             | What It Does                                                                                                                | Functions                                                                                                                                                                                                                                                                            |
-| --------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Superior Agent**    | Central coordinator for user interactions              | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed.     | -`access_rag_search_agent<br>`- `access_discord_agent<br>`- `access_google_agent<br>`- `access_live_status_agent<br>`- `get_discord_server_info<br>`- `get_user_profile_details`                                                                                         |
-| **Google Agent**      | Specialized search functionality                       | Performs Google searches for queries; defers to Superior Agent for complex queries requiring the Rag Search Agent.          | -`google_search_tool`                                                                                                                                                                                                                                                              |
-| **Rag Search Agent**  | Executes functions for queries from the Superior Agent | Executes specific functions to retrieve information based on queries passed by the Superior Agent; responds in JSON format. | -`get_latest_club_information<br>`- `get_latest_event_updates<br>`- `get_latest_news_updates<br>`- `get_latest_social_media_updates<br>`- `get_latest_sport_updates<br>`- `get_library_resources<br>`- `get_latest_scholarships<br>`- `get_latest_class_information` |
-| **Live Status Agent** | Manages live status-related queries                    | Executes live status functions for queries from the Superior Agent; responds in JSON format.                                | -`get_live_library_status<br>`- `get_live_shuttle_status`                                                                                                                                                                                                                        |
-| **Discord Agent**     | Handles Discord-specific functionalities               | Executes Discord-related functions for queries from the Superior Agent; responds in JSON format.                            | -`notify_discord_helpers<br>`- `notify_moderators` `<br>`- `create_discord_forum_post<br>`- `create_discord_announcement<br>`- `create_discord_event<br>`- `create_discord_poll`                                                                                       |
-
-
 ## Getting Started
 
 Follow these steps to set up and run the ASU Discord Bot on your local machine.
 
 ### 1. Clone the Repository
+
 First, clone the repository to your local machine using Git.
 
 ```bash
-git clone https://github.com/somwrks/SparkyAI.git
+git clone https://github.com/ashworks1706/SparkyAI.git
 cd sparkyai
 ```
 
 ---
 
 ### 2. Set Up a Virtual Environment
+
 Create and activate a Python virtual environment to isolate dependencies.
 
 #### On Linux/Mac:
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 #### On Windows:
+
 ```bash
 python -m venv venv
 venv\Scripts\activate
@@ -213,6 +223,7 @@ venv\Scripts\activate
 ---
 
 ### 3. Install Dependencies
+
 Install all required Python.12.3 packages from the `requirements.txt` file.
 
 ```bash
@@ -222,32 +233,27 @@ pip install -r requirements.txt
 ---
 
 ### 4. Configure API Keys and Credentials
+
 The bot requires several API keys and configuration files to function properly.
 
 1. **Create a `appConfig.json` file** in the `config/` folder with the following structure [Example](/__sample__appConfig.json):
-   ```json
-   {
-       "discord_bot_token": "your-discord-bot-token",
-       "google_search_api_key": "your-google-api-key",
-       "google_cse_id": "your-custom-search-engine-id",
-       "handshake_user": "your-handshake-username",
-       "handshake_pass": "your-handshake-password"
-   }
-   ```
-
 2. **Add Firebase API credentials** [Example](/__sample_firebase_secret.json):
+
    - Download the `firebase_secret.json` file from your Firebase Cloud Console.
    - Place it in the `config/` folder.
 
 ---
 
 ### 5. Set Up Qdrant Vector Database
+
 The bot uses Qdrant for vector-based similarity search. Run Qdrant using Docker.
 
 #### Install Docker (if not installed):
+
 Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system.
 
 #### Start Qdrant:
+
 Run the following command to start Qdrant on port `6333`:
 
 ```bash
@@ -259,9 +265,11 @@ docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 ---
 
 ### 6. Install Chrome Dependencies (for Web Scraping)
+
 The bot uses Selenium for web scraping. Ensure Chrome and Chromedriver are installed.
 
 #### On Linux:
+
 ```bash
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb 
 sudo apt install ./google-chrome-stable_current_amd64.deb 
@@ -275,6 +283,7 @@ sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libatk1.0-0 libg
 ```
 
 #### On Windows:
+
 1. Download and install [Google Chrome](https://www.google.com/chrome/).
 2. Download the appropriate Chromedriver version from [Chromedriver Downloads](https://chromedriver.chromium.org/downloads).
 3. Add Chromedriver to your system PATH.
@@ -282,6 +291,7 @@ sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libatk1.0-0 libg
 ---
 
 ### 7. Run the Bot
+
 Start the bot by running the `main.py` script:
 
 ```bash
@@ -295,22 +305,23 @@ If everything is set up correctly, you should see logs indicating that the bot h
 ### Troubleshooting Common Issues
 
 1. **Qdrant Not Running:**
+
    - Ensure Docker is installed and running.
    - Verify that port `6333` is available on your system.
    - Check Qdrant logs for errors by running:
      ```bash
      docker logs 
      ```
-
 2. **Missing API Keys:**
+
    - Double-check that your `config.json` file is correctly formatted and placed in the `config/` folder.
    - Ensure all required keys are present.
-
 3. **Chromedriver Errors:**
+
    - Make sure you have installed a compatible version of Chromedriver for your version of Chrome.
    - Verify that Chromedriver is in your system PATH.
-
 4. **Dependency Issues:**
+
    - If you encounter dependency errors, try upgrading pip and reinstalling requirements:
      ```bash
      pip install --upgrade pip
@@ -333,70 +344,6 @@ This project draws inspiration from and builds upon the following research paper
 6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
 
 These papers have significantly contributed to the field of vector similarity search, maximum inner product search (MIPS), and efficient indexing techniques, which are fundamental to this project's approach.
-
-### Future Innovations
-
-- [ ]  **Architecture**
-    - [ ]  Implement caching mechanisms
-        - [ ]  Add FP16 embedding cache with Redis
-        - [ ]  Implement RAG Cache
-    - [ ]  Enhance retrieval methods
-        - [ ]  Implement SOAR (sparse retrieval methods)
-        - [ ]  Implement DeepSeek R1 reinforcement learning technique
-        - [ ]  Implement graph RAG
-        - [ ]  implement colbert
-    - [ ]  Improve query processing
-        - [ ]  Add query intent classifier to bypass RAG for simple searches
-    - [ ]  Implement User Profile AI Agent
-        - [ ]  Store user personality and behavior information in Firebase
-        - [ ]  Add user context to action agent
-        - [ ]  Integrate user information option in RAG database search function
-- [ ]  **Security Enhancements (Critical)**
-    - [ ]  Implement encrypted credential management
-        - [ ]  Migrate `clientsecret.json`, Discord tokens, and Handshake credentials to Google Cloud Secret Manager
-        - [x]  Remove plaintext credentials from config files
-    - [ ]  Enhance endpoint security
-        - [ ]  Implement rate limiting for Discord webhooks and Google Cloud endpoints
-        - [ ]  Set up IP whitelisting for sensitive endpoints
-    - [ ]  Improve web scraping security
-        - [ ]  Implement secure credential handling for Handshake login
-        - [ ]  Add input sanitization for web scraping using BeautifulSoup's `cleaner` module
-- [ ]  **Website launch**
-    - [ ]  **Live Chat Implementation**
-        - [ ]  Implement WebSocket API for real-time chat
-            - [ ]  Use FastAPI+WebSockets
-            - [ ]  Add JWT authentication for ASU IDs
-        - [ ]  Build chat interface components
-            - [ ]  Create responsive chat UI
-            - [ ]  Implement message threading
-            - [ ]  Add file attachment support
-        - [ ]  Add enterprise features
-            - [ ]  Session transfer between agents
-            - [ ]  Proactive assistance prompts
-            - [ ]  Screen sharing integration
-    - [ ]  **Analytics and Monitoring**
-        - [ ]  Develop Next.js website for analytics
-            - [ ]  Fetch and display content from Firebase
-            - [ ]  Implement chat, metrics, and analytics visualizations
-            - [ ]  Set up system for deploying fetched chats as training dataset
-            - [ ]  Add data engineering tools for editing dataset chat and converting csv, downladable
-            - [ ]  implement custom rag documents to add for qdrant vector DB
-    - [ ]  **Compliance & Accessibility**
-        - [ ]  Create session recording system
-- [ ]  **Infrastructure and Deployment**
-    - [ ]  Configure premium services
-        - [ ]  Update Google Cloud premium settings
-        - [ ]  Finalize decision between Llama and DeepSeek
-            - [ ]  gpt → reasoning superior agent
-            - [ ]  deepseek → deep reasoning search agent
-            - [ ]  gemini → function calling sub agent
-            - [ ]  research gemini search tool
-- [ ]  **Team Expansion**
-    - [ ]  Recruit developers with expertise in:
-        - [ ]  Web/software development
-        - [ ]  Python data structures
-        - [ ]  LLMs and AI
-        - [ ]  Specific requirements: Interest in AI, web scraping, LangChain, Discord.py
 
 ## License
 
