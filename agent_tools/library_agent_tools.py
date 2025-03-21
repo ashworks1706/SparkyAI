@@ -54,7 +54,7 @@ class Library_Agent_Tools:
             }
                 
             if "StudyRoomsAvailability" in status_type:
-                transformed_date = datetime.strptime(date, '%b %d').strftime('2024-%m-%d')
+                transformed_date = datetime.strptime(date, '%b %d').strftime('2025-%m-%d')
                 for library in library_names:
                     query= library_map[library]
                     search_url = f"https://asu.libcal.com/r/accessible/availability?lid={library_map[library]}&gid={gid_map[library_map[library]]}&zone=0&space=0&capacity=2&date={transformed_date}"

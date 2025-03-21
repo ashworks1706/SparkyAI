@@ -835,8 +835,7 @@ class ASUWebScraper:
             except Exception as e:
                 print(f"\nFailed to scrape book details: {e}")
                 return False
-
-        
+     
         elif 'lib.asu.edu' in url:
             def extract_query_parameters(query):
                 pattern = r'(\w+)=([^&]*)'
@@ -1034,7 +1033,7 @@ class ASUWebScraper:
         
         elif 'asu.libcal.com' in url:
             # Navigate to the URL
-            self.self.driver.get(url)
+            self.driver.get(url)
             
             # Wait for page to load
             
@@ -1044,7 +1043,7 @@ class ASUWebScraper:
                 )
                 
                 # Parse page source with BeautifulSoup
-                soup = BeautifulSoup(self.self.driver.page_source, 'html.parser')
+                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
                 
                 
                 # Reset text_content for new scrape
