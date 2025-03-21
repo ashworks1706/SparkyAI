@@ -67,9 +67,6 @@ class Courses_Agent_Tools:
             'Spring 2025': '2251',
             'Fall 2024': '2247', 
             'Summer 2024': '2244',
-            'Spring 2024': '2241',
-            'Fall 2023': '2237', 
-            'Summer 2023': '2234'
         }
         
         CREDIT_UNITS_MAP = {
@@ -120,7 +117,7 @@ class Courses_Agent_Tools:
         
         params = {
             'advanced': 'true',
-            'campus': class_location,
+            'campus': _convert_to_query_string(class_location, {}),
             'campusOrOnlineSelection': 'A',
             'daysOfWeek': _convert_to_query_string(class_days, DAYS_MAP),
             'honors': 'F',

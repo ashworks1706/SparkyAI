@@ -48,7 +48,7 @@ class Firestore:
         doc_ref = self.db.collection(self.collection).document()
         doc_ref.set(self.document)
         
-        self.check_and_add_user() 
+        await self.check_and_add_user() 
         
         return doc_ref.id  # Return the document ID for reference
 
@@ -67,7 +67,7 @@ class Firestore:
                 "user_has_mod_role": self.discord_state.get('user_has_mod_role'),
                 "user_in_voice_channel": self.discord_state.get('user_in_voice_channel'),
                 "request_in_dm": self.discord_state.get('request_in_dm'),
-                "guild_user": self.discord_state.get('guild_user'),
+                "guild_user": str(self.discord_state.get('guild_user')),
                 "user_voice_channel_id": self.discord_state.get('user_voice_channel_id'),
             }
             users_collection.add(new_user_doc)

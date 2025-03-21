@@ -225,7 +225,7 @@ class Superior_Agent_Tools:
         if len(self.conversations[user_id]) > 3:
             self.conversations[user_id].pop(0)
 
-    async def access_google_agent(self, original_query: str, detailed_query: str, generalized_query: str, relative_query: str, categories: list):
+    async def access_rag_search_agent(self, original_query: str, detailed_query: str, generalized_query: str, relative_query: str, categories: list):
         self.firestore.update_message("category", categories)
         
         user_id = self.discord_state.get('user_id')
@@ -253,9 +253,9 @@ class Superior_Agent_Tools:
         
         {self.app_config.get_google_agent_prompt()}
         
-        - If applicable, you may use the related database information : {responses}
+        - Existing RAG Databse Knowledge: {responses}
         
-
+        - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
         User's Query: {original_query}
 
         Deliver a direct, actionable response that precisely matches the query's specificity."""

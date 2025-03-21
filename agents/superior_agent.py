@@ -290,7 +290,7 @@ class SuperiorModel:
 
     async def execute_function(self, function_call: Any) -> str:
         function_mapping = {
-            'access_google_agent': self.agent_tools.access_google_agent,
+            'access_rag_search_agent': self.agent_tools.access_rag_search_agent,
             'access_discord_agent': self.agent_tools.access_discord_agent,
             'access_shuttle_status_agent': self.agent_tools.access_shuttle_status_agent,
             'get_user_profile_details': self.agent_tools.get_user_profile_details,
@@ -341,6 +341,7 @@ class SuperiorModel:
 
     async def determine_action(self, query: str) -> List[str]:
         try:
+            max_depth=3
             final_response=""
             self._initialize_model()
             responses = []
@@ -352,6 +353,7 @@ class SuperiorModel:
             """
             
             response = await self.chat.send_message_async(prompt)
+            max_depth-=1
             
             while True:
                 text_response, has_function_call, function_call = await self.process_gemini_response(response)
@@ -367,7 +369,8 @@ class SuperiorModel:
                 function_result = await self.execute_function(function_call)
                 self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
                 self.logger.info("\nAction Model @ Function result is: %s", function_result)
-                response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
+                response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question. Remaining function tries : {max_depth}""")
+                max_depth-=1
                 
             final_response = " ".join(response.strip() for response in responses if response.strip())
             

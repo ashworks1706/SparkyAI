@@ -1458,9 +1458,7 @@ class ASUWebScraper:
                     
                     for url in search_results:
                         await self.scrape_content(url=url)
-                    
-                    
-                
+                                 
                 if 'x.com' in search_url or 'facebook.com' in search_url or "instagram.com" in search_url:
                     if optional_query:
                         self.logger.info("\nOptional query :: %s" % optional_query)
@@ -1469,8 +1467,7 @@ class ASUWebScraper:
                         query_part = f"{urllib.parse.quote(optional_query)}+{path}" if path else urllib.parse.quote(optional_query)
                         google_search_url = f"https://www.google.com/search?q={query_part}+site:{domain}"
                         self.logger.info("Google search url formed : {}".format(google_search_url))
-                        await self.engine_search(search_url=google_search_url)
-                                                
+                        await self.engine_search(search_url=google_search_url)                            
                 
                 if 'https://goglobal.asu.edu/scholarship-search' in search_url or 'https://onsa.asu.edu/scholarships'in search_url:
                     try:
