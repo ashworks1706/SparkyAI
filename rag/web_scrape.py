@@ -69,6 +69,46 @@ class ASUWebScraper:
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=self.chrome_options)
 
     
+    
+    def handle_feedback_popup(self,driver):
+        if self.popup:
+            pass
+        else:
+            try:
+                self.logger.info("\nHandling feedback popup")
+                # Wait for the popup to be present
+                popup = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "fsrDeclineButton"))
+                )
+                
+                # Click the "No thanks" button
+                popup.click()
+                self.logger.info("\nFeedback popup clicked")
+                # Optional: Wait for popup to disappear
+                WebDriverWait(driver, 5).until(
+                    EC.invisibility_of_element_located((By.ID, "fsrFullScreenContainer"))
+                )
+                
+                self.popup = True
+            except Exception as e:
+
+                pass
+    
+    def handle_cookie(self,driver):
+        if self.popup: 
+            pass
+        else:
+            try:
+                self.logger.info("\nHandling feedback popup")
+                cookie_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.ID, "rcc-confirm-button"))
+                )
+                cookie_button.click()
+                self.logger.info("\nSuccessfully clciked on cookie button")
+            except:
+                pass
+
+    
     async def __login__(self, username, password):
         try:
             # Navigate to Handshake login page
@@ -123,7 +163,9 @@ class ASUWebScraper:
             self.logger.error(f"Login failed: {str(e)}")
             return False
         
- 
+    
+    
+    
     async def scrape_content(self, url: str, query_type: str = None, max_retries: int = 3, selenium :bool = False, optional_query:str=None) -> bool:
         """Scrape content using Jina.ai"""
         
@@ -450,7 +492,7 @@ class ASUWebScraper:
         elif 'catalog.apps.asu.edu' in url:
             self.driver.get(url)
             
-            self.utils.handle_cookie(self.driver)
+            self.handle_cookie(self.driver)
             course_elements = WebDriverWait(self.driver, 10).until(
                 EC.presence_of_all_elements_located((By.CLASS_NAME, "class-accordion"))
             )
@@ -609,140 +651,137 @@ class ASUWebScraper:
                     formatted_courses.append(course_string)
         
         elif 'search.lib.asu.edu' in url:
-            self.self.driver.get(url)
-            time.sleep(1) 
-            book_results=[]
-            self.utils.handle_feedback_popup(self.driver)
+            self.driver.get(url)
+            time.sleep(1)
+            book_results = []
+            self.handle_feedback_popup(self.driver)
+
             try:
                 # Find and click on the first book title link
                 first_book_link = WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "h3.item-title a"))
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, ".result-item-text div"))
                 )
                 first_book_link.click()
-                self.logger.info("\nBook Title Clicked")
-            
-                try:
-                    book_details = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "full-view-inner-container"))
-                    )
-                    self.logger.info("\nBook Details Clicked")
-
-                except:
-
-                    first_book_link = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "h3.item-title a"))
-                    )
-                    first_book_link.click()
-                    self.logger.info("\nBook Title Clicked")
+                print("\nBook Title Clicked")
                 
+                time.sleep(2)
                 
-                self.utils.handle_feedback_popup(self.driver)
+                if nested_book_link := self.driver.find_element(By.CSS_SELECTOR, ".result-item-text div"):
+                    nested_book_link.click()
                     
+                book_details = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
+                )
+                # Wait for book details to be present
+                print("\nBook Details fetched")
+                
+                
                 for _ in range(3):
-                    # Wait for book details to be present
-                    self.utils.handle_feedback_popup(self.driver)
+                    
                     book_details = WebDriverWait(self.driver, 10).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
                     )
-                    self.logger.info("\nBook Details fetched")
-                    
-                    
-
+                    self.handle_feedback_popup(self.driver)
                     
                     # Extract book title
-                    author_view = self.self.driver.find_element(By.CSS_SELECTOR, "div.result-item-text.layout-fill.layout-column.flex")
-                    self.logger.info("\nAuthors fetched")
-                    
+                    author_view = self.driver.find_element(By.CSS_SELECTOR,
+                                                            "div.result-item-text.layout-fill.layout-column.flex")
+                    print("\nAuthors fetched")
+
                     title = author_view.find_element(By.CSS_SELECTOR, "h3.item-title").text.strip()
-                    self.logger.info("\nBook Title fetched")
-                    
+                    print("\nBook Title fetched")
+
                     # Extract Authors
-                    
                     authors = []
-        
-                    
+
                     try:
-                        author_div = author_view.find_element(By.XPATH, "//div[contains(@class, 'item-detail') and contains(@class, 'reduce-lines-display')]")
-                        
-                        
+                        author_div = author_view.find_element(By.XPATH,
+                                                                "//div[contains(@class, 'item-detail') and contains(@class, 'reduce-lines-display')]")
+
                         # Find all author elements within this div
-                        author_elements = author_div.find_elements(By.CSS_SELECTOR, "span[data-field-selector='creator'], span[data-field-selector='contributor']")
-                        
-                        if len(author_elements)>0:
+                        author_elements = author_div.find_elements(By.CSS_SELECTOR,
+                                                                    "span[data-field-selector='creator'], span[data-field-selector='contributor']")
+
+                        if len(author_elements) > 0:
                             for element in author_elements:
                                 author_text = element.text.strip()
                                 if author_text and author_text not in authors:
                                     authors.append(author_text)
                         else:
                             author_div = book_details.find_element(By.XPATH, "//div[.//span[@title='Author']]")
-                        
-                            author_elements = author_div.find_elements(By.CSS_SELECTOR, "a span[ng-bind-html='$ctrl.highlightedText']")
-                            
-                            if not author_elements:
 
-                                author_elements = book_details.find_elements(By.XPATH, "//div[contains(@class, 'item-details-element')]//a//span[contains(@ng-bind-html, '$ctrl.highlightedText')]")
-                            if len(author_elements)>0:
+                            author_elements = author_div.find_elements(By.CSS_SELECTOR,
+                                                                        "a span[ng-bind-html='$ctrl.highlightedText']")
+
+                            if not author_elements:
+                                author_elements = book_details.find_elements(By.XPATH,
+                                                                                "//div[contains(@class, 'item-details-element')]//a//span[contains(@ng-bind-html, '$ctrl.highlightedText')]")
+                            if len(author_elements) > 0:
                                 for element in author_elements:
                                     author_text = element.text.strip()
                                     if author_text and author_text not in authors:
                                         authors.append(author_text)
-                        self.logger.info("\nAuthors fetched")
-                        
+                        print("\nAuthors fetched")
+
                     except Exception as e:
                         authors = 'N/A'
 
-                    
                     try:
-                        publisher = book_details.find_element(By.CSS_SELECTOR, "span[data-field-selector='publisher']").text.strip()
-                        self.logger.info("\nPublisher fetched")
+                        publisher = book_details.find_element(By.CSS_SELECTOR,
+                                                                "span[data-field-selector='publisher']").text.strip()
+                        print("\nPublisher fetched")
                     except:
-                        self.logger.info("\nNo Publisher found")
+                        print("\nNo Publisher found")
                         publisher = "N/A"
-                    
+
                     # Extract publication year
                     try:
-                        year = book_details.find_element(By.CSS_SELECTOR, "span[data-field-selector='creationdate']").text.strip()
+                        year = book_details.find_element(By.CSS_SELECTOR,
+                                                            "span[data-field-selector='creationdate']").text.strip()
                     except:
-                        self.logger.info("\nNo Book details found")
+                        print("\nNo Book details found")
                         year = "N/A"
-                    
+
                     # Extract availability
                     try:
                         location_element = book_details.find_element(By.CSS_SELECTOR, "h6.md-title")
                         availability = location_element.text.strip()
-                        self.logger.info("\nAvailability found with first method")
+                        print("\nAvailability found with first method")
 
                     except Exception as e:
                         # Find the first link in the exception block
-                        location_element = book_details.find_elements(By.CSS_SELECTOR, "a.item-title.md-primoExplore-theme")
-                        if isinstance(location_element,list):
+                        location_element = book_details.find_elements(By.CSS_SELECTOR,
+                                                                        "a.item-title.md-primoExplore-theme")
+                    try:
+                        
+                        if isinstance(location_element, list):
                             availability = location_element[0].get_attribute('href')
                         else:
                             availability = location_element.get_attribute('href')
-                        self.logger.info("\nAvailability found with second method")
-                        
-                        if availability is None:
-                            location_element = book_details.find_elements(By.CSS_SELECTOR, "h6.md-title ng-binding zero-margin")
-                            availability = location_element.text.strip()
-                            self.logger.info("\nAvailablility found with third method")
-                            
+                        print("\nAvailability found with second method")
 
-                        
+                        if availability is None:
+                            location_element = book_details.find_elements(By.CSS_SELECTOR,
+                                                                            "h6.md-title ng-binding zero-margin")
+                            availability = location_element.text.strip()
+                            print("\nAvailablility found with third method")
+                    except:
+                        print("\nNo availability found")
+                        availability = "N/A"
+
                     try:
                         # Use more flexible locator strategies
-                        links = self.self.driver.find_elements(By.XPATH, "//a[contains(@ui-sref, 'sourceRecord')]")
-                        
-                        if isinstance(links, list) and len(links) > 0:
-                            
-                            link = links[0]
-                            link = link.get_attribute('href')
-                            self.logger.info("\nFetched Link")
-                        else:
-                            link = link.get_attribute('href')
-                            self.logger.info("\nFetched Link")
-                    except Exception as e:
-                        self.logger.info("\nNo link Found")
+                        links = self.driver.find_elements(By.XPATH, "//a[contains(@ui-sref, 'sourceRecord')]")
 
+                        if isinstance(links, list) and len(links) > 0:
+                            link = links[0].get_attribute('href')
+                            print("\nFetched Link")
+                        else:
+                            link = 'N/A'
+                            print("\nNo link Found")
+                    except Exception as e:
+                        print("\nNo link Found")
+                        link = 'N/A'
 
                     # Compile book result
                     book_result = {
@@ -753,27 +792,27 @@ class ASUWebScraper:
                         "availability": availability,
                         "link": link
                     }
-                    
+
                     book_results.append(book_result)
-                    
+
                     try:
                         next_button = WebDriverWait(self.driver, 5).until(
                             EC.element_to_be_clickable((By.XPATH, "//button[contains(@ng-click, '$ctrl.getNextRecord()')]"))
                         )
-                        self.self.driver.execute_script("arguments[0].click();", next_button)
-
-                        next_button.click()
+                        self.driver.execute_script("arguments[0].click();", next_button)
                         
-                        self.logger.info("\nClciked next button")
+                        time.sleep(3)
 
-                        self.utils.handle_feedback_popup(self.driver)
-                        
+                        print("\nClicked next button")
+
+                        self.handle_feedback_popup(self.driver)
+
                     except Exception as e:
-                        self.logger.error(f"Failed to click next button")
-                    
-                if len(book_results)==0:
+                        print(f"Failed to click next button: {e}")
+
+                if len(book_results) == 0:
                     return False
-                
+
                 for book in book_results:
                     book_string = f"Title: {book['title']}\n"
                     book_string += f"Authors: {', '.join(book['authors']) if book['authors'] else 'N/A'}\n"
@@ -789,13 +828,14 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
-                    self.logger.info("\nAppended book details: %s" % self.text_content[-1])
-                    
+                    print("\nAppended book details: %s" % self.text_content[-1])
+
+                return True
+
             except Exception as e:
-                self.logger.info("\nFailed to append book details: %s" % e)
+                print(f"\nFailed to scrape book details: {e}")
                 return False
 
-            return True
         
         elif 'lib.asu.edu' in url:
             def extract_query_parameters(query):
