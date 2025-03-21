@@ -2,7 +2,7 @@ from utils.common_imports import *
 
 class Superior_Agent_Tools:
     
-    def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_agent, scholarship_agent, social_media_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
@@ -16,9 +16,8 @@ class Superior_Agent_Tools:
         self.discord_agent = discord_agent
         self.courses_agent = courses_agent
         self.library_agent = library_agent
-        self.news_agent = news_agent
+        self.news_media_agent = news_media_agent
         self.scholarship_agent = scholarship_agent
-        self.social_media_agent = social_media_agent
         self.sports_agent = sports_agent
         self.student_clubs_events_agent = student_clubs_events_agent
         self.student_jobs_agent = student_jobs_agent
@@ -131,15 +130,15 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error in access library agent: {str(e)}")
             return "Library Agent Not Responsive"
     
-    async def access_news_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing news agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+    async def access_news_media_agent(self, instruction_to_agent: str, special_instructions: str):
+        self.logger.info(f"Action Model : accessing news media agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.news_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access news agent: {str(e)}")
+            self.logger.error(f"Error in access news media agent: {str(e)}")
             return "News Agent Not Responsive"
     
     async def access_scholarship_agent(self, instruction_to_agent: str, special_instructions: str):
@@ -153,16 +152,6 @@ class Superior_Agent_Tools:
             self.logger.error(f"Error in access scholarship agent: {str(e)}")
             return "Scholarship Agent Not Responsive"
     
-    async def access_social_media_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing social media agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
-        self.group_chat.update_text(instruction_to_agent)
-        
-        try:
-            response = await self.social_media_agent.determine_action(instruction_to_agent, special_instructions)
-            return response
-        except Exception as e:
-            self.logger.error(f"Error in access social media agent: {str(e)}")
-            return "Social Media Agent Not Responsive"
     
     async def access_sports_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"Action Model : accessing sports agent with instruction {instruction_to_agent} with special instructions {special_instructions}")

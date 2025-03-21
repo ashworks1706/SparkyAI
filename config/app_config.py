@@ -46,12 +46,10 @@ class AppConfig:
         self.discord_post_channel_name = config_data.get('DISCORD_POST_CHANNEL_NAME', '')
         self.student_clubs_events_agent_prompt = config_data.get('STUDENT_CLUBS_EVENTS_AGENT_PROMPT', '')
         self.student_clubs_events_agent_instruction = config_data.get('STUDENT_CLUBS_EVENTS_AGENT_INSTRUCTION', '')
-        self.news_agent_prompt = config_data.get('NEWS_AGENT_PROMPT', '')
-        self.news_agent_instruction = config_data.get('NEWS_AGENT_INSTRUCTION', '')
+        self.news_media_agent_prompt = config_data.get('NEWS_SOCIAL_AGENT_PROMPT', '')
+        self.news_media_agent_instruction = config_data.get('NEWS_SOCIAL_AGENT_INSTRUCTION', '')
         self.sports_agent_prompt = config_data.get('SPORTS_AGENT_PROMPT', '')
         self.sports_agent_instruction = config_data.get('SPORTS_AGENT_INSTRUCTION', '')
-        self.social_media_agent_prompt = config_data.get('SOCIAL_MEDIA_AGENT_PROMPT', '')
-        self.social_media_agent_instruction = config_data.get('SOCIAL_MEDIA_AGENT_INSTRUCTION', '')
         self.library_agent_prompt = config_data.get('LIBRARY_AGENT_PROMPT', '')
         self.library_agent_instruction = config_data.get('LIBRARY_AGENT_INSTRUCTION', '')
         self.scholarship_agent_prompt = config_data.get('SCHOLARSHIP_AGENT_PROMPT', '')
@@ -120,20 +118,16 @@ class AppConfig:
         return self.student_clubs_events_agent_instruction
     
     
-    def get_news_agent_prompt(self):
-        return self.news_agent_prompt
-    def get_news_agent_instruction(self):
-        return self.news_agent_instruction
+    def get_news_media_agent_prompt(self):
+        return self.news_media_agent_prompt
+    def get_news_media_agent_instruction(self):
+        return self.news_media_agent_instruction
     
     def get_sports_agent_prompt(self):
         return self.sports_agent_prompt
     def get_sports_agent_instruction(self):
         return self.sports_agent_instruction
     
-    def get_social_media_agent_prompt(self):
-        return self.social_media_agent_prompt
-    def get_social_media_agent_instruction(self):
-        return self.social_media_agent_instruction
     
     def get_library_agent_prompt(self):
         return self.library_agent_prompt

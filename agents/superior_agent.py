@@ -195,8 +195,8 @@ class SuperiorModel:
                     ),
                 ),
                 genai.protos.FunctionDeclaration(
-                    name="access_news_agent",
-                    description="Has ability to search for ASU news information",
+                    name="access_news_media_agent",
+                    description="Has ability to search for ASU news and ASU Social Media information",
                     parameters=content.Schema(
                     type=content.Type.OBJECT,
                     properties={
@@ -215,24 +215,6 @@ class SuperiorModel:
                 genai.protos.FunctionDeclaration(
                     name="access_scholarship_agent",
                     description="Has ability to search for ASU scholarship information",
-                    parameters=content.Schema(
-                    type=content.Type.OBJECT,
-                    properties={
-                        "instruction_to_agent": content.Schema(
-                        type=content.Type.STRING,
-                        description="Tasks for the agent"
-                        ),
-                        "special_instructions": content.Schema(
-                        type=content.Type.STRING,
-                        description="Remarks about previous search or Special Instructions to Agent"
-                        ),
-                    },
-                    required= ["instruction_to_agent","special_instructions"],
-                    ),
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="access_social_media_agent",
-                    description="Has ability to search for ASU social media information",
                     parameters=content.Schema(
                     type=content.Type.OBJECT,
                     properties={
@@ -316,10 +298,8 @@ class SuperiorModel:
             'access_courses_agent': self.agent_tools.access_courses_agent,
             'access_student_clubs_events_agent': self.agent_tools.access_student_clubs_events_agent,
             'access_library_agent': self.agent_tools.access_library_agent,
-            'access_news_agent': self.agent_tools.access_news_agent,
+            'access_news_media_agent': self.agent_tools.access_news_media_agent,
             'access_scholarship_agent': self.agent_tools.access_scholarship_agent,
-            'access_social_media_agent': self.agent_tools.access_social_media_agent,
-            'access_sports_agent': self.agent_tools.access_sports_agent,
             'access_student_jobs_agent': self.agent_tools.access_student_jobs_agent,
         }
 

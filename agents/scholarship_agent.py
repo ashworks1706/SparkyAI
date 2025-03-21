@@ -209,10 +209,10 @@ class ScholarshipModel:
                 if hasattr(part, 'function_call') and part.function_call:
                     
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message("social_media_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                    self.firestore.update_message("scholarship_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
                 elif hasattr(part, 'text') and part.text.strip():
                     text = part.text.strip()
-                    self.firestore.update_message("social_media_agent_message", f"Text Response : {text}")
+                    self.firestore.update_message("scholarship_agent_message", f"Text Response : {text}")
                     if not text.startswith("This query") and not "can be answered directly" in text:
                         final_response = text.strip()
                         self.logger.info(f"text response : {final_response}")

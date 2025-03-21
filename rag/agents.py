@@ -60,7 +60,7 @@ class Agents:
         self.logger.info("Initialized LibraryModel Instance")
 
         self.news_media_agent = NewsMediaModel(self.firestore, self.genai, self.app_config, logger, self.news_media_agent_tools, discord_state)
-        self.logger.info("Initialized NewsModel Instance")
+        self.logger.info("Initialized NewsMediaModel Instance")
 
         self.scholarship_agent = ScholarshipModel(self.firestore, self.genai, self.app_config, logger, self.scholarship_agent_tools, discord_state)
         self.logger.info("Initialized ScholarshipModel Instance")
