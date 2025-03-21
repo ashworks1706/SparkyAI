@@ -1,5 +1,5 @@
 from utils.common_imports import *
-class NewsModel:
+class NewsMediaModel:
     
     def __init__(self,firestore,genai,app_config,logger,agent_tools,discord_state):
         self.logger = logger
@@ -27,7 +27,7 @@ class NewsModel:
                     function_declarations=[
 
                         genai.protos.FunctionDeclaration(
-                              name="get_latest_news_updates",
+                              name="get_latest_news_updates", 
                               description="Searches for news information with Sun Devil Search Engine",
                               parameters=content.Schema(
                                   type=content.Type.OBJECT,
@@ -43,6 +43,35 @@ class NewsModel:
                                   },
                                   required=["search_bar_query"]
                               ),
+                          ),
+                           genai.protos.FunctionDeclaration(
+                              name="get_latest_social_media_updates",
+                              description="Searches for ASU social media posts from specified accounts",
+                              parameters=content.Schema(
+                                  type=content.Type.OBJECT,
+                                  properties={
+                                      "search_bar_query": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Optional search query to filter social media posts"
+                                      ),
+                                      "account_name": content.Schema(
+                                          type=content.Type.ARRAY,
+                                          items=content.Schema( 
+                                              type=content.Type.STRING,
+                                              enum=[
+                                                  "@ArizonaState", 
+                                                  "@SunDevilAthletics", 
+                                                  "@SparkySunDevil", 
+                                                  "@SunDevilFootball", 
+                                                  "@ASUFootball", 
+                                                  "@SunDevilFB"
+                                              ]
+                                          ),
+                                          description="Pick from the List of ASU social media account names to search"
+                                      )
+                                  },
+                                  required=["account_name"]
+                              )
                           ),
                     ],
                 ),
@@ -63,6 +92,8 @@ class NewsModel:
         function_mapping = {
             
             'get_latest_news_updates': self.agent_tools.get_latest_news_updates,
+            'get_latest_social_media_updates': self.agent_tools.get_latest_social_media_updates,
+
         }
         
             

@@ -170,7 +170,7 @@ class LibraryModel:
                 
                 """
 
-            response = await self.chat.send_message_async(prompt)
+            response = await self.chat.send_message_async(prompt) 
             self.logger.info(f"Internal response @ Library Model : {response}")
             
             for part in response.parts:

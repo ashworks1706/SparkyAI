@@ -273,4 +273,41 @@ classwith task tracking and logging."""
     def clear_ground_sources(self):
         self.ground_sources = []
         return True
+    def handle_feedback_popup(self,driver):
+        if self.popup:
+            pass
+        else:
+            try:
+                self.logger.info("\nHandling feedback popup")
+                # Wait for the popup to be present
+                popup = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "fsrDeclineButton"))
+                )
+                
+                # Click the "No thanks" button
+                popup.click()
+                self.logger.info("\nFeedback popup clicked")
+                # Optional: Wait for popup to disappear
+                WebDriverWait(driver, 5).until(
+                    EC.invisibility_of_element_located((By.ID, "fsrFullScreenContainer"))
+                )
+                
+                self.popup = True
+            except Exception as e:
+
+                pass
+    
+    def handle_cookie(self,driver):
+        if self.popup: 
+            pass
+        else:
+            try:
+                self.logger.info("\nHandling feedback popup")
+                cookie_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.ID, "rcc-confirm-button"))
+                )
+                cookie_button.click()
+                self.logger.info("\nSuccessfully clciked on cookie button")
+            except:
+                pass
     

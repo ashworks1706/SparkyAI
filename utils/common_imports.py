@@ -35,10 +35,11 @@ from unidecode import unidecode  # For Unicode to ASCII conversion
 from langchain.text_splitter import RecursiveCharacterTextSplitter 
 from langchain_qdrant import  QdrantVectorStore 
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.document_loaders import WebBaseLoader
+# from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
 from langchain.embeddings.base import Embeddings
 from langchain_community.vectorstores import ScaNN
+from langchain_community.document_loaders import UnstructuredURLLoader
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams, OptimizersConfigDiff

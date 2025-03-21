@@ -1,7 +1,7 @@
 import logging
 from utils.common_imports import *
 from utils.otp_verification import OTPVerificationModal
-
+ 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

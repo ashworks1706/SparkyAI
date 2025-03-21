@@ -20,7 +20,7 @@ class Main:
         
         try:
             # initializing vector store for qdrant vector database
-            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
+            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=True)
             self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")
@@ -45,7 +45,8 @@ class Main:
             self.logger.warning("\nASU RAG INITIALIZED WITH ERRORS - VectorStore not available")
 
     async def initialize_scraper(self):
-        await self.asu_scraper.__login__(self.app_config.get_handshake_user(), self.app_config.get_handshake_pass())
+        return True
+        # await self.asu_scraper.__login__(self.app_config.get_handshake_user(), self.app_config.get_handshake_pass())
 
     async def run_discord_bot(self,config: Optional[BotConfig] = None, app_config=None):
         """Run the Discord bot"""

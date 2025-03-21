@@ -43,18 +43,12 @@ class DataPreprocessor:
                 start_time = time.time()
                 self.logger.info(f"Starting document processing for {len(documents)} documents")
                 try:
-                    consolidated_text = await self._consolidate_documents(documents, search_context)
+                    consolidated_text , refined_title = await self._consolidate_documents(documents, search_context)
+                    self.doc_title = refined_title != "Undefined" and refined_title or title
                 except Exception as e:
                     self.logger.error(f"Document consolidation failed: {str(e)}")
                     raise
                 
-                try:
-                    refined_content, refined_title = await self.asu_data_agent.refine(search_context, consolidated_text)
-                    self.doc_title = refined_title
-                    consolidated_text = refined_content
-                except Exception as e:
-                    self.logger.error(f"Content refinement failed: {str(e)}")
-                    raise
                 try:
                     document = self._create_processed_document(consolidated_text, documents)
                 except Exception as e:
@@ -105,22 +99,21 @@ class DataPreprocessor:
         text = self.WHITESPACE_PATTERN.sub(' ', text).strip()
 
         return text
-
     async def _consolidate_documents(self, documents: List[Dict[str, str]], search_context: str) -> str:
-        """Consolidate and clean documents into a single text corpus using DataModel."""
-        all_content = ""
-        for doc in documents:
-            content = doc['content']
-            # Use DataModel to refine each document's content
-            refine_result = await self.asu_data_agent.refine(search_context, content)
-            if refine_result:
-                refined_content, refined_title = refine_result
-                all_content += refined_content + "\n\n"
-            else:
-                all_content += content + "\n\n"  # Fallback to original content if refinement fails
+        """Consolidate all documents into a single text corpus and refine the combined content."""
+        all_content = "\n\n".join([doc['content'] for doc in documents])
+        refined_title = "Undefined"
 
-        return all_content.strip()
+        try:
+            # Use DataModel to refine the combined content
+            refine_result = await self.asu_data_agent.refine(search_context, all_content)
+            refined_content, refined_title = refine_result
+            self.logger.info("Combined text refinement successful")
+        except Exception as e:
+            self.logger.error(f"Combined text refinement failed: {str(e)}")
+            refined_content = all_content  # Fallback to original combined content if refinement fails
 
+        return refined_content.strip(), refined_title
 
 
     def _create_processed_document(self, 

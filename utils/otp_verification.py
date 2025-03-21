@@ -9,7 +9,7 @@ class OTPVerificationModal(discord.ui.Modal):
             placeholder="Enter the 6-digit OTP sent to your email",
             custom_id="otp_input"
         )
-        self.add_item(self.otp)
+        self.add_item(self.otp) 
 
     async def on_submit(self, interaction: discord.Interaction):
         if self.otp.value == self.correct_otp:
@@ -18,7 +18,7 @@ class OTPVerificationModal(discord.ui.Modal):
             await interaction.response.send_message("Incorrect OTP. Please try again.", ephemeral=True)
 
     async def verify_member(self, interaction: discord.Interaction, email):
-        verified_role = discord.utils.get(interaction.guild.roles, name="verified")
+        verified_role = discord.utils.get(interaction.guild.roles, name="Verified")
         if verified_role:
             await interaction.user.add_roles(verified_role)
             await interaction.response.send_message("You have been verified!", ephemeral=True)

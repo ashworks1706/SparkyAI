@@ -2,7 +2,7 @@ from utils.otp_verification import OTPVerificationModal
 from utils.verify_button import VerifyButton
 from utils.verification_modal import VerificationModal
 
-from utils.common_imports import *
+from utils.common_imports import * 
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
@@ -28,7 +28,6 @@ class ASUDiscordBot:
         self.discord_state = discord_state
         self.client = discord_state.get('discord_client')
         self.tree = app_commands.CommandTree(self.client)
-        self.service = Service(ChromeDriverManager().install())
         
         @self.client.event
         async def on_ready():
@@ -77,11 +76,11 @@ class ASUDiscordBot:
                     if member.voice:
                         user_voice_channel_id = member.voice.channel.id
                 else:
-                    return "You are not part of Sparky Discord Server. Access to command is restricted."
+                    return "You are not part of AIM Discord Server. Access to command is restricted."
 
                     
             except discord.NotFound:
-                return "You are not part of Sparky Discord Server. Access to command is restricted."
+                return "You are not part of AIM Discord Server. Access to command is restricted."
         self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
         self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
@@ -138,8 +137,8 @@ class ASUDiscordBot:
             self.logger.info(f"Successfully processed question for {interaction.user.name}")
             
             
-            await self.vector_store.store_to_vector_db()
             self.firestore.update_message("user_message", question)
+            await self.vector_store.store_to_vector_db()
             document_id = await self.firestore.push_message()
             self.logger.info(f"Message pushed with document ID: {document_id}")
 
@@ -172,7 +171,7 @@ class ASUDiscordBot:
                 button = discord.ui.Button(label=domain, url=url, style=discord.ButtonStyle.link)
                 buttons.append(button)
             # Custom link for feedbacks
-            button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.blurple)
+            button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.primary)
             buttons.append(button)
 
             view = discord.ui.View()
