@@ -59,7 +59,8 @@ class Library_Agent_Tools:
                     query= library_map[library]
                     search_url = f"https://asu.libcal.com/r/accessible/availability?lid={library_map[library]}&gid={gid_map[library_map[library]]}&zone=0&space=0&capacity=2&date={transformed_date}"
                     result+=await self.utils.perform_web_search(search_url, query,doc_title=doc_title, doc_category ="libraries_status")
-                
+            if not result:
+                return "No rooms available currently at this specific library."
             return result
             
     async def get_library_resources(self, search_bar_query: str = None, resource_type: str = 'All Items'):
