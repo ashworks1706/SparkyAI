@@ -1,12 +1,10 @@
 {
-    "NUMEXPR_MAX_THREADS": "",
     "HUGGINGFACEHUB_API_TOKEN": "",
     "API_KEY": "",
     "HANDSHAKE_USER": "",
     "HANDSHAKE_PASS": "",
     "GMAIL": "",
     "GMAIL_PASS": "",
-    "KUBERNETES_SECRET": "",
     "QDRANT_API_KEY": "",
     "DISCORD_BOT_TOKEN": "",
     "DATA_AGENT_PROMPT": "",

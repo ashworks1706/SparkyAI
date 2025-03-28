@@ -45,8 +45,8 @@ class SuperiorModel:
                     ),   
                 ),
                 genai.protos.FunctionDeclaration(
-                    name="access_google_agent",
-                    description="Performs Google Search to provide rapid result summary",
+                    name="access_rag_search_agent",
+                    description="Performs RAG Search to provide rapid result summary",
                     parameters=content.Schema(
                     type=content.Type.OBJECT,
                     properties={

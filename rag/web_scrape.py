@@ -67,8 +67,6 @@ class ASUWebScraper:
         self.popup = False
         
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=self.chrome_options)
-
-    
     
     def handle_feedback_popup(self,driver):
         if self.popup:

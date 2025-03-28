@@ -12,7 +12,6 @@ class AppConfig:
             print(f"Error: Config file '{config_file}' contains invalid JSON.")
             config_data = {}
         
-        os.environ['NUMEXPR_MAX_THREADS'] = config_data.get('NUMEXPR_MAX_THREADS', '16')
         os.environ['HUGGINGFACEHUB_API_TOKEN'] = config_data.get('HUGGINGFACEHUB_API_TOKEN', '')
         self._api_key = config_data.get('API_KEY', '')
         self.handshake_user = config_data.get('HANDSHAKE_USER', '')
@@ -36,7 +35,6 @@ class AppConfig:
         self.data_agent_prompt = config_data.get('DATA_AGENT_PROMPT', '')
         self.data_agent_instruction = config_data.get('DATA_AGENT_INSTRUCTION', '')
         self.discord_bot_token = config_data.get('DISCORD_BOT_TOKEN', '')
-        self.kubernetes_api_key = config_data.get('KUBERNETES_SECRET', '')
         self.qdrant_api_key = config_data.get('QDRANT_API_KEY', '')
         self.discord_target_guild_id = config_data.get('TARGET_GUILD_ID', '')
         self.discord_allowed_chat_id = config_data.get('ALLOWED_CHAT_ID', '')
@@ -59,8 +57,6 @@ class AppConfig:
         self.courses_agent_prompt = config_data.get('COURSES_AGENT_PROMPT', '')
         self.courses_agent_instruction = config_data.get('COURSES_AGENT_INSTRUCTION', '')
 
-    def get_numexpr_max_threads(self):
-        return os.environ['NUMEXPR_MAX_THREADS']
     def get_huggingfacehub_api_token(self):
         return os.environ['HUGGINGFACEHUB_API_TOKEN']
     def get_qdrant_api_key(self):
