@@ -149,7 +149,12 @@ class RaptorRetriever:
                 return
             
             # Get embeddings for new documents
-            new_embeddings = self.vector_store.get_embeddings(new_documents)
+            try:
+                new_embeddings = self.vector_store.get_embeddings(new_documents)
+                self.logger.info(f"@raptor.py Generated embeddings for {len(new_embeddings)} new documents")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error generating embeddings: {str(e)}")
+                return
             
             if not new_embeddings:
                 self.logger.warning(f"@raptor.py Could not generate embeddings for new documents.")
@@ -158,61 +163,86 @@ class RaptorRetriever:
             new_embeddings = np.array(new_embeddings)
             
             # Start with the lowest level (level_0)
-            level_0 = self.tree.get("level_0", {})
-            clusters = level_0.get("clusters", {})
+            try:
+                level_0 = self.tree.get("level_0", {})
+                clusters = level_0.get("clusters", {})
+                self.logger.debug(f"@raptor.py Retrieved level 0 with {len(clusters)} clusters")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error accessing tree structure: {str(e)}")
+                return
             
             # For each new document, find the closest cluster and add it
             for i, embedding in enumerate(new_embeddings):
-                # If this is the first update, we need to initialize the tree
-                if not self.tree:
-                    self.logger.info(f"@raptor.py Tree is empty. Building a new tree instead of updating.")
-                    self.tree = self.build_raptor_tree()
-                    return
-                
-                if not clusters:
-                    self.logger.info(f"@raptor.py No clusters found in level 0. Building a new tree.")
-                    self.tree = self.build_raptor_tree()
-                    return
-                
-                # Find the closest cluster for the new document
-                closest_cluster = None
-                max_similarity = -float('inf')
-                
-                for cluster_id, cluster_docs in clusters.items():
-                    cluster_embedding = self.vector_store.get_embeddings([level_0["summaries"][cluster_id]])[0]
-                    similarity = np.dot(embedding, cluster_embedding)
+                try:
+                    # If this is the first update, we need to initialize the tree
+                    if not self.tree:
+                        self.logger.info(f"@raptor.py Tree is empty. Building a new tree instead of updating.")
+                        self.tree = self.build_raptor_tree()
+                        return
                     
-                    if similarity > max_similarity:
-                        max_similarity = similarity
-                        closest_cluster = cluster_id
-                
-                # Add the document to the closest cluster
-                if closest_cluster is not None:
-                    clusters[closest_cluster].append(new_documents[i])
+                    if not clusters:
+                        self.logger.info(f"@raptor.py No clusters found in level 0. Building a new tree.")
+                        self.tree = self.build_raptor_tree()
+                        return
                     
-                    # Update the summary for this cluster
-                    level_0["summaries"][closest_cluster] = self.generate_summary(clusters[closest_cluster])
+                    # Find the closest cluster for the new document
+                    closest_cluster = None
+                    max_similarity = -float('inf')
                     
-                    self.logger.info(f"@raptor.py Added document to cluster {closest_cluster} in level 0")
-                else:
-                    self.logger.warning(f"@raptor.py Could not find a suitable cluster for the document")
+                    for cluster_id, cluster_docs in clusters.items():
+                        try:
+                            cluster_embedding = self.vector_store.get_embeddings([level_0["summaries"][cluster_id]])[0]
+                            similarity = np.dot(embedding, cluster_embedding)
+                            
+                            self.logger.debug(f"@raptor.py Similarity with cluster {cluster_id}: {similarity}")
+                            
+                            if similarity > max_similarity:
+                                max_similarity = similarity
+                                closest_cluster = cluster_id
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Error calculating similarity for cluster {cluster_id}: {str(e)}")
+                            continue
+                    
+                    # Add the document to the closest cluster
+                    if closest_cluster is not None:
+                        clusters[closest_cluster].append(new_documents[i])
+                        
+                        # Update the summary for this cluster
+                        try:
+                            level_0["summaries"][closest_cluster] = self.generate_summary(clusters[closest_cluster])
+                            self.logger.info(f"@raptor.py Added document to cluster {closest_cluster} in level 0 and updated summary")
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Error updating summary for cluster {closest_cluster}: {str(e)}")
+                    else:
+                        self.logger.warning(f"@raptor.py Could not find a suitable cluster for document {i}")
+                except Exception as e:
+                    self.logger.error(f"@raptor.py Error processing document {i}: {str(e)}")
+                    continue
             
             # Propagate changes up the tree
-            for level in range(1, self.num_levels):
-                level_key = f"level_{level}"
-                if level_key not in self.tree:
-                    break
+            try:
+                for level in range(1, self.num_levels):
+                    level_key = f"level_{level}"
+                    if level_key not in self.tree:
+                        self.logger.debug(f"@raptor.py No more levels to update after level {level-1}")
+                        break
+                        
+                    prev_level_key = f"level_{level-1}"
+                    self.logger.info(f"@raptor.py Propagating changes to level {level}")
                     
-                prev_level_key = f"level_{level-1}"
-                
-                # Update summaries in the current level
-                for cluster_id in self.tree[level_key]["clusters"]:
-                    child_docs = []
-                    for child_cluster in self.tree[level_key]["clusters"][cluster_id]:
-                        child_docs.append(self.tree[prev_level_key]["summaries"][child_cluster])
-                    
-                    self.tree[level_key]["summaries"][cluster_id] = self.generate_summary(child_docs)
-                    self.logger.info(f"@raptor.py Updated summary for cluster {cluster_id} in level {level}")
+                    # Update summaries in the current level
+                    for cluster_id in self.tree[level_key]["clusters"]:
+                        try:
+                            child_docs = []
+                            for child_cluster in self.tree[level_key]["clusters"][cluster_id]:
+                                child_docs.append(self.tree[prev_level_key]["summaries"][child_cluster])
+                            
+                            self.tree[level_key]["summaries"][cluster_id] = self.generate_summary(child_docs)
+                            self.logger.info(f"@raptor.py Updated summary for cluster {cluster_id} in level {level}")
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Error updating cluster {cluster_id} at level {level}: {str(e)}")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error propagating changes up the tree: {str(e)}")
             
             self.logger.info(f"@raptor.py RAPTOR tree update completed.")
             self.logger.info(f"@raptor.py Updated Tree Structure:\n{self.format_tree_structure(self.tree)}")

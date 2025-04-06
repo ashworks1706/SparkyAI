@@ -240,8 +240,11 @@ class Superior_Agent_Tools:
                 {"search_bar_query": relative_query}
             ]
             for query in queries:
+                self.logger.info(f"@superior_agent_tools.py Action Model: Performing database search with query {query['search_bar_query']}")
                 response = await self.utils.perform_database_search(query["search_bar_query"], categories) or []
                 responses.append(response)
+                self.logger.info(f"@superior_agent_tools.py Action Model: Database search response: {response}")
+                
 
             responses = [resp for resp in responses if resp]
         except:

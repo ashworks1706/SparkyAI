@@ -72,11 +72,16 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         #"""Extract the content from a document."""
         self.logger.debug(f"Extracting content from document: {doc}")
         if isinstance(doc, str):
-            try:
-                doc_dict = json.loads(doc)
-                return doc_dict.get('page_content', '')
-            except json.JSONDecodeError:
-                self.logger.warning(f"@vector_store.py Failed to decode JSON from document: {doc}")
+            # Check if the string looks like JSON before trying to parse it
+            if doc.strip().startswith('{') and doc.strip().endswith('}'):
+                try:
+                    doc_dict = json.loads(doc)
+                    return doc_dict.get('page_content', '')
+                except json.JSONDecodeError:
+                    self.logger.warning(f"@vector_store.py Failed to decode JSON from document: {doc}")
+                    return doc
+            else:
+                # Not JSON-formatted, return as is
                 return doc
         else:
             return getattr(doc, 'page_content', str(doc))

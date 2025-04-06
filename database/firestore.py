@@ -76,8 +76,8 @@ class Firestore:
             raise ValueError("@firestore.py User ID not found in discord_state.")
         
         users_collection = self.db.collection("users")
-        # Use the filter keyword argument as recommended in the warning
-        query_results = users_collection.filter("user_id", "==", user_id).get()
+        # Use the where method for filtering in Firestore
+        query_results = users_collection.where("user_id", "==", user_id).get()
         print(f"Query result: {query_results}")
         
         # Check if the user already exists in the collection
