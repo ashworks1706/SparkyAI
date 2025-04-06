@@ -123,7 +123,6 @@ classwith task tracking and logging."""
             return "Error formatting search results."
     async def perform_raptor_tree_update(self):
         try:
-            self.logger.info(f"@utils.py \nUpdating RAPTOR tree with new documents")
             await self.raptor_retriever.update_raptor_tree()
         except Exception as e:  
             self.logger.error(f"@utils.py Error updating RAPTOR tree: {str(e)}")
@@ -181,19 +180,36 @@ classwith task tracking and logging."""
             self.logger.info(f"@utils.py \nDocuments stored successfully")
             
             results = []
-            extracted_urls=[]
-            for doc in processed_docs:
-                doc_info = {
-                    'content': doc.page_content,
-                    'metadata': doc.metadata,
-                    'timestamp': doc.metadata.get('timestamp'),
-                    'url': doc.metadata.get('url')
-                }
-                sources = doc.metadata.get('url')
-                extracted_urls.extend(sources)
-
-                results.append(doc_info)
+            extracted_urls = []
             
+            try:
+                for doc in processed_docs:
+                    doc_info = {
+                        'content': doc.page_content,
+                        'metadata': doc.metadata,
+                        'timestamp': doc.metadata.get('timestamp'),
+                        'url': doc.metadata.get('url')
+                    }
+                    results.append(doc_info)
+                    
+                    # Safely extract URLs
+                    sources = doc.metadata.get('url', [])
+                    if sources:
+                        # Handle different URL formats (string, list, nested list)
+                        if isinstance(sources, str):
+                            extracted_urls.append(sources)
+                        elif isinstance(sources, list):
+                            # Handle nested lists by flattening them
+                            for item in sources:
+                                if isinstance(item, list):
+                                    extracted_urls.extend([url for url in item if isinstance(url, str)])
+                                elif isinstance(item, str):
+                                    extracted_urls.append(item)
+            except Exception as e:
+                self.logger.error(f"@utils.py Error processing individual document: {str(e)}")
+                self.logger.error(f"@utils.py Documents : {processed_docs}")
+                # Continue with next document   
+                
             self.update_ground_sources(extracted_urls)
 
             results = self.format_search_results(results)
@@ -279,34 +295,78 @@ classwith task tracking and logging."""
             raptor_results = raptor_results or []
             similarity_results = similarity_results or []
             
+            # Convert LangChain Document objects to dictionaries to ensure consistent handling
+            combined_results = []
             try:
-                combined_results = raptor_results + similarity_results
+                for item in raptor_results:
+                    if hasattr(item, 'page_content') and hasattr(item, 'metadata'):
+                        # Convert Document object to dict
+                        combined_results.append({
+                            'content': item.page_content,
+                            'metadata': item.metadata,
+                            'score': getattr(item, 'score', 0)
+                        })
+                    else:
+                        combined_results.append(item)
+                
+                combined_results.extend(similarity_results)
                 self.logger.info(f"@utils.py Combined results count: {len(combined_results)}")
             except Exception as e:
                 self.logger.error(f"@utils.py Error combining results: {str(e)}")
                 combined_results = []
                 # Try to salvage results if possible
                 if raptor_results:
-                    combined_results = raptor_results
+                    combined_results = [
+                        {'content': doc.page_content, 'metadata': doc.metadata} 
+                        if hasattr(doc, 'page_content') else doc 
+                        for doc in raptor_results
+                    ]
                 elif similarity_results:
                     combined_results = similarity_results
+            
+            self.logger.debug(f"@utils.py Combined results after conversion: {combined_results}")
             
             try:
                 deduplicated_results = []
                 seen_urls = set()
                 
+                self.logger.info(f"@utils.py Deduplicating results")
+                
                 for result in combined_results:
                     try:
-                        url = result.get('metadata', {}).get('url')
-                        # Handle both string and list URLs
-                        if isinstance(url, list):
-                            url_key = tuple(url) if url else None  # Convert list to hashable tuple
-                        else:
-                            url_key = url
-                            
+                        # Safely extract URL from result whether it's a dict or has other structure
+                        url = None
+                        metadata = result.get('metadata', {}) if isinstance(result, dict) else getattr(result, 'metadata', {})
+                        
+                        if isinstance(metadata, dict):
+                            url = metadata.get('url')
+                        
+                        # Create a hashable key from URL
+                        url_key = None
+                        if url:
+                            if isinstance(url, list):
+                                # Convert nested lists to a flat tuple of strings
+                                flat_urls = []
+                                for item in url:
+                                    if isinstance(item, list):
+                                        flat_urls.extend(str(u) for u in item)
+                                    else:
+                                        flat_urls.append(str(item))
+                                url_key = tuple(flat_urls)
+                            elif isinstance(url, str):
+                                url_key = url
+                        
+                        # Use document ID as fallback if URL is not available
+                        if not url_key and isinstance(metadata, dict):
+                            doc_id = metadata.get('id')
+                            if doc_id:
+                                url_key = f"id:{doc_id}"
+                        
                         if url_key and url_key not in seen_urls:
                             seen_urls.add(url_key)
                             deduplicated_results.append(result)
+                        else:
+                            self.logger.debug(f"@utils.py Skipping duplicate result with URL key: {url_key}")
                     except Exception as e:
                         self.logger.error(f"@utils.py Error processing individual result: {str(e)}")
                         # Continue with next result
@@ -320,7 +380,10 @@ classwith task tracking and logging."""
                 # Sort by relevance score, defaulting to 0 if score is missing
                 sorted_results = sorted(
                     deduplicated_results, 
-                    key=lambda x: x.get('score', 0), 
+                    key=lambda x: (
+                        x.get('score', 0) if isinstance(x, dict) else 
+                        getattr(x, 'score', 0)
+                    ),
                     reverse=True
                 )
                 self.logger.info(f"@utils.py Successfully sorted results by relevance score")
@@ -356,9 +419,9 @@ classwith task tracking and logging."""
         # Perform RAPTOR search
         self.logger.info(f"@utils.py \nPerforming RAPTOR search")
         try:
-            raptor_results = await self.raptor_retriever.retrieve(query, top_k=5)
-        except:
-            self.logger.error(f"@utils.py Error during RAPTOR search")
+            raptor_results = self.raptor_retriever.retrieve(query, top_k=5)
+        except Exception as e:
+            self.logger.error(f"@utils.py Error during RAPTOR search {e}")
             raptor_results = []
         
         self.logger.info(f"@utils.py RAPTOR search returned {len(raptor_results)} results")
@@ -411,7 +474,7 @@ classwith task tracking and logging."""
                 self.logger.error(f"@utils.py Error processing search results: {str(e)}")
             
             try:
-                self.logger.info(f"@utils.py Updating ground sources with {len(extracted_urls)} URLs")
+                self.logger.info(f"@utils.py Updating ground sources with {len(extracted_urls)} URLs : {extracted_urls}")
                 self.update_ground_sources(extracted_urls)
                 self.logger.info(f"@utils.py Ground sources updated successfully")
             except Exception as e:

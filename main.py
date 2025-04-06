@@ -21,7 +21,7 @@ class Main:
         self.logger.info("Setting up Vector store @ Main")
         try:
             # initializing vector store for qdrant vector database
-            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=True)
+            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
             self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")

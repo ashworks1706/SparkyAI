@@ -48,7 +48,7 @@ from huggingface_hub import login
 from sentence_transformers import CrossEncoder
 import numpy as np
 from sklearn.cluster import KMeans
-from qdrant_client.http.models import Filter, FieldCondition, MatchAny
+from qdrant_client.http.models import Filter, FieldCondition, MatchAny, MatchValue
 
 ## Google 
 from google.protobuf.json_format import MessageToDict

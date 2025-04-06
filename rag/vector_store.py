@@ -316,6 +316,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         except Exception as e:
             self.logger.error(f"@vector_store.py Document evaluation error: {str(e)}")
             raise
+    
     def update_document_metadata(self, doc_id: str, metadata_update: dict) -> bool:
         """
         Update the metadata of a document in the vector store.
@@ -329,32 +330,61 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         """
         try:
             self.logger.info(f"@vector_store.py Updating metadata for document {doc_id}")
+            self.logger.debug(f"@vector_store.py Metadata update payload: {metadata_update}")
             
-            # Get the existing document to preserve its content
-            search_result = self.client.retrieve(
+            # Get all documents to find the one with the matching ID in metadata
+            all_docs = self.get_all_documents()
+            self.logger.info(f"@vector_store.py All documents retrieved: {len(all_docs)} documents")
+            
+            # Find the document with the matching ID in its metadata
+            target_doc = None
+            point_id = None
+            
+            # Get all points with their IDs directly from Qdrant
+            search_results = self.client.scroll(
                 collection_name=self.collection_name,
-                ids=[doc_id]
-            )
+                with_payload=True,
+                with_vectors=False,
+                limit=10000
+            )[0]  # First element contains the points
             
-            if not search_result:
-                self.logger.error(f"@vector_store.py Document {doc_id} not found for metadata update")
+            for point in search_results:
+                if point.payload.get("metadata", {}).get("id") == doc_id:
+                    point_id = point.id
+                    target_doc = point
+                    break
+            
+            if not target_doc:
+                self.logger.error(f"@vector_store.py Document with metadata ID {doc_id} not found")
                 return False
                 
-            existing_doc = search_result[0]
-            existing_metadata = existing_doc.payload.get("metadata", {})
+            try:
+                existing_metadata = target_doc.payload.get("metadata", {})
+                self.logger.debug(f"@vector_store.py Existing metadata: {existing_metadata}")
+                
+                # Update metadata while preserving existing fields
+                updated_metadata = {**existing_metadata, **metadata_update}
+                self.logger.debug(f"@vector_store.py Updated metadata: {updated_metadata}")
+                
+            except Exception as metadata_error:
+                self.logger.error(f"@vector_store.py Error processing metadata: {str(metadata_error)}")
+                self._log_detailed_error(metadata_error)
+                return False
             
-            # Update metadata while preserving existing fields
-            updated_metadata = {**existing_metadata, **metadata_update}
-            
-            # Perform the update operation
-            self.client.set_payload(
-                collection_name=self.collection_name,
-                payload={"metadata": updated_metadata},
-                points=[doc_id]
-            )
-            
-            self.logger.info(f"@vector_store.py Successfully updated metadata for document {doc_id}")
-            return True
+            # Perform the update operation using the point_id
+            try:
+                self.client.set_payload(
+                    collection_name=self.collection_name,
+                    payload={"metadata": updated_metadata},
+                    points=[point_id]
+                )
+                self.logger.info(f"@vector_store.py Successfully updated metadata for document {doc_id}")
+                return True
+                
+            except Exception as update_error:
+                self.logger.error(f"@vector_store.py Failed to set payload: {str(update_error)}")
+                self._log_detailed_error(update_error)
+                return False
             
         except Exception as e:
             self.logger.error(f"@vector_store.py Failed to update document metadata: {str(e)}", exc_info=True)

@@ -11,7 +11,7 @@ class ASUWebScraper:
         self.logged_in_driver= None
         self.chrome_options = Options()
         # if you want to start chrome supressed enable this comment
-        # self.chrome_options.add_argument('--headless')  
+        self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')

@@ -1,8 +1,4 @@
 from utils.common_imports import *
-import json
-import numpy as np
-from sklearn.cluster import KMeans
-from sentence_transformers import CrossEncoder
 
 class RaptorRetriever:
     def __init__(self, vector_store_class, logger, vector_store,num_levels=3, branching_factor=5):
@@ -175,39 +171,52 @@ class RaptorRetriever:
                                 self.logger.debug(f"@raptor.py Converted cluster_id {best_cluster} to {cluster_id}")
                             except (TypeError, ValueError) as e:
                                 self.logger.error(f"@raptor.py Failed to convert cluster_id: {str(e)}")
-                                return []
+                                cluster_id = best_cluster  # Try to use original value
                             
+                            # Try cluster-specific search first
                             try:
-                                # Use the correct filter parameter format that Qdrant expects
-                                self.logger.debug(f"@raptor.py Executing similarity search for cluster {cluster_id}")
-                                filter_dict = {"must": [{"key": "cluster_id", "match": {"value": cluster_id}}]}
+                                
+                                # Create a Qdrant filter for cluster_id
+                                
+                                filter_conditions = Filter(
+                                    must=[
+                                        FieldCondition(
+                                            key="metadata.cluster_id", 
+                                            match=MatchValue(value=cluster_id)
+                                        )
+                                    ]
+                                )
+                                
                                 initial_results = self.vector_store.similarity_search(
                                     query, 
                                     k=top_k,
-                                    filter=filter_dict
+                                    filter=filter_conditions
                                 )
                                 self.logger.info(f"@raptor.py Retrieved {len(initial_results)} initial results from cluster {cluster_id}")
                             except Exception as e:
                                 self.logger.error(f"@raptor.py Error during similarity search: {str(e)}")
-                                self.logger.warning(f"@raptor.py Falling back to default search without cluster filter")
+                                initial_results = []
+                            
+                            # If no results in specific cluster, try global search
+                            if not initial_results:
+                                self.logger.warning(f"@raptor.py No results found in cluster {cluster_id}, trying global search")
                                 try:
                                     initial_results = self.vector_store.similarity_search(query, k=top_k)
-                                    self.logger.info(f"@raptor.py Fallback retrieved {len(initial_results)} results")
+                                    self.logger.info(f"@raptor.py Global search retrieved {len(initial_results)} results")
                                 except Exception as e2:
-                                    self.logger.error(f"@raptor.py Fallback search also failed: {str(e2)}")
+                                    self.logger.error(f"@raptor.py Global search failed: {str(e2)}")
                                     return []
                             
                             if not initial_results:
-                                self.logger.warning(f"@raptor.py No results found in cluster {cluster_id}")
+                                self.logger.warning(f"@raptor.py No results found in either cluster or global search")
                                 return []
                                 
                             try:
                                 reranked_results = self.rerank_results(query, initial_results, top_k)
-                                self.logger.info(f"@raptor.py Returning {len(reranked_results)} reranked results")
+                                self.logger.info(f"@raptor.py Returning {len(reranked_results)} reranked results : {reranked_results[:5]}...")
                                 return reranked_results
                             except Exception as e:
                                 self.logger.error(f"@raptor.py Error during reranking: {str(e)}")
-                                self.logger.warning(f"@raptor.py Falling back to initial results")
                                 return initial_results[:top_k]
                         except Exception as e:
                             self.logger.error(f"@raptor.py Error during final retrieval: {str(e)}")
