@@ -16,7 +16,7 @@ class ASUDiscordBot:
             config: Optional bot configuration
         """
         self.logger= logger
-        self.logger.info("\nInitializing ASUDiscordBot")
+        self.logger.info(f"@discord_bot.py \nInitializing ASUDiscordBot")
         self.config = config or BotConfig(app_config)
         self.app_config= app_config
         self.agents = agents
@@ -52,7 +52,7 @@ class ASUDiscordBot:
             interaction: Discord interaction
             question: User's question
         """
-        self.logger.info(f"User {interaction.user.name} asked: {question}")
+        self.logger.info(f"@discord_bot.py User {interaction.user.name} asked: {question}")
         user = interaction.user
         user_id= interaction.user.id
         request_in_dm = isinstance(interaction.channel, discord.DMChannel)
@@ -134,22 +134,22 @@ class ASUDiscordBot:
             await self.utils.start_animation(task_message)
             response = await self.agents.process_question(question)
             await self._send_chunked_response(interaction, response)
-            self.logger.info(f"Successfully processed question for {interaction.user.name}")
+            self.logger.info(f"@discord_bot.py Successfully processed question for {interaction.user.name}")
             
             
             self.firestore.update_message("user_message", question)
             await self.vector_store.store_to_vector_db()
             document_id = await self.firestore.push_message()
-            self.logger.info(f"Message pushed with document ID: {document_id}")
+            self.logger.info(f"@discord_bot.py Message pushed with document ID: {document_id}")
 
         except asyncio.TimeoutError:
-            self.logger.error("Response generation timed out")
+            self.logger.error(f"@discord_bot.py Response generation timed out")
             await self._send_error_response(
                 interaction,
                 "Sorry, the response took too long to generate. Please try again."
             )
         except Exception as e:
-            self.logger.error(f"Error processing question at discord class: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Error processing question at discord class: {str(e)}", exc_info=True)
             await self._send_error_response(interaction)
 
     async def setup_verify_button(self):
@@ -167,9 +167,12 @@ class ASUDiscordBot:
             # Create buttons for each URL
             buttons = []
             for url in ground_sources:
-                domain = urlparse(url).netloc
-                button = discord.ui.Button(label=domain, url=url, style=discord.ButtonStyle.link)
-                buttons.append(button)
+                if isinstance(url, str):
+                    domain = urlparse(url).netloc
+                    button = discord.ui.Button(label=domain, url=url, style=discord.ButtonStyle.link)
+                    buttons.append(button)
+                else:
+                    self.logger.warning(f"Skipping non-string URL: {type(url)}")
             # Custom link for feedbacks
             button = discord.ui.Button(label="Feedback", url=f"https://discord.com/channels/{self.app_config.get_discord_target_guild_id()}/{self.app_config.get_discord_feedback_id()}", style=discord.ButtonStyle.primary)
             buttons.append(button)
@@ -194,7 +197,7 @@ class ASUDiscordBot:
             self.utils.clear_ground_sources()
 
         except Exception as e:
-            self.logger.error(f"Error sending response: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Error sending response: {str(e)}", exc_info=True)
             await self._send_error_response(interaction)
 
     async def _send_error_response(
@@ -214,7 +217,7 @@ class ASUDiscordBot:
                     ephemeral=True
                 )
         except Exception as e:
-            self.logger.error(f"Error sending error response: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Error sending error response: {str(e)}", exc_info=True)
 
     async def _handle_ready(self):
         try:
@@ -222,14 +225,14 @@ class ASUDiscordBot:
             self.logger.info(f'Bot is ready! Logged in as {self.client.user}')
             await self.setup_verify_button()  # Set up the verify button when the bot starts
         except Exception as e:
-            self.logger.error(f"Error in ready event: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Error in ready event: {str(e)}", exc_info=True)
 
     async def start(self) -> None:
         """Start the Discord bot"""
         try:
             await self.client.start(self.config.token)
         except Exception as e:
-            self.logger.error(f"Failed to start bot: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Failed to start bot: {str(e)}", exc_info=True)
             raise
 
     async def close(self) -> None:
@@ -237,4 +240,4 @@ class ASUDiscordBot:
         try:
             await self.client.close()
         except Exception as e:
-            self.logger.error(f"Error closing bot: {str(e)}", exc_info=True)
+            self.logger.error(f"@discord_bot.py Error closing bot: {str(e)}", exc_info=True)

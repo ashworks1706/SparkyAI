@@ -18,19 +18,19 @@ classwith task tracking and logging."""
             self.logger=logger
             self.raptor_retriever = RaptorRetriever(vector_store=self.vector_store_class,logger=self.logger)
             self.group_chat=group_chat
-            self.logger.info(f"Group Chat setup successfully {group_chat}")
+            self.logger.info(f"@utils.py Group Chat setup successfully {group_chat}")
 
-            self.logger.info("\nUtils instance initialized successfully")
+            self.logger.info(f"@utils.py \nUtils instance initialized successfully")
         except Exception as e:
-            self.logger.error(f"Failed to initialize Utils: {e}")
+            self.logger.error(f"@utils.py Failed to initialize Utils: {e}")
 
     async def start_animation(self, message):
         """Start the loading animation using Discord's built-in thinking indicator"""
         try:
             self.message = message
-            self.logger.info(f"Animation started for message: {message.id}")
+            self.logger.info(f"@utils.py Animation started for message: {message.id}")
         except Exception as e:
-            self.logger.error(f"Failed to start animation: {e}")
+            self.logger.error(f"@utils.py Failed to start animation: {e}")
 
     async def update_text(self, new_content):
         """Update text while maintaining task history"""
@@ -56,10 +56,10 @@ classwith task tracking and logging."""
             content="\n".join(display_lines)
             # Update the message content
             await self.message.edit(content=content)
-            self.logger.info(f"Message updated with {len(display_lines)} tasks")
+            self.logger.info(f"@utils.py Message updated with {len(display_lines)} tasks")
 
         except Exception as e:
-            self.logger.error(f"Failed to update text: {e}")
+            self.logger.error(f"@utils.py Failed to update text: {e}")
             # Optionally, you could re-raise the exception or handle it differently
 
     async def stop_animation(self, message=None, final_content=None,View=None):
@@ -70,22 +70,23 @@ classwith task tracking and logging."""
                 if View:
                     await message.edit(content=final_content,view=View)
                 await message.edit(content=final_content)
-                self.logger.info(f"Final content set: {final_content}")
+                self.logger.info(f"@utils.py Final content set: {final_content}")
 
             # Reset internal state
             self.tasks = []
             self.current_content = ""
             self.message = None
-            self.logger.info("\nAnimation stopped and state reset")
+            self.logger.info(f"@utils.py \nAnimation stopped and state reset")
 
         except Exception as e:
-            self.logger.error(f"Error stopping animation: {e}")
+            self.logger.error(f"@utils.py Error stopping animation: {e}")
 
     def format_search_results(self, engine_context):
         """Format search results into a readable string."""
         if not engine_context:
             return "No search results found."
         try:
+            self.logger.info(f"@utils.py \nFormatting search results")
             formatted_results = "\n\n"
             if isinstance(engine_context, str):
                 # If engine_context is already formatted, return it as is
@@ -118,31 +119,59 @@ classwith task tracking and logging."""
             return formatted_results
 
         except Exception as e:
-            self.logger.error(f"Error formatting search results: {str(e)}")
+            self.logger.error(f"@utils.py Error formatting search results: {str(e)}")
             return "Error formatting search results."
 
     async def perform_web_search(self,search_url:str =None,  optional_query : str = None, doc_title : str =None, doc_category : str = None):
         try:
             # Initial search
-            self.logger.info("\nPerforming Web Search")
- 
-            documents = await self.asu_scraper.engine_search(search_url, optional_query)
+            self.logger.info(f"@utils.py \nPerforming Web Search")
 
+            try:
+                documents = await self.asu_scraper.engine_search(search_url, optional_query)
+            except Exception as e:
+                self.logger.error(f"@utils.py Error during web search: {str(e)}")
+                raise ValueError("Failed to perform web search")
             if not documents:
                 raise ValueError("No documents found matching the query")
             
             self.logger.info(documents)
             
-            self.logger.info("\nPreprocessing documents...")
+            self.logger.info(f"@utils.py \nPreprocessing documents...")
             
-            processed_docs = await self.asu_data_processor.process_documents(
-                documents=documents, 
-                search_context= self.group_chat.get_text(),
-                title = doc_title, category = doc_category
-            )
-
-            store = self.vector_store_class.queue_documents(processed_docs)
-
+            try:
+                
+                processed_docs = await self.asu_data_processor.process_documents(
+                    documents=documents, 
+                    search_context= self.group_chat.get_text(),
+                    title = doc_title, category = doc_category
+                )
+            except Exception as e:
+                self.logger.error(f"@utils.py Error during document processing: {str(e)}")
+                raise ValueError("Failed to process documents")
+            
+            self.logger.info(f"@utils.py \nDocuments processed successfully")
+            
+            self.logger.info(f"@utils.py Processed {len(processed_docs)} documents")
+            
+            try:
+                # Update RAPTOR tree with new documents
+                self.logger.info(f"@utils.py \nUpdating RAPTOR tree with new documents")
+                self.raptor_retriever.update_raptor_tree(processed_docs)
+            except Exception as e:  
+                self.logger.error(f"@utils.py Error updating RAPTOR tree: {str(e)}")
+                raise ValueError("Failed to update RAPTOR tree")
+            
+            self.logger.info(f"@utils.py \nStoring documents in vector store")
+            try:
+                store = self.vector_store_class.queue_documents(processed_docs)
+            except Exception as e:
+                self.logger.error(f"@utils.py Error storing documents in vector store: {str(e)}")
+                raise ValueError("Failed to store documents in vector store")
+            
+            
+            self.logger.info(f"@utils.py \nDocuments stored successfully")
+            
             results = []
             extracted_urls=[]
             for doc in processed_docs:
@@ -156,7 +185,7 @@ classwith task tracking and logging."""
                 extracted_urls.extend(sources)
 
                 results.append(doc_info)
-
+            
             self.update_ground_sources(extracted_urls)
 
             results = self.format_search_results(results)
@@ -164,15 +193,15 @@ classwith task tracking and logging."""
             return results
 
         except Exception as e:
-            self.logger.error(f"Error in web search: {str(e)}")
+            self.logger.error(f"@utils.py Error in web search: {str(e)}")
             return "No results found on web"
        
     async def perform_similarity_search(self, query: str, categories: list):
         try:
-            self.logger.info(f"Action Model: Performing similarity search with query: {query}")
+            self.logger.info(f"@utils.py Action Model: Performing similarity search with query: {query}")
             self.vector_store = self.vector_store.get_vector_store()
             if not self.vector_store:
-                self.logger.info("\nVector Store not initialized")
+                self.logger.info(f"@utils.py \nVector Store not initialized")
                 raise ValueError("Vector store not properly initialized")
 
             # Correct filter construction using Qdrant's Filter class
@@ -197,7 +226,7 @@ classwith task tracking and logging."""
 
             # Check if results are empty
             if not results:
-                self.logger.info("\nNo documents found in vector store")
+                self.logger.info(f"@utils.py \nNo documents found in vector store")
                 return None
 
             documents = []
@@ -211,11 +240,11 @@ classwith task tracking and logging."""
                 }
                 documents.append(doc_info)
 
-            self.logger.info(f"Retrieved {len(documents)} documents from vector store")
+            self.logger.info(f"@utils.py Retrieved {len(documents)} documents from vector store")
             return documents
 
         except Exception as e:
-            self.logger.error(f"Error during similarity search: {str(e)}")
+            self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
             return None
 
     def merge_search_results(self, raptor_results, similarity_results):
@@ -238,13 +267,33 @@ classwith task tracking and logging."""
     async def perform_database_search(self, query: str, categories: list):
         self.cached_queries.append(query)
         
+        # check whether there are documents present on database or not else skip and return no documents in database
+        
+        if self.vector_store.get_document_count() == 0:
+            self.logger.info(f"@utils.py \nNo documents found in database")
+            return "No documents found in database"
+        
         # Perform RAPTOR search
-        raptor_results = await self.raptor_retriever.retrieve(query, top_k=5)
+        self.logger.info(f"@utils.py \nPerforming RAPTOR search")
+        try:
+            raptor_results = await self.raptor_retriever.retrieve(query, top_k=5)
+        except:
+            self.logger.error(f"@utils.py Error during RAPTOR search")
+            raptor_results = []
         
-        # Perform similarity search
-        similarity_results = await self.perform_similarity_search(query, categories)
+        self.logger.info(f"@utils.py RAPTOR search returned {len(raptor_results)} results")
         
+        self.logger.info(f"@utils.py \nPerforming similarity search")    
+        
+        try:
+            # Perform similarity search
+            similarity_results = await self.perform_similarity_search(query, categories)
+        except:
+            self.logger.error(f"@utils.py Error during similarity search")
+            similarity_results = []
 
+        self.logger.info(f"@utils.py Similarity search returned {len(similarity_results)} results")
+        
         # Combine and deduplicate results
         combined_results = self.merge_search_results(raptor_results, similarity_results)
         

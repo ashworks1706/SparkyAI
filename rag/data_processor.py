@@ -8,12 +8,6 @@ class DataPreprocessor:
                  max_processing_attempts: int = 3,  logger=False):
         """Initialize DataPreprocessor with configurable text splitting and retry mechanism."""
         self.max_processing_attempts = max_processing_attempts
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=len,
-            separators=["\n\n", "\n", " ", ""]
-        )
         self.doc_title = None
         self.doc_category = None
         self.asu_data_agent = DataModel( app_config, genai,logger)
@@ -26,7 +20,7 @@ class DataPreprocessor:
 
         self.logger= logger
 
-        self.logger.info(f"DataPreprocessor initialized with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
+        self.logger.info(f"@data_processor.py DataPreprocessor initialized with chunk_size={chunk_size}, chunk_overlap={chunk_overlap}")
 
     async def process_documents(self, 
                                 documents: List[Dict[str, str]], 
@@ -34,40 +28,40 @@ class DataPreprocessor:
                                 title: str = None, 
                                 category: str = None) -> List[Document]:
         """Process documents with advanced error handling and multiple retry mechanism."""
-        self.logger.info(f"Processing documents with title={title} category={category}")
+        self.logger.info(f"@data_processor.py Processing documents with title={title} category={category}")
         self.doc_title = title
         self.doc_category = category
 
         for attempt in range(self.max_processing_attempts):
             try:
                 start_time = time.time()
-                self.logger.info(f"Starting document processing for {len(documents)} documents")
+                self.logger.info(f"@data_processor.py Starting document processing for {len(documents)} documents")
                 try:
                     consolidated_text , refined_title = await self._consolidate_documents(documents, search_context)
                     self.doc_title = refined_title != "Undefined" and refined_title or title
                 except Exception as e:
-                    self.logger.error(f"Document consolidation failed: {str(e)}")
+                    self.logger.error(f"@data_processor.py Document consolidation failed: {str(e)}")
                     raise
                 
                 try:
                     document = self._create_processed_document(consolidated_text, documents)
                 except Exception as e:
-                    self.logger.error(f"Document creation failed: {str(e)}")
+                    self.logger.error(f"@data_processor.py Document creation failed: {str(e)}")
                     raise
                 try:
                     processed_documents = self._split_and_annotate_document(document)
                 except  Exception as e:
-                    self.logger.error(f"Document splitting failed: {str(e)}")
+                    self.logger.error(f"@data_processor.py Document splitting failed: {str(e)}")
                     raise
                 
                 processing_time = time.time() - start_time
-                self.logger.info(f"Document processing completed in {processing_time:.2f} seconds. "
+                self.logger.info(f"@data_processor.py Document processing completed in {processing_time:.2f} seconds. "
                             f"Generated {len(processed_documents)} document chunks.")
 
                 return processed_documents
 
             except Exception as e:
-                self.logger.error(f"Document processing attempt {attempt + 1} failed: {str(e)}")
+                self.logger.error(f"@data_processor.py Document processing attempt {attempt + 1} failed: {str(e)}")
                 if attempt == self.max_processing_attempts - 1:
                     return await self._generate_fallback_document(documents, e)
 
@@ -108,9 +102,9 @@ class DataPreprocessor:
             # Use DataModel to refine the combined content
             refine_result = await self.asu_data_agent.refine(search_context, all_content)
             refined_content, refined_title = refine_result
-            self.logger.info("Combined text refinement successful")
+            self.logger.info(f"@data_processor.py Combined text refinement successful")
         except Exception as e:
-            self.logger.error(f"Combined text refinement failed: {str(e)}")
+            self.logger.error(f"@data_processor.py Combined text refinement failed: {str(e)}")
             refined_content = all_content  # Fallback to original combined content if refinement fails
 
         return refined_content.strip(), refined_title
@@ -152,8 +146,18 @@ class DataPreprocessor:
             })
             return [document]
         else:
+            # Use SemanticTextSplitter to avoid splitting paragraphs abruptly
+
+            # Create semantic splitter (adjust model as needed)
+            semantic_splitter = SemanticChunker(
+                embeddings=OpenAIEmbeddings(),
+                breakpoint_threshold=0.5,  # Adjust as needed
+                chunk_size=1024,
+                chunk_overlap=200
+            )
+            
             # Proceed with splitting if the document is long enough
-            splits = self.text_splitter.split_documents([document])
+            splits = semantic_splitter.split_documents([document])
 
             for i, split in enumerate(splits):
                 split.metadata.update({

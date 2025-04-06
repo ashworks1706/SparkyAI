@@ -32,7 +32,8 @@ from bs4 import BeautifulSoup  # For web scraping
 from unidecode import unidecode  # For Unicode to ASCII conversion
 
 # Lang Chain Imports
-from langchain.text_splitter import RecursiveCharacterTextSplitter 
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_openai import OpenAIEmbeddings 
 from langchain_qdrant import  QdrantVectorStore 
 from langchain_huggingface import HuggingFaceEmbeddings
 # from langchain_community.document_loaders import WebBaseLoader

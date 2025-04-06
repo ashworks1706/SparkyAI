@@ -22,7 +22,7 @@ class Shuttle_Status_Agent_Tools:
         self.logger.info(shuttle_route)
         
         if len(shuttle_route) == 1:
-            self.logger.info("\nOnly one route")
+            self.logger.info("@shuttle_agent_tools.py \nOnly one route")
             route = next(iter(shuttle_route))
             return await self.utils.perform_web_search(search_url, optional_query=route,doc_title=doc_title, doc_category ="shuttles_status")
 
@@ -31,7 +31,7 @@ class Shuttle_Status_Agent_Tools:
         try:
             for route in shuttle_route:
                 result += await self.utils.perform_web_search(search_url, optional_query=route,doc_title=doc_title, doc_category ="shuttles_status")
-            self.logger.info("\nDone")
+            self.logger.info("@shuttle_agent_tools.py \nDone")
             return result
         except Exception as e:
             return f"Error performing shuttle search: {str(e)}"

@@ -1,8 +1,10 @@
 from utils.common_imports import *
 
 class AppConfig:
+    # This class is responsible for loading and managing the application configuration.
     def __init__(self, config_file='config/appConfig.json'):
         try:
+            print(f"Loading config from {config_file}")
             with open(config_file, 'r') as file:
                 config_data = json.load(file)
         except FileNotFoundError:
@@ -56,6 +58,8 @@ class AppConfig:
         self.student_jobs_agent_instruction = config_data.get('STUDENT_JOBS_AGENT_INSTRUCTION', '')
         self.courses_agent_prompt = config_data.get('COURSES_AGENT_PROMPT', '')
         self.courses_agent_instruction = config_data.get('COURSES_AGENT_INSTRUCTION', '')
+        
+        print("Config loaded successfully @ AppConfig")
 
     def get_huggingfacehub_api_token(self):
         return os.environ['HUGGINGFACEHUB_API_TOKEN']

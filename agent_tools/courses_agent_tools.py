@@ -140,7 +140,7 @@ class Courses_Agent_Tools:
                 if value is not None and value != ''
             )
         except Exception as e:
-            self.logger.error(f"Error constructing search URL: {e}", exc_info=True)
+            self.logger.error(f"@courses_agent_tools.py Error constructing search URL: {e}", exc_info=True)
             return "An error occurred while constructing the search URL. Please check the logs for more details."
         
         doc_title=""
@@ -165,8 +165,8 @@ class Courses_Agent_Tools:
             doc_title = None
         try:
             result = await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
-            self.logger.info(f"Web search successful for URL: {search_url}")
+            self.logger.info(f"@courses_agent_tools.py Web search successful for URL: {search_url}")
             return result
         except Exception as e:
-            self.logger.error(f"Error during web search for URL {search_url}: {e}", exc_info=True)
+            self.logger.error(f"@courses_agent_tools.py Error during web search for URL {search_url}: {e}", exc_info=True)
             return "An error occurred while performing the web search. Please check the logs for more details."

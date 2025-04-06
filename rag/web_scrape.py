@@ -23,7 +23,7 @@ class ASUWebScraper:
 
         self.logger= logger
         
-        # logger.info("Enter Chrome binary location")
+        # logger.info(" @web_scrape.py Enter Chrome binary location")
         logger.info('/usr/bin/google-chrome-stable # Standard Linux path')
         logger.info('/mnt/c/Program Files/Google/Chrome/Application/chrome.exe # Standard WSL path')
         
@@ -46,13 +46,13 @@ class ASUWebScraper:
             ).decode().strip()
             driver_version = driver_out.split()[1]
             
-            logger.info(f"Chrome: {chrome_version}, Chromedriver: {driver_version}")
-            
+            logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
+            # bypass this by commenting out the next line
             if chrome_version != driver_version:
-                raise RuntimeError(f"Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
-            logger.error(f"Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
+            logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
             raise
 
         
@@ -73,7 +73,7 @@ class ASUWebScraper:
             pass
         else:
             try:
-                self.logger.info("\nHandling feedback popup")
+                self.logger.info(" @web_scrape.py \nHandling feedback popup")
                 # Wait for the popup to be present
                 popup = WebDriverWait(driver, 5).until(
                     EC.presence_of_element_located((By.CLASS_NAME, "fsrDeclineButton"))
@@ -81,7 +81,7 @@ class ASUWebScraper:
                 
                 # Click the "No thanks" button
                 popup.click()
-                self.logger.info("\nFeedback popup clicked")
+                self.logger.info(" @web_scrape.py \nFeedback popup clicked")
                 # Optional: Wait for popup to disappear
                 WebDriverWait(driver, 5).until(
                     EC.invisibility_of_element_located((By.ID, "fsrFullScreenContainer"))
@@ -97,12 +97,12 @@ class ASUWebScraper:
             pass
         else:
             try:
-                self.logger.info("\nHandling feedback popup")
+                self.logger.info(" @web_scrape.py \nHandling feedback popup")
                 cookie_button = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.ID, "rcc-confirm-button"))
                 )
                 cookie_button.click()
-                self.logger.info("\nSuccessfully clciked on cookie button")
+                self.logger.info(" @web_scrape.py \nSuccessfully clciked on cookie button")
             except:
                 pass
 
@@ -158,20 +158,18 @@ class ASUWebScraper:
             return True
         
         except Exception as e:
-            self.logger.error(f"Login failed: {str(e)}")
+            self.logger.error(f"@web_scrape.py Login failed: {str(e)}")
             return False
         
-    
-    
     
     async def scrape_content(self, url: str, query_type: str = None, max_retries: int = 3, selenium :bool = False, optional_query:str=None) -> bool:
         """Scrape content using Jina.ai"""
         
-        self.logger.info(f"Scraping url : {url} ")
-        self.logger.info(f"query_type : {query_type} ")
-        self.logger.info(f"max_retries : {max_retries} ")
-        self.logger.info(f"selenium required : {selenium} ")
-        self.logger.info(f"optional query : {optional_query} ")
+        self.logger.info(f"@web_scrape.py Scraping url : {url} ")
+        self.logger.info(f"@web_scrape.py query_type : {query_type} ")
+        self.logger.info(f"@web_scrape.py max_retries : {max_retries} ")
+        self.logger.info(f"@web_scrape.py selenium required : {selenium} ")
+        self.logger.info(f"@web_scrape.py optional query : {optional_query} ")
         
         await self.utils.update_text("Understanding Results...")
 
@@ -180,7 +178,7 @@ class ASUWebScraper:
         
         # Ensure url is a string and not empty
         if not isinstance(url, str) or not url:
-            self.logger.error(f"Invalid URL: {url}")
+            self.logger.error(f"@web_scrape.py Invalid URL: {url}")
             return False
         
         # Validate and format the URL
@@ -190,16 +188,16 @@ class ASUWebScraper:
                 url = f"https://{url}"
                 parsed_url = urlparse(url)
             if not parsed_url.netloc:
-                self.logger.error(f"Malformed URL: {url}")
+                self.logger.error(f"@web_scrape.py Malformed URL: {url}")
                 return False
         except Exception as e:
-            self.logger.error(f"Error parsing URL: {url}, Exception: {str(e)}")
+            self.logger.error(f"@web_scrape.py Error parsing URL: {url}, Exception: {str(e)}")
             return False
         
         if url in self.visited_urls:
             return False
         
-        
+        self.logger.info(f"@web_scrape.py Visiting URL: {url}")
         self.visited_urls.add(url)
         
         if not selenium:
@@ -220,9 +218,9 @@ class ASUWebScraper:
                             })
                         return True
                     else:
-                        self.logger.info("Langchain method failed")
+                        self.logger.info(" @web_scrape.py Langchain method failed")
                 except Exception as e:
-                    self.logger.error(f"Error fetching content from {url}: {str(e)}")
+                    self.logger.error(f"@web_scrape.py Error fetching content from {url}: {str(e)}")
                     await asyncio.sleep(8) 
                     continue  
                 else:
@@ -231,13 +229,13 @@ class ASUWebScraper:
                     response.raise_for_status()
                     
                     text = response.text
-                    self.logger.info(f"Raw text response for https://r.jina.ai/{url}\n{text}")
+                    self.logger.info(f"@web_scrape.py Raw text response for https://r.jina.ai/{url}\n{text}")
                     
                     if "LOADING..." in text.upper() or "requires javascript to be enabled" in text.lower() or "supported browser" in text.lower() or "captcha" in text.lower():
-                        self.logger.warning(f"LOADING response detected for {url}. Retry attempt {attempt + 1}")
+                        self.logger.warning(f"@web_scrape.py LOADING response detected for {url}. Retry attempt {attempt + 1}")
                         await asyncio.sleep(8)  # Wait before retrying
                         continue
-                    self.logger.info("Scrarping successfull")
+                    self.logger.info(" @web_scrape.py Scrarping successfull")
                     if text and len(text.strip()) > 50:
                         self.text_content.append({
                             'content': text,
@@ -249,12 +247,10 @@ class ASUWebScraper:
                         
                         self.logger.info(self.text_content[-1])
                         return True
-                    
-            return False
-        
-        elif 'postings' in url:
+                            
+        elif 'postings' in url and selenium:
 
-                
+            self.logger.info(" @web_scrape.py \nLogin to Handshake")
             # Navigate to Handshake job postings
             self.logged_in_self.driver.get(url)
             
@@ -266,14 +262,14 @@ class ASUWebScraper:
             if optional_query:
                 query_params = parse_qs(optional_query)
                 
-                
+                self.logger.info(f"@web_scrape.py Parsed query parameters: {query_params}")
                 # Search Bar Query
                 if 'search_bar_query' in query_params:
                     search_input = wait.until(
                         EC.presence_of_element_located((By.XPATH, "//input[@role='combobox']"))
                     )
                     search_input.send_keys(query_params['search_bar_query'][0])
-                    self.logger.info("\nSuccessfully entered search_bar_query")
+                    self.logger.info(" @web_scrape.py \nSuccessfully entered search_bar_query")
                 
                 
                 if 'job_location' in query_params:
@@ -291,7 +287,7 @@ class ASUWebScraper:
                     
                     location_input.clear()
                     location_input.send_keys(job_location)
-                    self.logger.info("\n Successfully entered job_location")
+                    self.logger.info(" @web_scrape.py \n Successfully entered job_location")
 
                     try:
                         wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mapbox-autocomplete-results")))
@@ -305,9 +301,9 @@ class ASUWebScraper:
                         
                         first_location.click()
                         
-                        self.logger.info(f"Selected location: {job_location}")
+                        self.logger.info(f"@web_scrape.py Selected location: {job_location}")
                     except Exception as e:
-                        self.logger.error(f"Error job location: {e}")
+                        self.logger.error(f"@web_scrape.py Error job location: {e}")
 
                 all_filters_button = wait.until(
                     EC.element_to_be_clickable((
@@ -317,7 +313,7 @@ class ASUWebScraper:
                 )
                 all_filters_button.click()
                 
-                self.logger.info("\nClicked on all filters")
+                self.logger.info(" @web_scrape.py \nClicked on all filters")
                                     
                 
                 if 'job_type' in query_params:
@@ -327,22 +323,25 @@ class ASUWebScraper:
                     # Function to force click using JavaScript with multiple attempts
                     def force_click_element(driver, element, max_attempts=3):
                         for attempt in range(max_attempts):
-                            self.logger.info("\nAttempting to force click")
+                            self.logger.info(" @web_scrape.py \nAttempting to force click")
                             try:
                                 # Try different click methods
                                 self.driver.execute_script("arguments[0].click();", element)
                                 time.sleep(0.5)  # Short pause to allow for potential page changes
+                                self.logger.info(" @web_scrape.py \nForce click successful")
                                 return True
                             except Exception:
                                 # Try alternative click methods
                                 try:
                                     element.click()
+                                    self.logger.info(" @web_scrape.py \nElement clicked successfully")
                                 except Exception:
                                     # Last resort: move and click
                                     try:
                                         ActionChains(self.driver).move_to_element(element).click().perform()
+                                        self.logger.info(" @web_scrape.py \nMoved and clicked successfully")
                                     except Exception:
-                                        continue
+                                        raise Exception(f"Failed to click element after {max_attempts} attempts")
                         return False
                     
                     # Check if the job type is in the first level of buttons (Full-Time, Part-Time)
@@ -358,9 +357,9 @@ class ASUWebScraper:
                                 ))
                             )
                             force_click_element(self.driver, job_type_button)
-                            self.logger.info("\nSelect job type")
+                            self.logger.info(" @web_scrape.py \nSelect job type")
                         except Exception:
-                            pass
+                            raise Exception(f"Failed to click job type button: {job_type}")
                     else:
                         # For nested job types, click More button first
                         try:
@@ -371,7 +370,7 @@ class ASUWebScraper:
                                 ))
                             )
                             force_click_element(self.driver, more_button)
-                            self.logger.info("\nClicked more button")
+                            self.logger.info(" @web_scrape.py \nClicked more button")
                             
                             # Wait and force click the specific job type button from nested options
                             job_type_button = wait.until(
@@ -381,12 +380,12 @@ class ASUWebScraper:
                                 ))
                             )
                             force_click_element(self.driver, job_type_button)
-                            self.logger.info("\nSelect Job type")
+                            self.logger.info(" @web_scrape.py \nSelect Job type")
                         except Exception:
-                            pass
+                            raise Exception(f"Failed to click job type button: {job_type}")
                     
                 
-                
+                self.logger.info(" @web_scrape.py \nClicked on all filters")
                 # Wait for the Show results button to be clickable
                 show_results_button = wait.until(
                     EC.element_to_be_clickable((
@@ -401,9 +400,7 @@ class ASUWebScraper:
                 # Force click the Show results button using JavaScript
                 self.driver.execute_script("arguments[0].click();", show_results_button)
 
-
-
-
+                self.logger.info(" @web_scrape.py \nClicked on show results button")
 
                 try:
                     # Wait for job cards to be present using data-hook
@@ -412,13 +409,12 @@ class ASUWebScraper:
                             (By.CSS_SELECTOR, "[data-hook='jobs-card']")
                         )
                     )
-                    text_content = []  # Limit to top 3 jobs
-                    
+                    self.logger.info(" @web_scrape.py \nJob cards loaded")                    
                     for job_card in job_cards[:3]:
                         full_job_link = job_card.get_attribute('href')
 
                         self.driver.execute_script("arguments[0].click();", job_card)
-                        self.logger.info("\nClicked Job Card")
+                        self.logger.info(" @web_scrape.py \nClicked Job Card")
                         
                         # Wait for preview panel to load using data-hook
                         wait.until(
@@ -432,7 +428,7 @@ class ASUWebScraper:
                             EC.element_to_be_clickable((By.CSS_SELECTOR, "button.view-more-button"))
                         )
                         self.driver.execute_script("arguments[0].click();", more_button)
-                        self.logger.info("\nClicked 'More' button")
+                        self.logger.info(" @web_scrape.py \nClicked 'More' button")
 
                         
                         time.sleep(1)
@@ -458,7 +454,8 @@ class ASUWebScraper:
                         if unwanted_div:
                             unwanted_div.decompose()
                         
-
+                        self.logger.info(" @web_scrape.py \nConverted HTML to BeautifulSoup object")
+                        
                         markdown_content = h.handle(str(soup))
                         
                         # remove image links
@@ -475,6 +472,8 @@ class ASUWebScraper:
                         
                         markdown_content = markdown_content.replace('/',' ')
                         
+                        self.logger.info(" @web_scrape.py \nConverted HTML to Markdown " )
+                        
                         self.text_content.append({
                             'content': markdown_content,
                             'metadata': {
@@ -482,18 +481,21 @@ class ASUWebScraper:
                                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             }
                         })
+                        self.logger.info(" @web_scrape.py \nAppended content to text_content")
                 except Exception as e:
-                        self.logger.error(f"Error html to makrdown conversion :  {e}")
+                        self.logger.error(f"@web_scrape.py Error html to makrdown conversion :  {e}")
             
             return True
         
-        elif 'catalog.apps.asu.edu' in url:
+        elif 'catalog.apps.asu.edu' in url and selenium:
             self.driver.get(url)
+            self.logger.info(" @web_scrape.py \nLogin to ASU Catalog")
             
             self.handle_cookie(self.driver)
             course_elements = WebDriverWait(self.driver, 10).until(
                 EC.presence_of_all_elements_located((By.CLASS_NAME, "class-accordion"))
             )
+            self.logger.info(" @web_scrape.py \nCourse elements loaded")
 
             detailed_courses = []
             
@@ -504,7 +506,7 @@ class ASUWebScraper:
                     
                     # Use JavaScript click to handle potential interception
                     self.driver.execute_script("arguments[0].click();", course_title_element)
-                    self.logger.info("\nSuccessfully clicked on the course")
+                    self.logger.info(" @web_scrape.py \nSuccessfully clicked on the course")
 
                     # Wait for dropdown to load
                     details_element = WebDriverWait(self.driver, 10).until(
@@ -528,7 +530,7 @@ class ASUWebScraper:
                         location_link = location_element.find_element(By.TAG_NAME, "a")
                         course_info['location'] = location_link.text
                     except Exception as e:
-                        self.logger.info(f"Error in web_scrap course location : {e}")
+                        self.logger.info(f"@web_scrape.py Error in web_scrap course location : {e}")
                         course_info['location'] = 'N/A'
                     try:
                         course_info['number'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Number')]/following-sibling::p").text
@@ -602,11 +604,14 @@ class ASUWebScraper:
                         course_info['reserved_seats'] = reserved_groups
                     except:
                         course_info['reserved_seats'] = []
+                        self.logger.info(" @web_scrape.py \nNo reserved seats information found")
                     
                     detailed_courses.append(course_info)
+                    self.logger.info(f"@web_scrape.py \nAppended course details: {course_info}")
                     
                 except Exception as e:
-                    self.logger.error(f"Error processing course {e}")
+                    self.logger.error(f"@web_scrape.py Error processing course {e}")
+                    raise e
 
                     
                 formatted_courses = []
@@ -645,15 +650,16 @@ class ASUWebScraper:
                                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             }
                         })
-                    self.logger.info(f"Appended {self.text_content[-1]}")
+                    self.logger.info(f"@web_scrape.py Appended {self.text_content[-1]}")
                     formatted_courses.append(course_string)
         
-        elif 'search.lib.asu.edu' in url:
+        elif 'search.lib.asu.edu' in url and selenium:
             self.driver.get(url)
             time.sleep(1)
+            self.logger.info(" @web_scrape.py \nLogin to ASU Library")
             book_results = []
             self.handle_feedback_popup(self.driver)
-
+            self.logger.info(" @web_scrape.py \nHandling feedback popup")
             try:
                 # Find and click on the first book title link
                 first_book_link = WebDriverWait(self.driver, 10).until(
@@ -826,7 +832,7 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
-                    print("\nAppended book details: %s" % self.text_content[-1])
+                    self.logger("\nAppended book details: %s" % self.text_content[-1])
 
                 return True
 
@@ -834,11 +840,13 @@ class ASUWebScraper:
                 print(f"\nFailed to scrape book details: {e}")
                 return False
      
-        elif 'lib.asu.edu' in url:
+        elif 'lib.asu.edu' in url and selenium:
+            self.logger.info(" @web_scrape.py \nLogin to ASU Library Hours")
             def extract_query_parameters(query):
                 pattern = r'(\w+)=([^&]*)'
                 matches = re.findall(pattern, query)
                 parameters = [{param: value} for param, value in matches]
+                self.logger.info(f"@web_scrape.py Extracted parameters: {parameters}")
                 return parameters
 
             # Classify the extracted parameters into lists
@@ -856,13 +864,14 @@ class ASUWebScraper:
                         library_names.append(value.replace("['", "").replace("']", ""))
                     if key == 'date' and value != 'None':
                         dates.append(value.replace("['","").replace("']",""))
-            
+            self.logger.info(f"@web_scrape.py Library names: {library_names}")
             try:
                 # Navigate to library hours page
                 try:
                     self.self.driver.get(url)
+                    self.logger.info(f"@web_scrape.py Navigated to URL: {url}")
                 except Exception as e:
-                    self.logger.error(f"Error navigating to URL: {e}")
+                    self.logger.error(f"@web_scrape.py Error navigating to URL: {e}")
                     return f"Error navigating to URL: {str(e)}"
 
                 # Wait for page to load
@@ -870,8 +879,9 @@ class ASUWebScraper:
                     WebDriverWait(self.driver, 10).until(
                         EC.presence_of_element_located((By.CLASS_NAME, "s-lc-whw"))
                     )
+                    self.logger.info(" @web_scrape.py Page loaded successfully")
                 except Exception as e:
-                    self.logger.error(f"Error waiting for page to load: {e}")
+                    self.logger.error(f"@web_scrape.py Error waiting for page to load: {e}")
                     return f"Error waiting for page to load: {str(e)}"
                 
                 # Handle cookie popup
@@ -880,8 +890,9 @@ class ASUWebScraper:
                         EC.element_to_be_clickable((By.CLASS_NAME, "accept-btn"))
                     )
                     cookie_button.click()
+                    self.logger.info(" @web_scrape.py Cookie popup handled successfully")
                 except Exception as e:
-                    self.logger.warning(f"Error handling cookie popup: {e}")
+                    self.logger.warning(f"@web_scrape.py Error handling cookie popup: {e}")
 
                 # Map library names to their row identifiers
                 library_map = {
@@ -892,7 +903,7 @@ class ASUWebScraper:
                     "Polytechnic Campus - Library": "Polytechnic"
                 }
 
-
+                self.logger.info(f"@web_scrape.py Library map: {library_map}")
                 # Process each library and date
                 for library_name in library_names: 
                     
@@ -907,21 +918,21 @@ class ASUWebScraper:
                                     By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
                                 )
                             except Exception as e:
-                                self.logger.error(f"Error finding date headers: {e}")
+                                self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
                                 return f"Error finding date headers: {str(e)}"
                             
                             # Extract text from date headers
                             try:
                                 header_dates = [header.text.strip() for header in date_headers]
                             except Exception as e:
-                                self.logger.error(f"Error extracting text from date headers: {e}")
+                                self.logger.error(f"@web_scrape.py Error extracting text from date headers: {e}")
                                 return f"Error extracting text from date headers: {str(e)}"
                             
                             # Remove line breaks and additional whitespace
                             try:
                                 header_dates = [date.lower().split('\n')[0] for date in header_dates]
                             except Exception as e:
-                                self.logger.error(f"Error processing date headers: {e}")
+                                self.logger.error(f"@web_scrape.py Error processing date headers: {e}")
                                 return f"Error processing date headers: {str(e)}"
                                 
                             # Check if requested date is in the list of header dates
@@ -933,69 +944,71 @@ class ASUWebScraper:
                                     next_button.click()
                                     time.sleep(0.2)  # Allow page to load
                                 except Exception as e:
-                                    self.logger.error(f"Error clicking next button: {e}")
+                                    self.logger.error(f"@web_scrape.py Error clicking next button: {e}")
                                     return f"Error clicking next button: {str(e)}"
                             
                             iterations += 1
                         
                         # Optional: self.logger.info debug information
-                        self.logger.info(f"Available Dates: {header_dates}")
-                        self.logger.info(f"Requested Date: {date}")
-                        self.logger.info(f"Date Present: {is_date_present}")
+                        self.logger.info(f"@web_scrape.py Available Dates: {header_dates}")
+                        self.logger.info(f"@web_scrape.py Requested Date: {date}")
+                        self.logger.info(f"@web_scrape.py Date Present: {is_date_present}")
                         
                     
-                        self.logger.info("\nhello")
+                        self.logger.info(" @web_scrape.py \nhello")
                         mapped_library_names = library_map.get(str(library_name))
-                        self.logger.info(f"Mapped library names: {mapped_library_names}")
+                        self.logger.info(f"@web_scrape.py Mapped library names: {mapped_library_names}")
                         
                         # Find library row
                         try:
                             library_row = self.self.driver.find_element(
                                 By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
                             )
+                            self.logger.info(f"@web_scrape.py Found library row: {library_row.text}")
                         except Exception as e:
-                            self.logger.error(f"Error finding library row: {e}")
+                            self.logger.error(f"@web_scrape.py Error finding library row: {e}")
                             return f"Error finding library row: {str(e)}"
                         
                         
-                        self.logger.info("\nFound library row")
+                        self.logger.info(" @web_scrape.py \nFound library row")
 
                         # Find date column index
                         try:
                             date_headers = self.self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
+                            self.logger.info(f"@web_scrape.py Found date headers: {[header.text for header in date_headers]}")
                         except Exception as e:
-                            self.logger.error(f"Error finding date headers: {e}")
+                            self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
                             return f"Error finding date headers: {str(e)}"
                         
-                        self.logger.info(f"Found date_headers")
+                        self.logger.info(f"@web_scrape.py Found date_headers")
                         
                         date_column_index = None
                         for index, header in enumerate(date_headers, start=0):
-                            self.logger.info(f"header.text.lower() = {header.text.lower()}")  
-                            self.logger.info(f"date.lower() = {date.lower()}")  
+                            self.logger.info(f"@web_scrape.py header.text.lower() = {header.text.lower()}")  
+                            self.logger.info(f"@web_scrape.py date.lower() = {date.lower()}")  
                             if date.lower() == header.text.lower():
                                 date_column_index = index+1 if index==0 else index
-                                self.logger.info("\nFound date column index")
+                                self.logger.info(" @web_scrape.py \nFound date column index")
                                 break
 
                         if date_column_index is None:
-                            self.logger.info("\nNo date info found")
+                            self.logger.info(" @web_scrape.py \nNo date info found")
                             continue  # Skip if date not found
                         
-                        self.logger.info(f"Found date column index {date_column_index}")
+                        self.logger.info(f"@web_scrape.py Found date column index {date_column_index}")
                         # Extract status
                         try:
                             status_cell = library_row.find_elements(By.TAG_NAME, "td")[date_column_index]
-                            self.logger.info(f"Found library row elements : {status_cell}")
+                            self.logger.info(f"@web_scrape.py Found library row elements : {status_cell}")
                         except Exception as e:
-                            self.logger.error(f"Error finding status cell: {e}")
+                            self.logger.error(f"@web_scrape.py Error finding status cell: {e}")
                             return f"Error finding status cell: {str(e)}"
                         try:
                             status = status_cell.find_element(By.CSS_SELECTOR, "span").text
-                            self.logger.info(f"Found library status elements : {status}")
+                            self.logger.info(f"@web_scrape.py Found library status elements : {status}")
                         except Exception as e:
-                            self.logger.info(f"Status cell HTML: {status_cell.get_attribute('outerHTML')}")
-                            self.logger.error(f"Error extracting library status: {e}")
+                            self.logger.info(f"@web_scrape.py Status cell HTML: {status_cell.get_attribute('outerHTML')}")
+                            self.logger.error(f"@web_scrape.py Error extracting library status: {e}")
                             raise
                             break
 
@@ -1005,11 +1018,11 @@ class ASUWebScraper:
                             'date': date,
                             'status': status
                         }
-                        self.logger.info(f"mapping {library_result}")
+                        self.logger.info(f"@web_scrape.py mapping {library_result}")
                         results.append(library_result)
 
                 # Convert results to formatted string for text_content
-                self.logger.info(f"Results : {results}")
+                self.logger.info(f"@web_scrape.py Results : {results}")
                 for library in results:
                     lib_string = f"Library: {library['library']}\n"
                     lib_string += f"Date: {library['date']}\n"
@@ -1022,6 +1035,7 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
+                    
                 self.logger.info(self.text_content)
                 
                 return True
@@ -1029,7 +1043,7 @@ class ASUWebScraper:
             except Exception as e:
                 return f"Error retrieving library status: {str(e)}"
         
-        elif 'asu.libcal.com' in url:
+        elif 'asu.libcal.com' in url and selenium:
             # Navigate to the URL
             self.driver.get(url)
             
@@ -1074,11 +1088,11 @@ class ASUWebScraper:
                         }
                     })
             except Exception as e:
-                self.logger.error(f"Error extracting study room data: {e}")
+                self.logger.error(f"@web_scrape.py Error extracting study room data: {e}")
                 return "No Study Rooms Open Today"
             return True
         
-        elif 'asu-shuttles.rider.peaktransit.com' in url:
+        elif 'asu-shuttles.rider.peaktransit.com' in url and selenium:
             query = optional_query
             # Navigate to the URL
             try:
@@ -1107,18 +1121,18 @@ class ASUWebScraper:
                         EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-name'))
                     )
                     route_name = route_block.find_element(By.CSS_SELECTOR, "div.route-name")
-                    self.logger.info("\nloacted routenames")
+                    self.logger.info(" @web_scrape.py \nloacted routenames")
                     if "Tempe-Downtown" in route_name.text and  "Tempe-Downtown" in query:
                         button_times =5
                         route = route_name.text
                         route_block.click()
-                        self.logger.info("\nclicked")
+                        self.logger.info(" @web_scrape.py \nclicked")
                         break
                     elif "Tempe-West" in route_name.text and "Tempe-West" in query:
                         button_times=5
                         route = route_name.text
                         route_block.click()
-                        self.logger.info("\nclicked")
+                        self.logger.info(" @web_scrape.py \nclicked")
                         break
                     elif "Mercado" in route_name.text and "Mercado" in query:
                         button_times = 2
@@ -1127,7 +1141,7 @@ class ASUWebScraper:
                         route = route_name.text
 
                         route_block.click()
-                        self.logger.info("\nMercado")
+                        self.logger.info(" @web_scrape.py \nMercado")
                         break
                     elif "Polytechnic" in route_name.text and "Polytechnic" in query:
                         button_times = 2
@@ -1137,7 +1151,7 @@ class ASUWebScraper:
                         route = route_name.text
 
                     
-                        self.logger.info("\nPolytechnic")
+                        self.logger.info(" @web_scrape.py \nPolytechnic")
                         break
                 
                 time.sleep(2)
@@ -1156,7 +1170,7 @@ class ASUWebScraper:
                 #         time.sleep(0.5)  # Short pause between clicks
                 
                 # except Exception as e:
-                #     self.logger.info(f"Error clicking zoom out button: {e}")
+                #     self.logger.info(f"@web_scrape.py Error clicking zoom out button: {e}")
                 
                 # Replace the existing zoom control code with:
 
@@ -1179,7 +1193,7 @@ class ASUWebScraper:
                         time.sleep(0.5)  # Short pause between clicks
 
                 except Exception as e:
-                    self.logger.info(f"Error with map controls: {e}")
+                    self.logger.info(f"@web_scrape.py Error with map controls: {e}")
                     # Try alternative method using JavaScript
                     try:
                         zoom_script = """
@@ -1195,14 +1209,14 @@ class ASUWebScraper:
                         """
                         self.self.driver.execute_script(zoom_script, button_times)
                     except Exception as e:
-                        self.logger.info(f"Failed to zoom using JavaScript: {e}")
+                        self.logger.info(f"@web_scrape.py Failed to zoom using JavaScript: {e}")
 
                 map_div = None
                 try:
                     # Method 1: JavaScript click
                     map_div = self.self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
                     self.self.driver.execute_script("arguments[0].click();", map_div)
-                    self.logger.info("\nfirst method worked")
+                    self.logger.info(" @web_scrape.py \nfirst method worked")
                 
                 except Exception as first_error:
                     try:
@@ -1210,7 +1224,7 @@ class ASUWebScraper:
                         map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
                         actions = ActionChains(self.driver)
                         actions.move_to_element(map_div).click().perform()
-                        self.logger.info("\nsecond method worked")
+                        self.logger.info(" @web_scrape.py \nsecond method worked")
                     
                     except Exception as second_error:
                         try:
@@ -1218,10 +1232,10 @@ class ASUWebScraper:
                             map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
                             actions = ActionChains(self.driver)
                             actions.move_to_element_with_offset(map_div, 10, 10).click().perform()
-                            self.logger.info("\nthird method worked")
+                            self.logger.info(" @web_scrape.py \nthird method worked")
                                  
                         except Exception as third_error:
-                            self.logger.info(f"All click methods failed: {first_error}, {second_error}, {third_error}")
+                            self.logger.info(f"@web_scrape.py All click methods failed: {first_error}, {second_error}, {third_error}")
 
                 
                 
@@ -1249,18 +1263,18 @@ class ASUWebScraper:
                             
                             # Perform the action
                             actions.perform()
-                            self.logger.info("\nmoved")
+                            self.logger.info(" @web_scrape.py \nmoved")
                             # Wait a moment between movements
-                    self.logger.info("\niterating over y")        
+                    self.logger.info(" @web_scrape.py \niterating over y")        
                     for i in range(0, iterate_Y):
                         for dx, dy in directions_y:
                             actions.move_to_element(map_div).click_and_hold()
                             actions.move_by_offset(dx, dy)
                             actions.release()
                             actions.perform()
-                            self.logger.info("\nmoved")
+                            self.logger.info(" @web_scrape.py \nmoved")
                 if "Polytechnic" in query:
-                    self.logger.info("\npoly")
+                    self.logger.info(" @web_scrape.py \npoly")
                     # Move map to different directions
                     directions_x = [
                         (-300, 0),
@@ -1284,9 +1298,9 @@ class ASUWebScraper:
                             
                             # Perform the action
                             actions.perform()
-                            self.logger.info("\nmoved")
+                            self.logger.info(" @web_scrape.py \nmoved")
                             # Wait a moment between movements
-                    self.logger.info("\niterating over y")        
+                    self.logger.info(" @web_scrape.py \niterating over y")        
                     for i in range(0, iterate_Y):
                         
                         for dx, dy in directions_y:
@@ -1294,7 +1308,7 @@ class ASUWebScraper:
                             actions.move_by_offset(dx, dy)
                             actions.release()
                             actions.perform()
-                            self.logger.info("\nmoved")
+                            self.logger.info(" @web_scrape.py \nmoved")
                   
                 map_markers = self.self.driver.find_elements(By.CSS_SELECTOR, 
                     'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
@@ -1349,7 +1363,7 @@ class ASUWebScraper:
                     
                     except Exception as e:
                         # Log the error without stopping the entire process
-                        self.logger.info(f"Error processing marker: {e}")
+                        self.logger.info(f"@web_scrape.py Error processing marker: {e}")
                         continue
                 content = [
                             f"Station : {result['Station']}\n"
@@ -1373,11 +1387,11 @@ class ASUWebScraper:
                 return True
             
             except Exception as e:
-                self.logger.info(f"Error extracting shuttle status: {e}")
+                self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
                 return False
             
         else:
-            self.logger.error("NO CHOICE FOR SCRAPER!")
+            self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
             
         return False
     
@@ -1395,11 +1409,11 @@ class ASUWebScraper:
                 if 'google.com/search' in search_url:
                     self.driver.get(search_url)
                     # Wait for search results to load
-                    self.logger.info(f"Searching for google links {search_url}")
+                    self.logger.info(f"@web_scrape.py Searching for google links {search_url}")
                     try:
                         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.g')))
                     except Exception as e:
-                        self.logger.error(f"Error waiting for search results: {e}")
+                        self.logger.error(f"@web_scrape.py Error waiting for search results: {e}")
                         
                     # Find all search result elements
                     try:
@@ -1411,16 +1425,17 @@ class ASUWebScraper:
                             search_results.append(url)
                             
                         
-                        self.logger.info(f"Found {len(search_results)} : {search_results} Google search results")
+                        self.logger.info(f"@web_scrape.py Found {len(search_results)} : {search_results} Google search results")
                         
                         for url in search_results:
                             await self.scrape_content(url=url)
 
                     except Exception as e:
-                        self.logger.error(f"Error extracting search results: {e}")
+                        self.logger.error(f"@web_scrape.py Error extracting search results: {e}")
                                     # Handle ASU Campus Labs pages
                 
                 if 'asu.campuslabs.com/engage' in search_url:
+                    self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs links {search_url}")
                     self.driver.get(search_url)
                     if 'events' in search_url:
                         # Wait for events to load
@@ -1431,9 +1446,12 @@ class ASUWebScraper:
                             event.get_attribute('href') 
                             for event in events[:3]
                         ]
+                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
+                        
                         
                     elif 'organizations' in search_url:
                         # Wait for organizations to load
+                        self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs organizations links {search_url}")
                         orgs = wait.until(EC.presence_of_all_elements_located(
                             (By.CSS_SELECTOR, 'a[href*="/engage/organization/"]')
                         ))
@@ -1441,9 +1459,11 @@ class ASUWebScraper:
                             org.get_attribute('href') 
                             for org in orgs[:3]
                         ]
+                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
                         
                     elif 'news' in search_url:
                         # Wait for news items to load
+                        self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs news links {search_url}")
                         news = wait.until(EC.presence_of_all_elements_located(
                             (By.CSS_SELECTOR, 'a[href*="/engage/news/"]')
                         ))
@@ -1451,24 +1471,32 @@ class ASUWebScraper:
                             article.get_attribute('href') 
                             for article in news[:3]
                         ]
+                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
                         
-                    self.logger.info(f"Found {len(search_results)} ASU Campus Labs results")
                     
                     for url in search_results:
+                        self.logger.info(f"@web_scrape.py Scraping content from {url}")
                         await self.scrape_content(url=url)
                                  
                 if 'x.com' in search_url or 'facebook.com' in search_url or "instagram.com" in search_url:
                     if optional_query:
-                        self.logger.info("\nOptional query :: %s" % optional_query)
-                        domain = urlparse(search_url).netloc
-                        path = urlparse(search_url).path.strip("/")
-                        query_part = f"{urllib.parse.quote(optional_query)}+{path}" if path else urllib.parse.quote(optional_query)
-                        google_search_url = f"https://www.google.com/search?q={query_part}+site:{domain}"
-                        self.logger.info("Google search url formed : {}".format(google_search_url))
+                        self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
+                        try:
+                            self.logger.info(f"@web_scrape.py Searching for {search_url} links")
+                            domain = urlparse(search_url).netloc
+                            path = urlparse(search_url).path.strip("/")
+                            query_part = f"{urllib.parse.quote(optional_query)}+{path}" if path else urllib.parse.quote(optional_query)
+                            google_search_url = f"https://www.google.com/search?q={query_part}+site:{domain}"
+                            self.logger.info(" @web_scrape.py Google search url formed : {}".format(google_search_url))
+                        except Exception as e:
+                            self.logger.error(f"@web_scrape.py Error forming Google search URL: {e}")
+                            return False
+                        
                         await self.engine_search(search_url=google_search_url)                            
                 
                 if 'https://goglobal.asu.edu/scholarship-search' in search_url or 'https://onsa.asu.edu/scholarships'in search_url:
                     try:
+                        self.logger.info(f"@web_scrape.py Searching for ASU scholarships links {search_url}")
                         # Get base domain based on URL
                         base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
                         
@@ -1476,6 +1504,7 @@ class ASUWebScraper:
                         WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
                         
                         # Handle cookie consent for goglobal
+                        self.logger.info(" @web_scrape.py \nHandling cookie consent")
                         try:
                             cookie_button = WebDriverWait(self.driver, 5).until(
                                 EC.element_to_be_clickable((By.CSS_SELECTOR, '.accept-btn'))
@@ -1483,11 +1512,11 @@ class ASUWebScraper:
                             self.driver.execute_script("arguments[0].click();", cookie_button)
                             time.sleep(2)
                         except Exception as cookie_error:
-                            self.logger.warning(f"Cookie consent handling failed: {cookie_error}")
+                            self.logger.warning(f"@web_scrape.py Cookie consent handling failed: {cookie_error}")
                         
                         if optional_query:
-                            self.logger.info("\nOptional query :: %s" % optional_query)
-                            
+                            self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
+                            self.logger.info(f"@web_scrape.py Searching for {search_url} links")
                             # Parse query parameters
                             query_params = dict(param.split('=') for param in optional_query.split('&') if '=' in param)
                             
@@ -1509,7 +1538,7 @@ class ASUWebScraper:
                             
                             # Determine which site's filter mapping to use
                             site_filters = filter_mapping['goglobal.asu.edu'] if 'goglobal.asu.edu' in search_url else filter_mapping['onsa.asu.edu']
-                            
+                            self.logger.info(f"@web_scrape.py Using filter mapping: {site_filters}")
                             # Apply filters with robust error handling
                             for param, value in query_params.items():
                                 if param in site_filters and value:
@@ -1522,17 +1551,22 @@ class ASUWebScraper:
                                         self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", filter_element)
                                         time.sleep(1)
                                         
+                                        self.logger.info(f"@web_scrape.py Applying filter {param} with value {value}")
+                                        
                                         # Handle different input types
                                         if filter_element.tag_name == 'select':
                                             Select(filter_element).select_by_visible_text(value)
+                                            self.logger.info(f"@web_scrape.py Selected {value} in {param}")
                                         elif filter_element.tag_name == 'input':
                                             filter_element.clear()
                                             filter_element.send_keys(value)
                                             filter_element.send_keys(Keys.ENTER)
+                                            self.logger.info(f"@web_scrape.py Entered {value} in {param}")
                                         
                                         time.sleep(1)
                                     except Exception as filter_error:
-                                        self.logger.warning(f"Could not apply filter {param}: {filter_error}")
+                                        self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
+                                        raise Exception(f"Could not apply filter {param}: {filter_error}")
                             
                             # Click search button with multiple retry mechanism
                             search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
@@ -1544,9 +1578,11 @@ class ASUWebScraper:
                                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
                                     time.sleep(1)
                                     self.driver.execute_script("arguments[0].click();", search_button)
+                                    self.logger.info(f"@web_scrape.py Clicked search button with selector {selector}")
                                     break
                                 except Exception as e:
-                                    self.logger.warning(f"Search button click failed for selector {selector}: {e}")
+                                    self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
+                                    raise Exception(f"Search button click failed for selector {selector}: {e}")
                         
                         # Extract scholarship links with improved URL construction
                         link_selectors = {
@@ -1556,9 +1592,13 @@ class ASUWebScraper:
                         
                         current_selector = link_selectors['goglobal'] if "goglobal" in search_url else link_selectors['onsa']
                         
+                        self.logger.info(f"@web_scrape.py Using selector: {current_selector}")
+                        
                         scholarship_links = WebDriverWait(self.driver, 10).until(
                             EC.presence_of_all_elements_located((By.CSS_SELECTOR, current_selector))
                         )
+                        
+                        self.logger.info(f"@web_scrape.py Found {len(scholarship_links)} scholarship links")
                         
                         for link in scholarship_links[:3]:
                             href = link.get_attribute('href')
@@ -1570,22 +1610,22 @@ class ASUWebScraper:
                                 else:
                                     search_results.append(f"{base_url}/{href}")
                         
-                        self.logger.info(f"Found {len(search_results)} scholarship links - ")
-                        self.logger.info(f"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-                        self.logger.info(f"{search_results}")
-                        self.logger.info(f"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                        self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ")
                         
                         for url in search_results:
+                            self.logger.info(f"@web_scrape.py Scraping content from {url}")
                             await self.scrape_content(url=url)
                         
                     except Exception as e:
-                        self.logger.error(f"Error in scholarship search: {str(e)}")
+                        self.logger.error(f"@web_scrape.py Error in scholarship search: {str(e)}")
 
                 
                 if 'catalog.apps.asu.edu' in search_url or  'search.lib.asu.edu' in search_url :
+                    self.logger.info(f"@web_scrape.py Searching for ASU catalog links {search_url}")
                     await self.scrape_content(search_url, selenium=True)
                 
                 if 'https://app.joinhandshake.com/stu/postings' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
+                    self.logger.info(f"@web_scrape.py Searching for ASU Handshake links {search_url}")
                     await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
                 # finally:
                 #     self.driver.quit()
@@ -1593,12 +1633,12 @@ class ASUWebScraper:
             return self.text_content
                 
         except Exception as e:
-            self.logger.error(f"Error in search: {str(e)}")
+            self.logger.error(f"@web_scrape.py Error in search: {str(e)}")
             return []
         
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
     #     if not self.discord_client:
-    #         self.logger.info(f"Could not initialize discord_client {self.discord_client}")
+    #         self.logger.info(f"@web_scrape.py Could not initialize discord_client {self.discord_client}")
     #         return []
         
     #     messages = []
@@ -1608,7 +1648,7 @@ class ASUWebScraper:
     #         channel = self.discord_client.get_channel(channel_id)
             
     #         if not channel:
-    #             self.logger.info(f"Could not access channel with ID {channel_id}")
+    #             self.logger.info(f"@web_scrape.py Could not access channel with ID {channel_id}")
     #             continue
             
     #         if isinstance(channel, discord.TextChannel):
@@ -1658,7 +1698,7 @@ class ASUWebScraper:
     #                     EC.presence_of_all_elements_located((By.TAG_NAME, 'body'))
     #                 )
     #             except Exception as e:
-    #                 self.logger.warning(f"Timeout waiting for tweets to load {str(e)}")
+    #                 self.logger.warning(f"@web_scrape.py Timeout waiting for tweets to load {str(e)}")
                 
     #             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     #             time.sleep(3)
@@ -1680,7 +1720,7 @@ class ASUWebScraper:
     #                     if tweet_articles:
     #                         break
     #             except Exception as e:
-    #                 self.logger.error(f"Error finding tweet articles: {str(e)}")
+    #                 self.logger.error(f"@web_scrape.py Error finding tweet articles: {str(e)}")
                     
                     
     #             if not tweet_articles:
@@ -1706,14 +1746,14 @@ class ASUWebScraper:
     #                         except:
     #                             continue
     #                 except Exception as inner_e:
-    #                     self.logger.error(f"Error extracting individual tweet link: {str(inner_e)}")
+    #                     self.logger.error(f"@web_scrape.py Error extracting individual tweet link: {str(inner_e)}")
                 
     #             self.logger.info(tweet_links)
     #             search_results.extend(tweet_links)
-    #             self.logger.info(f"Found {len(tweet_links)} X (Twitter) links")
+    #             self.logger.info(f"@web_scrape.py Found {len(tweet_links)} X (Twitter) links")
                 
     #         except Exception as e:
-    #             self.logger.error(f"X.com tweet link extraction error: {str(e)}")
+    #             self.logger.error(f"@web_scrape.py X.com tweet link extraction error: {str(e)}")
 
         
     #     elif 'instagram.com' in search_url:
@@ -1748,7 +1788,7 @@ class ASUWebScraper:
     #                         continue
                 
     #             search_results.extend(instagram_links)
-    #             self.logger.info(f"Found {len(instagram_links)} Instagram post links")
+    #             self.logger.info(f"@web_scrape.py Found {len(instagram_links)} Instagram post links")
             
     #         except Exception as instagram_error:
-    #             self.logger.error(f"Instagram link extraction error: {str(instagram_error)}")
+    #             self.logger.error(f"@web_scrape.py Instagram link extraction error: {str(instagram_error)}")

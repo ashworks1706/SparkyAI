@@ -43,37 +43,37 @@ class Agents:
         self.student_clubs_events_agent_tools = Student_Clubs_Events_Agent_Tools(firestore, utils, logger)
         self.student_jobs_agent_tools = Student_Jobs_Agent_Tools(firestore, utils, logger)
 
-        self.logger.info("Initialized Agent Tools")
+        self.logger.info(f"@agents.py Initialized Agent Tools")
 
 
         self.shuttle_status_agent = Shuttle_Status_Model(self.firestore, self.genai, self.app_config, logger, self.shuttle_status_agent_tools, discord_state)
-        self.logger.info("Initialized ShuttleStatusAgent")
+        self.logger.info(f"@agents.py Initialized ShuttleStatusAgent")
 
 
         self.discord_agent = DiscordModel(self.firestore, self.genai, self.app_config, logger, self.discord_agent_tools, discord_state)
-        self.logger.info("Initialized Discord Model Instance")
+        self.logger.info(f"@agents.py Initialized Discord Model Instance")
 
         self.courses_agent = CoursesModel(self.firestore, self.genai, self.app_config, logger, self.courses_agent_tools, discord_state)
-        self.logger.info("Initialized CoursesModel Instance")
+        self.logger.info(f"@agents.py Initialized CoursesModel Instance")
 
         self.library_agent = LibraryModel(self.firestore, self.genai, self.app_config, logger, self.library_agent_tools, discord_state)
-        self.logger.info("Initialized LibraryModel Instance")
+        self.logger.info(f"@agents.py Initialized LibraryModel Instance")
 
         self.news_media_agent = NewsMediaModel(self.firestore, self.genai, self.app_config, logger, self.news_media_agent_tools, discord_state)
-        self.logger.info("Initialized NewsMediaModel Instance")
+        self.logger.info(f"@agents.py Initialized NewsMediaModel Instance")
 
         self.scholarship_agent = ScholarshipModel(self.firestore, self.genai, self.app_config, logger, self.scholarship_agent_tools, discord_state)
-        self.logger.info("Initialized ScholarshipModel Instance")
+        self.logger.info(f"@agents.py Initialized ScholarshipModel Instance")
 
 
         self.sports_agent = SportsModel(self.firestore, self.genai, self.app_config, logger, self.sports_agent_tools, discord_state)
-        self.logger.info("Initialized SportsModel Instance")
+        self.logger.info(f"@agents.py Initialized SportsModel Instance")
 
         self.student_clubs_events_agent = StudentClubsEventsModel(self.firestore, self.genai, self.app_config, logger, self.student_clubs_events_agent_tools, discord_state) 
-        self.logger.info("Initialized StudentClubsEventsModel Instance")
+        self.logger.info(f"@agents.py Initialized StudentClubsEventsModel Instance")
 
         self.student_jobs_agent = StudentJobsModel(self.firestore, self.genai, self.app_config, logger, self.student_jobs_agent_tools, discord_state)
-        self.logger.info("Initialized StudentJobsModel Instance")
+        self.logger.info(f"@agents.py Initialized StudentJobsModel Instance")
 
         self.superior_agent_tools = Superior_Agent_Tools(self.vector_store, self.asu_data_processor,
             firestore, discord_state, utils, app_config, self.shuttle_status_agent, 
@@ -83,7 +83,7 @@ class Agents:
         )
         
         self.superior_agent = SuperiorModel(self.firestore, self.genai, self.app_config, self.logger, self.superior_agent_tools)
-        self.logger.info("Initialized ActionAgent Global Instance")
+        self.logger.info(f"@agents.py Initialized ActionAgent Global Instance")
 
     async def process_question(self, question: str) -> str:
         return await self.superior_agent.determine_action(question)

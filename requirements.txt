@@ -3,6 +3,8 @@ google-generativeai
 google-genai
 langchain
 langchain-huggingface
+langchain_openai
+langchain_experimental
 langchain-qdrant
 huggingface_hub
 langchain-community

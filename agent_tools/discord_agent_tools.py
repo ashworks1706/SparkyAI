@@ -7,24 +7,24 @@ class Discord_Agent_Tools:
         self.discord_state = discord_state
         self.discord_client = discord_state.get('discord_client')
         self.logger= logger
-        self.logger.info(f"Initialized Discord Client : {self.discord_client}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Client : {self.discord_client}")
         self.guild = self.discord_state.get('target_guild')
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
      
     async def notify_discord_helpers(self, short_message_to_helper: str) -> str:
         self.guild = self.discord_state.get('target_guild')
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
 
         if not self.request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
         await self.utils.update_text("Checking available discord helpers...")
 
-        self.logger.info("Contact Model: Handling contact request for helper notification")
+        self.logger.info("@discord_agent_tools.py Contact Model: Handling contact request for helper notification")
 
         try:
 
@@ -72,7 +72,7 @@ class Discord_Agent_Tools:
             return f"Server Helper Assigned: {selected_helper.name}\n"
 
         except Exception as e:
-            self.logger.error(f"Error notifying helpers: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error notifying helpers: {str(e)}")
             return f"An error occurred while notifying helpers: {str(e)}"
 
     async def notify_moderators(self, short_message_to_moderator: str) -> str:
@@ -80,7 +80,7 @@ class Discord_Agent_Tools:
         self.user_id=self.discord_state.get('user_id')
         self.user=self.discord_state.get('user')
         
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
 
 
         if not self.discord_state.get('request_in_dm'):
@@ -88,7 +88,7 @@ class Discord_Agent_Tools:
 
         await self.utils.update_text("Checking available discord moderators...")
 
-        self.logger.info("Contact Model: Handling contact request for moderator notification")
+        self.logger.info("@discord_agent_tools.py Contact Model: Handling contact request for moderator notification")
 
         try:
             if not self.guild:
@@ -100,8 +100,8 @@ class Discord_Agent_Tools:
                 self.utils.update_ground_sources([existing_channel.jump_url])
                 return f"User already has an open support channel."
             # Find helpers/moderators
-            self.logger.info(f"Searching for users wtih {self.discord_state.get("discord_mod_role_name")} role")
-            self.logger.info(f"from {self.guild.roles}")
+            self.logger.info(f"@discord_agent_tools.py Searching for users wtih {self.discord_state.get("discord_mod_role_name")} role")
+            self.logger.info(f"@discord_agent_tools.py from {self.guild.roles}")
             helper_role = discord.utils.get(self.guild.roles, name=self.discord_state.get("discord_mod_role_name"))
             if not helper_role:
                 return "Unable to find moderators. Please contact an administrator."
@@ -136,13 +136,13 @@ class Discord_Agent_Tools:
             return f"Moderator Assigned: {selected_helper.name}"
 
         except Exception as e:
-            self.logger.error(f"Error notifying moderators: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error notifying moderators: {str(e)}")
             return f"An error occurred while notifying moderators: {str(e)}"
 
     # async def start_recording_discord_call(self,channel_id:Any) -> str: 
 
         
-    #     self.logger.info(f"Initialized Discord Guild : {self.guild}")
+    #     self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
     #     await self.utils.update_text("Checking user permissions...")
        
     #     if not self.discord_state.get('user_has_mod_role'):
@@ -154,21 +154,21 @@ class Discord_Agent_Tools:
     #     if not self.discord_state.get('user_voice_channel_id'):
     #         return "User is not in a voice channel. User needs to be in a voice channel to start recording. Exiting command..."
 
-    #     self.logger.info("Discord Model: Handling recording request")
+    #     self.logger.info("@discord_agent_tools.py Discord Model: Handling recording request")
 
     #     return f"Recording started!"
 
     async def create_discord_forum_post(self, title: str, category: str, body_content_1: str, body_content_2: str, body_content_3: str, link:str=None) -> str:
         self.guild = self.discord_state.get('target_guild')
         
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
         await self.utils.update_text("Checking user permissions...")
 
 
         if not self.discord_state.get('request_in_dm'):
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
 
-        self.logger.info("Discord Model: Handling discord forum request with context")
+        self.logger.info("@discord_agent_tools.py Discord Model: Handling discord forum request with context")
 
         try:
             if not self.guild:
@@ -178,7 +178,7 @@ class Discord_Agent_Tools:
                 # Find the forum channel 
                 forum_channel = discord.utils.get(self.guild.forums, name=self.discord_state("discord_post_channel_name"))  # Replace with your forum channel name
             except Exception as e:
-                self.logger.error(f"Error finding forum channel: {str(e)}")
+                self.logger.error(f"@discord_agent_tools.py Error finding forum channel: {str(e)}")
                 return f"An error occurred while finding the forum channel: {str(e)}"
             if not forum_channel:
                 return "Forum channel not found. Please ensure the forum exists."
@@ -188,7 +188,7 @@ class Discord_Agent_Tools:
             if link:
                 content+=f"\n[Link]({link})"
             try:
-                self.logger.info(f"Forum channel ID: {forum_channel.id if forum_channel else 'None'}")
+                self.logger.info(f"@discord_agent_tools.py Forum channel ID: {forum_channel.id if forum_channel else 'None'}")
                 
                 thread = await forum_channel.create_thread(
                     name=title,
@@ -197,9 +197,9 @@ class Discord_Agent_Tools:
 
             except Exception as e:
                 
-                self.logger.error(f"Error creating forum thread: {str(e)}")
+                self.logger.error(f"@discord_agent_tools.py Error creating forum thread: {str(e)}")
                 return f"An error occurred while creating the forum thread: {str(e)}"
-            self.logger.info(f"Created forum thread {thread.message.id} {type(thread)}")
+            self.logger.info(f"@discord_agent_tools.py Created forum thread {thread.message.id} {type(thread)}")
             
             self.utils.update_ground_sources([f"https://discord.com/channels/{self.guild}/{thread.id}"])
             return f"Forum post created successfully.\nTitle: {title}\nDescription: {content[:100]}...\n"
@@ -208,10 +208,10 @@ class Discord_Agent_Tools:
         except discord.errors.Forbidden:
             return "The bot doesn't have permission to create forum posts. Please contact an administrator."
         except discord.errors.HTTPException as e:
-            self.logger.error(f"HTTP error creating forum post: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py HTTP error creating forum post: {str(e)}")
             return f"An error occurred while creating the forum post: {str(e)}"
         except Exception as e:
-            self.logger.error(f"Error creating forum post: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error creating forum post: {str(e)}")
             return f"An unexpected error occurred while creating the forum post: {str(e)}"
     
     async def create_discord_announcement(self, ping: str, title: str, category: str, body_content_1: str, body_content_2: str, body_content_3: str, link:str = None) -> str:
@@ -221,7 +221,7 @@ class Discord_Agent_Tools:
         await self.utils.update_text("Checking user permissions...")
 
 
-        self.logger.info(f"Discord Model: Handling discord announcement request with context")
+        self.logger.info(f"@discord_agent_tools.py Discord Model: Handling discord announcement request with context")
 
         if not self.discord_state.get('request_in_dm'):
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
@@ -252,13 +252,13 @@ class Discord_Agent_Tools:
             return f"Announcement created successfully."
 
         except Exception as e:
-            self.logger.error(f"Error creating announcement: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error creating announcement: {str(e)}")
             return f"An error occurred while creating the announcement: {str(e)}"
   
     async def create_discord_event(self, title: str, time_start: str, time_end: str, description: str, img_provided:Any = None) -> str:
         self.guild = self.discord_state.get('target_guild')
         
-        self.logger.info(f"Initialized Discord Guild : {self.guild}")
+        self.logger.info(f"@discord_agent_tools.py Initialized Discord Guild : {self.guild}")
         
         await self.utils.update_text("Checking user permissions...")
 
@@ -269,7 +269,7 @@ class Discord_Agent_Tools:
         if not self.discord_state.get('user_has_mod_role'):
             return "User does not have enough permissions to create an event. This command is only accessible by moderators. Exiting command..."
 
-        self.logger.info("Discord Model: Handling discord event creation request")
+        self.logger.info("@discord_agent_tools.py Discord Model: Handling discord event creation request")
 
         try:
             if self.guild:
@@ -314,7 +314,7 @@ class Discord_Agent_Tools:
         except ValueError as e:
             return f"Invalid date format: {str(e)}"
         except Exception as e:
-            self.logger.error(f"Error creating event: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error creating event: {str(e)}")
             return f"An unexpected error occurred while creating the event: {str(e)}"
     
     async def search_discord(self,query:str):
@@ -333,7 +333,7 @@ class Discord_Agent_Tools:
         if not self.discord_state.get('user_has_mod_role'):
             return "User does not have enough permissions to create a poll. This command is only accessible by moderators. Exiting command..."
 
-        self.logger.info("Discord Model: Handling discord poll creation request")
+        self.logger.info("@discord_agent_tools.py Discord Model: Handling discord poll creation request")
 
         try:
             if not self.guild:
@@ -352,14 +352,14 @@ class Discord_Agent_Tools:
                     poll_message += f"{emoji_options[i]} {option}\n"
                     
             except Exception as e:
-                self.logger.error(f"Error creating poll options: {str(e)}")
+                self.logger.error(f"@discord_agent_tools.py Error creating poll options: {str(e)}")
                 return f"An unexpected error occurred while creating poll options: {str(e)}"
             
             # Send the poll message
             try:
                 poll = await channel.send(poll_message)
             except Exception as e:
-                self.logger.error(f"Error sending poll message: {str(e)}")
+                self.logger.error(f"@discord_agent_tools.py Error sending poll message: {str(e)}")
                 return  f"An unexpected error occurred while sending poll: {str(e)}"
             
             self.utils.update_ground_sources([poll.jump_url])  
@@ -370,7 +370,7 @@ class Discord_Agent_Tools:
                 for i in range(len(options)):
                     await poll.add_reaction(emoji_options[i])
             except Exception as e:
-                self.logger.error(f"Error adding reactions to poll: {str(e)}")
+                self.logger.error(f"@discord_agent_tools.py Error adding reactions to poll: {str(e)}")
                 return f"An unexpected error occurred while adding reactions to poll: {str(e)}"
             
             return f"Poll created successfully in channel '{channel_name}'.\nQuestion: {question}\nOptions: {', '.join(options)}"
@@ -379,5 +379,5 @@ class Discord_Agent_Tools:
             return "The bot doesn't have permission to create polls or send messages in the specified channel. Please contact an administrator."
         except Exception as e:
             
-            self.logger.error(f"Error creating poll: {str(e)}")
+            self.logger.error(f"@discord_agent_tools.py Error creating poll: {str(e)}")
             return f"An unexpected error occurred while creating the poll: {str(e)}"

@@ -84,12 +84,12 @@ class SportsModel:
             function_to_call = function_mapping[function_name]
             func_response = await function_to_call(**function_args)
             # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
-            self.logger.info(f"Sports : Function loop response : {func_response}")
+            self.logger.info(f"@sports_agent.py Sports : Function loop response : {func_response}")
             
             if func_response:
                 return func_response
             else:
-                self.logger.error(f"Error extracting text from response: {e}")
+                self.logger.error(f"@sports_agent.py Error extracting text from response: {e}")
                 return "Error processing response"
             
             
@@ -99,7 +99,7 @@ class SportsModel:
         
     def _initialize_model(self):
         if not self.model:
-            return self.logger.error("Model not initialized at ActionFunction")
+            return self.logger.error("@sports_agent.py Model not initialized at ActionFunction")
             
         # Rate limiting check
         current_time = time.time()
@@ -132,7 +132,7 @@ class SportsModel:
                 """
 
             response = await self.chat.send_message_async(prompt)
-            self.logger.info(f"Internal response @ Sports Model : {response}")
+            self.logger.info(f"@sports_agent.py Internal response @ Sports Model : {response}")
             
             for part in response.parts:
                 if hasattr(part, 'function_call') and part.function_call:
@@ -144,11 +144,11 @@ class SportsModel:
                     self.firestore.update_message("sports_agent_message", f"Text Response : {text}")
                     if not text.startswith("This query") and not "can be answered directly" in text:
                         final_response = text.strip()
-                        self.logger.info(f"text response : {final_response}")
+                        self.logger.info(f"@sports_agent.py text response : {final_response}")
         
         # Return only the final message
             return final_response if final_response else "Sports agent fell off! Error 404"
             
         except Exception as e:
-            self.logger.error(f"Internal Error @ Sports Model : {str(e)}")
+            self.logger.error(f"@sports_agent.py Internal Error @ Sports Model : {str(e)}")
             return "I apologize, but I couldn't generate a response at this time. Please try again."

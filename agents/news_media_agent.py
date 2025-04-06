@@ -106,7 +106,7 @@ class NewsMediaModel:
             if func_response:
                 return func_response
             else:
-                self.logger.error(f"Error extracting text from response: {e}")
+                self.logger.error(f"@news_media_agent.py Error extracting text from response: {e}")
                 return "Error processing response"
             
             
@@ -116,7 +116,7 @@ class NewsMediaModel:
         
     def _initialize_model(self):
         if not self.model:
-            return self.logger.error("Model not initialized at ActionFunction")
+            return self.logger.error("@news_media_agent.py Model not initialized at ActionFunction")
             
         # Rate limiting check
         current_time = time.time()
@@ -167,5 +167,5 @@ class NewsMediaModel:
             return final_response if final_response else "News agent fell off! Error 404"
             
         except Exception as e:
-            self.logger.error(f"Internal Error @ News Model : {str(e)}")
+            self.logger.error(f"@news_media_agent.py Internal Error @ News Model : {str(e)}")
             return "I apologize, but I couldn't generate a response at this time. Please try again."

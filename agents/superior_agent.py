@@ -310,7 +310,7 @@ class SuperiorModel:
             raise ValueError(f"Unknown function: {function_name}")
         
         function_to_call = function_mapping[function_name]
-        self.logger.info(f"Function called : {function_name}")
+        self.logger.info(f"@superior_agent.py Function called : {function_name}")
         return await function_to_call(**function_args)
 
     async def process_gemini_response(self, response: Any) -> tuple[str, bool, Any]:
@@ -321,22 +321,22 @@ class SuperiorModel:
         for part in response.parts:
             if hasattr(part, 'text') and part.text.strip():
                 text_response += f"\n{part.text.strip()}"
-                self.logger.info(f"text response : {text_response}")
+                self.logger.info(f"@superior_agent.py text response : {text_response}")
                 self.firestore.update_message("superior_agent_message", f"Text Response : {text_response} ")
             if hasattr(part, 'function_call') and part.function_call:
                 has_function_call = True
                 function_call = part.function_call
-                self.logger.info(f"function response : {part.function_call}")
+                self.logger.info(f"@superior_agent.py function response : {part.function_call}")
                 temp_func =  {
                 "function_call": {
                     "name": part.function_call.name,
                     "args": dict(part.function_call.args)
                     }
                 }
-                self.logger.info(f"@ Superior Agent formed function call : {temp_func}")
+                self.logger.info(f"@superior_agent.py @ Superior Agent formed function call : {temp_func}")
                 self.firestore.update_message("superior_agent_message", f"temp_func")
-                self.logger.info("Updated Firestore message")
-        self.logger.info(f"@Superior Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
+                self.logger.info(f"@superior_agent.py @superior_agent.py Updated Firestore message")
+        self.logger.info(f"@superior_agent.py @Superior Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
         return text_response, has_function_call, function_call
 
     async def determine_action(self, query: str) -> List[str]:
@@ -360,15 +360,15 @@ class SuperiorModel:
                 responses.append(text_response)
                 final_response += text_response
                 if not has_function_call and "send_bot_feedback" not in final_response:
-                    self.logger.info("@ Superior Agent : not function call requested")
+                    self.logger.info(f"@superior_agent.py @superior_agent.py @ Superior Agent : not function call requested")
                     break
                 if not has_function_call and "send_bot_feedback" in final_response:
-                    self.logger.info("@ Superior Agent : not function call requested")
+                    self.logger.info(f"@superior_agent.py @superior_agent.py @ Superior Agent : not function call requested")
                     break
-                self.logger.info("@ Superior Agent : function call requested")
+                self.logger.info(f"@superior_agent.py @superior_agent.py @ Superior Agent : function call requested")
                 function_result = await self.execute_function(function_call)
                 self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
-                self.logger.info("\nAction Model @ Function result is: %s", function_result)
+                self.logger.info(f"@superior_agent.py @superior_agent.py \nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question. Remaining function tries : {max_depth}""")
                 max_depth-=1
                 
@@ -377,5 +377,5 @@ class SuperiorModel:
             return final_response.strip()
         
         except Exception as e:
-            self.logger.error(f"Error in determine_action: {e}")
+            self.logger.error(f"@superior_agent.py Error in determine_action: {e}")
             return ["I'm sorry, I couldn't generate a response. Please try again."]

@@ -33,7 +33,7 @@ class DataModel:
         """
 
         try:
-            self.logger.info(f"Data Model: Refining Data with context : {search_context} \n and data : {text}")
+            self.logger.info(f"@data_agent.py Data Model: Refining Data with context : {search_context} \n and data : {text}")
             response = await self.chat.send_message_async(prompt)
             if response and hasattr(response, 'text'):
                 parsed = self.parse_json_response(response.text)
@@ -43,7 +43,7 @@ class DataModel:
                 )
             return None, None
         except Exception as e:
-            self.logger.error(f"Gemini refinement error: {str(e)}")
+            self.logger.error(f"@data_agent.py Gemini refinement error: {str(e)}")
             return None, None
 
     def parse_json_response(self, response_text: str) -> dict:
@@ -58,14 +58,14 @@ class DataModel:
             # Validate required fields
             required_fields = {'document_content', 'document_title'}
             if not all(field in parsed_data for field in required_fields):
-                self.logger.error("Missing required fields in JSON response")
+                self.logger.error("@data_agent.py Missing required fields in JSON response")
                 return {'document_content': '', 'document_title': ''}
 
             return parsed_data
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"JSON parsing error: {str(e)}")
+            self.logger.error(f"@data_agent.py JSON parsing error: {str(e)}")
             return {'document_content': '', 'document_title': ''}
         except Exception as e:
-            self.logger.error(f"Unexpected error parsing response: {str(e)}")
+            self.logger.error(f"@data_agent.py Unexpected error parsing response: {str(e)}")
             return {'document_content': '', 'document_title': ''}

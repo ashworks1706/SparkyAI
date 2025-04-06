@@ -39,21 +39,21 @@ class Superior_Agent_Tools:
             return e  
          
     async def access_discord_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing discord agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
 
         try:
             response = await self.discord_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access discord agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access discord agent: {str(e)}")
             return "Discord Agent Not Responsive"
         
     async def get_user_profile_details(self) -> str:
         """Retrieve user profile details from the Discord server"""
         self.guild = self.discord_state.get('target_guild')
         self.user_id = self.discord_state.get('user_id')
-        self.logger.info(f"Discord Model: Handling user profile details request for user ID: {self.user_id}")
+        self.logger.info(f"@superior_agent_tools.py Discord Model: Handling user profile details request for user ID: {self.user_id}")
 
         if not self.request_in_dm:
             return "User can only access this command in private messages. It seems like the user is trying to access this command in a discord server. Exiting command."
@@ -83,98 +83,98 @@ class Superior_Agent_Tools:
         except discord.errors.NotFound:
             return f"User with ID {self.user_id} not found in the server."
         except Exception as e:
-            self.logger.error(f"Error retrieving user profile: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error retrieving user profile: {str(e)}")
             return f"An error occurred while retrieving the user profile: {str(e)}"
     
     async def access_shuttle_status_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing live status agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.shuttle_status_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in deep search agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in deep search agent: {str(e)}")
             return "I apologize, but I couldn't retrieve the information at this time."
     
     async def access_courses_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing courses agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing courses agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.courses_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access courses agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access courses agent: {str(e)}")
             return "Courses Agent Not Responsive"
     
     async def access_student_clubs_events_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing studentclubsevents agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing studentclubsevents agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.student_clubs_events_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access studentclubsevents agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access studentclubsevents agent: {str(e)}")
             return "Studentclubsevents Agent Not Responsive"
     
     async def access_library_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing library agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing library agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.library_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access library agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access library agent: {str(e)}")
             return "Library Agent Not Responsive"
     
     async def access_news_media_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing news media agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing news media agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.news_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access news media agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access news media agent: {str(e)}")
             return "News Agent Not Responsive"
     
     async def access_scholarship_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing scholarship agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing scholarship agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.scholarship_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access scholarship agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access scholarship agent: {str(e)}")
             return "Scholarship Agent Not Responsive"
     
     
     async def access_sports_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing sports agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing sports agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.sports_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access sports agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access sports agent: {str(e)}")
             return "Sports Agent Not Responsive"
     
 
     
     async def access_student_jobs_agent(self, instruction_to_agent: str, special_instructions: str):
-        self.logger.info(f"Action Model : accessing student jobs agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
+        self.logger.info(f"@superior_agent_tools.py Action Model : accessing student jobs agent with instruction {instruction_to_agent} with special instructions {special_instructions}")
         self.group_chat.update_text(instruction_to_agent)
         
         try:
             response = await self.student_jobs_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
-            self.logger.error(f"Error in access student jobs agent: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error in access student jobs agent: {str(e)}")
             return "Student Jobs Agent Not Responsive"
     
     async def send_bot_feedback(self, feedback: str) -> str:
@@ -184,7 +184,7 @@ class Superior_Agent_Tools:
         
         await self.utils.update_text("Opening feedbacks...")
         
-        self.logger.info("Contact Model: Handling contact request for server feedback")
+        self.logger.info("@superior_agent_tools.py Contact Model: Handling contact request for server feedback")
 
         try:
             # Find the feedbacks channel
@@ -209,7 +209,7 @@ class Superior_Agent_Tools:
             return "Your feedback has been successfully submitted."
 
         except Exception as e:
-            self.logger.error(f"Error sending feedback: {str(e)}")
+            self.logger.error(f"@superior_agent_tools.py Error sending feedback: {str(e)}")
             return f"An error occurred while sending your feedback: {str(e)}"
     
     def _save_message(self, user_id: str, role: str, content: str):
@@ -230,7 +230,7 @@ class Superior_Agent_Tools:
         
         user_id = self.discord_state.get('user_id')
         responses = []
-        self.logger.info(f"Action Model: accessing Google Search with instruction {original_query}")
+        self.logger.info(f"@superior_agent_tools.py Action Model: accessing Google Search with instruction {original_query}")
         try:
             # Perform database search
             queries = [
@@ -245,7 +245,7 @@ class Superior_Agent_Tools:
 
             responses = [resp for resp in responses if resp]
         except:
-            self.logger.error("No results found in database")
+            self.logger.error("@superior_agent_tools.py No results found in database")
             pass
 
         # Prepare the prompt
@@ -272,7 +272,7 @@ class Superior_Agent_Tools:
                     max_output_tokens=600
                 )
             )
-            self.logger.info(f"Google search agent response : {response}")
+            self.logger.info(f"@superior_agent_tools.py Google search agent response : {response}")
             grounding_sources = [self.get_final_url(chunk.web.uri) for candidate in response.candidates if candidate.grounding_metadata and candidate.grounding_metadata.grounding_chunks for chunk in candidate.grounding_metadata.grounding_chunks if chunk.web]
             
             self.utils.update_ground_sources(grounding_sources)
@@ -301,9 +301,9 @@ class Superior_Agent_Tools:
                 self.vector_store.queue_documents(processed_docs)
 
             if not response_text:
-                self.logger.error("No response from Google Search")
+                self.logger.error("@superior_agent_tools.py No response from Google Search")
                 return None
             return response_text
         except Exception as e:
-            self.logger.info(f"Google Search Exception {e}")
+            self.logger.info(f"@superior_agent_tools.py Google Search Exception {e}")
             return responses

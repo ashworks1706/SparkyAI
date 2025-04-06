@@ -52,7 +52,7 @@ class Student_Jobs_Agent_Tools:
         search_url = "https://app.joinhandshake.com/stu/postings"
         
         results = []
-        self.logger.info(f"Requested search query : {query}")
+        self.logger.info("@student_jobs_agent_tools.py Requested search query : {query}")
         doc_title = ""
         if search_bar_query:
             doc_title = " ".join(search_bar_query) if isinstance(search_bar_query, list) else search_bar_query

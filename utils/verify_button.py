@@ -7,4 +7,5 @@ class VerifyButton(discord.ui.Button):
         super().__init__(label="Verify", style=discord.ButtonStyle.primary, custom_id="verify_button")
 
     async def callback(self, interaction: discord.Interaction):
+        print(f"@verify_button.py Button clicked by {interaction.user.name}")
         await interaction.response.send_modal(VerificationModal(self.config)) 
