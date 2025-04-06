@@ -868,7 +868,7 @@ class ASUWebScraper:
             try:
                 # Navigate to library hours page
                 try:
-                    self.self.driver.get(url)
+                    self.driver.get(url)
                     self.logger.info(f"@web_scrape.py Navigated to URL: {url}")
                 except Exception as e:
                     self.logger.error(f"@web_scrape.py Error navigating to URL: {e}")
@@ -914,7 +914,7 @@ class ASUWebScraper:
                         while not is_date_present:
                             # Find all date headers in the thead
                             try:
-                                date_headers = self.self.driver.find_elements(
+                                date_headers = self.driver.find_elements(
                                     By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
                                 )
                             except Exception as e:
@@ -940,7 +940,7 @@ class ASUWebScraper:
                             
                             if not is_date_present:
                                 try:
-                                    next_button = self.self.driver.find_element(By.ID, "s-lc-whw-next-0")
+                                    next_button = self.driver.find_element(By.ID, "s-lc-whw-next-0")
                                     next_button.click()
                                     time.sleep(0.2)  # Allow page to load
                                 except Exception as e:
@@ -961,7 +961,7 @@ class ASUWebScraper:
                         
                         # Find library row
                         try:
-                            library_row = self.self.driver.find_element(
+                            library_row = self.driver.find_element(
                                 By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
                             )
                             self.logger.info(f"@web_scrape.py Found library row: {library_row.text}")
@@ -974,7 +974,7 @@ class ASUWebScraper:
 
                         # Find date column index
                         try:
-                            date_headers = self.self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
+                            date_headers = self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
                             self.logger.info(f"@web_scrape.py Found date headers: {[header.text for header in date_headers]}")
                         except Exception as e:
                             self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
@@ -1097,14 +1097,14 @@ class ASUWebScraper:
             # Navigate to the URL
             try:
                 # Navigate to the URL
-                self.self.driver.get(url)
+                self.driver.get(url)
                 time.sleep(3)
                 # Wait for route list to load
                 WebDriverWait(self.driver, 10).until(
                     EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#route-list .route-block .route-name'))
                 )
                 # Target the route list container first
-                route_list = self.self.driver.find_element(By.CSS_SELECTOR, "div#route-list.route-block-container")
+                route_list = self.driver.find_element(By.CSS_SELECTOR, "div#route-list.route-block-container")
                 
                 WebDriverWait(self.driver, 10).until(
                     EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-block'))
@@ -1207,15 +1207,15 @@ class ASUWebScraper:
                             }
                         }
                         """
-                        self.self.driver.execute_script(zoom_script, button_times)
+                        self.driver.execute_script(zoom_script, button_times)
                     except Exception as e:
                         self.logger.info(f"@web_scrape.py Failed to zoom using JavaScript: {e}")
 
                 map_div = None
                 try:
                     # Method 1: JavaScript click
-                    map_div = self.self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
-                    self.self.driver.execute_script("arguments[0].click();", map_div)
+                    map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
+                    self.driver.execute_script("arguments[0].click();", map_div)
                     self.logger.info(" @web_scrape.py \nfirst method worked")
                 
                 except Exception as first_error:
@@ -1310,13 +1310,13 @@ class ASUWebScraper:
                             actions.perform()
                             self.logger.info(" @web_scrape.py \nmoved")
                   
-                map_markers = self.self.driver.find_elements(By.CSS_SELECTOR, 
+                map_markers = self.driver.find_elements(By.CSS_SELECTOR, 
                     'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
                 
                 for marker in map_markers:
                     try:
                         parent_div = marker.find_element(By.XPATH, '..')
-                        self.self.driver.execute_script("arguments[0].click();", parent_div)
+                        self.driver.execute_script("arguments[0].click();", parent_div)
                         
                         dialog = WebDriverWait(self.driver, 10).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="dialog"]'))

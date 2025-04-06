@@ -121,7 +121,14 @@ classwith task tracking and logging."""
         except Exception as e:
             self.logger.error(f"@utils.py Error formatting search results: {str(e)}")
             return "Error formatting search results."
-
+    def perform_raptor_tree_update(self,processed_docs):
+        try:
+            self.logger.info(f"@utils.py \nUpdating RAPTOR tree with new documents")
+            self.raptor_retriever.update_raptor_tree(processed_docs)
+        except Exception as e:  
+            self.logger.error(f"@utils.py Error updating RAPTOR tree: {str(e)}")
+            raise ValueError("Failed to update RAPTOR tree")
+        self.logger.info(f"@utils.py \nRAPTOR tree updated successfully")
     async def perform_web_search(self,search_url:str =None,  optional_query : str = None, doc_title : str =None, doc_category : str = None):
         try:
             # Initial search

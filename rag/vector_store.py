@@ -262,7 +262,20 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
     def _should_store_document(self, doc: Document) -> bool:
         self.logger.info(f"@vector_store.py Evaluating document for storage: {doc.metadata.get('url', 'Unknown')}")
         try:
-            urls = doc.metadata['url'] if isinstance(doc.metadata['url'], list) else [doc.metadata['url']]
+            # Flatten the URL list if it's a nested list
+            url_data = doc.metadata.get('url', 'Unknown')
+            if isinstance(url_data, list):
+                # Flatten nested lists
+                flat_urls = []
+                for url in url_data:
+                    if isinstance(url, list):
+                        flat_urls.extend(url)
+                    else:
+                        flat_urls.append(url)
+                urls = flat_urls
+            else:
+                urls = [url_data]
+                
             existing_docs = self.client.scroll(
                 collection_name=self.collection_name,
                 scroll_filter=models.Filter(

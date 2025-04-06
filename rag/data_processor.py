@@ -128,7 +128,7 @@ class DataPreprocessor:
                 'url': urls[:5],  # Use the extracted URLs
                 'timestamp': datetime.now(),
                 'total_source_documents': len(documents),
-                'cluster': None
+                'cluster_id': None
             }
         )
 

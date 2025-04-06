@@ -41,6 +41,22 @@ class RaptorRetriever:
                     if label not in clusters:
                         clusters[label] = []
                     clusters[label].append(all_docs[i])
+                    
+                    # Assign cluster IDs to documents if we're at level 0
+                    if level == 0:
+                        # Update the document with its cluster ID in the vector store
+                        try:
+                            doc_id = getattr(all_docs[i], 'id', None) or getattr(all_docs[i], 'metadata', {}).get('id')
+                            if doc_id:
+                                # Convert NumPy int32/64 to regular Python int if necessary
+                                cluster_label = int(label)
+                                self.vector_store.update_document_metadata(
+                                    doc_id, 
+                                    {"cluster_id": cluster_label}
+                                )
+                                self.logger.debug(f"@raptor.py Assigned cluster ID {cluster_label} to document {doc_id}")
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Failed to update document cluster ID: {str(e)}")
 
                 summaries = {label: self.generate_summary(docs) for label, docs in clusters.items()}
                 self.logger.info(f"@raptor.py Generated summaries for level {level + 1}")
@@ -150,7 +166,7 @@ class RaptorRetriever:
                             try:
                                 # Use the correct filter parameter format that Qdrant expects
                                 self.logger.debug(f"@raptor.py Executing similarity search for cluster {cluster_id}")
-                                filter_dict = {"metadata": {"cluster_id": cluster_id}}
+                                filter_dict = {"must": [{"key": "cluster_id", "match": {"value": cluster_id}}]}
                                 initial_results = self.vector_store.similarity_search(
                                     query, 
                                     k=top_k,
@@ -273,7 +289,7 @@ class RaptorRetriever:
         else:
             return getattr(doc, 'page_content', str(doc))
         
-    def update_raptor_tree(self, new_documents):
+    def update_raptor_tree(self, new_documents :list):
         """
         Update the RAPTOR tree with new documents without rebuilding the entire tree.
         
@@ -345,6 +361,20 @@ class RaptorRetriever:
                     # Add the document to the closest cluster
                     if closest_cluster is not None:
                         clusters[closest_cluster].append(new_documents[i])
+                        
+                        # Update the document's cluster_id in the vector store
+                        try:
+                            doc_id = getattr(new_documents[i], 'id', None) or getattr(new_documents[i], 'metadata', {}).get('id')
+                            if doc_id:
+                                # Convert NumPy int32/64 to regular Python int if necessary
+                                cluster_label = int(closest_cluster)
+                                self.vector_store.update_document_metadata(
+                                    doc_id, 
+                                    {"cluster_id": cluster_label}
+                                )
+                                self.logger.debug(f"@raptor.py Updated cluster ID {cluster_label} for document {doc_id} in vector store")
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Failed to update document cluster ID in vector store: {str(e)}")
                         
                         # Update the summary for this cluster
                         try:
