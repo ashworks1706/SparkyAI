@@ -36,13 +36,13 @@ class Main:
         self.logger.info("Setting up ASU Data Processor @ Main")
         self.firestore = Firestore(self.discord_state)
         self.logger.info("Setting up ASU Firestore @ Main")
-        self.utils = Utils(vector_store=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger= self.logger,group_chat=self.group_chat)
+        self.utils = Utils(vector_store_class=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger=self.logger,group_chat=self.group_chat)
         self.logger.info("Setting up ASU Utils @ Main")
         self.asu_scraper = ASUWebScraper(self.discord_state, self.utils, self.logger)
         self.logger.info("Setting up ASU Web Scraper @ Main")
         self.utils.asu_scraper = self.asu_scraper
         self.logger.info("Setting up ASU Utils @ Main")
-        self.agents = Agents(self.vector_store, self.asu_data_processor, self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, group_chat=self.group_chat)
+        self.agents = Agents(self.vector_store, self.asu_data_processor, self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, self.group_chat)
         self.logger.info("Setting up ASU Agents @ Main")
 
         if self.vector_store:

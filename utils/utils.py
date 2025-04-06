@@ -1,22 +1,22 @@
 from utils.common_imports import *
 from rag.raptor import RaptorRetriever
 class Utils:
-    def __init__(self,vector_store,asu_data_processor,asu_scraper,logger,group_chat):
+    def __init__(self,vector_store_class,asu_data_processor,asu_scraper,logger,group_chat):
         """Initialize the Utils from utils.common_imports import *
 classwith task tracking and logging."""
         try:
             self.tasks = []
-            self.vector_store_class = vector_store
             self.asu_data_processor = asu_data_processor
             self.asu_scraper = asu_scraper
-            self.current_content = "Understanding your question"
+            self.current_content = "Understanding your query..."
             self.message = None
             self.cached_doc_ids = []
             self.ground_sources =[]
             self.cached_queries=[]
-            self.vector_store = vector_store.get_vector_store()
+            self.vector_store_class = vector_store_class
+            self.vector_store = vector_store_class.get_vector_store()
             self.logger=logger
-            self.raptor_retriever = RaptorRetriever(vector_store=self.vector_store_class,logger=self.logger)
+            self.raptor_retriever = RaptorRetriever(vector_store_class=self.vector_store_class,logger=self.logger, vector_store=self.vector_store)
             self.group_chat=group_chat
             self.logger.info(f"@utils.py Group Chat setup successfully {group_chat}")
 
@@ -199,80 +199,152 @@ classwith task tracking and logging."""
     async def perform_similarity_search(self, query: str, categories: list):
         try:
             self.logger.info(f"@utils.py Action Model: Performing similarity search with query: {query}")
-            self.vector_store = self.vector_store.get_vector_store()
             if not self.vector_store:
                 self.logger.info(f"@utils.py \nVector Store not initialized")
                 raise ValueError("Vector store not properly initialized")
 
             # Correct filter construction using Qdrant's Filter class
             filter_conditions = None
-            if categories and len(categories) > 0:
-                
-
-                filter_conditions = Filter(
-                    must=[
-                        FieldCondition(
-                            key="metadata.category", 
-                            match=MatchAny(any=categories)
-                        )
-                    ]
-                )
+            try:
+                if categories and len(categories) > 0:
+                    filter_conditions = Filter(
+                        must=[
+                            FieldCondition(
+                                key="metadata.category", 
+                                match=MatchAny(any=categories)
+                            )
+                        ]
+                    )
+                    self.logger.info(f"@utils.py Filter conditions created for categories: {categories}")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error creating filter conditions: {str(e)}")
+                # Continue without filters if there's an error
 
             # Perform similarity search with optional filtering
-            results = self.vector_store.similarity_search(
-                query, 
-                filter=filter_conditions
-            )
+            try:
+                results = self.vector_store.similarity_search(
+                    query, 
+                    filter=filter_conditions
+                )
+                self.logger.info(f"@utils.py Similarity search completed, found {len(results)} results")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error during vector store similarity search: {str(e)}")
+                return None
 
             # Check if results are empty
             if not results:
                 self.logger.info(f"@utils.py \nNo documents found in vector store")
                 return None
 
-            documents = []
-            for doc in results:
-                doc_info = {
-                    'content': doc.page_content,
-                    'metadata': doc.metadata,
-                    'timestamp': doc.metadata.get('timestamp'),
-                    'url': doc.metadata.get('url'),
-                    'category': doc.metadata.get('category')
-                }
-                documents.append(doc_info)
+            try:
+                documents = []
+                for doc in results:
+                    doc_info = {
+                        'content': doc.page_content,
+                        'metadata': doc.metadata,
+                        'timestamp': doc.metadata.get('timestamp'),
+                        'url': doc.metadata.get('url'),
+                        'category': doc.metadata.get('category')
+                    }
+                    documents.append(doc_info)
 
-            self.logger.info(f"@utils.py Retrieved {len(documents)} documents from vector store")
-            return documents
+                self.logger.info(f"@utils.py Retrieved and processed {len(documents)} documents from vector store")
+                return documents
+            except Exception as e:
+                self.logger.error(f"@utils.py Error processing similarity search results: {str(e)}")
+                return None
+
+        except Exception as e:
+            self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
+            return None
 
         except Exception as e:
             self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
             return None
 
     def merge_search_results(self, raptor_results, similarity_results):
-        combined_results = raptor_results + similarity_results 
-        
-        deduplicated_results = []
-        seen_urls = set()
-        
-        for result in combined_results:
-            url = result.get('metadata', {}).get('url')
-            if url not in seen_urls:
-                seen_urls.add(url)
-                deduplicated_results.append(result)
-        
-        # Sort by relevance score (assuming higher is better)
-        sorted_results = sorted(deduplicated_results, key=lambda x: x.get('score', 0), reverse=True)
-        
-        return sorted_results[:10]  # Return top 10 unique results
+        """Merge and deduplicate search results from both retrieval methods"""
+        try:
+            self.logger.info(f"@utils.py Merging {len(raptor_results) if raptor_results else 0} RAPTOR results and {len(similarity_results) if similarity_results else 0} similarity results")
+            
+            # Handle cases where either result list might be None
+            raptor_results = raptor_results or []
+            similarity_results = similarity_results or []
+            
+            try:
+                combined_results = raptor_results + similarity_results
+                self.logger.info(f"@utils.py Combined results count: {len(combined_results)}")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error combining results: {str(e)}")
+                combined_results = []
+                # Try to salvage results if possible
+                if raptor_results:
+                    combined_results = raptor_results
+                elif similarity_results:
+                    combined_results = similarity_results
+            
+            try:
+                deduplicated_results = []
+                seen_urls = set()
+                
+                for result in combined_results:
+                    try:
+                        url = result.get('metadata', {}).get('url')
+                        # Handle both string and list URLs
+                        if isinstance(url, list):
+                            url_key = tuple(url) if url else None  # Convert list to hashable tuple
+                        else:
+                            url_key = url
+                            
+                        if url_key and url_key not in seen_urls:
+                            seen_urls.add(url_key)
+                            deduplicated_results.append(result)
+                    except Exception as e:
+                        self.logger.error(f"@utils.py Error processing individual result: {str(e)}")
+                        # Continue with next result
+                
+                self.logger.info(f"@utils.py Deduplicated results count: {len(deduplicated_results)}")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error during deduplication: {str(e)}")
+                deduplicated_results = combined_results[:10]  # Fallback to first 10 combined results
+            
+            try:
+                # Sort by relevance score, defaulting to 0 if score is missing
+                sorted_results = sorted(
+                    deduplicated_results, 
+                    key=lambda x: x.get('score', 0), 
+                    reverse=True
+                )
+                self.logger.info(f"@utils.py Successfully sorted results by relevance score")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error sorting results: {str(e)}")
+                sorted_results = deduplicated_results  # Fallback to unsorted results
+            
+            final_results = sorted_results[:10]  # Return top 10 unique results
+            self.logger.info(f"@utils.py Returning {len(final_results)} final merged results")
+            return final_results
+            
+        except Exception as e:
+            self.logger.error(f"@utils.py Error in merge_search_results: {str(e)}")
+            # Return whatever might be available as a fallback
+            if raptor_results:
+                return raptor_results[:10]
+            elif similarity_results:
+                return similarity_results[:10]
+            return []
 
     async def perform_database_search(self, query: str, categories: list):
+        self.logger.info(f"@utils.py \nPerforming database search with query: {query}")
         self.cached_queries.append(query)
         
         # check whether there are documents present on database or not else skip and return no documents in database
-        
-        if self.vector_store.get_document_count() == 0:
-            self.logger.info(f"@utils.py \nNo documents found in database")
-            return "No documents found in database"
-        
+        try:
+            if self.vector_store_class.get_document_count() == 0:
+                self.logger.info(f"@utils.py \nNo documents found in database")
+                return "No documents found in database"
+        except Exception as e:
+            self.logger.error(f"@utils.py Error checking document count in database {e}")
+            return "Error checking document count in database"
         # Perform RAPTOR search
         self.logger.info(f"@utils.py \nPerforming RAPTOR search")
         try:
@@ -294,22 +366,59 @@ classwith task tracking and logging."""
 
         self.logger.info(f"@utils.py Similarity search returned {len(similarity_results)} results")
         
-        # Combine and deduplicate results
-        combined_results = self.merge_search_results(raptor_results, similarity_results)
-        
-        # Process results
-        extracted_urls = []
-        self.cached_doc_ids.clear()
-        
-        for doc in combined_results[:5]:
-            doc_id = doc.get('metadata', {}).get('id')
-            if doc_id:
-                self.cached_doc_ids.append(doc_id)
-            sources = doc.get('metadata', {}).get('url', [])
-            extracted_urls.extend(sources)
-        
-        self.update_ground_sources(extracted_urls)
-        formatted_context = self.format_search_results(combined_results[:5])
+        try:
+            # Combine and deduplicate results
+            self.logger.info(f"@utils.py Combining and deduplicating search results")
+            combined_results = self.merge_search_results(raptor_results, similarity_results)
+            self.logger.info(f"@utils.py Combined {len(combined_results)} results successfully")
+            
+            # Process results
+            extracted_urls = []
+            try:
+                self.logger.info(f"@utils.py Clearing cached document IDs")
+                self.cached_doc_ids.clear()
+                self.logger.debug(f"@utils.py Cached document IDs cleared")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error clearing cached document IDs: {str(e)}")
+                self.cached_doc_ids = []  # Reset if clearing fails
+            
+            try:
+                self.logger.info(f"@utils.py Processing top {min(5, len(combined_results))} results")
+                for doc in combined_results[:5]:
+                    try:
+                        doc_id = doc.get('metadata', {}).get('id')
+                        if doc_id:
+                            self.cached_doc_ids.append(doc_id)
+                            self.logger.debug(f"@utils.py Added document ID to cache: {doc_id}")
+                        
+                        sources = doc.get('metadata', {}).get('url', [])
+                        if isinstance(sources, str):
+                            sources = [sources]  # Convert single URL to list
+                        extracted_urls.extend(sources)
+                        self.logger.debug(f"@utils.py Added sources: {sources}")
+                    except Exception as e:
+                        self.logger.error(f"@utils.py Error processing individual document: {str(e)}")
+                self.logger.info(f"@utils.py Extracted {len(extracted_urls)} URLs from results")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error processing search results: {str(e)}")
+            
+            try:
+                self.logger.info(f"@utils.py Updating ground sources with {len(extracted_urls)} URLs")
+                self.update_ground_sources(extracted_urls)
+                self.logger.info(f"@utils.py Ground sources updated successfully")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error updating ground sources: {str(e)}")
+            
+            try:
+                self.logger.info(f"@utils.py Formatting search results")
+                formatted_context = self.format_search_results(combined_results[:5])
+                self.logger.info(f"@utils.py Search results formatted successfully")
+            except Exception as e:
+                self.logger.error(f"@utils.py Error formatting search results: {str(e)}")
+                formatted_context = "Error formatting search results."
+        except Exception as e:
+            self.logger.error(f"@utils.py Error in perform_database_search: {str(e)}")
+            formatted_context = "Error performing database search."
         return formatted_context
 
     def update_ground_sources(self,extracted_urls:list):

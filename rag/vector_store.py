@@ -254,6 +254,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         except Exception as e:
             self.logger.error(f"@vector_store.py Failed to get document count: {str(e)}", exc_info=True)
             raise
+    
     def get_vector_store(self):
         self.logger.info(f"@vector_store.py Returning vector store instance")
         return self.vector_store

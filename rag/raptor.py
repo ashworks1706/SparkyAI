@@ -5,11 +5,12 @@ from sklearn.cluster import KMeans
 from sentence_transformers import CrossEncoder
 
 class RaptorRetriever:
-    def __init__(self, vector_store, logger, num_levels=3, branching_factor=5):
+    def __init__(self, vector_store_class, logger, vector_store,num_levels=3, branching_factor=5):
         try:
             self.logger = logger
-            self.vector_store = vector_store
+            self.vector_store_class = vector_store_class
             self.num_levels = num_levels
+            self.vector_store=vector_store
             self.branching_factor = branching_factor
             self.tree = self.build_raptor_tree()
             logger.info(f"@raptor.py RAPTOR Retriever initialized.")
@@ -20,9 +21,9 @@ class RaptorRetriever:
     def build_raptor_tree(self):
         tree = {}
         self.logger.info(f"@raptor.py Building RAPTOR tree...")
-        all_docs = self.vector_store.get_all_documents()
+        all_docs = self.vector_store_class.get_all_documents()
         self.logger.info(f"@raptor.py Retrieved {len(all_docs)} documents for tree construction")
-        all_embeddings = self.vector_store.get_embeddings(all_docs)
+        all_embeddings = self.vector_store_class.get_embeddings(all_docs)
 
         if not all_embeddings:
             self.logger.warning(f"@raptor.py No embeddings found. The vector store may be empty.")
@@ -51,7 +52,7 @@ class RaptorRetriever:
 
                 all_docs = list(summaries.values())
                 self.logger.info(f"@raptor.py Retrieved {len(all_docs)} documents for next level")
-                all_embeddings = self.vector_store.get_embeddings(all_docs)
+                all_embeddings = self.vector_store_class.get_embeddings(all_docs)
                 self.logger.info(f"@raptor.py Retrieved embeddings for next level")
 
                 if not all_embeddings:
@@ -95,33 +96,171 @@ class RaptorRetriever:
         return " ".join(summaries)[:200]
 
     def retrieve(self, query, top_k=5):
-        query_embedding = self.vector_store.embedding_model.embed_query(query)
-        current_level = self.num_levels - 1
-        current_node = self.tree[f"level_{current_level}"]
+        try:
+            self.logger.info(f"@raptor.py Retrieving documents for query: {query[:50]}...")
+            
+            try:
+                query_embedding = self.vector_store_class.embedding_model.embed_query(query)
+                self.logger.info(f"@raptor.py Generated query embedding successfully")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error generating query embedding: {str(e)}")
+                return []
+                
+            current_level = self.num_levels - 1
+            self.logger.info(f"@raptor.py Starting retrieval from level {current_level}")
+            
+            try:
+                current_node = self.tree[f"level_{current_level}"]
+                self.logger.info(f"@raptor.py Accessed level {current_level} with {len(current_node.get('summaries', {}))} summaries")
+            except KeyError:
+                self.logger.error(f"@raptor.py Level {current_level} not found in tree")
+                return []
+                
+            while current_level >= 0:
+                self.logger.debug(f"@raptor.py Processing at level {current_level}")
+                try:
+                    summaries = current_node["summaries"]
+                    self.logger.debug(f"@raptor.py Found {len(summaries)} summaries at level {current_level}")
+                    
+                    try:
+                        summary_embeddings = self.vector_store_class.get_embeddings(list(summaries.values()))
+                        self.logger.debug(f"@raptor.py Generated {len(summary_embeddings)} summary embeddings")
+                    except Exception as e:
+                        self.logger.error(f"@raptor.py Error generating summary embeddings at level {current_level}: {str(e)}")
+                        return []
+                    
+                    try:
+                        best_cluster = max(summaries.keys(), key=lambda x: np.dot(query_embedding, summary_embeddings[list(summaries.keys()).index(x)]))
+                        self.logger.info(f"@raptor.py Selected cluster {best_cluster} at level {current_level}")
+                    except (ValueError, IndexError) as e:
+                        self.logger.error(f"@raptor.py Error finding best cluster: {str(e)}")
+                        return []
 
-        while current_level >= 0:
-            summaries = current_node["summaries"]
-            summary_embeddings = self.vector_store.get_embeddings(list(summaries.values()))
-            best_cluster = max(summaries.keys(), key=lambda x: np.dot(query_embedding, summary_embeddings[x]))
+                    if current_level == 0:
+                        self.logger.info(f"@raptor.py Reached leaf level, retrieving documents from cluster {best_cluster}")
+                        try:
+                            # Convert NumPy int32 to standard Python int
+                            try:
+                                cluster_id = int(best_cluster)
+                                self.logger.debug(f"@raptor.py Converted cluster_id {best_cluster} to {cluster_id}")
+                            except (TypeError, ValueError) as e:
+                                self.logger.error(f"@raptor.py Failed to convert cluster_id: {str(e)}")
+                                return []
+                            
+                            try:
+                                # Use the correct filter parameter format that Qdrant expects
+                                self.logger.debug(f"@raptor.py Executing similarity search for cluster {cluster_id}")
+                                filter_dict = {"metadata": {"cluster_id": cluster_id}}
+                                initial_results = self.vector_store.similarity_search(
+                                    query, 
+                                    k=top_k,
+                                    filter=filter_dict
+                                )
+                                self.logger.info(f"@raptor.py Retrieved {len(initial_results)} initial results from cluster {cluster_id}")
+                            except Exception as e:
+                                self.logger.error(f"@raptor.py Error during similarity search: {str(e)}")
+                                self.logger.warning(f"@raptor.py Falling back to default search without cluster filter")
+                                try:
+                                    initial_results = self.vector_store.similarity_search(query, k=top_k)
+                                    self.logger.info(f"@raptor.py Fallback retrieved {len(initial_results)} results")
+                                except Exception as e2:
+                                    self.logger.error(f"@raptor.py Fallback search also failed: {str(e2)}")
+                                    return []
+                            
+                            if not initial_results:
+                                self.logger.warning(f"@raptor.py No results found in cluster {cluster_id}")
+                                return []
+                                
+                            try:
+                                reranked_results = self.rerank_results(query, initial_results, top_k)
+                                self.logger.info(f"@raptor.py Returning {len(reranked_results)} reranked results")
+                                return reranked_results
+                            except Exception as e:
+                                self.logger.error(f"@raptor.py Error during reranking: {str(e)}")
+                                self.logger.warning(f"@raptor.py Falling back to initial results")
+                                return initial_results[:top_k]
+                        except Exception as e:
+                            self.logger.error(f"@raptor.py Error during final retrieval: {str(e)}")
+                            return []
 
-            if current_level == 0:
-                initial_results = self.vector_store.similarity_search(query, filter={"cluster": best_cluster}, k=top_k)
-                return self.rerank_results(query, initial_results, top_k)
+                    current_level -= 1
+                    self.logger.info(f"@raptor.py Moving down to level {current_level}")
+                    
+                    try:
+                        current_node = self.tree[f"level_{current_level}"]
+                        self.logger.debug(f"@raptor.py Accessed next level with {len(current_node.get('summaries', {}))} summaries")
+                    except KeyError as e:
+                        self.logger.error(f"@raptor.py Error accessing level {current_level}: {str(e)}")
+                        return []
+                        
+                except KeyError as e:
+                    self.logger.error(f"@raptor.py Missing key in tree structure at level {current_level}: {str(e)}")
+                    return []
+                except Exception as e:
+                    self.logger.error(f"@raptor.py Unexpected error processing level {current_level}: {str(e)}")
+                    return []
 
-            current_level -= 1
-            current_node = self.tree[f"level_{current_level}"]
-            current_node = {k: v for k, v in current_node.items() if k in current_node["clusters"][best_cluster]}
-
-        self.logger.info(f"@raptor.py No results found in RAPTOR tree.")
-        return []
+            self.logger.warning(f"@raptor.py No results found in RAPTOR tree after traversal")
+            return []
+            
+        except Exception as e:
+            self.logger.error(f"@raptor.py Critical error in retrieve method: {str(e)}")
+            return []
 
     def rerank_results(self, query, initial_results, top_k=5):
-        cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
-        pairs = [[query, self.get_document_content(doc)] for doc in initial_results]
-        scores = cross_encoder.predict(pairs)
-        reranked_results = [doc for _, doc in sorted(zip(scores, initial_results), key=lambda x: x[0], reverse=True)]
-        self.logger.info(f"@raptor.py Reranked results.")
-        return reranked_results[:top_k]
+        try:
+            self.logger.info(f"@raptor.py Starting reranking with {len(initial_results)} documents")
+            
+            try:
+                cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                self.logger.info(f"@raptor.py Cross-encoder model loaded successfully")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error loading cross-encoder model: {str(e)}")
+                return initial_results[:top_k]  # Fallback to initial results
+            
+            try:
+                pairs = []
+                for doc in initial_results:
+                    try:
+                        content = self.get_document_content(doc)
+                        pairs.append([query, content])
+                        self.logger.debug(f"@raptor.py Created pair with content length: {len(content)}")
+                    except Exception as e:
+                        self.logger.error(f"@raptor.py Error extracting content from document: {str(e)}")
+                        pairs.append([query, ""])  # Add empty content as fallback
+                
+                self.logger.info(f"@raptor.py Created {len(pairs)} query-document pairs for reranking")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error creating document pairs: {str(e)}")
+                return initial_results[:top_k]  # Fallback to initial results
+                
+            try:
+                scores = cross_encoder.predict(pairs)
+                self.logger.info(f"@raptor.py Generated {len(scores)} scores with cross-encoder")
+                self.logger.debug(f"@raptor.py Score range: min={min(scores) if len(scores) > 0 else 'N/A'}, max={max(scores) if len(scores) > 0 else 'N/A'}")
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error predicting scores with cross-encoder: {str(e)}")
+                return initial_results[:top_k]  # Fallback to initial results
+                
+            try:
+                scored_results = list(zip(scores, initial_results))
+                sorted_results = sorted(scored_results, key=lambda x: x[0], reverse=True)
+                reranked_results = [doc for _, doc in sorted_results]
+                self.logger.info(f"@raptor.py Successfully reranked results")
+                
+                if len(reranked_results) > top_k:
+                    self.logger.info(f"@raptor.py Returning top {top_k} of {len(reranked_results)} reranked results")
+                else:
+                    self.logger.info(f"@raptor.py Returning all {len(reranked_results)} reranked results")
+                    
+                return reranked_results[:top_k]
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error sorting and slicing results: {str(e)}")
+                return initial_results[:top_k]  # Fallback to initial results
+                
+        except Exception as e:
+            self.logger.error(f"@raptor.py Unexpected error in reranking: {str(e)}")
+            return initial_results[:top_k]  # Fallback to initial results
 
     def get_document_content(self, doc):
         if isinstance(doc, str):
@@ -150,7 +289,7 @@ class RaptorRetriever:
             
             # Get embeddings for new documents
             try:
-                new_embeddings = self.vector_store.get_embeddings(new_documents)
+                new_embeddings = self.vector_store_class.get_embeddings(new_documents)
                 self.logger.info(f"@raptor.py Generated embeddings for {len(new_embeddings)} new documents")
             except Exception as e:
                 self.logger.error(f"@raptor.py Error generating embeddings: {str(e)}")
@@ -191,7 +330,7 @@ class RaptorRetriever:
                     
                     for cluster_id, cluster_docs in clusters.items():
                         try:
-                            cluster_embedding = self.vector_store.get_embeddings([level_0["summaries"][cluster_id]])[0]
+                            cluster_embedding = self.vector_store_class.get_embeddings([level_0["summaries"][cluster_id]])[0]
                             similarity = np.dot(embedding, cluster_embedding)
                             
                             self.logger.debug(f"@raptor.py Similarity with cluster {cluster_id}: {similarity}")

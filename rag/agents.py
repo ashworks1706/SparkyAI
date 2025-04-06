@@ -75,11 +75,7 @@ class Agents:
         self.student_jobs_agent = StudentJobsModel(self.firestore, self.genai, self.app_config, logger, self.student_jobs_agent_tools, discord_state)
         self.logger.info(f"@agents.py Initialized StudentJobsModel Instance")
 
-        self.superior_agent_tools = Superior_Agent_Tools(self.vector_store, self.asu_data_processor,
-            firestore, discord_state, utils, app_config, self.shuttle_status_agent, 
-            self.discord_agent, self.courses_agent, self.library_agent, self.news_media_agent, 
-            self.scholarship_agent, self.sports_agent, self.student_clubs_events_agent, 
-            self.student_jobs_agent, logger, self.group_chat
+        self.superior_agent_tools = Superior_Agent_Tools(self.vector_store, self.asu_data_processor,firestore, discord_state, utils, app_config, self.shuttle_status_agent,self.discord_agent, self.courses_agent, self.library_agent, self.news_media_agent,self.scholarship_agent, self.sports_agent, self.student_clubs_events_agent,self.student_jobs_agent, logger, self.group_chat
         )
         
         self.superior_agent = SuperiorModel(self.firestore, self.genai, self.app_config, self.logger, self.superior_agent_tools)
