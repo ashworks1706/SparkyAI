@@ -303,7 +303,7 @@ class Superior_Agent_Tools:
                 )
 
                 self.vector_store.queue_documents(processed_docs)
-                self.utils.perform_raptor_tree_update(processed_docs)
+                self.utils.raptor_retriever.queue_raptor_tree(processed_docs)
 
             if not response_text:
                 self.logger.error("@superior_agent_tools.py No response from Google Search")

@@ -316,5 +316,49 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         except Exception as e:
             self.logger.error(f"@vector_store.py Document evaluation error: {str(e)}")
             raise
-    
-    
+    def update_document_metadata(self, doc_id: str, metadata_update: dict) -> bool:
+        """
+        Update the metadata of a document in the vector store.
+        
+        Args:
+            doc_id (str): The ID of the document to update
+            metadata_update (dict): Dictionary containing metadata fields to update
+            
+        Returns:
+            bool: True if update was successful
+        """
+        try:
+            self.logger.info(f"@vector_store.py Updating metadata for document {doc_id}")
+            
+            # Get the existing document to preserve its content
+            search_result = self.client.retrieve(
+                collection_name=self.collection_name,
+                ids=[doc_id]
+            )
+            
+            if not search_result:
+                self.logger.error(f"@vector_store.py Document {doc_id} not found for metadata update")
+                return False
+                
+            existing_doc = search_result[0]
+            existing_metadata = existing_doc.payload.get("metadata", {})
+            
+            # Update metadata while preserving existing fields
+            updated_metadata = {**existing_metadata, **metadata_update}
+            
+            # Perform the update operation
+            self.client.set_payload(
+                collection_name=self.collection_name,
+                payload={"metadata": updated_metadata},
+                points=[doc_id]
+            )
+            
+            self.logger.info(f"@vector_store.py Successfully updated metadata for document {doc_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"@vector_store.py Failed to update document metadata: {str(e)}", exc_info=True)
+            self._log_detailed_error(e)
+            return False
+
+        

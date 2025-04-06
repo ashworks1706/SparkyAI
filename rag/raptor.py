@@ -10,6 +10,7 @@ class RaptorRetriever:
             self.logger = logger
             self.vector_store_class = vector_store_class
             self.num_levels = num_levels
+            self.queued_docs=[]
             self.vector_store=vector_store
             self.branching_factor = branching_factor
             self.tree = self.build_raptor_tree()
@@ -17,7 +18,20 @@ class RaptorRetriever:
         except Exception as e:
             logger.error(f"@raptor.py Error initializing RAPTOR Retriever: {str(e)}")
             raise e
-
+    def queue_raptor_tree(self, new_documents):
+        """
+        Queue new documents for updating the RAPTOR tree.
+        
+        Args:
+            new_documents: List of new documents to be added to the tree
+        """
+        try:
+            self.logger.info(f"@raptor.py Queuing {len(new_documents)} documents for RAPTOR tree update.")
+            self.queued_docs.extend(new_documents)
+            self.logger.info(f"@raptor.py Documents queued successfully.")
+        except Exception as e:
+            self.logger.error(f"@raptor.py Error queuing documents: {str(e)}")
+            raise e
     def build_raptor_tree(self):
         tree = {}
         self.logger.info(f"@raptor.py Building RAPTOR tree...")
@@ -50,7 +64,7 @@ class RaptorRetriever:
                             if doc_id:
                                 # Convert NumPy int32/64 to regular Python int if necessary
                                 cluster_label = int(label)
-                                self.vector_store.update_document_metadata(
+                                self.vector_store_class.update_document_metadata(
                                     doc_id, 
                                     {"cluster_id": cluster_label}
                                 )
@@ -289,23 +303,24 @@ class RaptorRetriever:
         else:
             return getattr(doc, 'page_content', str(doc))
         
-    def update_raptor_tree(self, new_documents :list):
+    async def update_raptor_tree(self):
         """
         Update the RAPTOR tree with new documents without rebuilding the entire tree.
         
         Args:
-            new_documents: List of new documents to add to the tree
+            self.queued_docs: List of new documents to add to the tree
         """
+        
         try:
-            self.logger.info(f"@raptor.py Updating RAPTOR tree with {len(new_documents)} new documents")
+            self.logger.info(f"@raptor.py Updating RAPTOR tree with {len(self.queued_docs)} new documents")
             
-            if not new_documents:
+            if not self.queued_docs:
                 self.logger.info(f"@raptor.py No new documents to add.")
                 return
             
             # Get embeddings for new documents
             try:
-                new_embeddings = self.vector_store_class.get_embeddings(new_documents)
+                new_embeddings = self.vector_store_class.get_embeddings(self.queued_docs)
                 self.logger.info(f"@raptor.py Generated embeddings for {len(new_embeddings)} new documents")
             except Exception as e:
                 self.logger.error(f"@raptor.py Error generating embeddings: {str(e)}")
@@ -360,15 +375,15 @@ class RaptorRetriever:
                     
                     # Add the document to the closest cluster
                     if closest_cluster is not None:
-                        clusters[closest_cluster].append(new_documents[i])
+                        clusters[closest_cluster].append(self.queued_docs[i])
                         
                         # Update the document's cluster_id in the vector store
                         try:
-                            doc_id = getattr(new_documents[i], 'id', None) or getattr(new_documents[i], 'metadata', {}).get('id')
+                            doc_id = getattr(self.queued_docs[i], 'id', None) or getattr(self.queued_docs[i], 'metadata', {}).get('id')
                             if doc_id:
                                 # Convert NumPy int32/64 to regular Python int if necessary
                                 cluster_label = int(closest_cluster)
-                                self.vector_store.update_document_metadata(
+                                self.vector_store_class.update_document_metadata(
                                     doc_id, 
                                     {"cluster_id": cluster_label}
                                 )

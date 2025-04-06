@@ -137,8 +137,10 @@ class ASUDiscordBot:
             self.logger.info(f"@discord_bot.py Successfully processed question for {interaction.user.name}")
             
             
+            
             self.firestore.update_message("user_message", question)
             await self.vector_store.store_to_vector_db()
+            await self.utils.perform_raptor_tree_update()
             document_id = await self.firestore.push_message()
             self.logger.info(f"@discord_bot.py Message pushed with document ID: {document_id}")
 
