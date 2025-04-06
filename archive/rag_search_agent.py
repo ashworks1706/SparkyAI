@@ -568,7 +568,7 @@ class RagSearchModel:
         try:
             user_id = self.discord_state.get('user_id')
             self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
-            self.logger.info("\nSearch model chat session initialized successfully")
+            self.logger.info(" Search model chat session initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize chat session: {str(e)}")
             raise RuntimeError("Could not start chat session")
@@ -604,7 +604,7 @@ class RagSearchModel:
                 for part in response.parts:
                     if hasattr(part, 'function_call') and part.function_call: 
                         final_response = await self.execute_function(part.function_call)
-                        self.firestore.update_message("rag_search_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                        self.firestore.update_message("rag_search_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
                     elif hasattr(part, 'text') and part.text.strip():
                         text = part.text.strip()
                         self.firestore.update_message("rag_search_agent_message", f"Text Response : {text} ")

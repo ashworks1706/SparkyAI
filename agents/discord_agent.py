@@ -289,7 +289,7 @@ class DiscordModel:
                 if hasattr(part, 'function_call') and part.function_call: 
                     # Execute function and store only its result
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message("discord_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                    self.firestore.update_message("discord_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
                 elif hasattr(part, 'text') and part.text.strip():
                     # Only store actual response content, skip analysis messages
                     text = part.text.strip()

@@ -50,7 +50,7 @@ class Main:
             self.logger.info("ASU RAG INITIALIZED SUCCESSFULLY")
             self.logger.info("---------------------------------------------------------------")
         else:
-            self.logger.warning("\nASU RAG INITIALIZED WITH ERRORS - VectorStore not available")
+            self.logger.warning(" ASU RAG INITIALIZED WITH ERRORS - VectorStore not available")
 
     async def initialize_scraper(self):
         return True
@@ -68,7 +68,7 @@ class Main:
         try:
             await bot.start()
         except KeyboardInterrupt:
-            self.logger.info("\nBot shutdown requested")
+            self.logger.info(" Bot shutdown requested")
             await bot.close()
         except Exception as e:
             self.logger.error(f"Bot error: {str(e)}", exc_info=True)

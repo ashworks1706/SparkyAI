@@ -296,6 +296,7 @@ class SuperiorModel:
             'get_user_profile_details': self.agent_tools.get_user_profile_details,
             'send_bot_feedback': self.agent_tools.send_bot_feedback,
             'access_courses_agent': self.agent_tools.access_courses_agent,
+            'access_sports_agent':self.agent_tools.access_sports_agent,
             'access_student_clubs_events_agent': self.agent_tools.access_student_clubs_events_agent,
             'access_library_agent': self.agent_tools.access_library_agent,
             'access_news_media_agent': self.agent_tools.access_news_media_agent,

@@ -33,7 +33,7 @@ class DataModel:
         """
 
         try:
-            self.logger.info(f"@data_agent.py Data Model: Refining Data with context : {search_context} \n and data : {text}")
+            self.logger.info(f"@data_agent.py Data Model: Refining Data with context : {search_context}   and data : {text}")
             response = await self.chat.send_message_async(prompt)
             if response and hasattr(response, 'text'):
                 parsed = self.parse_json_response(response.text)

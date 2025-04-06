@@ -95,14 +95,14 @@ class RaptorRetriever:
             raise e
 
         self.logger.info(f"@raptor.py Building RAPTOR tree completed.")
-        self.logger.info(f"@raptor.py RAPTOR Tree Structure:\n{self.format_tree_structure(tree)}")
+        self.logger.info(f"@raptor.py RAPTOR Tree Structure: {self.format_tree_structure(tree)}")
         return tree
 
     def format_tree_structure(self, tree):
         def format_level(level, level_data):
-            formatted = f"Level {level}:\n"
+            formatted = f"Level {level}: "
             for cluster_id, cluster_data in level_data["clusters"].items():
-                formatted += f"  Cluster {cluster_id}: {len(cluster_data)} documents\n"
+                formatted += f"  Cluster {cluster_id}: {len(cluster_data)} documents "
             return formatted
 
         formatted_tree = ""
@@ -429,7 +429,7 @@ class RaptorRetriever:
                 self.logger.error(f"@raptor.py Error propagating changes up the tree: {str(e)}")
             
             self.logger.info(f"@raptor.py RAPTOR tree update completed.")
-            self.logger.info(f"@raptor.py Updated Tree Structure:\n{self.format_tree_structure(self.tree)}")
+            self.logger.info(f"@raptor.py Updated Tree Structure: {self.format_tree_structure(self.tree)}")
         
         except Exception as e:
             self.logger.error(f"@raptor.py Error updating RAPTOR tree: {str(e)}")

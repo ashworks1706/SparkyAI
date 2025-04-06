@@ -184,7 +184,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
                 memmap_threshold=20000
             )
         )
-        self.logger.info(f"@vector_store.py \nCollection created successfully")
+        self.logger.info(f"@vector_store.py  Collection created successfully")
     
     def queue_documents(self, docs: List[Document]) -> None:
         """Queue documents for storage."""
@@ -234,7 +234,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
 
     def _initialize_vector_store(self) -> None:
         """Initialize the QdrantVectorStore."""
-        self.logger.info(f"@vector_store.py \nInitializing QdrantVectorStore")
+        self.logger.info(f"@vector_store.py  Initializing QdrantVectorStore")
         self.vector_store = QdrantVectorStore(
             client=self.client,
             collection_name=self.collection_name,
@@ -289,7 +289,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
             )[0]
             self.logger.info(f"@vector_store.py Existing documents found: {len(existing_docs)}")
             if existing_docs:
-                self.logger.info(f"@vector_store.py Found existing Docs\n")
+                self.logger.info(f"@vector_store.py Found existing Docs ")
                 self.logger.info(existing_docs)
                 new_timestamp = doc.metadata.get('timestamp')                
                 for existing_doc in existing_docs:

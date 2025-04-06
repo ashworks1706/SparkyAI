@@ -147,7 +147,7 @@ class StudentJobsModel:
                 if hasattr(part, 'function_call') and part.function_call:
                     
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message("jobs_agent_message", f"Function called {part.function_call}\n Function Response {final_response} ")
+                    self.firestore.update_message("jobs_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
                 elif hasattr(part, 'text') and part.text.strip():
                     text = part.text.strip()
                     self.firestore.update_message("jobs_agent_message", f"Text Response : {text}")

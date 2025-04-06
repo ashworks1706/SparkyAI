@@ -206,7 +206,7 @@ classwith task tracking and logging."""
        
     async def perform_similarity_search(self, query: str, categories: list):
         try:
-            self.logger.info(f"@utils.py Action Model: Performing similarity search with query: {query}")
+            self.logger.info(f"@utils.py Performing similarity search with query: {query}")
             if not self.vector_store:
                 self.logger.info(f"@utils.py \nVector Store not initialized")
                 raise ValueError("Vector store not properly initialized")
@@ -348,7 +348,7 @@ classwith task tracking and logging."""
         # check whether there are documents present on database or not else skip and return no documents in database
         try:
             if self.vector_store_class.get_document_count() == 0:
-                self.logger.info(f"@utils.py \nNo documents found in database")
+                self.logger.info(f"@utils.py No documents found in database")
                 return "No documents found in database"
         except Exception as e:
             self.logger.error(f"@utils.py Error checking document count in database {e}")
@@ -363,7 +363,7 @@ classwith task tracking and logging."""
         
         self.logger.info(f"@utils.py RAPTOR search returned {len(raptor_results)} results")
         
-        self.logger.info(f"@utils.py \nPerforming similarity search")    
+        self.logger.info(f"@utils.py Performing similarity search")    
         
         try:
             # Perform similarity search

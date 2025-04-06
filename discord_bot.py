@@ -16,7 +16,7 @@ class ASUDiscordBot:
             config: Optional bot configuration
         """
         self.logger= logger
-        self.logger.info(f"@discord_bot.py \nInitializing ASUDiscordBot")
+        self.logger.info(f"@discord_bot.py  Initializing ASUDiscordBot")
         self.config = config or BotConfig(app_config)
         self.app_config= app_config
         self.agents = agents

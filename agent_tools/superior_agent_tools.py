@@ -249,7 +249,8 @@ class Superior_Agent_Tools:
             if not responses:
                 self.logger.error("@superior_agent_tools.py No results found in database")
         except Exception as e:
-            self.logger.error("@superior_agent_tools.py Error in database search")
+            self.logger.error("@superior_agent_tools.py Error in database search ")
+            self.logger.error(f"@superior_agent_tools.py Error in database search responses: {responses}")
             raise Exception(f"Error in database search {e}")
 
         # Prepare the prompt
