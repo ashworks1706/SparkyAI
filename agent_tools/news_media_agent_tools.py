@@ -1,6 +1,7 @@
 from utils.common_imports import *
 
 class News_Media_Agent_Tools:
+    
     def __init__(self,firestore,utils,logger):
         self.firestore = firestore
         self.utils = utils
@@ -8,7 +9,6 @@ class News_Media_Agent_Tools:
         self.max_depth = 2
         self.max_links_per_page = 3
         
-   
     async def get_latest_news_updates(self, news_campus : list = None, search_bar_query: str = None,):
         if not any([search_bar_query, news_campus]):
             return "At least one parameter of this function is required. Neither Search query and news campus received. Please provide at least one parameter to perform search."

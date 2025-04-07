@@ -1,6 +1,7 @@
 from utils.common_imports import *
 
 class RaptorRetriever:
+    
     def __init__(self, vector_store_class, logger, vector_store,num_levels=3, branching_factor=5):
         try:
             self.logger = logger
@@ -14,6 +15,7 @@ class RaptorRetriever:
         except Exception as e:
             logger.error(f"@raptor.py Error initializing RAPTOR Retriever: {str(e)}")
             raise e
+    
     def queue_raptor_tree(self, new_documents):
         """
         Queue new documents for updating the RAPTOR tree.
@@ -28,6 +30,7 @@ class RaptorRetriever:
         except Exception as e:
             self.logger.error(f"@raptor.py Error queuing documents: {str(e)}")
             raise e
+    
     def build_raptor_tree(self):
         tree = {}
         self.logger.info(f"@raptor.py Building RAPTOR tree...")

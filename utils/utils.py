@@ -121,6 +121,7 @@ classwith task tracking and logging."""
         except Exception as e:
             self.logger.error(f"@utils.py Error formatting search results: {str(e)}")
             return "Error formatting search results."
+    
     async def perform_raptor_tree_update(self):
         try:
             await self.raptor_retriever.update_raptor_tree()
@@ -146,7 +147,7 @@ classwith task tracking and logging."""
             
             self.logger.info(f"@utils.py \nPreprocessing documents...")
             
-            try:
+            try: 
                 
                 processed_docs = await self.asu_data_processor.process_documents(
                     documents=documents, 

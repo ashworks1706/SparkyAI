@@ -1,6 +1,7 @@
 from utils.common_imports import *
 
 class Superior_Agent_Tools:
+    
     # This class contains the tools and methods for the superior agent to interact with other agents and perform various tasks.
     def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
         self.group_chat = group_chat
@@ -151,7 +152,6 @@ class Superior_Agent_Tools:
         except Exception as e:
             self.logger.error(f"@superior_agent_tools.py Error in access scholarship agent: {str(e)}")
             return "Scholarship Agent Not Responsive"
-    
     
     async def access_sports_agent(self, instruction_to_agent: str, special_instructions: str):
         self.logger.info(f"@superior_agent_tools.py Action Model : accessing sports agent with instruction {instruction_to_agent} with special instructions {special_instructions}")

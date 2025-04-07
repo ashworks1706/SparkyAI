@@ -1627,6 +1627,8 @@ class ASUWebScraper:
                 if 'https://app.joinhandshake.com/stu/postings' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
                     self.logger.info(f"@web_scrape.py Searching for ASU Handshake links {search_url}")
                     await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
+                
+                
                 # finally:
                 #     self.driver.quit()
  

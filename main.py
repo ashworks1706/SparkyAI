@@ -1,6 +1,7 @@
 from utils.common_imports import *
 
 class Main:
+    
     def __init__(self):
         # Initializing common logger
         logging.basicConfig(

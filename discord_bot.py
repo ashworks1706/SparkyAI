@@ -39,8 +39,7 @@ class ASUDiscordBot:
         )
         async def ask(interaction: discord.Interaction, question: str):
             await self._handle_ask_command(interaction, question)
-        
-            
+                  
     async def _handle_ask_command(
         self,
         interaction: discord.Interaction,
