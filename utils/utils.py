@@ -259,8 +259,7 @@ classwith task tracking and logging."""
             # Check if results are empty
             if not results:
                 self.logger.info(f"@utils.py \nNo documents found in vector store")
-                return None
-
+                return "No documents found in database"
             try:
                 documents = []
                 for doc in results:
@@ -417,15 +416,6 @@ classwith task tracking and logging."""
         except Exception as e:
             self.logger.error(f"@utils.py Error checking document count in database {e}")
             return "Error checking document count in database"
-        # Perform RAPTOR search
-        self.logger.info(f"@utils.py \nPerforming RAPTOR search")
-        try:
-            raptor_results = self.raptor_retriever.retrieve(query, top_k=5)
-        except Exception as e:
-            self.logger.error(f"@utils.py Error during RAPTOR search {e}")
-            raptor_results = []
-        
-        self.logger.info(f"@utils.py RAPTOR search returned {len(raptor_results)} results")
         
         self.logger.info(f"@utils.py Performing similarity search")    
         
@@ -437,6 +427,23 @@ classwith task tracking and logging."""
             similarity_results = []
 
         self.logger.info(f"@utils.py Similarity search returned {len(similarity_results)} results")
+        
+        if type(similarity_results) == str:
+            self.logger.info(f"@utils.py \nNo documents found in database")
+            return similarity_results
+        
+        # Perform RAPTOR search
+        self.logger.info(f"@utils.py \nPerforming RAPTOR search")
+        try:
+            raptor_results = self.raptor_retriever.retrieve(query, top_k=5)
+        except Exception as e:
+            self.logger.error(f"@utils.py Error during RAPTOR search {e}")
+            raptor_results = []
+        
+        self.logger.info(f"@utils.py RAPTOR search returned {len(raptor_results)} results")
+
+       
+        
         
         try:
             # Combine and deduplicate results
