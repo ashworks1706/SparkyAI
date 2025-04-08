@@ -221,6 +221,102 @@ classwith task tracking and logging."""
             self.logger.error(f"@utils.py Error in web search: {str(e)}")
             return "No results found on web"
        
+    # async def perform_similarity_search(self, query: str, categories: list):
+    #     try:
+    #         self.logger.info(f"@utils.py Performing similarity search with query: {query}")
+    #         if not self.vector_store:
+    #             self.logger.info(f"@utils.py \nVector Store not initialized")
+    #             raise ValueError("Vector store not properly initialized")
+
+    #         # Correct filter construction using Qdrant's Filter class
+    #         filter_conditions = None
+    #         try:
+    #             if categories and len(categories) > 0:
+    #                 filter_conditions = Filter(
+    #                     must=[
+    #                         FieldCondition(
+    #                             key="metadata.category", 
+    #                             match=MatchAny(any=categories)
+    #                         )
+    #                     ]
+    #                 )
+    #                 self.logger.info(f"@utils.py Filter conditions created for categories: {categories}")
+    #         except Exception as e:
+    #             self.logger.error(f"@utils.py Error creating filter conditions: {str(e)}")
+    #             # Continue without filters if there's an error
+
+    #         # Perform similarity search with optional filtering
+    #         try:
+    #             # Get more results than needed to allow for date-based sorting
+    #             raw_results = self.vector_store.similarity_search_with_score(
+    #                 query, 
+    #                 k=20,  # Get more results to sort by date
+    #                 filter=filter_conditions
+    #             )
+                
+    #             # Extract documents and their scores
+    #             scored_results = [(doc, score) for doc, score in raw_results]
+                
+    #             # Group documents by similar scores (within 0.05 similarity threshold)
+    #             # Then sort each group by timestamp
+    #             threshold = 0.05
+    #             score_groups = {}
+                
+    #             for doc, score in scored_results:
+    #                 # Round score to group similar scores
+    #                 score_group = round(score / threshold) * threshold
+    #                 if score_group not in score_groups:
+    #                     score_groups[score_group] = []
+    #                 score_groups[score_group].append((doc, score))
+                
+    #             # Sort each group by timestamp (newer first)
+    #             for group in score_groups.values():
+    #                 group.sort(key=lambda x: x[0].metadata.get('timestamp', ''), reverse=True)
+                
+    #             # Flatten groups back to a single list, preserving primary sort by score
+    #             sorted_groups = sorted(score_groups.items(), key=lambda x: x[0])
+    #             final_results = []
+    #             for _, group in sorted_groups:
+    #                 final_results.extend([doc for doc, _ in group])
+                
+    #             # Take only the documents (without scores)
+    #             results = final_results[:10]  # Limit to 10 final results
+                
+    #             self.logger.info(f"@utils.py Similarity search completed, found {len(results)} results prioritized by relevance and recency")
+    #         except Exception as e:
+    #             self.logger.error(f"@utils.py Error during vector store similarity search: {str(e)}")
+    #             return None
+
+    #         # Check if results are empty
+    #         if not results:
+    #             self.logger.info(f"@utils.py \nNo documents found in vector store")
+    #             return "No documents found in database"
+    #         try:
+    #             documents = []
+    #             for doc in results:
+    #                 doc_info = {
+    #                     'content': doc.page_content,
+    #                     'metadata': doc.metadata,
+    #                     'timestamp': doc.metadata.get('timestamp'),
+    #                     'url': doc.metadata.get('url'),
+    #                     'category': doc.metadata.get('category')
+    #                 }
+    #                 documents.append(doc_info)
+
+    #             self.logger.info(f"@utils.py Retrieved and processed {len(documents)} documents from vector store")
+    #             return documents
+    #         except Exception as e:
+    #             self.logger.error(f"@utils.py Error processing similarity search results: {str(e)}")
+    #             return None
+
+    #     except Exception as e:
+    #         self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
+    #         return None
+
+    #     except Exception as e:
+    #         self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
+    #         return None
+    
     async def perform_similarity_search(self, query: str, categories: list):
         try:
             self.logger.info(f"@utils.py Performing similarity search with query: {query}")
@@ -247,11 +343,29 @@ classwith task tracking and logging."""
 
             # Perform similarity search with optional filtering
             try:
-                results = self.vector_store.similarity_search(
+                # Get more results than needed to allow for embeddings-based filtering
+                raw_results = self.vector_store.similarity_search_with_score(
                     query, 
+                    k=20,  # Fetch more results to allow filtering
                     filter=filter_conditions
                 )
-                self.logger.info(f"@utils.py Similarity search completed, found {len(results)} results")
+                
+                # Extract documents and their scores
+                scored_results = [(doc, score) for doc, score in raw_results]
+                
+                # Embeddings-based filtering: Keep only documents with a score above a threshold
+                threshold = 0.75  # Adjust this threshold based on your use case
+                filtered_results = [doc for doc, score in scored_results if score >= threshold]
+                
+                self.logger.info(f"@utils.py Filtered results count after embeddings-based filtering: {len(filtered_results)}")
+                
+                # Sort filtered results by timestamp (newer first)
+                filtered_results.sort(key=lambda x: x.metadata.get('timestamp', ''), reverse=True)
+                
+                # Limit final results to top 10 documents
+                results = filtered_results[:10]
+
+                self.logger.info(f"@utils.py Similarity search completed, found {len(results)} results prioritized by relevance and recency")
             except Exception as e:
                 self.logger.error(f"@utils.py Error during vector store similarity search: {str(e)}")
                 return None
@@ -260,6 +374,7 @@ classwith task tracking and logging."""
             if not results:
                 self.logger.info(f"@utils.py \nNo documents found in vector store")
                 return "No documents found in database"
+            
             try:
                 documents = []
                 for doc in results:
@@ -282,9 +397,6 @@ classwith task tracking and logging."""
             self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
             return None
 
-        except Exception as e:
-            self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
-            return None
 
     def merge_search_results(self, raptor_results, similarity_results):
         """Merge and deduplicate search results from both retrieval methods"""
@@ -324,17 +436,17 @@ classwith task tracking and logging."""
                 elif similarity_results:
                     combined_results = similarity_results
             
-            self.logger.debug(f"@utils.py Combined results after conversion: {combined_results}")
-            
+            # Deduplicate by content similarity using a simple approach
             try:
                 deduplicated_results = []
                 seen_urls = set()
+                content_hashes = set()
                 
                 self.logger.info(f"@utils.py Deduplicating results")
                 
                 for result in combined_results:
                     try:
-                        # Safely extract URL from result whether it's a dict or has other structure
+                        # Deduplicate by URL first
                         url = None
                         metadata = result.get('metadata', {}) if isinstance(result, dict) else getattr(result, 'metadata', {})
                         
@@ -345,7 +457,6 @@ classwith task tracking and logging."""
                         url_key = None
                         if url:
                             if isinstance(url, list):
-                                # Convert nested lists to a flat tuple of strings
                                 flat_urls = []
                                 for item in url:
                                     if isinstance(item, list):
@@ -362,11 +473,19 @@ classwith task tracking and logging."""
                             if doc_id:
                                 url_key = f"id:{doc_id}"
                         
-                        if url_key and url_key not in seen_urls:
-                            seen_urls.add(url_key)
+                        # Content-based deduplication
+                        content = result.get('content', '') if isinstance(result, dict) else getattr(result, 'page_content', '')
+                        # Create a simple hash of the content (first 100 chars)
+                        content_hash = hash(content[:100].lower().strip())
+                        
+                        # Add document if neither URL nor content was seen before
+                        if (url_key and url_key not in seen_urls) or (content_hash not in content_hashes):
+                            if url_key:
+                                seen_urls.add(url_key)
+                            content_hashes.add(content_hash)
                             deduplicated_results.append(result)
                         else:
-                            self.logger.debug(f"@utils.py Skipping duplicate result with URL key: {url_key}")
+                            self.logger.debug(f"@utils.py Skipping redundant result")
                     except Exception as e:
                         self.logger.error(f"@utils.py Error processing individual result: {str(e)}")
                         # Continue with next result
@@ -390,6 +509,22 @@ classwith task tracking and logging."""
             except Exception as e:
                 self.logger.error(f"@utils.py Error sorting results: {str(e)}")
                 sorted_results = deduplicated_results  # Fallback to unsorted results
+            
+            # Reorder results to improve retrieval effectiveness (similar to LongContextReorder)
+            # Mix high and low ranked documents to avoid performance degradation
+            if len(sorted_results) > 5:
+                reordered_results = []
+                half = len(sorted_results) // 2
+                for i in range(half):
+                    reordered_results.append(sorted_results[i])  # High ranked
+                    if i + half < len(sorted_results):
+                        reordered_results.append(sorted_results[i + half])  # Low ranked
+                
+                # Add any remaining documents
+                for i in range(2 * half, len(sorted_results)):
+                    reordered_results.append(sorted_results[i])
+                    
+                sorted_results = reordered_results
             
             final_results = sorted_results[:10]  # Return top 10 unique results
             self.logger.info(f"@utils.py Returning {len(final_results)} final merged results")
