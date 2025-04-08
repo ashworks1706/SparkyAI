@@ -341,7 +341,7 @@ class ASUWebScraper:
                                         ActionChains(self.driver).move_to_element(element).click().perform()
                                         self.logger.info(" @web_scrape.py \nMoved and clicked successfully")
                                     except Exception:
-                                        raise Exception(f"Failed to click element after {max_attempts} attempts")
+                                        self.logger.error(f"Failed to click element after {max_attempts} attempts")
                         return False
                     
                     # Check if the job type is in the first level of buttons (Full-Time, Part-Time)
@@ -359,7 +359,7 @@ class ASUWebScraper:
                             force_click_element(self.driver, job_type_button)
                             self.logger.info(" @web_scrape.py \nSelect job type")
                         except Exception:
-                            raise Exception(f"Failed to click job type button: {job_type}")
+                            self.logger.info(f"Failed to click job type button: {job_type}")
                     else:
                         # For nested job types, click More button first
                         try:
@@ -382,7 +382,7 @@ class ASUWebScraper:
                             force_click_element(self.driver, job_type_button)
                             self.logger.info(" @web_scrape.py \nSelect Job type")
                         except Exception:
-                            raise Exception(f"Failed to click job type button: {job_type}")
+                            self.logger.info(f"Failed to click job type button: {job_type}")
                     
                 
                 self.logger.info(" @web_scrape.py \nClicked on all filters")
@@ -611,7 +611,6 @@ class ASUWebScraper:
                     
                 except Exception as e:
                     self.logger.error(f"@web_scrape.py Error processing course {e}")
-                    raise e
 
                     
                 formatted_courses = []
@@ -1009,8 +1008,8 @@ class ASUWebScraper:
                         except Exception as e:
                             self.logger.info(f"@web_scrape.py Status cell HTML: {status_cell.get_attribute('outerHTML')}")
                             self.logger.error(f"@web_scrape.py Error extracting library status: {e}")
-                            raise
-                            break
+                            
+                        
 
                         # Append to results
                         library_result = {
@@ -1566,9 +1565,7 @@ class ASUWebScraper:
                                         time.sleep(1)
                                     except Exception as filter_error:
                                         self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
-                                        raise Exception(f"Could not apply filter {param}: {filter_error}")
-                            
-                            # Click search button with multiple retry mechanism
+                                        pass  # Click search button with multiple retry mechanism
                             search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
                             for selector in search_button_selectors:
                                 try:
@@ -1582,7 +1579,7 @@ class ASUWebScraper:
                                     break
                                 except Exception as e:
                                     self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
-                                    raise Exception(f"Search button click failed for selector {selector}: {e}")
+                                    self.logger.error(f"Search button click failed for selector {selector}: {e}")
                         
                         # Extract scholarship links with improved URL construction
                         link_selectors = {

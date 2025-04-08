@@ -110,19 +110,70 @@ class RaptorRetriever:
         return formatted_tree
 
     def generate_summary(self, documents):
-        summaries = []
-        for doc in documents:
-            if isinstance(doc, str):
+        """
+        Generate a summary from a list of documents by combining their content snippets.
+        
+        Args:
+            documents: List of documents to summarize
+            
+        Returns:
+            A string summary of the documents
+        """
+        try:
+            self.logger.info(f"@raptor.py Generating summary for {len(documents)} documents")
+            summaries = []
+            
+            for i, doc in enumerate(documents):
                 try:
-                    doc_dict = json.loads(doc)
-                    content = doc_dict.get('page_content', '')
-                except json.JSONDecodeError:
-                    content = doc
-            else:
-                content = getattr(doc, 'page_content', str(doc))
-            summaries.append(content[:50])
-            self.logger.info(f"@raptor.py Generated summary for document.")
-        return " ".join(summaries)[:200]
+                    if isinstance(doc, str):
+                        try:
+                            doc_dict = json.loads(doc)
+                            content = doc_dict.get('page_content', '')
+                            self.logger.debug(f"@raptor.py Extracted content from JSON document {i}")
+                        except json.JSONDecodeError as e:
+                            self.logger.debug(f"@raptor.py Document {i} is not JSON: {str(e)}")
+                            content = doc
+                        except Exception as e:
+                            self.logger.warning(f"@raptor.py Error parsing JSON for document {i}: {str(e)}")
+                            content = doc
+                    else:
+                        try:
+                            content = getattr(doc, 'page_content', None)
+                            if content is None:
+                                self.logger.debug(f"@raptor.py No page_content for document {i}, using string representation")
+                                content = str(doc)
+                            else:
+                                self.logger.debug(f"@raptor.py Found page_content for document {i}")
+                        except Exception as e:
+                            self.logger.warning(f"@raptor.py Error accessing attributes for document {i}: {str(e)}")
+                            content = str(doc)
+                    
+                    # Truncate content if it's too long
+                    try:
+                        truncated = content[:50]
+                        summaries.append(truncated)
+                        self.logger.debug(f"@raptor.py Added summary snippet for document {i}: '{truncated}'")
+                    except Exception as e:
+                        self.logger.warning(f"@raptor.py Error truncating content for document {i}: {str(e)}")
+                        summaries.append("")
+                        
+                except Exception as e:
+                    self.logger.error(f"@raptor.py Error processing document {i}: {str(e)}")
+                    summaries.append("")
+            
+            # Create the final summary
+            try:
+                joined_summary = " ".join(summaries)
+                final_summary = joined_summary[:200]
+                self.logger.info(f"@raptor.py Generated summary: '{final_summary}'")
+                return final_summary
+            except Exception as e:
+                self.logger.error(f"@raptor.py Error creating final summary: {str(e)}")
+                return "Summary generation failed"
+                
+        except Exception as e:
+            self.logger.error(f"@raptor.py Critical error in generate_summary: {str(e)}")
+            return "Summary generation failed"
 
     def retrieve(self, query, top_k=5):
         try:
@@ -429,17 +480,25 @@ class RaptorRetriever:
                     # Update summaries in the current level
                     for cluster_id in self.tree[level_key]["clusters"]:
                         try:
-                            child_docs = []
-                            for child_cluster in self.tree[level_key]["clusters"][cluster_id]:
-                                child_docs.append(self.tree[prev_level_key]["summaries"][child_cluster])
+                            # Get the child clusters for this cluster
+                            child_clusters = self.tree[level_key]["clusters"][cluster_id]
+                            child_summaries = []
                             
-                            self.tree[level_key]["summaries"][cluster_id] = self.generate_summary(child_docs)
-                            self.logger.info(f"@raptor.py Updated summary for cluster {cluster_id} in level {level}")
+                            # For each child cluster, get its summary from the previous level
+                            for child_cluster in child_clusters:
+                                if child_cluster in self.tree[prev_level_key]["summaries"]:
+                                    child_summaries.append(self.tree[prev_level_key]["summaries"][child_cluster])
+                            
+                            if child_summaries:
+                                # Generate a new summary for this cluster based on child summaries
+                                self.tree[level_key]["summaries"][cluster_id] = self.generate_summary(child_summaries)
+                                self.logger.info(f"@raptor.py Updated summary for cluster {cluster_id} in level {level}")
+                            else:
+                                self.logger.warning(f"@raptor.py No child summaries found for cluster {cluster_id} at level {level}")
                         except Exception as e:
                             self.logger.error(f"@raptor.py Error updating cluster {cluster_id} at level {level}: {str(e)}")
             except Exception as e:
                 self.logger.error(f"@raptor.py Error propagating changes up the tree: {str(e)}")
-            
             self.logger.info(f"@raptor.py RAPTOR tree update completed.")
             self.logger.info(f"@raptor.py Updated Tree Structure: {self.format_tree_structure(self.tree)}")
         
