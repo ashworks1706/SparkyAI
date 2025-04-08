@@ -1083,7 +1083,6 @@ class ASUWebScraper:
                         'metadata': {
                             'url': url,
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            'source_type': 'asu_web_scrape',
                         }
                     })
             except Exception as e:

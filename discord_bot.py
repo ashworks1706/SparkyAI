@@ -1,6 +1,4 @@
-from utils.otp_verification import OTPVerificationModal
 from utils.verify_button import VerifyButton
-from utils.verification_modal import VerificationModal
 
 from utils.common_imports import * 
 class ASUDiscordBot:
