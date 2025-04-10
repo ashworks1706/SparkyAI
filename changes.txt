@@ -1,0 +1,19 @@
+
+# SETUP
+web_scrape.py
+    - Line 34-35
+    - Added support for macOS
+    - Line 52-53
+
+vector_store.py
+    - Line 1
+    - Added torch import
+    - Line 95-104
+    - Added support for mps, cuda or cpu instead of manually inputting device
+
+# SPORTS AGENT
+web_scrape.py
+    - Line 1391-
+    - Webscrape for ticket information
+
+

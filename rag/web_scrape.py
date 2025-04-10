@@ -31,7 +31,8 @@ class ASUWebScraper:
             self.chrome_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
         elif 'microsoft' in platform.uname().release.lower():  # WSL detection
             self.chrome_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
-            
+        elif platform.system() == 'Darwin':
+            self.chrome_options.binary_location = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
             
         try:
             # Get Chrome version (3rd element in output)
@@ -1387,7 +1388,53 @@ class ASUWebScraper:
             except Exception as e:
                 self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
                 return False
-            
+
+        elif 'https://sundevils.com/tickets' in url and selenium:
+            self.logger.info(" @web_scrape.py \nInitializing Ticketing Scraper")
+            # Initialize driver
+            self.driver = webdriver.Chrome(options=options)
+            try:
+                wait = WebDriverWait(self.driver, 10)
+                search_bar = wait.until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "sc-gEkIjz"))
+                )
+                # Clear any existing text and type the search term
+                search_bar.clear()
+                search_bar.send_keys(sport)
+                search_bar.send_keys(Keys.RETURN)  # Press Enter
+                time.sleep(2)
+                # Find relevant games
+                games = self.driver.find_elements(By.CLASS_NAME, "sc-lizKOf")
+                for game in games:
+                    if game.text.strip() == "":
+                        continue
+
+                    game_information = game.text.split("\n")
+
+                    # data we want to send the user
+                    sport = game_information[0]
+                    date = game_information[1]
+                    time = game_information[2]
+                    location = game_information[3]
+                    rival_team = game_information[4]
+                    themes = game_information[5]
+                    ticket_link = game_information[6]   
+                    event_link = game_information[7]
+                    extra_links = game_information[8]
+
+                    self.text_content.append({
+                        'content': f"{sport} - {date} - {time} - {location} - {rival_team} - {themes} - {ticket_link} - {event_link} - {extra_links}",
+                        'metadata': {
+                            'url': self.driver.current_url,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
+                    self.logger.info(self.text_content)
+                    
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Error initializing ticketing scraper: {e}")
+                return False  
+        
         else:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
             
