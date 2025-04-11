@@ -1391,8 +1391,14 @@ class ASUWebScraper:
 
         elif 'sundevils.com/tickets' in url and selenium:
             self.logger.info(" @web_scrape.py \nInitializing Ticketing Scraper")
+            self.text_content = []
+            # Initialize variables
             query = optional_query
-            sport = query
+            sport = query.get("sport")
+            query_date = query.get("date", "None")
+            query_time = query.get("time", "None")
+            query_rival_team = query.get("rival_team", "None")
+            query_location = query.get("location", "None")
             # Initialize driver
             try:
                 self.driver.get(url)
@@ -1403,7 +1409,6 @@ class ASUWebScraper:
                 )
                 # Clear any existing text and type the search term
                 search_bar.clear()
-                sport = query
                 self.logger.info(f"@web_scrape.py \nSport: {sport}")
                 search_bar.send_keys(sport)
                 search_bar.send_keys(Keys.RETURN)  # Press Enter
@@ -1436,50 +1441,64 @@ class ASUWebScraper:
                             continue
 
                         # data we want to send the user
-                        # sport = game_information[0]
-                        # date = game_information[1]
-                        # game_time = game_information[2]
-                        # location = game_information[3]
-                        # rival_team = game_information[4]
-                        # themes = game_information[5] if len(game_information) > 5 else ""
-                        # ticket_link = game_information[6] if len(game_information) > 6 else ""
-                        # event_link = game_information[7] if len(game_information) > 7 else ""
-                        # extra_links = game_information[8:] if len(game_information) > 8 else []
-
-                        # game_content = [
-                        #     f"Sport : {sport}\n",
-                        #     f"Date : {date}\n",
-                        #     f"Time : {game_time}\n",
-                        #     f"Location : {location}\n",
-                        #     f"Rival Team : {rival_team}\n",
-                        #     f"Themes : {themes}\n",
-                        #     f"Ticket Link : {ticket_link}\n",
-                        #     f"Event Link : {event_link}\n",
-                        #     f"Extra Links : {extra_links}\n"
-                        # ]
-                        # Extract information with safe defaults
-                        game_content = [
-                            f"Sport : {game_information[0] if len(game_information) > 0 else 'Unknown'}\n",
-                            f"Date : {game_information[1] if len(game_information) > 1 else 'TBD'}\n",
-                            f"Time : {game_information[2] if len(game_information) > 2 else 'TBD'}\n",
-                            f"Location : {game_information[3] if len(game_information) > 3 else 'TBD'}\n",
-                            f"Opponent : {game_information[4] if len(game_information) > 4 else 'TBD'}\n",
-                            f"Theme : {game_information[5] if len(game_information) > 5 else 'None'}\n"
-                        ]
+                        game_sport = game_information[0]
+                        game_date = game_information[1] + " " + game_information[2]
+                        game_time = game_information[3] + " " + game_information[4]
+                        game_location = game_information[5]
+                        game_rival_team = game_information[6]
+                        game_themes = []
+                        for theme in game_information[7:]:
+                            if theme != "Buy tickets" and theme != "Event details" and theme != "History":
+                                game_themes.append(theme)
                         
-                        # Add optional links if available
-                        if len(game_information) > 6:
-                            game_content.append(f"Ticket Link : {game_information[6]}\n")
-                        if len(game_information) > 7:
-                            game_content.append(f"Event Link : {game_information[7]}\n")
+                        # game links
+                        links = game.find_elements(By.TAG_NAME, "a")
+                        extra_links = []
+                        event_link = None
+                        ticket_link = None
+                        for link in links:
+                            if link.text == "Buy tickets":
+                                ticket_link = link.get_attribute("href")
+                            elif link.text == "Event details":
+                                event_link = link.get_attribute("href")
+                            else:
+                                extra_links.append(link.get_attribute("href"))
+
+                        # before storing content, make check if it game meets optional queries
+                        if query_date:
+                            self.logger.info(f"@web_scrape.py Game date: {game_date} Query date: {query_date}")
+                            if game_date != query_date:
+                                continue
+                        if query_time:
+                            if game_time != query_time:
+                                continue
+                        if query_rival_team:
+                            if game_rival_team != query_rival_team:
+                                continue
+                        if query_location:
+                            if game_location != query_location:
+                                continue
+
+                        # store content
+                        game_content = [
+                            f"Sport : {game_sport}\n",
+                            f"Date : {game_date}\n",
+                            f"Time : {game_time}\n",
+                            f"Location : {game_location}\n",
+                            f"Rival Team : {game_rival_team}\n",
+                            f"Themes : {game_themes}\n",
+                            f"Ticket Link : {ticket_link if ticket_link else "N/A"}\n",
+                            f"Event Link : {event_link if event_link else "N/A"}\n",
+                            f"Extra Links : {extra_links if extra_links else "N/A"}\n"
+                        ]
                             
-                        content.extend(game_content)
+                        content.append(game_content)
                     except Exception as e:
                         self.logger.error(f"@web_scrape.py Error processing game information: {e}")
                         continue
 
                 if content:
-                    content = set(content)
+                    # content = set(content)
                     self.text_content.append({
                         'content': content,
                         'metadata': {
@@ -1487,17 +1506,19 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
-                    self.logger.info(f'@web_scrape.py Ticketing scraper completed for {url}')
-                    return self.text_content[-1]
+                    self.logger.info(" @web_scrape.py \nAppended content to text_content")
+                    return self.text_content[:3]
                 else:
                     self.logger.warning(f'@web_scrape.py No content found for {url}')
-                    return None
+                    return False
+
+                # return True
             except Exception as e:
                 self.logger.error(f"@web_scrape.py Error initializing ticketing scraper: {e}")
-                return False  
+                return False 
+
         else:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
-            
         return False
     
     

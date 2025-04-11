@@ -79,7 +79,19 @@ class SportsModel:
                                       ),
                                       "match_date": content.Schema(
                                           type=content.Type.STRING,
-                                          description="Specific match date in YYYY-MM-DD format"
+                                          description="Specific match date in Month Day (Weekday) format (e.g., 'May. 19 (Thu)', 'Apr. 25 (Fri)')"
+                                      ),
+                                      "match_time": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Specific match time in HH:MM timezone 12-hour format (e.g., '1:00 p.m.(PT)', '2:00 p.m. (MST)')"
+                                      ),
+                                      "rival_team": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Rival team name, may start with 'at' or 'vs' followed by the rival team name (e.g., 'at Stanford', 'vs USC', 'at grand Canyon')"
+                                      ),
+                                      "location": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Location of the game, generally by stadium name (e.g., 'Phoenix Municipal Stadium')"
                                       )
                                   },
                                   required=["sport"]

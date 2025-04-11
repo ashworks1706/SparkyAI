@@ -98,8 +98,8 @@ for game in games:
     #top 10 games
     list_of_games.append(game_details)
 
-    # print(game_details)
-    # print("----------------")
+    print(game_details)
+    print("----------------")
 
 # Handle whenever query does not return a result
 try:
