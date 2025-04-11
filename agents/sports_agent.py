@@ -58,6 +58,33 @@ class SportsModel:
                                   required=["search_bar_query","sport"]
                               )
                           ),
+                          genai.protos.FunctionDeclaration(
+                            name="get_ticketing_info",
+                            description="Fetches ticketing information for Arizona State University sports events. Top 10 results.",
+                            parameters=content.Schema(
+                                type=content.Type.OBJECT,
+                                  properties={
+                                      "search_bar_query": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="search query to filter sports information"
+                                      ),
+                                      "sport": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Specific sport to search (e.g., 'football', 'basketball', 'baseball', 'soccer')",
+                                          enum=[
+                                              "football", "men's basketball", "women's basketball", "basketball",
+                                              "hockey", "baseball", "gymnastics", 
+                                              "volleyball", "softball", "wrestling"
+                                          ]
+                                      ),
+                                      "match_date": content.Schema(
+                                          type=content.Type.STRING,
+                                          description="Specific match date in YYYY-MM-DD format"
+                                      )
+                                  },
+                                  required=["sport"]
+                              )
+                            )
                     ],
                 ),
             ],
@@ -75,8 +102,8 @@ class SportsModel:
         function_args = function_call.args
         
         function_mapping = {
-            
             'get_latest_sport_updates': self.agent_tools.get_latest_sport_updates,
+            'get_ticketing_info': self.agent_tools.get_ticketing_info
         }
         
             
@@ -89,9 +116,8 @@ class SportsModel:
             if func_response:
                 return func_response
             else:
-                self.logger.error(f"@sports_agent.py Error extracting text from response: {e}")
+                self.logger.error(f"@sports_agent.py Error extracting text from function")
                 return "Error processing response"
-            
             
         else:
             raise ValueError(f"Unknown function: {function_name}")

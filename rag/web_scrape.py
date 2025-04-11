@@ -49,8 +49,8 @@ class ASUWebScraper:
             
             logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            if chrome_version != driver_version:
-                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            # if chrome_version != driver_version:
+            #     raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
@@ -1389,52 +1389,112 @@ class ASUWebScraper:
                 self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
                 return False
 
-        elif 'https://sundevils.com/tickets' in url and selenium:
+        elif 'sundevils.com/tickets' in url and selenium:
             self.logger.info(" @web_scrape.py \nInitializing Ticketing Scraper")
+            query = optional_query
+            sport = query
             # Initialize driver
-            self.driver = webdriver.Chrome(options=options)
             try:
-                wait = WebDriverWait(self.driver, 10)
+                self.driver.get(url)
+                wait = WebDriverWait(self.driver, 15)
+                # wait for search bar to load
                 search_bar = wait.until(
                     EC.presence_of_element_located((By.CLASS_NAME, "sc-gEkIjz"))
                 )
                 # Clear any existing text and type the search term
                 search_bar.clear()
+                sport = query
+                self.logger.info(f"@web_scrape.py \nSport: {sport}")
                 search_bar.send_keys(sport)
                 search_bar.send_keys(Keys.RETURN)  # Press Enter
-                time.sleep(2)
+                time.sleep(3)
                 # Find relevant games
-                games = self.driver.find_elements(By.CLASS_NAME, "sc-lizKOf")
+                # Wait for game elements to be present
+                try:
+                    # Wait for game elements to be present
+                    games = wait.until(
+                        EC.presence_of_all_elements_located((By.CLASS_NAME, "sc-lizKOf"))
+                    )
+                except TimeoutException:
+                    self.logger.error("@web_scrape.py No game elements found within timeout period")
+                    return False
+                # store game info
+                content=[]
                 for game in games:
-                    if game.text.strip() == "":
+                    try:
+                        # Wait for game content to be visible
+                        WebDriverWait(self.driver, 5).until(
+                            EC.visibility_of(game)
+                        )
+                        # Check if game content is empty
+                        if game.text.strip() == "":
+                            continue
+
+                        game_information = game.text.split("\n")
+                        if len(game_information) < 1:  # Minimum required fields
+                            self.logger.warning(f"@web_scrape.py Incomplete game information found: {game_information}")
+                            continue
+
+                        # data we want to send the user
+                        # sport = game_information[0]
+                        # date = game_information[1]
+                        # game_time = game_information[2]
+                        # location = game_information[3]
+                        # rival_team = game_information[4]
+                        # themes = game_information[5] if len(game_information) > 5 else ""
+                        # ticket_link = game_information[6] if len(game_information) > 6 else ""
+                        # event_link = game_information[7] if len(game_information) > 7 else ""
+                        # extra_links = game_information[8:] if len(game_information) > 8 else []
+
+                        # game_content = [
+                        #     f"Sport : {sport}\n",
+                        #     f"Date : {date}\n",
+                        #     f"Time : {game_time}\n",
+                        #     f"Location : {location}\n",
+                        #     f"Rival Team : {rival_team}\n",
+                        #     f"Themes : {themes}\n",
+                        #     f"Ticket Link : {ticket_link}\n",
+                        #     f"Event Link : {event_link}\n",
+                        #     f"Extra Links : {extra_links}\n"
+                        # ]
+                        # Extract information with safe defaults
+                        game_content = [
+                            f"Sport : {game_information[0] if len(game_information) > 0 else 'Unknown'}\n",
+                            f"Date : {game_information[1] if len(game_information) > 1 else 'TBD'}\n",
+                            f"Time : {game_information[2] if len(game_information) > 2 else 'TBD'}\n",
+                            f"Location : {game_information[3] if len(game_information) > 3 else 'TBD'}\n",
+                            f"Opponent : {game_information[4] if len(game_information) > 4 else 'TBD'}\n",
+                            f"Theme : {game_information[5] if len(game_information) > 5 else 'None'}\n"
+                        ]
+                        
+                        # Add optional links if available
+                        if len(game_information) > 6:
+                            game_content.append(f"Ticket Link : {game_information[6]}\n")
+                        if len(game_information) > 7:
+                            game_content.append(f"Event Link : {game_information[7]}\n")
+                            
+                        content.extend(game_content)
+                    except Exception as e:
+                        self.logger.error(f"@web_scrape.py Error processing game information: {e}")
                         continue
 
-                    game_information = game.text.split("\n")
-
-                    # data we want to send the user
-                    sport = game_information[0]
-                    date = game_information[1]
-                    time = game_information[2]
-                    location = game_information[3]
-                    rival_team = game_information[4]
-                    themes = game_information[5]
-                    ticket_link = game_information[6]   
-                    event_link = game_information[7]
-                    extra_links = game_information[8]
-
+                if content:
+                    content = set(content)
                     self.text_content.append({
-                        'content': f"{sport} - {date} - {time} - {location} - {rival_team} - {themes} - {ticket_link} - {event_link} - {extra_links}",
+                        'content': content,
                         'metadata': {
-                            'url': self.driver.current_url,
+                            'url': url,
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
-                    self.logger.info(self.text_content)
-                    
+                    self.logger.info(f'@web_scrape.py Ticketing scraper completed for {url}')
+                    return self.text_content[-1]
+                else:
+                    self.logger.warning(f'@web_scrape.py No content found for {url}')
+                    return None
             except Exception as e:
                 self.logger.error(f"@web_scrape.py Error initializing ticketing scraper: {e}")
                 return False  
-        
         else:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
             

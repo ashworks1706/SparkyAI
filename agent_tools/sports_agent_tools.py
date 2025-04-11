@@ -34,5 +34,13 @@ class Sports_Agent_Tools:
          
         
         return await self.utils.perform_web_search(search_url)
+    
+    async def get_ticketing_info(self, search_bar_query: str = None, sport: str = None, match_date: str = None):
+        if not any([search_bar_query, sport]):
+            return "Please provide at least one sport to perform the search."
+        
+        url = "sundevils.com/tickets"
+        return await self.utils.asu_scraper.scrape_content(url=url, query_type=sport, selenium=True, optional_query=sport)
+        
 
    
