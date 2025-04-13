@@ -93,8 +93,8 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         try:
             self.embedding_model = HuggingFaceEmbeddings(
                 model_name=model_name,
-                # model_kwargs={'device': 'cpu'}
-                model_kwargs={'device': 'cuda'}
+                model_kwargs={'device': 'cpu'}
+                #model_kwargs={'device': 'cuda'}
                 # rename to : "cpu" if no gpu is found
             )
             self.vector_size = len(self.embedding_model.embed_query("test"))

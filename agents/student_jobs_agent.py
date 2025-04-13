@@ -1,15 +1,16 @@
 from utils.common_imports import *
+from datetime import datetime
+import time
 from typing import Dict, List
 
 class StudentJobsModel:
-    
     def __init__(self, firestore, genai, app_config, logger, jobs_agent_tools, discord_state):
         self.logger = logger
         self.agent_tools = jobs_agent_tools
         self.discord_state = discord_state
         self.app_config = app_config
 
-        # Create the Gemini model with a new function declaration "get_workday_student_jobs"
+        # Create the Gemini model with a function declaration for Workday scraping.
         self.model = genai.GenerativeModel(
             model_name="gemini-2.0-flash",
             generation_config={
@@ -44,15 +45,14 @@ class StudentJobsModel:
                                         description="Max number of jobs to return"
                                     ),
                                 },
-                                required=["keyword"]
+                                required=["keyword"]  # 'keyword' must be provided
                             )
                         ),
-                    ],
-                ),
+                    ]
+                )
             ],
             tool_config={'function_calling_config': 'ANY'},
         )
-
         self.firestore = firestore
         self.chat = None
         self.last_request_time = time.time()
@@ -60,10 +60,10 @@ class StudentJobsModel:
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
         
     async def execute_function(self, function_call):
-        """Execute whichever function the agent has decided to call."""
+        """Execute the function requested by the agent."""
         function_name = function_call.name
         function_args = function_call.args
-        
+
         function_mapping = {
             'get_workday_student_jobs': self.agent_tools.get_workday_student_jobs,
         }
@@ -72,7 +72,6 @@ class StudentJobsModel:
             function_to_call = function_mapping[function_name]
             func_response = await function_to_call(**function_args)
             self.logger.info(f"@student_jobs_agent.py: Function '{function_name}' response: {func_response}")
-            
             if func_response:
                 return func_response
             else:
@@ -82,12 +81,11 @@ class StudentJobsModel:
             raise ValueError(f"Unknown function: {function_name}")
    
     def _initialize_model(self):
-        """Setup or check the model, plus basic rate-limiting logic."""
+        """Initialize the model and apply a simple rate limit."""
         if not self.model:
             self.logger.error("@student_jobs_agent.py Model not initialized.")
             return
 
-        # Rate limiting check
         current_time = time.time()
         if current_time - self.last_request_time < 1.0: 
             raise Exception("Rate limit exceeded")
@@ -98,8 +96,9 @@ class StudentJobsModel:
 
     async def determine_action(self, instruction_to_agent: str, special_instructions: str) -> str:
         """
-        Invoked with the user's query. The agent uses its context and the prompt 
-        to determine if it should call get_workday_student_jobs, then returns the result.
+        Determines the action based on the user's query; if the agent
+        needs to call a tool (like get_workday_student_jobs), it does so,
+        then returns the tool's output or the plain text response.
         """
         try:
             self._initialize_model()

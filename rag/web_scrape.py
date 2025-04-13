@@ -33,6 +33,9 @@ class ASUWebScraper:
         
         if platform.system() == 'Linux':
             self.chrome_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
+        elif platform.system() == 'Darwin':
+            # macOS
+            self.chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"    
         elif 'microsoft' in platform.uname().release.lower():  # WSL detection
             self.chrome_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
             
