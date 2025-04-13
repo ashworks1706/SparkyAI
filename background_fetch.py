@@ -60,17 +60,17 @@ class Background_Fetch:
         try:
             for doc_category, doc_list in {
                 "shuttles_status": self.shuttle_docs,
-                # "events_info": self.event_docs,
-                # "news_info": self.news_docs,
-                # "clubs_info": self.club_docs,
-                # "study_rooms_status": self.study_room_docs,
-                # "courses_catalog": self.course_docs,
-                # "social_media_updates": self.social_media_instagram_docs,
-                # "social_media_updates": self.social_media_x_docs,
-                # "social_media_updates": self.social_media_facebook_docs,
-                # "scholarships_info": self.scholarships_goglobal_docs,
-                # "scholarships_info": self.scholarships_onsa_docs,
-                # "library_catalog": self.library_catalog_docs
+                "events_info": self.event_docs,
+                "news_info": self.news_docs,
+                "clubs_info": self.club_docs,
+                "study_rooms_status": self.study_room_docs,
+                "courses_catalog": self.course_docs,
+                "social_media_updates": self.social_media_instagram_docs,
+                "social_media_updates": self.social_media_x_docs,
+                "social_media_updates": self.social_media_facebook_docs,
+                "scholarships_info": self.scholarships_goglobal_docs,
+                "scholarships_info": self.scholarships_onsa_docs,
+                "library_catalog": self.library_catalog_docs
             }.items():
                 for doc in doc_list:
                     processed_docs= await self.asu_data_processor.process_documents(

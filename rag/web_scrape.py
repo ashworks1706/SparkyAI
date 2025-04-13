@@ -5,13 +5,12 @@ import platform
 class ASUWebScraper:
     def __init__(self,discord_state,utils,logger):
         self.discord_client = discord_state.get('discord_client')
-        self.visited_urls = set()
         self.utils = utils
         self.text_content = []
         self.logged_in_driver= None
         self.chrome_options = Options()
         # if you want to start chrome supressed enable this comment
-        self.chrome_options.add_argument('--headless')  
+        # self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
@@ -200,11 +199,8 @@ class ASUWebScraper:
             self.logger.error(f"@web_scrape.py Error parsing URL: {url}, Exception: {str(e)}")
             return False
         
-        if url in self.visited_urls:
-            return False
         
         self.logger.info(f"@web_scrape.py Visiting URL: {url}")
-        self.visited_urls.add(url)
         
         
         if not selenium:
@@ -1338,6 +1334,7 @@ class ASUWebScraper:
                                             'Next Bus': next_bus_time,
                                             'Second Bus': second_bus_time
                                         })
+                                        self.logger.info(f"@web_scrape.py \nRoute: {route_name}, Next Bus: {next_bus_time}, Second Bus: {second_bus_time}")
                                     except IndexError:
                                         # Skip routes without bus times
                                         continue
@@ -1348,6 +1345,7 @@ class ASUWebScraper:
                                         'Station': stop_name,
                                         'Routes': station_routes
                                     }]
+                                    self.logger.info(f"@web_scrape.py \nParsed station: {parsed_stations}")
                                     results.extend(parsed_stations)
                             
                         except Exception as e:
@@ -1359,17 +1357,17 @@ class ASUWebScraper:
                     return False
                 
                 
+                self.logger.info("Results : %s" % results)
+
                 content = [
-                            f"Station : {result['Station']}\n"
-                            f"Route : {route['Route']}\n"
-                            f"Next Bus : {route['Next Bus']}\n"
-                            f"Second Bus : {route['Second Bus']}"
-                            for result in results
-                            for route in result['Routes']
-                            if 'mins.' in route['Next Bus'] and 'mins.' in route['Second Bus']
-                        ]
-                content = set(content)
-                self.logger.info(f"Conmtent : {content}")  
+                    f"Station: {result['Station']}\n"
+                    f"Route: {route['Route']}\n"
+                    f"Next Bus: {route['Next Bus']}\n"
+                    f"Second Bus: {route['Second Bus']}\n"
+                    for result in results
+                    for route in result['Routes']
+                ]
+                self.logger.info(f"Content: {content}")
                 for c in content:
                     self.text_content.append({
                         'content': c,
@@ -1630,7 +1628,7 @@ class ASUWebScraper:
             
             self.logger.info(f"Retrieved textcontent : {self.text_content}")
         
-        self.driver.quit()
+        # self.driver.quit()
 
         return self.text_content
                 

@@ -42,7 +42,7 @@ class Shuttles:
             for route in shuttle_route:
                 self.temp_docs = await self.asu_scraper.engine_search(search_url, route)
                 self.logger.info(f"@shuttles.py Tempddocs retrieved {self.temp_docs}")
-                self.shuttle_docs.append( {
+                self.shuttle_docs.append({
                     "documents": self.temp_docs,
                     "search_context": f"ASU Shuttle live status for {route}",
                     "title": doc_title
