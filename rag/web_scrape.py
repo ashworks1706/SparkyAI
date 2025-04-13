@@ -7,6 +7,7 @@ class ASUWebScraper:
     def __init__(self,discord_state,utils,logger):
         self.discord_client = discord_state.get('discord_client')
         self.utils = utils
+        self.discord_state = discord_state
         self.text_content = []
         self.logged_in_driver= None
         self.chrome_options = Options()
@@ -27,6 +28,7 @@ class ASUWebScraper:
 
         self.logger= logger
         
+        self.login_sessions = []
         # logger.info(" @web_scrape.py Enter Chrome binary location")
         logger.info('/usr/bin/google-chrome-stable # Standard Linux path')
         logger.info('/mnt/c/Program Files/Google/Chrome/Application/chrome.exe # Standard WSL path')
@@ -112,61 +114,7 @@ class ASUWebScraper:
                 self.logger.info(" @web_scrape.py \nSuccessfully clciked on cookie button")
             except:
                 pass
-
-    async def __login__(self, username, password):
-        try:
-            # Navigate to Handshake login page
-            self.driver.get("https://asu.joinhandshake.com/login?ref=app-domain")
-            
-            # Wait for page to load
-            wait = WebDriverWait(self.driver, 10)
-            
-            # Find and click "Sign in with your email address" button
-            email_signin_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//a[@data-bind='click: toggle']"))
-            )
-            email_signin_button.click()
-            
-            # Enter email address
-            email_input = wait.until(
-                EC.presence_of_element_located((By.ID, "non-sso-email-address"))
-            )
-            email_input.send_keys(username)
-            
-            # Click "Next" button
-            next_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@type='submit' and contains(@class, 'button')]"))
-            )
-            next_button.click()
-            
-            # Click "Or log in using your Handshake credentials"
-            alternate_login = wait.until(
-                EC.element_to_be_clickable((By.CLASS_NAME, "alternate-login-link"))
-            )
-            alternate_login.click()
-            
-            # Enter password
-            password_input = wait.until(
-                EC.presence_of_element_located((By.ID, "password"))
-            )
-            password_input.send_keys(password)
-            
-            # Submit login
-            submit_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='submit' and contains(@class, 'button default-focus')]"))
-            )
-            submit_button.click()
-            
-            
-            # Store the logged-in driver state
-            self.logged_in_driver = self.driver
-            
-            return True
-        
-        except Exception as e:
-            self.logger.error(f"@web_scrape.py Login failed: {str(e)}")
-            return False
-        
+       
     async def scrape_content(self, url: str, query_type: str = None, max_retries: int = 3, selenium :bool = False, optional_query:str=None) -> bool:
         """Scrape content using Jina.ai"""
         
@@ -259,7 +207,7 @@ class ASUWebScraper:
 
             self.logger.info(" @web_scrape.py \nLogin to Handshake")
             # Navigate to Handshake job postings
-            self.logged_in_self.driver.get(url)
+            self.logged_in_driver.get(url)
             
             
             # Wait for page to load
@@ -1405,7 +1353,12 @@ class ASUWebScraper:
     
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
-     
+        session_exists = self.discord_state.get('user_session_id')
+        
+        if session_exists !=None:
+            self.driver=self.login_sessions[session_exists]
+            
+            
         search_results = []
         try:
             self.logger.info(f"@web_scrape.py Updating discord text {search_url}")
@@ -1744,6 +1697,113 @@ class ASUWebScraper:
         self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
         return all_jobs_data
             
+    
+    async def login_user_credentials(self):
+        """Create an incognito Chrome window and sign into MyASU with user credentials"""
+        try:
+            asu_rite = self.discord_state.get('user_asu_rite')
+            password = self.discord_state.get('user_password')
+            session_id = self.discord_state.get('user_session_id')
+            
+            if not asu_rite or not password or not session_id:
+                self.logger.error("@web_scrape.py Missing credentials or session ID")
+                self.logger.info(f"@web_scrape.py asu_rite: {asu_rite}, password: {password}, session_id: {session_id}")
+                return False
+            
+            # Create incognito Chrome window for this user session
+            incognito_options = Options()
+            incognito_options.add_argument("--incognito")
+            incognito_options.add_argument('--no-sandbox')
+            incognito_options.add_argument('--disable-dev-shm-usage')
+            incognito_options.add_argument('--disable-gpu')
+            incognito_options.add_argument('--window-size=1920,1080')
+            
+            # Apply the same binary location logic as the main driver
+            if platform.system() == 'Linux':
+                incognito_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
+            elif 'microsoft' in platform.uname().release.lower():  # WSL detection
+                incognito_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
+                
+            logged_in_driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=incognito_options)
+            
+            # Navigate to MyASU login page and authenticate
+            try:
+                logged_in_driver.get("https://weblogin.asu.edu/cas/login")
+                
+                # Wait for login form to appear
+                username_field = WebDriverWait(logged_in_driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "username"))
+                )
+                password_field = logged_in_driver.find_element(By.ID, "password")
+                
+                # Input credentials
+                username_field.send_keys(asu_rite)
+                password_field.send_keys(password)
+                
+                # Submit the form
+                submit_button = logged_in_driver.find_element(By.NAME, "submit")
+                submit_button.click()
+                
+                # Wait for successful login
+                WebDriverWait(logged_in_driver, 15).until(
+                    EC.presence_of_element_located((By.ID, "asu-header"))
+                )
+                
+                self.logger.info(f"@web_scrape.py Successfully logged in for session {session_id}")
+                
+                # Store the logged in driver in the sessions list
+                self.logged_in_driver = logged_in_driver
+                self.login_sessions.append(logged_in_driver)
+                self.discord_state['user_session_id'] = len(self.login_sessions) - 1
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Login failed: {str(e)}")
+                logged_in_driver.quit()
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error in login_user_credentials: {str(e)}")
+            return False
+
+    async def logout_user_credentials(self):
+        """Logout and close the incognito window associated with the user session"""
+        try:
+            session_id = self.discord_state.get('user_session_id')
+            
+            if session_id is None or session_id == None:
+                self.logger.error("@web_scrape.py No active session to logout")
+                return False
+            
+            if 0 <= session_id < len(self.login_sessions):
+                # Get the driver associated with this session
+                driver = self.login_sessions[session_id]
+                
+                # Try to navigate to logout page
+                try:
+                    driver.get("https://weblogin.asu.edu/cas/logout")
+                    self.logger.info(f"@web_scrape.py Navigated to logout page for session {session_id}")
+                except:
+                    self.logger.warning(f"@web_scrape.py Could not navigate to logout page for session {session_id}")
+                
+                # Close the browser
+                driver.quit()
+                
+                # Remove the session from our list
+                self.login_sessions.pop(session_id)
+                self.discord_state['user_session_id'] = None
+                
+                self.logger.info(f"@web_scrape.py Session {session_id} successfully logged out")
+                return True
+                
+            else:
+                self.logger.error(f"@web_scrape.py Invalid session ID: {session_id}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error in logout_user_credentials: {str(e)}")
+            return False
     # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
     # disabled temprarily
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:

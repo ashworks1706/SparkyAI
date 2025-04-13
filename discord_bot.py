@@ -7,7 +7,7 @@ class ASUDiscordBot:
     """Discord bot for handling ASU-related questions"""
 
     # Your existing __init__ method, but add the login command
-    def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger ):
+    def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger,asu_scraper ):
         """
         Initialize the Discord bot.
         
@@ -22,6 +22,7 @@ class ASUDiscordBot:
         self.agents = agents
         self.firestore = firestore
         self.utils = utils
+        self.asu_scraper = asu_scraper
         self.vector_store = vector_store
         
         # Initialize Discord client
@@ -61,21 +62,22 @@ class ASUDiscordBot:
             interaction: Discord interaction
         """
         try:
-            if self.discord_state.get('user_session_id') == "timed_out":
+            if self.discord_state.get('user_session_id') == None:
                 await interaction.response.send_message(
                     "You are already logged out.",
                     ephemeral=True
                 )
                 return
             
+            await self.asu_scraper.logout_user_credentials()
+            
             # Reset user session ID and other states
-            self.discord_state.update(user_session_id="timed_out")
+            self.discord_state.update(user_session_id=None)
             await interaction.response.send_message(
                 "You have successfully logged out.",
                 ephemeral=True
             )
             
-            self.firestore.logout_user_credentials(interaction.user.id)
             
             self.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged out")
         
@@ -92,9 +94,9 @@ class ASUDiscordBot:
             interaction: Discord interaction
         """
         try:
-            if self.discord_state.get('user_session_id') != "timed_out":
+            if self.discord_state.get('user_session_id') != None:
                 await interaction.response.send_message(
-                    "You are already logged in. Please log out first.",
+                    f"You are already logged in. Please log out first. Session ID : {self.discord_state.get('user_session_id')}",
                     ephemeral=True
                 )
                 return
@@ -120,6 +122,7 @@ class ASUDiscordBot:
             
             # If user is a member, show the login modal
             modal = LoginModal(self)
+            await self.asu_scraper.login_user_credentials()
             await interaction.response.send_modal(modal)
             self.logger.info(f"@discord_bot.py Login modal sent to user {interaction.user.name}")
         
