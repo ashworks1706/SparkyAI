@@ -23,8 +23,6 @@ class Background_Fetch:
         self.library_catalog_docs = []
         self.library_ = []
         
-        
-        
     async def start_background_process(self):
         """
         Process the documents in the background.
