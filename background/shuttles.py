@@ -41,6 +41,7 @@ class Shuttles:
         try:
             for route in shuttle_route:
                 self.temp_docs = await self.asu_scraper.engine_search(search_url, route)
+                self.logger.info(f"@shuttles.py Tempddocs retrieved {self.temp_docs}")
                 self.shuttle_docs.append( {
                     "documents": self.temp_docs,
                     "search_context": f"ASU Shuttle live status for {route}",
@@ -55,5 +56,7 @@ class Shuttles:
     async def perform_web_search(self):
         # try all possible function parameters
         shuttle_routes = [ "Mercado", "Polytechnic-Tempe","Tempe-Downtown Phoenix-West","Tempe-West Express"]
-        return await self.get_live_shuttle_status(shuttle_routes)
+        # shuttle_routes = [ "Mercado"]
+        docs = await self.get_live_shuttle_status(shuttle_routes)
+        return docs
         

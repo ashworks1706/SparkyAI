@@ -19,7 +19,11 @@ class ASUWebScraper:
         self.chrome_options.add_argument('--ignore-certificate-errors')
         self.chrome_options.add_argument('--disable-extensions')
         self.chrome_options.add_argument('--no-first-run')
-        self.chrome_options.add_argument("--disable-blink-features=AutomationControlled")  # Prevent detection as a bot
+        self.chrome_options.add_argument('--disable-blink-features=AutomationControlled')  # Prevent detection as a bot
+        self.chrome_options.add_argument('--disable-site-isolation-trials')  # Helps with tab crashes
+        self.chrome_options.add_argument('--memory-pressure-off')  # Disable memory pressure calculations
+        self.chrome_options.add_argument('--disable-features=site-per-process')  # Disable site isolation
+        self.chrome_options.add_argument('--js-flags=--max-old-space-size=4096')  # Increase JS memory
 
         self.logger= logger
         
@@ -48,8 +52,8 @@ class ASUWebScraper:
             
             logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            # if chrome_version != driver_version:
-            #     raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            if chrome_version != driver_version:
+                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
@@ -168,9 +172,13 @@ class ASUWebScraper:
         self.logger.info(f"@web_scrape.py max_retries : {max_retries} ")
         self.logger.info(f"@web_scrape.py selenium required : {selenium} ")
         self.logger.info(f"@web_scrape.py optional query : {optional_query} ")
-        
-        await self.utils.update_text("Understanding Results...")
-
+        try:
+            self.logger.info(" @web_scrape.py \nUpdating text in Discord")
+            await self.utils.update_text("Understanding Results...")
+            self.logger.info(" @web_scrape.py \nText updated in Discord")
+        except:
+            self.logger.error(" @web_scrape.py \nError updating text in Discord")
+            pass
         if isinstance(url, dict):
             url = url.get('url', '')
         
@@ -198,6 +206,7 @@ class ASUWebScraper:
         self.logger.info(f"@web_scrape.py Visiting URL: {url}")
         self.visited_urls.add(url)
         
+        
         if not selenium:
             for attempt in range(max_retries):
                 try:
@@ -214,7 +223,7 @@ class ASUWebScraper:
                                     'description': documents[0].metadata.get('description', ''),
                                 }
                             })
-                        return True
+                        return self.text_content
                     else:
                         self.logger.info(" @web_scrape.py Langchain method failed")
                 except Exception as e:
@@ -244,7 +253,7 @@ class ASUWebScraper:
                         })
                         
                         self.logger.info(self.text_content[-1])
-                        return True
+                        return self.text_content
                             
         elif 'postings' in url and selenium:
 
@@ -483,7 +492,7 @@ class ASUWebScraper:
                 except Exception as e:
                         self.logger.error(f"@web_scrape.py Error html to makrdown conversion :  {e}")
             
-            return True
+            return self.text_content
         
         elif 'catalog.apps.asu.edu' in url and selenium:
             self.driver.get(url)
@@ -640,6 +649,7 @@ class ASUWebScraper:
                             course_string += f"  Students Enrolled: {group['students_enrolled']}\n"
                             course_string += f"  Total Reserved Seats: {group['total_seats_reserved']}\n"
                             course_string += f"  Reserved Until: {group['reserved_until']}\n"
+                    
                     self.text_content.append({
                             'content': course_string,
                             'metadata': {
@@ -649,6 +659,9 @@ class ASUWebScraper:
                         })
                     self.logger.info(f"@web_scrape.py Appended {self.text_content[-1]}")
                     formatted_courses.append(course_string)
+                    
+                    
+                return self.text_content
         
         elif 'search.lib.asu.edu' in url and selenium:
             self.driver.get(url)
@@ -831,7 +844,7 @@ class ASUWebScraper:
                     })
                     self.logger("\nAppended book details: %s" % self.text_content[-1])
 
-                return True
+                return self.text_content
 
             except Exception as e:
                 print(f"\nFailed to scrape book details: {e}")
@@ -1035,7 +1048,7 @@ class ASUWebScraper:
                     
                 self.logger.info(self.text_content)
                 
-                return True
+                return self.text_content
 
             except Exception as e:
                 return f"Error retrieving library status: {str(e)}"
@@ -1083,18 +1096,17 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
+                return self.text_content
             except Exception as e:
-                self.logger.error(f"@web_scrape.py Error extracting study room data: {e}")
-                return "No Study Rooms Open Today"
-            return True
+                self.logger.error(f"@web_scrape.py Error scraping library calendar: {e}")
+                return False
         
         elif 'asu-shuttles.rider.peaktransit.com' in url and selenium:
             query = optional_query
             # Navigate to the URL
             try:
-                # Navigate to the URL
+                # Create a fresh browser instance for this operation to prevent tab crashes
                 self.driver.get(url)
-                time.sleep(3)
                 # Wait for route list to load
                 WebDriverWait(self.driver, 10).until(
                     EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#route-list .route-block .route-name'))
@@ -1152,6 +1164,23 @@ class ASUWebScraper:
                 
                 time.sleep(2)
                 
+                # try:
+                #     # Find the map element
+                #     map_element = WebDriverWait(self.driver, 10).until(
+                #         EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Map']"))
+                #     )
+                    
+                #     # Create an ActionChains instance to perform scroll zoom out
+                #     actions = ActionChains(self.driver)
+                    
+                #     # Scroll to zoom out once (positive delta value zooms out)
+                #     actions.move_to_element(map_element).scroll_by_amount(0, 100).perform()
+                    
+                #     self.logger.info("@web_scrape.py Zoomed out using mouse scroll")
+                #     time.sleep(0.5)  # Short pause to let the zoom effect complete
+                # except Exception as e:
+                #     self.logger.error(f"@web_scrape.py Failed to zoom out using mouse scroll: {e}")
+                
                 try:
                     # First click on map camera controls button
                     camera_controls = WebDriverWait(self.driver, 10).until(
@@ -1173,21 +1202,7 @@ class ASUWebScraper:
                 except Exception as e:
                     self.logger.info(f"@web_scrape.py Error with map controls: {e}")
                     # Try alternative method using JavaScript
-                    try:
-                        zoom_script = """
-                        var controls = document.querySelector('button[aria-label="Map camera controls"]');
-                        if(controls) controls.click();
-                        var zoomOut = document.querySelector('button[aria-label="Zoom out"]');
-                        if(zoomOut) {
-                            for(var i = 0; i < arguments[0]; i++) {
-                                zoomOut.click();
-                                await new Promise(r => setTimeout(r, 500));
-                            }
-                        }
-                        """
-                        self.driver.execute_script(zoom_script, button_times)
-                    except Exception as e:
-                        self.logger.info(f"@web_scrape.py Failed to zoom using JavaScript: {e}")
+                    
 
                 map_div = None
                 try:
@@ -1214,135 +1229,136 @@ class ASUWebScraper:
                                  
                         except Exception as third_error:
                             self.logger.info(f"@web_scrape.py All click methods failed: {first_error}, {second_error}, {third_error}")
-
-                
-                
-                actions = ActionChains(self.driver)
-                if "Mercado" in query:
-                    # Move map to different directions
-                    directions_x = [
-                        (300, 0), 
-                    ]
-                    directions_y = [
-                        (0, 300),   
-                    ]
+                try:
+                    actions = ActionChains(self.driver)
                     
-                    for i in range(0, iterate_X):
+                    if "Mercado" in query:
+                        # Move map to different directions
+                        directions_x = [
+                            (300, 0), 
+                        ]
+                        directions_y = [
+                            (0, 300),   
+                        ]
                         
-                        for dx, dy in directions_x:
-                            # Click and hold on map
-                            actions.move_to_element(map_div).click_and_hold()
+                        for i in range(0, iterate_X):
                             
-                            # Move by offset
-                            actions.move_by_offset(dx, dy)
-                            
-                            # Release mouse button
-                            actions.release()
-                            
-                            # Perform the action
-                            actions.perform()
-                            self.logger.info(" @web_scrape.py \nmoved")
-                            # Wait a moment between movements
-                    self.logger.info(" @web_scrape.py \niterating over y")        
-                    for i in range(0, iterate_Y):
-                        for dx, dy in directions_y:
-                            actions.move_to_element(map_div).click_and_hold()
-                            actions.move_by_offset(dx, dy)
-                            actions.release()
-                            actions.perform()
-                            self.logger.info(" @web_scrape.py \nmoved")
-                if "Polytechnic" in query:
-                    self.logger.info(" @web_scrape.py \npoly")
-                    # Move map to different directions
-                    directions_x = [
-                        (-300, 0),
-                    ]
-                    directions_y = [
-                        (0, -300),   
-                    ]
-                    
-                    for i in range(0, iterate_X):
-                        
-                        for dx, dy in directions_x:
-                            # Click and hold on map
-                            actions.move_to_element(map_div).click_and_hold()
-                            
-                            # Move by offset
-                            actions.move_by_offset(dx, dy)
-                            actions.move_by_offset(dx, dy)
-                            
-                            # Release mouse button
-                            actions.release()
-                            
-                            # Perform the action
-                            actions.perform()
-                            self.logger.info(" @web_scrape.py \nmoved")
-                            # Wait a moment between movements
-                    self.logger.info(" @web_scrape.py \niterating over y")        
-                    for i in range(0, iterate_Y):
-                        
-                        for dx, dy in directions_y:
-                            actions.move_to_element(map_div).click_and_hold()
-                            actions.move_by_offset(dx, dy)
-                            actions.release()
-                            actions.perform()
-                            self.logger.info(" @web_scrape.py \nmoved")
-                  
-                map_markers = self.driver.find_elements(By.CSS_SELECTOR, 
-                    'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
-                
-                for marker in map_markers:
-                    try:
-                        parent_div = marker.find_element(By.XPATH, '..')
-                        self.driver.execute_script("arguments[0].click();", parent_div)
-                        
-                        dialog = WebDriverWait(self.driver, 10).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="dialog"]'))
-                        )
-                        
-                        dialog_html = dialog.get_attribute('outerHTML')
-                        soup = BeautifulSoup(dialog_html, 'html.parser')
-                        
-                        stop_name_elem = soup.find('div', class_='stop-name')
-                        if stop_name_elem:
-                            stop_name = stop_name_elem.find('h2').get_text(strip=True)
-                            routes = soup.find_all('div', class_='route-name')
-                            
-                            station_routes = []
-                            for route in routes:
-                                route_name = route.get_text(strip=True)
-                                bus_blocks = route.find_next_siblings('div', class_='bus-block')
+                            for dx, dy in directions_x:
+                                # Click and hold on map
+                                actions.move_to_element(map_div).click_and_hold()
                                 
-                                # Safer extraction of bus times
-                                try:
-                                    next_bus_time = bus_blocks[0].find('div', class_='bus-time').get_text(strip=True) if bus_blocks else 'N/A'
-                                    second_bus_time = bus_blocks[1].find('div', class_='bus-time').get_text(strip=True) if len(bus_blocks) > 1 else 'N/A'
-                                    
-                                    station_routes.append({
-                                        'Route': route_name,
-                                        'Next Bus': next_bus_time,
-                                        'Second Bus': second_bus_time
-                                    })
-                                except IndexError:
-                                    # Skip routes without bus times
-                                    continue
+                                # Move by offset
+                                actions.move_by_offset(dx, dy)
+                                
+                                # Release mouse button
+                                actions.release()
+                                
+                                # Perform the action
+                                actions.perform()
+                                self.logger.info(" @web_scrape.py \nmoved")
+                                # Wait a moment between movements
+                        self.logger.info(" @web_scrape.py \niterating over y")        
+                        for i in range(0, iterate_Y):
+                            for dx, dy in directions_y:
+                                actions.move_to_element(map_div).click_and_hold()
+                                actions.move_by_offset(dx, dy)
+                                actions.release()
+                                actions.perform()
+                                self.logger.info(" @web_scrape.py \nmoved")
+                    
+                    if "Polytechnic" in query:
+                        self.logger.info(" @web_scrape.py \npoly")
+                        # Move map to different directions
+                        directions_x = [
+                            (-300, 0),
+                        ]
+                        directions_y = [
+                            (0, -300),   
+                        ]
+                        
+                        for i in range(0, iterate_X):
                             
-                            # Only append if station_routes is not empty
-                            if station_routes:
-                                parsed_stations = [{
-                                    'Station': stop_name,
-                                    'Routes': station_routes
-                                }]
-                                results.extend(parsed_stations)
-                        
-                        
-                        
+                            for dx, dy in directions_x:
+                                # Click and hold on map
+                                actions.move_to_element(map_div).click_and_hold()
+                                
+                                # Move by offset
+                                actions.move_by_offset(dx, dy)
+                                actions.move_by_offset(dx, dy)
+                                
+                                # Release mouse button
+                                actions.release()
+                                
+                                # Perform the action
+                                actions.perform()
+                                self.logger.info(" @web_scrape.py \nmoved")
+                                # Wait a moment between movements
+                        self.logger.info(" @web_scrape.py \niterating over y")        
+                        for i in range(0, iterate_Y):
+                            
+                            for dx, dy in directions_y:
+                                actions.move_to_element(map_div).click_and_hold()
+                                actions.move_by_offset(dx, dy)
+                                actions.release()
+                                actions.perform()
+                                self.logger.info(" @web_scrape.py \nmoved")
                     
+                    map_markers = self.driver.find_elements(By.CSS_SELECTOR, 
+                        'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
                     
-                    except Exception as e:
-                        # Log the error without stopping the entire process
-                        self.logger.info(f"@web_scrape.py Error processing marker: {e}")
-                        continue
+                    for marker in map_markers:
+                        try:
+                            parent_div = marker.find_element(By.XPATH, '..')
+                            self.driver.execute_script("arguments[0].click();", parent_div)
+                            
+                            dialog = WebDriverWait(self.driver, 10).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="dialog"]'))
+                            )
+                            
+                            dialog_html = dialog.get_attribute('outerHTML')
+                            soup = BeautifulSoup(dialog_html, 'html.parser')
+                            
+                            stop_name_elem = soup.find('div', class_='stop-name')
+                            if stop_name_elem:
+                                stop_name = stop_name_elem.find('h2').get_text(strip=True)
+                                routes = soup.find_all('div', class_='route-name')
+                                
+                                station_routes = []
+                                for route in routes:
+                                    route_name = route.get_text(strip=True)
+                                    bus_blocks = route.find_next_siblings('div', class_='bus-block')
+                                    
+                                    # Safer extraction of bus times
+                                    try:
+                                        next_bus_time = bus_blocks[0].find('div', class_='bus-time').get_text(strip=True) if bus_blocks else 'N/A'
+                                        second_bus_time = bus_blocks[1].find('div', class_='bus-time').get_text(strip=True) if len(bus_blocks) > 1 else 'N/A'
+                                        
+                                        station_routes.append({
+                                            'Route': route_name,
+                                            'Next Bus': next_bus_time,
+                                            'Second Bus': second_bus_time
+                                        })
+                                    except IndexError:
+                                        # Skip routes without bus times
+                                        continue
+                                
+                                # Only append if station_routes is not empty
+                                if station_routes:
+                                    parsed_stations = [{
+                                        'Station': stop_name,
+                                        'Routes': station_routes
+                                    }]
+                                    results.extend(parsed_stations)
+                            
+                        except Exception as e:
+                            # Log the error without stopping the entire process
+                            self.logger.info(f"@web_scrape.py Error processing marker: {e}")
+                            continue
+                except Exception as e:
+                    self.logger.info(f"@web_scrape.py Error processing map markers: {e}")
+                    return False
+                
+                
                 content = [
                             f"Station : {result['Station']}\n"
                             f"Route : {route['Route']}\n"
@@ -1352,7 +1368,8 @@ class ASUWebScraper:
                             for route in result['Routes']
                             if 'mins.' in route['Next Bus'] and 'mins.' in route['Second Bus']
                         ]
-                content = set(content)  
+                content = set(content)
+                self.logger.info(f"Conmtent : {content}")  
                 for c in content:
                     self.text_content.append({
                         'content': c,
@@ -1361,8 +1378,11 @@ class ASUWebScraper:
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
 
                         }
-                    })        
-                return True
+                    })
+                    self.logger.info(f"@web_scrape.py Appended shuttle status: {c}")
+                
+                        
+                return self.text_content
             
             except Exception as e:
                 self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
@@ -1376,244 +1396,246 @@ class ASUWebScraper:
     
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
-        
+     
+        search_results = []
         try:
-            search_results = []
+            self.logger.info(f"@web_scrape.py Updating discord text {search_url}")
             await self.utils.update_text(f"Searching for [{urlparse(search_url).netloc}]({search_url})")
-            # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
-            # disabled temprarily
-            wait = WebDriverWait(self.driver, 10)
-            if (search_url):
-                if 'google.com/search' in search_url:
-                    self.driver.get(search_url)
-                    # Wait for search results to load
-                    self.logger.info(f"@web_scrape.py Searching for google links {search_url}")
-                    try:
-                        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.g')))
-                    except Exception as e:
-                        self.logger.error(f"@web_scrape.py Error waiting for search results: {e}")
+            self.logger.info(f"@web_scrape.py Updated discord text {search_url}")
+        except:
+            self.logger.error(f"@web_scrape.py Error updating text")
+            pass
+        
+        wait = WebDriverWait(self.driver, 10)
+        if (search_url):
+            if 'google.com/search' in search_url:
+                self.driver.get(search_url)
+                # Wait for search results to load
+                self.logger.info(f"@web_scrape.py Searching for google links {search_url}")
+                try:
+                    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.g')))
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error waiting for search results: {e}")
+                    
+                # Find all search result elements
+                try:
+                    
+                    results = self.driver.find_elements(By.CSS_SELECTOR, "div.tF2Cxc")[:3]
+                    for index, result in enumerate(results, start=1):
+                        # title = result.find_element(By.TAG_NAME, "h3").text
+                        url = result.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
+                        search_results.append(url)
                         
-                    # Find all search result elements
-                    try:
-                        
-                        results = self.driver.find_elements(By.CSS_SELECTOR, "div.tF2Cxc")[:3]
-                        for index, result in enumerate(results, start=1):
-                            # title = result.find_element(By.TAG_NAME, "h3").text
-                            url = result.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
-                            search_results.append(url)
-                            
-                        
-                        self.logger.info(f"@web_scrape.py Found {len(search_results)} : {search_results} Google search results")
-                        
-                        for url in search_results:
-                            await self.scrape_content(url=url)
+                    
+                    self.logger.info(f"@web_scrape.py Found {len(search_results)} : {search_results} Google search results")
+                    
+                    for url in search_results:
+                        await self.scrape_content(url=url)
 
-                    except Exception as e:
-                        self.logger.error(f"@web_scrape.py Error extracting search results: {e}")
-                                    # Handle ASU Campus Labs pages
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error extracting search results: {e}")
+                                # Handle ASU Campus Labs pages
+            
+            if 'asu.campuslabs.com/engage' in search_url:
+                self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs links {search_url}")
+                self.driver.get(search_url)
+                if 'events' in search_url:
+                    # Wait for events to load
+                    events = wait.until(EC.presence_of_all_elements_located(
+                        (By.CSS_SELECTOR, 'a[href*="/engage/event/"]')
+                    ))
+                    search_results = [
+                        event.get_attribute('href') 
+                        for event in events[:3]
+                    ]
+                    self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
+                    
+                    
+                elif 'organizations' in search_url:
+                    # Wait for organizations to load
+                    self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs organizations links {search_url}")
+                    orgs = wait.until(EC.presence_of_all_elements_located(
+                        (By.CSS_SELECTOR, 'a[href*="/engage/organization/"]')
+                    ))
+                    search_results = [
+                        org.get_attribute('href') 
+                        for org in orgs[:3]
+                    ]
+                    self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
+                    
+                elif 'news' in search_url:
+                    # Wait for news items to load
+                    self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs news links {search_url}")
+                    news = wait.until(EC.presence_of_all_elements_located(
+                        (By.CSS_SELECTOR, 'a[href*="/engage/news/"]')
+                    ))
+                    search_results = [
+                        article.get_attribute('href') 
+                        for article in news[:3]
+                    ]
+                    self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
+                    
                 
-                if 'asu.campuslabs.com/engage' in search_url:
-                    self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs links {search_url}")
+                for url in search_results:
+                    self.logger.info(f"@web_scrape.py Scraping content from {url}")
+                    await self.scrape_content(url=url)
+                                
+            if 'x.com' in search_url or 'facebook.com' in search_url or "instagram.com" in search_url:
+                if optional_query:
+                    self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
+                    try:
+                        self.logger.info(f"@web_scrape.py Searching for {search_url} links")
+                        domain = urlparse(search_url).netloc
+                        path = urlparse(search_url).path.strip("/")
+                        query_part = f"{urllib.parse.quote(optional_query)}+{path}" if path else urllib.parse.quote(optional_query)
+                        google_search_url = f"https://www.google.com/search?q={query_part}+site:{domain}"
+                        self.logger.info(" @web_scrape.py Google search url formed : {}".format(google_search_url))
+                    except Exception as e:
+                        self.logger.error(f"@web_scrape.py Error forming Google search URL: {e}")
+                        return False
+                    
+                    await self.engine_search(search_url=google_search_url)                            
+            
+            if 'https://goglobal.asu.edu/scholarship-search' in search_url or 'https://onsa.asu.edu/scholarships'in search_url:
+                try:
+                    self.logger.info(f"@web_scrape.py Searching for ASU scholarships links {search_url}")
+                    # Get base domain based on URL
+                    base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
+                    
                     self.driver.get(search_url)
-                    if 'events' in search_url:
-                        # Wait for events to load
-                        events = wait.until(EC.presence_of_all_elements_located(
-                            (By.CSS_SELECTOR, 'a[href*="/engage/event/"]')
-                        ))
-                        search_results = [
-                            event.get_attribute('href') 
-                            for event in events[:3]
-                        ]
-                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
+                    WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
+                    
+                    # Handle cookie consent for goglobal
+                    self.logger.info(" @web_scrape.py \nHandling cookie consent")
+                    try:
+                        cookie_button = WebDriverWait(self.driver, 5).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, '.accept-btn'))
+                        )
+                        self.driver.execute_script("arguments[0].click();", cookie_button)
+                        time.sleep(2)
+                    except Exception as cookie_error:
+                        self.logger.warning(f"@web_scrape.py Cookie consent handling failed: {cookie_error}")
+                    
+                    if optional_query:
+                        self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
+                        self.logger.info(f"@web_scrape.py Searching for {search_url} links")
+                        # Parse query parameters
+                        query_params = dict(param.split('=') for param in optional_query.split('&') if '=' in param)
                         
+                        # Define filter mappings based on site
+                        filter_mapping = {
+                            'goglobal.asu.edu': {
+                                'academiclevel': '#edit-field-ss-student-type-target-id',
+                                'citizenship_status': '#edit-field-ss-citizenship-status-target-id',
+                                'gpa': '#edit-field-ss-my-gpa-target-id',
+                                # 'college': '#edit-field-college-ss-target-id',
+                            },
+                            'onsa.asu.edu': {
+                                'search_bar_query': 'input[name="combine"]',
+                                'citizenship_status': 'select[name="field_citizenship_status"]',
+                                'eligible_applicants': 'select[name="field_eligible_applicants"]',
+                                'focus': 'select[name="field_focus"]',
+                            }
+                        }
                         
-                    elif 'organizations' in search_url:
-                        # Wait for organizations to load
-                        self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs organizations links {search_url}")
-                        orgs = wait.until(EC.presence_of_all_elements_located(
-                            (By.CSS_SELECTOR, 'a[href*="/engage/organization/"]')
-                        ))
-                        search_results = [
-                            org.get_attribute('href') 
-                            for org in orgs[:3]
-                        ]
-                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
-                        
-                    elif 'news' in search_url:
-                        # Wait for news items to load
-                        self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs news links {search_url}")
-                        news = wait.until(EC.presence_of_all_elements_located(
-                            (By.CSS_SELECTOR, 'a[href*="/engage/news/"]')
-                        ))
-                        search_results = [
-                            article.get_attribute('href') 
-                            for article in news[:3]
-                        ]
-                        self.logger.info(f"@web_scrape.py Found {len(search_results)} ASU Campus Labs results")
-                        
+                        # Determine which site's filter mapping to use
+                        site_filters = filter_mapping['goglobal.asu.edu'] if 'goglobal.asu.edu' in search_url else filter_mapping['onsa.asu.edu']
+                        self.logger.info(f"@web_scrape.py Using filter mapping: {site_filters}")
+                        # Apply filters with robust error handling
+                        for param, value in query_params.items():
+                            if param in site_filters and value:
+                                try:
+                                    filter_element = WebDriverWait(self.driver, 10).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, site_filters[param]))
+                                    )
+                                    
+                                    # Scroll element into view
+                                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", filter_element)
+                                    time.sleep(1)
+                                    
+                                    self.logger.info(f"@web_scrape.py Applying filter {param} with value {value}")
+                                    
+                                    # Handle different input types
+                                    if filter_element.tag_name == 'select':
+                                        Select(filter_element).select_by_visible_text(value)
+                                        self.logger.info(f"@web_scrape.py Selected {value} in {param}")
+                                    elif filter_element.tag_name == 'input':
+                                        filter_element.clear()
+                                        filter_element.send_keys(value)
+                                        filter_element.send_keys(Keys.ENTER)
+                                        self.logger.info(f"@web_scrape.py Entered {value} in {param}")
+                                    
+                                    time.sleep(1)
+                                except Exception as filter_error:
+                                    self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
+                                    pass  # Click search button with multiple retry mechanism
+                        search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
+                        for selector in search_button_selectors:
+                            try:
+                                search_button = WebDriverWait(self.driver, 10).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                                )
+                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
+                                time.sleep(1)
+                                self.driver.execute_script("arguments[0].click();", search_button)
+                                self.logger.info(f"@web_scrape.py Clicked search button with selector {selector}")
+                                break
+                            except Exception as e:
+                                self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
+                                self.logger.error(f"Search button click failed for selector {selector}: {e}")
+                    
+                    # Extract scholarship links with improved URL construction
+                    link_selectors = {
+                        'goglobal': 'td[headers="view-title-table-column"] a',
+                        'onsa': 'td a'
+                    }
+                    
+                    current_selector = link_selectors['goglobal'] if "goglobal" in search_url else link_selectors['onsa']
+                    
+                    self.logger.info(f"@web_scrape.py Using selector: {current_selector}")
+                    
+                    scholarship_links = WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, current_selector))
+                    )
+                    
+                    self.logger.info(f"@web_scrape.py Found {len(scholarship_links)} scholarship links")
+                    
+                    for link in scholarship_links[:3]:
+                        href = link.get_attribute('href')
+                        if href:
+                            if href.startswith('/'):
+                                search_results.append(f"{base_url}{href}")
+                            elif href.startswith('http'):
+                                search_results.append(href)
+                            else:
+                                search_results.append(f"{base_url}/{href}")
+                    
+                    self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ")
                     
                     for url in search_results:
                         self.logger.info(f"@web_scrape.py Scraping content from {url}")
                         await self.scrape_content(url=url)
-                                 
-                if 'x.com' in search_url or 'facebook.com' in search_url or "instagram.com" in search_url:
-                    if optional_query:
-                        self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
-                        try:
-                            self.logger.info(f"@web_scrape.py Searching for {search_url} links")
-                            domain = urlparse(search_url).netloc
-                            path = urlparse(search_url).path.strip("/")
-                            query_part = f"{urllib.parse.quote(optional_query)}+{path}" if path else urllib.parse.quote(optional_query)
-                            google_search_url = f"https://www.google.com/search?q={query_part}+site:{domain}"
-                            self.logger.info(" @web_scrape.py Google search url formed : {}".format(google_search_url))
-                        except Exception as e:
-                            self.logger.error(f"@web_scrape.py Error forming Google search URL: {e}")
-                            return False
-                        
-                        await self.engine_search(search_url=google_search_url)                            
-                
-                if 'https://goglobal.asu.edu/scholarship-search' in search_url or 'https://onsa.asu.edu/scholarships'in search_url:
-                    try:
-                        self.logger.info(f"@web_scrape.py Searching for ASU scholarships links {search_url}")
-                        # Get base domain based on URL
-                        base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
-                        
-                        self.driver.get(search_url)
-                        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
-                        
-                        # Handle cookie consent for goglobal
-                        self.logger.info(" @web_scrape.py \nHandling cookie consent")
-                        try:
-                            cookie_button = WebDriverWait(self.driver, 5).until(
-                                EC.element_to_be_clickable((By.CSS_SELECTOR, '.accept-btn'))
-                            )
-                            self.driver.execute_script("arguments[0].click();", cookie_button)
-                            time.sleep(2)
-                        except Exception as cookie_error:
-                            self.logger.warning(f"@web_scrape.py Cookie consent handling failed: {cookie_error}")
-                        
-                        if optional_query:
-                            self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
-                            self.logger.info(f"@web_scrape.py Searching for {search_url} links")
-                            # Parse query parameters
-                            query_params = dict(param.split('=') for param in optional_query.split('&') if '=' in param)
-                            
-                            # Define filter mappings based on site
-                            filter_mapping = {
-                                'goglobal.asu.edu': {
-                                    'academiclevel': '#edit-field-ss-student-type-target-id',
-                                    'citizenship_status': '#edit-field-ss-citizenship-status-target-id',
-                                    'gpa': '#edit-field-ss-my-gpa-target-id',
-                                    # 'college': '#edit-field-college-ss-target-id',
-                                },
-                                'onsa.asu.edu': {
-                                    'search_bar_query': 'input[name="combine"]',
-                                    'citizenship_status': 'select[name="field_citizenship_status"]',
-                                    'eligible_applicants': 'select[name="field_eligible_applicants"]',
-                                    'focus': 'select[name="field_focus"]',
-                                }
-                            }
-                            
-                            # Determine which site's filter mapping to use
-                            site_filters = filter_mapping['goglobal.asu.edu'] if 'goglobal.asu.edu' in search_url else filter_mapping['onsa.asu.edu']
-                            self.logger.info(f"@web_scrape.py Using filter mapping: {site_filters}")
-                            # Apply filters with robust error handling
-                            for param, value in query_params.items():
-                                if param in site_filters and value:
-                                    try:
-                                        filter_element = WebDriverWait(self.driver, 10).until(
-                                            EC.element_to_be_clickable((By.CSS_SELECTOR, site_filters[param]))
-                                        )
-                                        
-                                        # Scroll element into view
-                                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", filter_element)
-                                        time.sleep(1)
-                                        
-                                        self.logger.info(f"@web_scrape.py Applying filter {param} with value {value}")
-                                        
-                                        # Handle different input types
-                                        if filter_element.tag_name == 'select':
-                                            Select(filter_element).select_by_visible_text(value)
-                                            self.logger.info(f"@web_scrape.py Selected {value} in {param}")
-                                        elif filter_element.tag_name == 'input':
-                                            filter_element.clear()
-                                            filter_element.send_keys(value)
-                                            filter_element.send_keys(Keys.ENTER)
-                                            self.logger.info(f"@web_scrape.py Entered {value} in {param}")
-                                        
-                                        time.sleep(1)
-                                    except Exception as filter_error:
-                                        self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
-                                        pass  # Click search button with multiple retry mechanism
-                            search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
-                            for selector in search_button_selectors:
-                                try:
-                                    search_button = WebDriverWait(self.driver, 10).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                                    )
-                                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
-                                    time.sleep(1)
-                                    self.driver.execute_script("arguments[0].click();", search_button)
-                                    self.logger.info(f"@web_scrape.py Clicked search button with selector {selector}")
-                                    break
-                                except Exception as e:
-                                    self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
-                                    self.logger.error(f"Search button click failed for selector {selector}: {e}")
-                        
-                        # Extract scholarship links with improved URL construction
-                        link_selectors = {
-                            'goglobal': 'td[headers="view-title-table-column"] a',
-                            'onsa': 'td a'
-                        }
-                        
-                        current_selector = link_selectors['goglobal'] if "goglobal" in search_url else link_selectors['onsa']
-                        
-                        self.logger.info(f"@web_scrape.py Using selector: {current_selector}")
-                        
-                        scholarship_links = WebDriverWait(self.driver, 10).until(
-                            EC.presence_of_all_elements_located((By.CSS_SELECTOR, current_selector))
-                        )
-                        
-                        self.logger.info(f"@web_scrape.py Found {len(scholarship_links)} scholarship links")
-                        
-                        for link in scholarship_links[:3]:
-                            href = link.get_attribute('href')
-                            if href:
-                                if href.startswith('/'):
-                                    search_results.append(f"{base_url}{href}")
-                                elif href.startswith('http'):
-                                    search_results.append(href)
-                                else:
-                                    search_results.append(f"{base_url}/{href}")
-                        
-                        self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ")
-                        
-                        for url in search_results:
-                            self.logger.info(f"@web_scrape.py Scraping content from {url}")
-                            await self.scrape_content(url=url)
-                        
-                    except Exception as e:
-                        self.logger.error(f"@web_scrape.py Error in scholarship search: {str(e)}")
+                    
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error in scholarship search: {str(e)}")
 
-                
-                if 'catalog.apps.asu.edu' in search_url or  'search.lib.asu.edu' in search_url :
-                    self.logger.info(f"@web_scrape.py Searching for ASU catalog links {search_url}")
-                    await self.scrape_content(search_url, selenium=True)
-                
-                if 'https://app.joinhandshake.com/stu/postings' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
-                    self.logger.info(f"@web_scrape.py Searching for ASU Handshake links {search_url}")
-                    await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
-                
-                
-                # finally:
-                #     self.driver.quit()
- 
-            return self.text_content
-                
-        except Exception as e:
-            self.logger.error(f"@web_scrape.py Error in search: {str(e)}")
-            return []
+            
+            if 'catalog.apps.asu.edu' in search_url or  'search.lib.asu.edu' in search_url :
+                self.logger.info(f"@web_scrape.py Searching for ASU catalog links {search_url}")
+                await self.scrape_content(search_url, selenium=True)
+            
+            if 'https://app.joinhandshake.com/stu/postings' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
+                self.logger.info(f"@web_scrape.py Searching for ASU links {search_url}")
+                await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
+            
+            self.logger.info(f"Retrieved textcontent : {self.text_content}")
         
+        self.driver.quit()
+
+        return self.text_content
+                
+    # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
+    # disabled temprarily
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
     #     if not self.discord_client:
     #         self.logger.info(f"@web_scrape.py Could not initialize discord_client {self.discord_client}")

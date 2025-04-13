@@ -271,37 +271,59 @@ class Superior_Agent_Tools:
         try:     
             # Generate response
             response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=GenerateContentConfig(
-                    tools=[self.google_search_tool],
-                    response_modalities=["TEXT"],
-                    system_instruction=f"{self.app_config.get_google_agent_instruction()}",
-                    max_output_tokens=600
-                )
+            model=self.model_id,
+            contents=prompt,
+            config=GenerateContentConfig(
+                tools=[self.google_search_tool],
+                response_modalities=["TEXT"],
+                system_instruction=f"{self.app_config.get_google_agent_instruction()}",
+                max_output_tokens=600
+            )
             )
             self.logger.info(f"@superior_agent_tools.py Google search agent response : {response}")
-            grounding_sources = [self.get_final_url(chunk.web.uri) for candidate in response.candidates if candidate.grounding_metadata and candidate.grounding_metadata.grounding_chunks for chunk in candidate.grounding_metadata.grounding_chunks if chunk.web]
             
-            self.utils.update_ground_sources(grounding_sources)
+            # Safely extract grounding sources
+            grounding_sources = []
+            try:
+                for candidate in response.candidates:
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                        for chunk in candidate.grounding_metadata.grounding_chunks:
+                            if hasattr(chunk, 'web') and chunk.web and hasattr(chunk.web, 'uri'):
+                                final_url = self.get_final_url(chunk.web.uri)
+                                if final_url and isinstance(final_url, str):
+                                    grounding_sources.append(final_url)
+            except Exception as e:
+                self.logger.error(f"@superior_agent_tools.py Error extracting grounding sources: {e}")
+                
+                self.utils.update_ground_sources(grounding_sources)
+                
+                # Safely extract response text
+                response_text = ""
+            try:
+                if response.candidates and response.candidates[0].content and hasattr(response.candidates[0].content, 'parts'):
+                    response_text = "".join([part.text for part in response.candidates[0].content.parts if hasattr(part, 'text') and part.text])
+            except Exception as e:
+                self.logger.error(f"@superior_agent_tools.py Error extracting response text: {e}")
             
-            response_text = "".join([part.text for part in response.candidates[0].content.parts if part.text])
+            if not response_text and responses:
+                response_text = str(responses)
 
             # Save the interaction to chat history
+            user_id = self.discord_state.get('user_id')
             self._save_message(user_id, "user", original_query)
             self._save_message(user_id, "model", response_text)
 
             self.logger.info(response_text)
             
-            if 'search agent' not in response_text.lower():
+            if response_text and 'search agent' not in response_text.lower():
                 processed_docs = await self.asu_data_processor.process_documents(
                     documents=[{
-                                'content': response_text,
-                                'metadata': {
-                                    'url': grounding_sources,
-                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                }
-                            }], 
+                        'content': response_text,
+                        'metadata': {
+                            'url': grounding_sources,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                        }], 
                     search_context= self.group_chat.get_text(),
                     title = detailed_query, category = categories[0]
                 )

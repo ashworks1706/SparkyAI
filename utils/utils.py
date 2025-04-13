@@ -30,8 +30,10 @@ classwith task tracking and logging."""
         try:
             self.message = message
             self.logger.info(f"@utils.py Animation started for message: {message.id}")
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to start animation: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to start animation:")
+            pass
+        
 
     async def update_text(self, new_content):
         """Update text while maintaining task history"""
@@ -59,8 +61,8 @@ classwith task tracking and logging."""
             await self.message.edit(content=content)
             self.logger.info(f"@utils.py Message updated with {len(display_lines)} tasks")
 
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to update text: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to update text")
             pass
             # Optionally, you could re-raise the exception or handle it differently
 

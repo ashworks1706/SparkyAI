@@ -5,20 +5,10 @@ class Background_Fetch:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.app_config = AppConfig()
+        genai.configure(api_key=self.app_config.get_api_key())
         self.asu_data_processor = DataPreprocessor(self.app_config,genai=genai,logger=self.logger)
-        self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
-        self.shuttles = Shuttles(self.vector_store)
-        self.events = Events()
-        self.news = News()
-        self.clubs = Clubs()
-        self.study_rooms = Study_Rooms()
-        self.courses_catalog = Courses_Catalog()
-        self.social_media_instagram = Social_Media_Instagram()
-        self.social_media_x = Social_Media_X()
-        self.social_media_facebook = Social_Media_Facebook()
-        self.scholarships_goglobal = Scholarships_GoGlobal()
-        self.scholarships_onsa = Scholarships_Onsa()
-        self.library_catalog = Library_Catalog()
+        self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=True)
+        
         self.shuttle_docs = []
         self.event_docs = []
         self.news_docs = []
@@ -66,20 +56,21 @@ class Background_Fetch:
 
         
         """
+        self.logger.info("Starting background document processing...")
         try:
             for doc_category, doc_list in {
                 "shuttles_status": self.shuttle_docs,
-                "events_info": self.event_docs,
-                "news_info": self.news_docs,
-                "clubs_info": self.club_docs,
-                "study_rooms_status": self.study_room_docs,
-                "courses_catalog": self.course_docs,
-                "social_media_updates": self.social_media_instagram_docs,
-                "social_media_updates": self.social_media_x_docs,
-                "social_media_updates": self.social_media_facebook_docs,
-                "scholarships_info": self.scholarships_goglobal_docs,
-                "scholarships_info": self.scholarships_onsa_docs,
-                "library_catalog": self.library_catalog_docs
+                # "events_info": self.event_docs,
+                # "news_info": self.news_docs,
+                # "clubs_info": self.club_docs,
+                # "study_rooms_status": self.study_room_docs,
+                # "courses_catalog": self.course_docs,
+                # "social_media_updates": self.social_media_instagram_docs,
+                # "social_media_updates": self.social_media_x_docs,
+                # "social_media_updates": self.social_media_facebook_docs,
+                # "scholarships_info": self.scholarships_goglobal_docs,
+                # "scholarships_info": self.scholarships_onsa_docs,
+                # "library_catalog": self.library_catalog_docs
             }.items():
                 for doc in doc_list:
                     processed_docs= await self.asu_data_processor.process_documents(
@@ -103,19 +94,43 @@ class Background_Fetch:
         Perform a web search in the background.
         """
         try:
+            self.shuttles = Shuttles(self.vector_store)
             self.shuttle_docs = await self.shuttles.perform_web_search()            
-            self.news_docs = await self.news.perform_web_search()
-            self.club_docs = await self.clubs.perform_web_search()
-            self.study_room_docs = await  self.study_rooms.perform_web_search()
-            self.course_docs = await  self.courses_catalog.perform_web_search()
-            self.social_media_instagram_docs = await  self.social_media_instagram.perform_web_search()
-            self.social_media_x_docs = await  self.social_media_x.perform_web_search()
-            self.social_media_facebook_docs = await  self.social_media_facebook.perform_web_search()
-            self.scholarships_goglobal_docs = await  self.scholarships_goglobal.perform_web_search()
-            self.scholarships_onsa_docs = await  self.scholarships_onsa.perform_web_search()
-            self.library_docs = await  self.library_catalog.perform_web_search()
+            self.logger.info(f"Retrieved Shuttle docs : {self.shuttle_docs}")
+            self.events = Events()            
             self.event_docs = await self.events.perform_web_search()
-            await self.logger.info("Web search completed successfully.")
+            self.logger.info(f"Retrieved Event docs : {self.event_docs}")
+            self.news = News()
+            self.news_docs = await self.news.perform_web_search()
+            self.logger.info(f"Retrieved News docs : {self.news_docs}")
+            self.clubs = Clubs()
+            self.club_docs = await self.clubs.perform_web_search()
+            self.logger.info(f"Retrieved Club docs : {self.club_docs}")
+            self.study_rooms = Study_Rooms()
+            self.study_room_docs = await  self.study_rooms.perform_web_search()
+            self.logger.info(f"Retrieved Study Room docs : {self.study_room_docs}")
+            self.courses_catalog = Courses_Catalog()
+            self.course_docs = await  self.courses_catalog.perform_web_search()
+            self.logger.info(f"Retrieved Course docs : {self.course_docs}")
+            self.social_media_instagram = Social_Media_Instagram()
+            self.social_media_instagram_docs = await  self.social_media_instagram.perform_web_search()
+            self.logger.info(f"Retrieved Social Media Instagram docs : {self.social_media_instagram_docs}")
+            self.social_media_x = Social_Media_X()
+            self.social_media_x_docs = await  self.social_media_x.perform_web_search()
+            self.logger.info(f"Retrieved Social Media X docs : {self.social_media_x_docs}")
+            self.social_media_facebook = Social_Media_Facebook()
+            self.social_media_facebook_docs = await  self.social_media_facebook.perform_web_search()
+            self.logger.info(f"Retrieved Social Media Facebook docs : {self.social_media_facebook_docs}")
+            self.scholarships_goglobal = Scholarships_GoGlobal()
+            self.scholarships_goglobal_docs = await  self.scholarships_goglobal.perform_web_search()
+            self.logger.info(f"Retrieved Scholarships GoGlobal docs : {self.scholarships_goglobal_docs}")
+            self.scholarships_onsa = Scholarships_Onsa()
+            self.scholarships_onsa_docs = await  self.scholarships_onsa.perform_web_search()
+            self.logger.info(f"Retrieved Scholarships Onsa docs : {self.scholarships_onsa_docs}")
+            self.library_catalog = Library_Catalog()
+            self.library_docs = await  self.library_catalog.perform_web_search()
+            self.logger.info(f"Retrieved Library docs : {self.library_docs}")
+            self.logger.info("Web search completed successfully.")
             
         except Exception as e:
             self.logger.error(f"@background_fetch.py Error during web search: {str(e)}")
