@@ -1,12 +1,18 @@
+from datetime import timedelta
 from utils.common_imports import *
 class Firestore:
+    
+    
     # This class is responsible for interacting with Firestore database.
     def __init__(self,discord_state):
         if not firebase_admin._apps:
             cred = credentials.Certificate("config/firebase_secret.json")
             firebase_admin.initialize_app(cred)
+        
         self.db = firestore.client()
+        
         self.collection = None
+        
         self.document = {
             "superior_agent_message": [],
             "discord_agent_message": [],
@@ -25,9 +31,13 @@ class Firestore:
             "time": "",
             "category": []
         }
+        
         self.discord_state = discord_state
+        
         print("@firestore.py Firestore initialized @ Firestore")
-    # This method is used to update the collection name in Firestore.
+    
+    
+    
     def update_collection(self, collection):
         # get existing collections
         collections = self.db.collections()
@@ -41,7 +51,10 @@ class Firestore:
         self.collection = collection
         
         print(f"@firestore.py Firestore collection updated to: {self.collection}")
-    # This method is used to update the message in the document.
+        
+        
+    
+    
     def update_message(self, property, value): 
         if property in self.document:
             if isinstance(self.document[property], list):
@@ -52,6 +65,52 @@ class Firestore:
                 print(f"@firestore.py Setting {property} to: {value}")
         else:
             raise ValueError(f"@firestore.py Invalid property: {property}")
+        
+        
+        
+    async def check_user_session_timeout(self, user_id):
+            """
+            Check if a user's session has timed out and delete credentials if expired
+            
+            Args:
+                user_id (str): Discord user ID to check
+                
+            Returns:
+                bool: True if session is valid, False if timed out or user not found
+            """
+            users_collection = self.db.collection("users")
+            query_results = users_collection.where("user_id", "==", user_id).get()
+            
+            user_docs = list(query_results)
+            if not user_docs:
+                print(f"@firestore.py User {user_id} not found in database")
+                return False
+                
+            user_doc = user_docs[0]
+            user_data = user_doc.to_dict()
+            
+            # Check if user has session timeout field
+            if "user_session_timeout" not in user_data:
+                print(f"@firestore.py User {user_id} has no session timeout")
+                return False
+                
+            # Parse timeout and check against current time
+            timeout_str = user_data.get("user_session_timeout")
+            timeout_time = datetime.strptime(timeout_str, "%Y-%m-%d %H:%M:%S")
+            
+            if datetime.now() > timeout_time:
+                # Session timed out, remove credentials
+                print(f"@firestore.py User {user_id} session timed out, removing credentials")
+                users_collection.document(user_doc.id).update({
+                    "user_asu_rite": "timed_out",
+                    "user_password": "timed_out",
+                    "user_session_timeout": "timed_out"
+                })
+                self.discord_state.update(user_session_id= "timed_out")                
+                return False
+            
+            return True
+            
     # This method is used to push the message to Firestore.
     async def push_message(self):
         
@@ -64,10 +123,19 @@ class Firestore:
         self.document["time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         doc_ref = self.db.collection(self.collection).document()
+        
         doc_ref.set(self.document)
+        
         print(f"@firestore.py Document written with ID: {doc_ref.id}")
+        
         await self.check_and_add_user() 
+        
+        await self.check_user_session_timeout(self.document["user_id"])
+        
         return doc_ref.id  # Return the document ID for reference
+    
+    
+    
     # This method is used to check if the user exists in Firestore and add them if not.
     async def check_and_add_user(self):
         # Check if the user already exists in the Firestore database
@@ -93,7 +161,9 @@ class Firestore:
             users_collection.add(new_user_doc)
             print(f"@firestore.py New user added to Firestore: {new_user_doc}")
     
-    async def store_user_credentials(self, user_id, asurite_id, password):
+    
+    
+    async def login_user_credentials(self, user_id, asurite_id, password):
         # Check if the user already exists in the Firestore database
         users_collection = self.db.collection("users")
         query_results = users_collection.where("user_id", "==", user_id).get()
@@ -101,14 +171,15 @@ class Firestore:
         # Check if the user already exists in the collection
         if not list(query_results):  # Convert to list to check if empty
             new_user_doc = {
-                "user_id": user_id,
-                "user_asu_rite": asurite_id,
-                "user_password": password,
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "user_has_mod_role": self.discord_state.get('user_has_mod_role'),
-                "user_in_voice_channel": self.discord_state.get('user_in_voice_channel'),
-                "request_in_dm": self.discord_state.get('request_in_dm'),
-                "guild_user": str(self.discord_state.get('guild_user')),
+            "user_id": user_id,
+            "user_asu_rite": asurite_id,
+            "user_password": password,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "user_session_timeout": (datetime.now() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S"),
+            "user_has_mod_role": self.discord_state.get('user_has_mod_role'),
+            "user_in_voice_channel": self.discord_state.get('user_in_voice_channel'),
+            "request_in_dm": self.discord_state.get('request_in_dm'),
+            "guild_user": str(self.discord_state.get('guild_user')),
             }
             users_collection.add(new_user_doc)
             print(f"@firestore.py New user credentials added to Firestore: {new_user_doc}")
@@ -118,6 +189,18 @@ class Firestore:
                 users_collection.document(doc.id).update({
                     "user_asu_rite": asurite_id,
                     "user_password": password,
-                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "user_session_timeout": (datetime.now() + timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
                 })
-                print(f"@firestore.py User credentials updated in Firestore: {doc.id}")
+                break
+        self.discord_state.update(user_session_id=  doc.id)    
+        print(f"@firestore.py User credentials updated in Firestore: {doc.id}")
+
+    async def logout_user_credentials(self, user_id):
+        # Check if the user already exists in the Firestore database
+        users_collection = self.db.collection("users")
+        query_results = users_collection.where("user_id", "==", user_id).get()
+        
+        # Check if the user already exists in the collection
+        if not list(query_results):
+            print(f"@firestore.py User {user_id} not found in Firestore")
+            return False

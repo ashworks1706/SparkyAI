@@ -3,6 +3,7 @@ from utils.common_imports import *
 
 # Add this class for the login modal
 class LoginModal(discord.ui.Modal):
+    
     def __init__(self, bot):
         super().__init__(title="ASU Login")
         self.bot = bot
@@ -46,12 +47,14 @@ class LoginModal(discord.ui.Modal):
                 return
                 
             # Store the credentials safely in Firestore with user ID
-            await self.bot.firestore.store_user_credentials(user_id, asurite_id, password)
+            await self.bot.firestore.login_user_credentials(user_id, asurite_id, password)
             
             await interaction.response.send_message(
-                "You have successfully logged in via your ASURite!\nKeep in mind that this is a temporary login and will expire in 24 hours.\nIf you have any issues, please contact the ACM Discord Bot team.",
+                "You have successfully logged in via your ASURite!\nKeep in mind that this is a temporary login and will expire in 6 hours.\nIf you have any issues, please contact the ACM Discord Bot team.",
                 ephemeral=True
             )
+            
+            
             self.bot.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged in with ASUrite ID")
             
         except discord.NotFound:

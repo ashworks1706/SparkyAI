@@ -46,6 +46,43 @@ class ASUDiscordBot:
         )
         async def login(interaction: discord.Interaction):
             await self._handle_login_command(interaction)
+        @self.tree.command(
+            name="logout",
+            description="Login with your ASUrite credentials"
+        )
+        async def logout(interaction: discord.Interaction):
+            await self._handle_logout_command(interaction)
+    
+    async def _handle_logout_command(self, interaction: discord.Interaction) -> None:
+        """
+        Handle the logout command.
+        
+        Args:
+            interaction: Discord interaction
+        """
+        try:
+            if self.discord_state.get('user_session_id') == "timed_out":
+                await interaction.response.send_message(
+                    "You are already logged out.",
+                    ephemeral=True
+                )
+                return
+            
+            # Reset user session ID and other states
+            self.discord_state.update(user_session_id="timed_out")
+            await interaction.response.send_message(
+                "You have successfully logged out.",
+                ephemeral=True
+            )
+            
+            self.firestore.logout_user_credentials(interaction.user.id)
+            
+            self.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged out")
+        
+        except Exception as e:
+            error_msg = f"Error processing logout command: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            await self._send_error_response(interaction)
     
     async def _handle_login_command(self, interaction: discord.Interaction) -> None:
         """
@@ -55,6 +92,12 @@ class ASUDiscordBot:
             interaction: Discord interaction
         """
         try:
+            if self.discord_state.get('user_session_id') != "timed_out":
+                await interaction.response.send_message(
+                    "You are already logged in. Please log out first.",
+                    ephemeral=True
+                )
+                return
             # Check if user is part of the server
             target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
             user_id = interaction.user.id
@@ -64,13 +107,13 @@ class ASUDiscordBot:
                     member = await target_guild.fetch_member(user_id)
                     if not member:
                         await interaction.response.send_message(
-                            "You are not part of ACM Discord Server. Access to command is restricted.",
+                            "You are not part of Discord Server. Access to command is restricted.",
                             ephemeral=True
                         )
                         return
                 except discord.NotFound:
                     await interaction.response.send_message(
-                        "You are not part of ACM Discord Server. Access to command is restricted.",
+                        "You are not part of Discord Server. Access to command is restricted.",
                         ephemeral=True
                     )
                     return

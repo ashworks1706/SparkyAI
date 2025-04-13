@@ -7,6 +7,7 @@ class DiscordState:
         self.intents.message_content = True
         self.intents.members = True
         self.user = False
+        self.user_session_id = None
         self.target_guild = None
         self.user_id = None
         self.user_has_mod_role = False
