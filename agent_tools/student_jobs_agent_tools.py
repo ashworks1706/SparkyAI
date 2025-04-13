@@ -1,70 +1,54 @@
 from utils.common_imports import *
+from typing import List, Dict
+from rag.web_scrape import ASUWebScraper  # Adjust the path if necessary
 
 class Student_Jobs_Agent_Tools:
-    def __init__(self,firestore,utils,logger):
+    def __init__(self, firestore, utils, logger):
         self.firestore = firestore
         self.utils = utils
-        self.visited_urls = set()
-        self.max_depth = 2
-        self.max_links_per_page = 3
-        
-    async def get_latest_job_updates( self, search_bar_query: Optional[Union[str, List[str]]] = None, job_type: Optional[Union[str, List[str]]] = None, job_location: Optional[Union[str, List[str]]] = None):
+        self.logger = logger
+        self.text_content = []
+
+    async def get_workday_student_jobs(self, keyword: str, max_results: int = 5) -> str:
         """
-        Comprehensive function to retrieve ASU Job updates using multiple data sources.
-        
-        Args:
-            Multiple search parameters for job filtering with support for both string and list inputs
-        
-        Returns:
-            List of search results
+        This tool is called by the agent to scrape Workday jobs.
+        Returns a formatted string with the job listings or an error message.
         """
-        # Helper function to normalize input to list
-        def normalize_to_list(value):
-            if value is None:
-                return None
-            return value if isinstance(value, list) else [value]
-        
-        # Normalize all inputs to lists
-        query_params = {
-            'search_bar_query': normalize_to_list(search_bar_query),
-            'job_type': normalize_to_list(job_type),
-            'job_location': normalize_to_list(job_location),
-        }
-        
-        # Remove None values
-        query_params = {k: v for k, v in query_params.items() if v is not None}
-        
-        # Validate that at least one parameter is provided
-        if not query_params:
-            return "Please provide at least one parameter to perform the search."
-        
-        # Convert query parameters to URL query string
-        # Ensure each parameter is converted to a comma-separated string if it's a list
-        query_items = []
-        for k, v in query_params.items():
-            if isinstance(v, list):
-                query_items.append(f"{k}={','.join(map(str, v))}")
-            else:
-                query_items.append(f"{k}={v}")
-        
-        query = '&'.join(query_items)
-        
-        search_url = "https://app.joinhandshake.com/stu/postings"
-        
-        results = []
-        self.logger.info("@student_jobs_agent_tools.py Requested search query : {query}")
-        doc_title = ""
-        if search_bar_query:
-            doc_title = " ".join(search_bar_query) if isinstance(search_bar_query, list) else search_bar_query
-        elif job_type:
-            doc_title = " ".join(job_type) if isinstance(job_type, list) else job_type
-        elif job_location:
-            doc_title = " ".join(job_location) if isinstance(job_location, list) else job_location
-        else:
-            doc_title = None
-            
-        result = await self.utils.perform_web_search(search_url, query, doc_title=doc_title, doc_category ="job_updates")
-        results.append(result)
-        
-        return results       
-    
+        try:
+            scraper = ASUWebScraper(
+                discord_state={},  # Adjust with real data if available
+                utils=self.utils, 
+                logger=self.logger
+            )
+        except Exception as e:
+            self.logger.error(f"@student_jobs_agent_tools.py: Error creating ASUWebScraper: {e}")
+            return "Could not initialize the scraper."
+
+        try:
+            results = scraper.scrape_asu_workday_jobs(keyword=keyword, max_results=max_results)
+        except Exception as e:
+            self.logger.error(f"@student_jobs_agent_tools.py: Error scraping Workday jobs: {e}")
+            return "Failed to scrape Workday jobs."
+
+        if not results:
+            return "No job results found on Workday."
+
+        self.text_content = []
+        for idx, job in enumerate(results, start=1):
+            title = job.get("title", "N/A")
+            header = job.get("detail_header", "N/A")
+            detail_text = job.get("detail_text", "N/A")
+            # Use only the first 250 characters as an excerpt
+            excerpt = detail_text[:250].replace("\n", " ")
+            formatted_string = (
+                f"Job #{idx}: {title}\n"
+                f"Header: {header}\n"
+                f"Details Excerpt: {excerpt}...\n"
+                "--------------------"
+            )
+            self.text_content.append({
+                'content': formatted_string,
+                'metadata': {'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            })
+
+        return "\n\n".join([entry['content'] for entry in self.text_content])

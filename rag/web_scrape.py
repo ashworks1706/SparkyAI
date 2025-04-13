@@ -52,8 +52,8 @@ class ASUWebScraper:
             
             logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            if chrome_version != driver_version:
-                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            #if chrome_version != driver_version:
+                #raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
@@ -1386,7 +1386,15 @@ class ASUWebScraper:
             except Exception as e:
                 self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
                 return False
-            
+                # Branch for Workday pages
+                
+        elif 'myworkday.com' in url:
+            self.logger.info("Detected Workday URL – delegating to Workday scraper.")
+            if not optional_query or not optional_query.strip():
+                self.logger.error("No search keyword provided for Workday jobs.")
+                return []  # or return a message indicating that a search query is required
+            return self.scrape_asu_workday_jobs(keyword=optional_query.strip(), max_results=5)
+    
         else:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
             
@@ -1631,7 +1639,108 @@ class ASUWebScraper:
         # self.driver.quit()
 
         return self.text_content
-                
+
+    def scrape_asu_workday_jobs(self, keyword="arts", max_results=5) -> List[Dict[str, str]]:
+        """
+        Scrapes the ASU Workday Student Jobs page:
+        1) Opens the page and waits up to 2 minutes for manual login,
+        2) Searches with the given keyword,
+        3) Returns up to 'max_results' job listings 
+            (each with title, detail header, and detail text) as a list of dicts.
+        """
+        self.logger.info(f"Starting Workday scrape with keyword='{keyword}'")
+        driver = self.driver
+        url = "https://www.myworkday.com/asu/d/task/1422$3898.htmld"
+        driver.get(url)
+
+        self.logger.info("Please log in if prompted. Waiting 2 minutes…")
+        time.sleep(120)  # Wait for manual login
+
+        # Refresh the page after login
+        time.sleep(5)
+        driver.refresh()
+        time.sleep(3)
+
+        SEARCH_BAR_SELECTOR = "input[data-automation-id='textInputBox']"
+        
+        try:
+            self.logger.info("Locating the search input box…")
+            search_box = WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, SEARCH_BAR_SELECTOR))
+            )
+            driver.execute_script("arguments[0].scrollIntoView(true);", search_box)
+            time.sleep(1)
+
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, SEARCH_BAR_SELECTOR))
+            )
+            
+            try:
+                search_box.click()
+            except:
+                self.logger.info("Normal click failed, using JavaScript click on the search box.")
+                driver.execute_script("arguments[0].click();", search_box)
+            
+            search_box.clear()
+            search_box.send_keys(keyword)
+            search_box.send_keys(Keys.RETURN)
+            self.logger.info(f"Searched for '{keyword}'. Waiting for results to load...")
+        except Exception as e:
+            self.logger.error("Could not find or use the search box.", exc_info=True)
+            return []
+
+        time.sleep(5)
+        
+        job_selector = "div[role='link'][data-automation-label]"
+        job_divs = driver.find_elements(By.CSS_SELECTOR, job_selector)
+        self.logger.info(f"Found {len(job_divs)} job items on the page for '{keyword}'")
+
+        top_job_divs = job_divs[:max_results]
+        all_jobs_data = []
+
+        for idx, job_div in enumerate(top_job_divs, start=1):
+            job_title = job_div.get_attribute("data-automation-label") or "N/A"
+            self.logger.info(f"Opening job #{idx}: {job_title}")
+            
+            action_key = Keys.COMMAND  # or Keys.CONTROL on Windows
+            webdriver.ActionChains(driver)\
+                    .key_down(action_key)\
+                    .click(job_div)\
+                    .key_up(action_key)\
+                    .perform()
+                    
+            time.sleep(2)
+            driver.switch_to.window(driver.window_handles[-1])
+
+            try:
+                detail_panel = WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-automation-id='jobPosting']"))
+                )
+            except:
+                self.logger.warning("Timed out waiting for job detail overlay.")
+                detail_panel = None
+
+            job_data = {"title": job_title}
+            try:
+                h1_elem = driver.find_element(By.CSS_SELECTOR, "h1")
+                job_data["detail_header"] = h1_elem.text.strip()
+            except:
+                job_data["detail_header"] = "N/A"
+
+            if detail_panel:
+                job_data["detail_text"] = detail_panel.text.strip()
+            else:
+                job_data["detail_text"] = driver.find_element(By.TAG_NAME, "body").text.strip()
+            
+            all_jobs_data.append(job_data)
+            
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            time.sleep(2)
+
+        self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
+        return all_jobs_data
+            
     # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
     # disabled temprarily
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
