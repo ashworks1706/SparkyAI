@@ -89,7 +89,35 @@ class Firestore:
                 "user_in_voice_channel": self.discord_state.get('user_in_voice_channel'),
                 "request_in_dm": self.discord_state.get('request_in_dm'),
                 "guild_user": str(self.discord_state.get('guild_user')),
-                "user_voice_channel_id": self.discord_state.get('user_voice_channel_id'),
             }
             users_collection.add(new_user_doc)
             print(f"@firestore.py New user added to Firestore: {new_user_doc}")
+    
+    async def store_user_credentials(self, user_id, asurite_id, password):
+        # Check if the user already exists in the Firestore database
+        users_collection = self.db.collection("users")
+        query_results = users_collection.where("user_id", "==", user_id).get()
+        
+        # Check if the user already exists in the collection
+        if not list(query_results):  # Convert to list to check if empty
+            new_user_doc = {
+                "user_id": user_id,
+                "user_asu_rite": asurite_id,
+                "user_password": password,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "user_has_mod_role": self.discord_state.get('user_has_mod_role'),
+                "user_in_voice_channel": self.discord_state.get('user_in_voice_channel'),
+                "request_in_dm": self.discord_state.get('request_in_dm'),
+                "guild_user": str(self.discord_state.get('guild_user')),
+            }
+            users_collection.add(new_user_doc)
+            print(f"@firestore.py New user credentials added to Firestore: {new_user_doc}")
+        else:
+            # Update the existing user's credentials
+            for doc in query_results:
+                users_collection.document(doc.id).update({
+                    "user_asu_rite": asurite_id,
+                    "user_password": password,
+                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                print(f"@firestore.py User credentials updated in Firestore: {doc.id}")

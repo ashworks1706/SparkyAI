@@ -13,7 +13,6 @@ class DiscordState:
         self.user_in_voice_channel = False
         self.request_in_dm = False
         self.guild_user= None
-        self.user_voice_channel_id = None
         self.discord_client = discord.Client(intents=self.intents)
         self.task_message = None
         self.discord_post_channel_name= None

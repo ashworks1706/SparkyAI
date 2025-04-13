@@ -1,10 +1,12 @@
 from utils.verify_button import VerifyButton
-
+from utils.login_modal import LoginModal
 from utils.common_imports import * 
+
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
+    # Your existing __init__ method, but add the login command
     def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger ):
         """
         Initialize the Discord bot.
@@ -37,7 +39,52 @@ class ASUDiscordBot:
         )
         async def ask(interaction: discord.Interaction, question: str):
             await self._handle_ask_command(interaction, question)
-                  
+        
+        @self.tree.command(
+            name="login",
+            description="Login with your ASUrite credentials"
+        )
+        async def login(interaction: discord.Interaction):
+            await self._handle_login_command(interaction)
+    
+    async def _handle_login_command(self, interaction: discord.Interaction) -> None:
+        """
+        Handle the login command.
+        
+        Args:
+            interaction: Discord interaction
+        """
+        try:
+            # Check if user is part of the server
+            target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
+            user_id = interaction.user.id
+            
+            if target_guild:
+                try:
+                    member = await target_guild.fetch_member(user_id)
+                    if not member:
+                        await interaction.response.send_message(
+                            "You are not part of ACM Discord Server. Access to command is restricted.",
+                            ephemeral=True
+                        )
+                        return
+                except discord.NotFound:
+                    await interaction.response.send_message(
+                        "You are not part of ACM Discord Server. Access to command is restricted.",
+                        ephemeral=True
+                    )
+                    return
+            
+            # If user is a member, show the login modal
+            modal = LoginModal(self)
+            await interaction.response.send_modal(modal)
+            self.logger.info(f"@discord_bot.py Login modal sent to user {interaction.user.name}")
+        
+        except Exception as e:
+            error_msg = f"Error processing login command: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            await self._send_error_response(interaction)
+                             
     async def _handle_ask_command(
         self,
         interaction: discord.Interaction,
@@ -57,7 +104,6 @@ class ASUDiscordBot:
         target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
         user_has_mod_role= None
         member = None
-        user_voice_channel_id=None
         # Reset all states
 
         if target_guild:
@@ -69,16 +115,13 @@ class ASUDiscordBot:
                         role.name == required_role_name for role in member.roles
                     )
                     
-                    # Check voice state
-                    if member.voice:
-                        user_voice_channel_id = member.voice.channel.id
                 else:
                     return "You are not part of AIM Discord Server. Access to command is restricted."
 
                     
             except discord.NotFound:
                 return "You are not part of AIM Discord Server. Access to command is restricted."
-        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
+        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
         self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:

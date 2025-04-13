@@ -2,6 +2,7 @@ from utils.common_imports import *
 
 import subprocess
 import platform
+
 class ASUWebScraper:
     def __init__(self,discord_state,utils,logger):
         self.discord_client = discord_state.get('discord_client')
@@ -10,7 +11,7 @@ class ASUWebScraper:
         self.logged_in_driver= None
         self.chrome_options = Options()
         # if you want to start chrome supressed enable this comment
-        # self.chrome_options.add_argument('--headless')  
+        self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
@@ -1390,7 +1391,6 @@ class ASUWebScraper:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
             
         return False
-    
     
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
