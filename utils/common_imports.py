@@ -101,3 +101,22 @@ from discord_bot import ASUDiscordBot
 from rag.web_scrape import ASUWebScraper
 from rag.vector_store import VectorStore
 from rag.group_chat import GroupChat
+from background.clubs import Clubs
+from background.events import Events
+from background.library_catalog import Library_Catalog
+from background.library_catalog import Library_Catalog
+from background.courses_catalog import Courses_Catalog
+from background.news import News
+from background.social_media_facebook import Social_Media_Facebook
+from background.social_media_x import Social_Media_X
+from background.social_media_instagram import Social_Media_Instagram
+from background.study_rooms import Study_Rooms
+from background.shuttles import Shuttles
+from background.scholarships_goglobal import Scholarships_GoGlobal
+from background.scholarships_onsa import Scholarships_Onsa
+
+import subprocess
+import platform
+
+
+

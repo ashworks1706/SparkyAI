@@ -28,6 +28,7 @@ class Main:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")
             self.vector_store = None
             raise e
+        
         # Initializing ASU RAG components
         genai.configure(api_key=self.app_config.get_api_key())
         self.logger.info("Setting up GenAI @ Main")

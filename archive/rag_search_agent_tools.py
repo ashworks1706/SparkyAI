@@ -280,7 +280,7 @@ class Rag_Search_Agent_Tools:
         
         return await self.utils.perform_web_search(search_url)
 
-    async def get_library_resources(self, search_bar_query: str = None, resource_type: str = 'All Items'):
+    async def get_library_catalog(self, search_bar_query: str = None, resource_type: str = 'All Items'):
         """
         Retrieve ASU Library resources using ASU Library Search with robust parameter handling.
 
@@ -329,7 +329,7 @@ class Rag_Search_Agent_Tools:
             doc_title = None
         try:
             # Add error handling for web search
-            return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="library_resources")
+            return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="library_catalog")
         except Exception as e:
             return f"Error performing library search: {str(e)}"
         
@@ -596,4 +596,4 @@ class Rag_Search_Agent_Tools:
         else:
             doc_title = None
 
-        return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
+        return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="courses_catalog")

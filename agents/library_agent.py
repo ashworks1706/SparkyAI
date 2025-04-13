@@ -67,7 +67,7 @@ class LibraryModel:
                         ),
                       
                         genai.protos.FunctionDeclaration(
-                            name="get_library_resources",
+                            name="get_library_catalog",
                             description="Searches for Books, Articles, Journals, Etc Within ASU Library",
                             parameters=content.Schema(
                                 type=content.Type.OBJECT,
@@ -115,7 +115,7 @@ class LibraryModel:
         
         function_mapping = {
                         'get_live_library_status': self.agent_tools.get_live_library_status,
-            'get_library_resources': self.agent_tools.get_library_resources,
+            'get_library_catalog': self.agent_tools.get_library_catalog,
         }
         
             

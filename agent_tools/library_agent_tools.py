@@ -35,7 +35,7 @@ class Library_Agent_Tools:
             if "Availability" in status_type:
                 search_url=f"https://lib.asu.edu/hours"
                 query = f"library_names={library_names}&date={date}"
-                result+=await self.utils.perform_web_search(search_url, query,doc_title=doc_title, doc_category ="libraries_status")
+                result+=await self.utils.perform_web_search(search_url, query,doc_title=doc_title, doc_category ="study_rooms_status")
             
             library_map = {
                 "Tempe Campus - Hayden Library": "13858",
@@ -58,12 +58,12 @@ class Library_Agent_Tools:
                 for library in library_names:
                     query= library_map[library]
                     search_url = f"https://asu.libcal.com/r/accessible/availability?lid={library_map[library]}&gid={gid_map[library_map[library]]}&zone=0&space=0&capacity=2&date={transformed_date}"
-                    result+=await self.utils.perform_web_search(search_url, query,doc_title=doc_title, doc_category ="libraries_status")
+                    result+=await self.utils.perform_web_search(search_url, query,doc_title=doc_title, doc_category ="study_rooms_status")
             if not result:
                 return "No rooms available currently at this specific library."
             return result
             
-    async def get_library_resources(self, search_bar_query: str = None, resource_type: str = 'All Items'):
+    async def get_library_catalog(self, search_bar_query: str = None, resource_type: str = 'All Items'):
         """
         Retrieve ASU Library resources using ASU Library Search with robust parameter handling.
 
@@ -112,7 +112,7 @@ class Library_Agent_Tools:
             doc_title = None
         try:
             # Add error handling for web search
-            return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="library_resources")
+            return await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="library_catalog")
         except Exception as e:
             return f"Error performing library search: {str(e)}"
         

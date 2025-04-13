@@ -1,7 +1,7 @@
 from utils.common_imports import *
+
 import subprocess
 import platform
-
 class ASUWebScraper:
     def __init__(self,discord_state,utils,logger):
         self.discord_client = discord_state.get('discord_client')
@@ -48,8 +48,8 @@ class ASUWebScraper:
             
             logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            if chrome_version != driver_version:
-                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            # if chrome_version != driver_version:
+            #     raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
@@ -106,7 +106,6 @@ class ASUWebScraper:
             except:
                 pass
 
-    
     async def __login__(self, username, password):
         try:
             # Navigate to Handshake login page
@@ -161,7 +160,6 @@ class ASUWebScraper:
             self.logger.error(f"@web_scrape.py Login failed: {str(e)}")
             return False
         
-    
     async def scrape_content(self, url: str, query_type: str = None, max_retries: int = 3, selenium :bool = False, optional_query:str=None) -> bool:
         """Scrape content using Jina.ai"""
         
@@ -1154,24 +1152,6 @@ class ASUWebScraper:
                 
                 time.sleep(2)
                 
-                # WebDriverWait(self.driver, 10).until(
-                #     EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@style, 'z-index: 106')]"))
-                # )
-                
-                # try:
-                #     zoom_out_button = WebDriverWait(self.driver, 10).until(
-                #         EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Zoom out']"))
-                #     )
-                    
-                #     for _ in range(button_times):
-                #         zoom_out_button.click()
-                #         time.sleep(0.5)  # Short pause between clicks
-                
-                # except Exception as e:
-                #     self.logger.info(f"@web_scrape.py Error clicking zoom out button: {e}")
-                
-                # Replace the existing zoom control code with:
-
                 try:
                     # First click on map camera controls button
                     camera_controls = WebDriverWait(self.driver, 10).until(

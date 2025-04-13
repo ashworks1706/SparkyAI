@@ -195,7 +195,7 @@ class RagSearchModel:
                         ),
                         
                         genai.protos.FunctionDeclaration(
-                            name="get_library_resources",
+                            name="get_library_catalog",
                             description="Searches for Books, Articles, Journals, Etc Within ASU Library",
                             parameters=content.Schema(
                                 type=content.Type.OBJECT,
@@ -509,7 +509,7 @@ class RagSearchModel:
             'get_latest_news_updates': self.agent_tools.get_latest_news_updates,
             'get_latest_social_media_updates': self.agent_tools.get_latest_social_media_updates,
             'get_latest_sport_updates': self.agent_tools.get_latest_sport_updates,
-           'get_library_resources': self.agent_tools.get_library_resources,
+           'get_library_catalog': self.agent_tools.get_library_catalog,
               'get_latest_scholarships': self.agent_tools.get_latest_scholarships,
             'get_latest_job_updates': self.agent_tools.get_latest_job_updates,
             'get_latest_class_information': self.agent_tools.get_latest_class_information
