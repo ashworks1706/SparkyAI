@@ -380,7 +380,7 @@ class Rag_Search_Agent_Tools:
         
         return results
        
-    async def get_latest_job_updates( self, search_bar_query: Optional[Union[str, List[str]]] = None, job_type: Optional[Union[str, List[str]]] = None, job_location: Optional[Union[str, List[str]]] = None):
+    async def get_latest_student_jobs( self, search_bar_query: Optional[Union[str, List[str]]] = None, job_type: Optional[Union[str, List[str]]] = None, job_location: Optional[Union[str, List[str]]] = None):
         """
         Comprehensive function to retrieve ASU Job updates using multiple data sources.
         
@@ -435,7 +435,7 @@ class Rag_Search_Agent_Tools:
         else:
             doc_title = None
             
-        result = await self.utils.perform_web_search(search_url, query, doc_title=doc_title, doc_category ="job_updates")
+        result = await self.utils.perform_web_search(search_url, query, doc_title=doc_title, doc_category ="student_jobs")
         results.append(result)
         
         return results       

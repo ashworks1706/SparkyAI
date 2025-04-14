@@ -80,7 +80,7 @@ class SuperiorModel:
                             "social_media_updates", 
                             "scholarships_info", 
                             "library_catalog",  
-                            "job_updates", 
+                            "student_jobs", 
                             ]
                             
                             # "shuttles_status": self.shuttle_docs,

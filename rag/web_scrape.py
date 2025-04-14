@@ -203,244 +203,6 @@ class ASUWebScraper:
                         self.logger.info(self.text_content[-1])
                         return self.text_content
                             
-        elif 'postings' in url and selenium:
-
-            self.logger.info(" @web_scrape.py \nLogin to Handshake")
-            # Navigate to Handshake job postings
-            self.logged_in_driver.get(url)
-            
-            
-            # Wait for page to load
-            wait = WebDriverWait(self.logged_in_driver, 10)
-            
-            # Parse optional query parameters
-            if optional_query:
-                query_params = parse_qs(optional_query)
-                
-                self.logger.info(f"@web_scrape.py Parsed query parameters: {query_params}")
-                # Search Bar Query
-                if 'search_bar_query' in query_params:
-                    search_input = wait.until(
-                        EC.presence_of_element_located((By.XPATH, "//input[@role='combobox']"))
-                    )
-                    search_input.send_keys(query_params['search_bar_query'][0])
-                    self.logger.info(" @web_scrape.py \nSuccessfully entered search_bar_query")
-                
-                
-                if 'job_location' in query_params:
-                    location_button = wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'style__pill___3uHDM') and .//span[text()='Location']]"))
-                    )
-                    location_button.click()
-
-                    location_input = wait.until(
-                        EC.presence_of_element_located((By.ID, "locations-filter"))
-                    )
-                    
-                    # Remove list brackets and use the first element directly
-                    job_location = query_params['job_location'][0]
-                    
-                    location_input.clear()
-                    location_input.send_keys(job_location)
-                    self.logger.info(" @web_scrape.py \n Successfully entered job_location")
-
-                    try:
-                        wait.until(EC.presence_of_element_located((By.CLASS_NAME, "mapbox-autocomplete-results")))
-                        time.sleep(1)
-
-                        first_location = wait.until(
-                            EC.element_to_be_clickable((
-                            By.XPATH, 
-                            f"//div[contains(@class, 'mapbox-autocomplete-results')]//label[contains(text(), '{job_location}')]"
-                            )))
-                        
-                        first_location.click()
-                        
-                        self.logger.info(f"@web_scrape.py Selected location: {job_location}")
-                    except Exception as e:
-                        self.logger.error(f"@web_scrape.py Error job location: {e}")
-
-                all_filters_button = wait.until(
-                    EC.element_to_be_clickable((
-                        By.XPATH, 
-                        "//button[contains(@class, 'style__pill___3uHDM') and .//span[text()='All filters']]"
-                    ))
-                )
-                all_filters_button.click()
-                
-                self.logger.info(" @web_scrape.py \nClicked on all filters")
-                                    
-                
-                if 'job_type' in query_params:
-                    # Get the specific job type from query parameters
-                    job_type = query_params['job_type'][0]
-                    
-                    # Function to force click using JavaScript with multiple attempts
-                    def force_click_element(driver, element, max_attempts=3):
-                        for attempt in range(max_attempts):
-                            self.logger.info(" @web_scrape.py \nAttempting to force click")
-                            try:
-                                # Try different click methods
-                                self.driver.execute_script("arguments[0].click();", element)
-                                time.sleep(0.5)  # Short pause to allow for potential page changes
-                                self.logger.info(" @web_scrape.py \nForce click successful")
-                                return True
-                            except Exception:
-                                # Try alternative click methods
-                                try:
-                                    element.click()
-                                    self.logger.info(" @web_scrape.py \nElement clicked successfully")
-                                except Exception:
-                                    # Last resort: move and click
-                                    try:
-                                        ActionChains(self.driver).move_to_element(element).click().perform()
-                                        self.logger.info(" @web_scrape.py \nMoved and clicked successfully")
-                                    except Exception:
-                                        self.logger.error(f"Failed to click element after {max_attempts} attempts")
-                        return False
-                    
-                    # Check if the job type is in the first level of buttons (Full-Time, Part-Time)
-                    standard_job_types = ['Full-Time', 'Part-Time']
-                    
-                    if job_type in standard_job_types:
-                        # Direct selection for standard job types
-                        try:
-                            job_type_button = wait.until(
-                                EC.presence_of_element_located((
-                                    By.XPATH,
-                                    f"//button[contains(@class, 'style__pill___3uHDM') and .//div[@data-name='{job_type}' and @tabindex='-1']]"
-                                ))
-                            )
-                            force_click_element(self.driver, job_type_button)
-                            self.logger.info(" @web_scrape.py \nSelect job type")
-                        except Exception:
-                            self.logger.info(f"Failed to click job type button: {job_type}")
-                    else:
-                        # For nested job types, click More button first
-                        try:
-                            more_button = wait.until(
-                                EC.presence_of_element_located((
-                                    By.XPATH, 
-                                    "//button[contains(@class, 'style__pill___') and contains(text(), '+ More')]"
-                                ))
-                            )
-                            force_click_element(self.driver, more_button)
-                            self.logger.info(" @web_scrape.py \nClicked more button")
-                            
-                            # Wait and force click the specific job type button from nested options
-                            job_type_button = wait.until(
-                                EC.presence_of_element_located((
-                                    By.XPATH,
-                                    f"//button[contains(@class, 'style__pill___3uHDM') and .//div[@data-name='{job_type}' and @tabindex='-1']]"
-                                ))
-                            )
-                            force_click_element(self.driver, job_type_button)
-                            self.logger.info(" @web_scrape.py \nSelect Job type")
-                        except Exception:
-                            self.logger.info(f"Failed to click job type button: {job_type}")
-                    
-                
-                self.logger.info(" @web_scrape.py \nClicked on all filters")
-                # Wait for the Show results button to be clickable
-                show_results_button = wait.until(
-                    EC.element_to_be_clickable((
-                        By.CLASS_NAME, 
-                        "style__clickable___3a6Y8"
-                    ))
-                )
-
-                # Optional: Add a small delay before clicking to ensure page is ready
-                time.sleep(4)
-
-                # Force click the Show results button using JavaScript
-                self.driver.execute_script("arguments[0].click();", show_results_button)
-
-                self.logger.info(" @web_scrape.py \nClicked on show results button")
-
-                try:
-                    # Wait for job cards to be present using data-hook
-                    job_cards = wait.until(
-                        EC.presence_of_all_elements_located(
-                            (By.CSS_SELECTOR, "[data-hook='jobs-card']")
-                        )
-                    )
-                    self.logger.info(" @web_scrape.py \nJob cards loaded")                    
-                    for job_card in job_cards[:3]:
-                        full_job_link = job_card.get_attribute('href')
-
-                        self.driver.execute_script("arguments[0].click();", job_card)
-                        self.logger.info(" @web_scrape.py \nClicked Job Card")
-                        
-                        # Wait for preview panel to load using data-hook
-                        wait.until(
-                            EC.presence_of_element_located(
-                                (By.CSS_SELECTOR, "[data-hook='details-pane']")
-                            )
-                        )
-                        
-                        # Find 'More' button using a more robust selector
-                        more_button = wait.until(
-                            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.view-more-button"))
-                        )
-                        self.driver.execute_script("arguments[0].click();", more_button)
-                        self.logger.info(" @web_scrape.py \nClicked 'More' button")
-
-                        
-                        time.sleep(1)
-                        h = html2text.HTML2Text()
-                        time.sleep(2)
-                        
-                        job_preview_html = self.driver.find_element(By.CLASS_NAME, "style__details-padding___Y_KHb")
-                        
-                        soup = BeautifulSoup(job_preview_html.get_attribute('outerHTML'), 'html.parser')
-    
-                        # Find and remove the specific div with the class
-                        unwanted_div = soup.find('div', class_='sc-gwVtdH fXuOWU')
-                        if unwanted_div:
-                            unwanted_div.decompose()
-                        
-                        unwanted_div = soup.find('div', class_='sc-dkdNSM eNTbTl')
-                        if unwanted_div:
-                            unwanted_div.decompose()
-                        unwanted_div = soup.find('div', class_='sc-jEYHeb hSVHZy')
-                        if unwanted_div:
-                            unwanted_div.decompose()
-                        unwanted_div = soup.find('div', class_='sc-VJPgA bRBKUF')
-                        if unwanted_div:
-                            unwanted_div.decompose()
-                        
-                        self.logger.info(" @web_scrape.py \nConverted HTML to BeautifulSoup object")
-                        
-                        markdown_content = h.handle(str(soup))
-                        
-                        # remove image links
-                        markdown_content = re.sub(r'!\[.*?\]\(.*?\)', '', markdown_content)
-    
-                        # Remove hyperlinks
-                        markdown_content = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', markdown_content)
-
-                        markdown_content = markdown_content.replace('\n',' ')
-                        
-                        markdown_content = markdown_content.replace('[',' ')
-                        
-                        markdown_content = markdown_content.replace(']',' ')
-                        
-                        markdown_content = markdown_content.replace('/',' ')
-                        
-                        self.logger.info(" @web_scrape.py \nConverted HTML to Markdown " )
-                        
-                        self.text_content.append({
-                            'content': markdown_content,
-                            'metadata': {
-                                'url': full_job_link,
-                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            }
-                        })
-                        self.logger.info(" @web_scrape.py \nAppended content to text_content")
-                except Exception as e:
-                        self.logger.error(f"@web_scrape.py Error html to makrdown conversion :  {e}")
-            
-            return self.text_content
         
         elif 'catalog.apps.asu.edu' in url and selenium:
             self.driver.get(url)
@@ -1339,12 +1101,12 @@ class ASUWebScraper:
                 return False
                 # Branch for Workday pages
                 
-        elif 'myworkday.com' in url:
+        elif 'myworkday.com' in url and selenium:
             self.logger.info("Detected Workday URL – delegating to Workday scraper.")
             if not optional_query or not optional_query.strip():
                 self.logger.error("No search keyword provided for Workday jobs.")
                 return []  # or return a message indicating that a search query is required
-            results= self.scrape_asu_workday_jobs(keyword=optional_query.strip(), max_results=5)
+            results= await self.scrape_asu_workday_jobs(optional_query=optional_query)
             
             self.text_content.append({
                         'content': results,
@@ -1594,7 +1356,7 @@ class ASUWebScraper:
                 self.logger.info(f"@web_scrape.py Searching for ASU catalog links {search_url}")
                 await self.scrape_content(search_url, selenium=True)
             
-            if 'https://app.joinhandshake.com/stu/postings' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
+            if 'myworkday.com' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
                 self.logger.info(f"@web_scrape.py Searching for ASU links {search_url}")
                 await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
             
@@ -1604,7 +1366,7 @@ class ASUWebScraper:
 
         return self.text_content
 
-    def scrape_asu_workday_jobs(self, keyword="arts", max_results=5) -> List[Dict[str, str]]:
+    async def scrape_asu_workday_jobs(self, optional_query) -> List[Dict[str, str]]:
         """
         Scrapes the ASU Workday Student Jobs page:
         1) Opens the page and waits up to 2 minutes for manual login,
@@ -1612,6 +1374,8 @@ class ASUWebScraper:
         3) Returns up to 'max_results' job listings 
             (each with title, detail header, and detail text) as a list of dicts.
         """
+        keyword = optional_query.get('keyword', '')
+        max_results = optional_query.get('max_results', 5)
         self.logger.info(f"Starting Workday scrape with keyword='{keyword}'")
         driver = self.driver
         url = "https://www.myworkday.com/asu/d/task/1422$3898.htmld"

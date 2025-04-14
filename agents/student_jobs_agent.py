@@ -45,7 +45,7 @@ class StudentJobsModel:
                                         description="Max number of jobs to return"
                                     ),
                                 },
-                                required=["keyword"]  # 'keyword' must be provided
+                                required=["keyword"]  
                             )
                         ),
                     ]
