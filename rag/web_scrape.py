@@ -1344,7 +1344,15 @@ class ASUWebScraper:
             if not optional_query or not optional_query.strip():
                 self.logger.error("No search keyword provided for Workday jobs.")
                 return []  # or return a message indicating that a search query is required
-            return self.scrape_asu_workday_jobs(keyword=optional_query.strip(), max_results=5)
+            results= self.scrape_asu_workday_jobs(keyword=optional_query.strip(), max_results=5)
+            
+            self.text_content.append({
+                        'content': results,
+                        'metadata': {
+                            'url': url,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
     
         else:
             self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
@@ -1610,12 +1618,6 @@ class ASUWebScraper:
         driver.get(url)
 
         self.logger.info("Please log in if prompted. Waiting 2 minutes…")
-        time.sleep(120)  # Wait for manual login
-
-        # Refresh the page after login
-        time.sleep(5)
-        driver.refresh()
-        time.sleep(3)
 
         SEARCH_BAR_SELECTOR = "input[data-automation-id='textInputBox']"
         
@@ -1660,11 +1662,11 @@ class ASUWebScraper:
             
             action_key = Keys.COMMAND  # or Keys.CONTROL on Windows
             webdriver.ActionChains(driver)\
-                    .key_down(action_key)\
-                    .click(job_div)\
-                    .key_up(action_key)\
-                    .perform()
-                    
+                .key_down(action_key)\
+                .click(job_div)\
+                .key_up(action_key)\
+                .perform()
+                
             time.sleep(2)
             driver.switch_to.window(driver.window_handles[-1])
 
@@ -1693,9 +1695,24 @@ class ASUWebScraper:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
             time.sleep(2)
+        
+        # Format all job data into a single nicely formatted string
+        formatted_results = ""
+        for idx, job in enumerate(all_jobs_data, start=1):
+            formatted_results += f"--- Job #{idx} ---\n"
+            formatted_results += f"Job Title: {job['title']}\n"
+            formatted_results += f"Job Header: {job['detail_header']}\n"
+            
+            # Get a summary of the job description (first 300 chars)
+            description_summary = job['detail_text'][:300] + "..." if len(job['detail_text']) > 300 else job['detail_text']
+            formatted_results += f"Job Description: {description_summary}\n\n"
+        
+        self.logger.info(f"Formatted {len(all_jobs_data)} job records for keyword='{keyword}'")
+            
+            
 
         self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
-        return all_jobs_data
+        return formatted_results
             
     
     async def login_user_credentials(self):
