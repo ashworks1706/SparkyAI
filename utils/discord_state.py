@@ -6,14 +6,15 @@ class DiscordState:
         self.intents = discord.Intents.default()
         self.intents.message_content = True
         self.intents.members = True
+        self.user_asu_rite=None
+        self.user_password=None
         self.user = False
+        self.user_session_id = None
         self.target_guild = None
         self.user_id = None
         self.user_has_mod_role = False
-        self.user_in_voice_channel = False
         self.request_in_dm = False
         self.guild_user= None
-        self.user_voice_channel_id = None
         self.discord_client = discord.Client(intents=self.intents)
         self.task_message = None
         self.discord_post_channel_name= None

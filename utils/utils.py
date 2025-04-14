@@ -5,6 +5,7 @@ class Utils:
         """Initialize the Utils from utils.common_imports import *
 classwith task tracking and logging."""
         try:
+            self.logger=logger
             self.tasks = []
             self.asu_data_processor = asu_data_processor
             self.asu_scraper = asu_scraper
@@ -14,8 +15,7 @@ classwith task tracking and logging."""
             self.ground_sources =[]
             self.cached_queries=[]
             self.vector_store_class = vector_store_class
-            self.vector_store = vector_store_class.get_vector_store()
-            self.logger=logger
+            self.vector_store = self.vector_store_class.get_vector_store()
             self.raptor_retriever = RaptorRetriever(vector_store_class=self.vector_store_class,logger=self.logger, vector_store=self.vector_store)
             self.group_chat=group_chat
             self.logger.info(f"@utils.py Group Chat setup successfully {group_chat}")
@@ -23,14 +23,17 @@ classwith task tracking and logging."""
             self.logger.info(f"@utils.py \nUtils instance initialized successfully")
         except Exception as e:
             self.logger.error(f"@utils.py Failed to initialize Utils: {e}")
+            pass
 
     async def start_animation(self, message):
         """Start the loading animation using Discord's built-in thinking indicator"""
         try:
             self.message = message
             self.logger.info(f"@utils.py Animation started for message: {message.id}")
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to start animation: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to start animation:")
+            pass
+        
 
     async def update_text(self, new_content):
         """Update text while maintaining task history"""
@@ -58,8 +61,9 @@ classwith task tracking and logging."""
             await self.message.edit(content=content)
             self.logger.info(f"@utils.py Message updated with {len(display_lines)} tasks")
 
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to update text: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to update text")
+            pass
             # Optionally, you could re-raise the exception or handle it differently
 
     async def stop_animation(self, message=None, final_content=None,View=None):
@@ -143,7 +147,7 @@ classwith task tracking and logging."""
             if not documents:
                 raise ValueError("No documents found matching the query")
             
-            self.logger.info(documents)
+            self.logger.info(documents) 
             
             self.logger.info(f"@utils.py \nPreprocessing documents...")
             

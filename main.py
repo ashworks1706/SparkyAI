@@ -22,12 +22,13 @@ class Main:
         self.logger.info("Setting up Vector store @ Main")
         try:
             # initializing vector store for qdrant vector database
-            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
+            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=True)
             self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")
             self.vector_store = None
             raise e
+        
         # Initializing ASU RAG components
         genai.configure(api_key=self.app_config.get_api_key())
         self.logger.info("Setting up GenAI @ Main")
@@ -53,18 +54,14 @@ class Main:
         else:
             self.logger.warning(" ASU RAG INITIALIZED WITH ERRORS - VectorStore not available")
 
-    async def initialize_scraper(self):
-        return True
-        # await self.asu_scraper.__login__(self.app_config.get_handshake_user(), self.app_config.get_handshake_pass())
 
     async def run_discord_bot(self,config: Optional[BotConfig] = None, app_config=None):
         """Run the Discord bot"""
         if not self.vector_store:
             self.logger.error("Cannot start bot: VectorStore not initialized")
             return
-        bot = ASUDiscordBot(config,app_config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger)
+        bot = ASUDiscordBot(config,app_config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger, self.asu_scraper)
         
-        await self.initialize_scraper()
         
         try:
             await bot.start()

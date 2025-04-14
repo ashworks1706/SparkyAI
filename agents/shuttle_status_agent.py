@@ -60,7 +60,7 @@ class Shuttle_Status_Model:
         self.request_counter = 0
         self.conversations: Dict[str, List[Dict[str, str]]] = {}
         
-    async def execute_function(self, function_call):
+    async def execute_function(self, function_call): 
         """Execute the called function and return its result"""
         function_name = function_call.name
         function_args = function_call.args

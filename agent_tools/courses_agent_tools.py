@@ -164,7 +164,7 @@ class Courses_Agent_Tools:
         else:
             doc_title = None
         try:
-            result = await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="classes_info")
+            result = await self.utils.perform_web_search(search_url,doc_title=doc_title, doc_category ="courses_catalog")
             self.logger.info(f"@courses_agent_tools.py Web search successful for URL: {search_url}")
             return result
         except Exception as e:
