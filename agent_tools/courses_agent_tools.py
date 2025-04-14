@@ -85,7 +85,7 @@ class Courses_Agent_Tools:
         unmapped_items = []
         
         def _convert_to_query_string(input_value: Optional[Union[str, List[str]]], mapping: Dict[str, str]) -> str:
-            nonlocal unmapped_itemsresults
+            nonlocal unmapped_items
             unmapped_items = []
             
             # Handle None input
