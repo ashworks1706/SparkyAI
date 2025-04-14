@@ -115,14 +115,11 @@ class ASUWebScraper:
             except:
                 pass
        
-    async def scrape_content(self, url: str, query_type: str = None, max_retries: int = 3, selenium :bool = False, optional_query:str=None) -> bool:
+    async def scrape_static_content(self, url: str, max_retries: int = 3) -> bool:
         """Scrape content using Jina.ai"""
         
-        self.logger.info(f"@web_scrape.py Scraping url : {url} ")
-        self.logger.info(f"@web_scrape.py query_type : {query_type} ")
+        self.logger.info(f"@web_scrape.py Scraping static url : {url} ")
         self.logger.info(f"@web_scrape.py max_retries : {max_retries} ")
-        self.logger.info(f"@web_scrape.py selenium required : {selenium} ")
-        self.logger.info(f"@web_scrape.py optional query : {optional_query} ")
         try:
             self.logger.info(" @web_scrape.py \nUpdating text in Discord")
             await self.utils.update_text("Understanding Results...")
@@ -155,971 +152,55 @@ class ASUWebScraper:
         self.logger.info(f"@web_scrape.py Visiting URL: {url}")
         
         
-        if not selenium:
-            for attempt in range(max_retries):
-                try:
-                    loader = UnstructuredURLLoader(urls=[url])
-                    documents = loader.load()
-                    
-                    if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content.lower() and not "supported browser" in documents[0].page_content.lower() and not "captcha" in documents[0].page_content.lower():
-                        self.text_content.append({
-                                'content': documents[0].page_content,
-                                'metadata': {
-                                    'url': url,
-                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                    'title': documents[0].metadata.get('title', ''),
-                                    'description': documents[0].metadata.get('description', ''),
-                                }
-                            })
-                        return self.text_content
-                    else:
-                        self.logger.info(" @web_scrape.py Langchain method failed")
-                except Exception as e:
-                    self.logger.error(f"@web_scrape.py Error fetching content from {url}: {str(e)}")
-                    await asyncio.sleep(8) 
-                    continue  
+        for attempt in range(max_retries):
+            try:
+                loader = UnstructuredURLLoader(urls=[url])
+                documents = loader.load()
+                
+                if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content.lower() and not "supported browser" in documents[0].page_content.lower() and not "captcha" in documents[0].page_content.lower():
+                    self.text_content.append({
+                            'content': documents[0].page_content,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                'title': documents[0].metadata.get('title', ''),
+                                'description': documents[0].metadata.get('description', ''),
+                            }
+                        })
+                    return self.text_content
                 else:
-                    jina_url = f"https://r.jina.ai/{url}"
-                    response = requests.get(jina_url, headers=self.headers, timeout=30)
-                    response.raise_for_status()
-                    
-                    text = response.text
-                    self.logger.info(f"@web_scrape.py Raw text response for https://r.jina.ai/{url}\n{text}")
-                    
-                    if "LOADING..." in text.upper() or "requires javascript to be enabled" in text.lower() or "supported browser" in text.lower() or "captcha" in text.lower():
-                        self.logger.warning(f"@web_scrape.py LOADING response detected for {url}. Retry attempt {attempt + 1}")
-                        await asyncio.sleep(8)  # Wait before retrying
-                        continue
-                    self.logger.info(" @web_scrape.py Scrarping successfull")
-                    if text and len(text.strip()) > 50:
-                        self.text_content.append({
-                            'content': text,
-                            'metadata': {
-                                'url': url,
-                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            }
-                        })
-                        
-                        self.logger.info(self.text_content[-1])
-                        return self.text_content
-                            
-        
-        elif 'catalog.apps.asu.edu' in url and selenium:
-            self.driver.get(url)
-            self.logger.info(" @web_scrape.py \nLogin to ASU Catalog")
-            
-            self.handle_cookie(self.driver)
-            course_elements = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_all_elements_located((By.CLASS_NAME, "class-accordion"))
-            )
-            self.logger.info(" @web_scrape.py \nCourse elements loaded")
-
-            detailed_courses = []
-            
-            for course in course_elements[:7]:
-                try:
-                    course_title_element = course.find_element(By.CSS_SELECTOR, ".course .bold-hyperlink")
-                    course_title = course_title_element.text
-                    
-                    # Use JavaScript click to handle potential interception
-                    self.driver.execute_script("arguments[0].click();", course_title_element)
-                    self.logger.info(" @web_scrape.py \nSuccessfully clicked on the course")
-
-                    # Wait for dropdown to load
-                    details_element = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.ID, "class-details"))
-                    )
-                    
-                    # Extract additional details
-                    course_info = {
-                        'title': course_title,
-                    }
-                    try:
-                        course_info['description'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Description')]/following-sibling::p").text
-                    except:
-                        course_info['description'] = 'N/A'
-                    try:
-                        course_info['enrollment_requirements'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Enrollment Requirements')]/following-sibling::p").text
-                    except:
-                        course_info['enrollment_requirements'] = 'N/A'
-                    try:
-                        location_element = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Location')]/following-sibling::p")
-                        location_link = location_element.find_element(By.TAG_NAME, "a")
-                        course_info['location'] = location_link.text
-                    except Exception as e:
-                        self.logger.info(f"@web_scrape.py Error in web_scrap course location : {e}")
-                        course_info['location'] = 'N/A'
-                    try:
-                        course_info['number'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Number')]/following-sibling::p").text
-                    except:
-                        course_info['number'] = 'N/A'
-                    try:
-                        course_info['units'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Units')]/following-sibling::p").text
-                    except:
-                        course_info['units'] = 'N/A'
-                    try:
-                        course_info['dates'] = details_element.find_element(By.CLASS_NAME, "text-nowrap").text
-                    except:
-                        course_info['dates'] = 'N/A'
-                    try:
-                        course_info['offered_by'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Offered By')]/following-sibling::p").text
-                    except:
-                        course_info['offered_by'] = 'N/A'
-                    try:
-                        course_info['repeatable_for_credit'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Repeatable for credit')]/following-sibling::p").text
-                    except:
-                        course_info['repeatable_for_credit'] = 'N/A'
-                    try:
-                        course_info['component'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Component')]/following-sibling::p").text
-                    except:
-                        course_info['component'] = 'N/A'
-                    try:
-                        course_info['last_day_to_enroll'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Last day to enroll')]/following-sibling::p").text
-                    except:
-                        course_info['last_day_to_enroll'] = 'N/A'
-                    try:
-                        course_info['drop_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Drop deadline')]/following-sibling::p").text
-                    except:
-                        course_info['drop_deadline'] = 'N/A'
-                    try:
-                        course_info['course_withdrawal_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course withdrawal deadline')]/following-sibling::p").text
-                    except:
-                        course_info['course_withdrawal_deadline'] = 'N/A'
-                    try:
-                        course_info['consent'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Consent')]/following-sibling::p").text
-                    except:
-                        course_info['consent'] = 'N/A'
-                    try:
-                        course_info['course_notes'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Notes')]/following-sibling::p").text
-                    except:
-                        course_info['course_notes'] = 'N/A'
-                    try:
-                        course_info['fees'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Fees')]/following-sibling::p").text
-                    except:
-                        course_info['fees'] = 'N/A'
-                        
-                    try:
-                        course_info['instructor'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Instructor')]/following-sibling::a").text
-                    except:
-                        course_info['instructor'] = 'N/A'
-                    
-                    
-                    # Extract reserved seats information
-                    try:
-                        reserved_seats_table = details_element.find_element(By.CLASS_NAME, "reserved-seats")
-                        reserved_groups = []
-                        rows = reserved_seats_table.find_elements(By.TAG_NAME, "tr")[1:-1]  # Skip header and last row
-                        for row in rows:
-                            cols = row.find_elements(By.TAG_NAME, "td")
-                            reserved_groups.append({
-                                'group': cols[0].text,
-                                'available_seats': cols[1].text,
-                                'students_enrolled': cols[2].text,
-                                'total_seats_reserved': cols[3].text,
-                                'reserved_until': cols[4].text
-                            })
-                        course_info['reserved_seats'] = reserved_groups
-                    except:
-                        course_info['reserved_seats'] = []
-                        self.logger.info(" @web_scrape.py \nNo reserved seats information found")
-                    
-                    detailed_courses.append(course_info)
-                    self.logger.info(f"@web_scrape.py \nAppended course details: {course_info}")
-                    
-                except Exception as e:
-                    self.logger.error(f"@web_scrape.py Error processing course {e}")
-
-                    
-                formatted_courses = []
-                for course in detailed_courses:
-                    course_string = f"Title: {course['title']}\n"
-                    course_string += f"Description: {course['description']}\n"
-                    course_string += f"Enrollment Requirements: {course['enrollment_requirements']}\n"                    
-                    course_string += f"Instructor: {course['instructor']}\n"
-                    course_string += f"Location: {course['location']}\n"
-                    course_string += f"Course Number: {course['number']}\n"
-                    course_string += f"Units: {course['units']}\n"
-                    course_string += f"Dates: {course['dates']}\n"
-                    course_string += f"Offered By: {course['offered_by']}\n"
-                    course_string += f"Repeatable for Credit: {course['repeatable_for_credit']}\n"
-                    course_string += f"Component: {course['component']}\n"
-                    course_string += f"Last Day to Enroll: {course['last_day_to_enroll']}\n"
-                    course_string += f"Drop Deadline: {course['drop_deadline']}\n"
-                    course_string += f"Course Withdrawal Deadline: {course['course_withdrawal_deadline']}\n"
-                    course_string += f"Consent: {course['consent']}\n"
-                    course_string += f"Course Notes: {course['course_notes']}\n"
-                    course_string += f"Fees: {course['fees']}\n"
-
-                    # Add reserved seats information
-                    if course.get('reserved_seats'):
-                        course_string += "Reserved Seats:\n"
-                        for group in course['reserved_seats']:
-                            course_string += f"- Group: {group['group']}\n"
-                            course_string += f"  Available Seats: {group['available_seats']}\n"
-                            course_string += f"  Students Enrolled: {group['students_enrolled']}\n"
-                            course_string += f"  Total Reserved Seats: {group['total_seats_reserved']}\n"
-                            course_string += f"  Reserved Until: {group['reserved_until']}\n"
-                    
-                    self.text_content.append({
-                            'content': course_string,
-                            'metadata': {
-                                'url': url,
-                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            }
-                        })
-                    self.logger.info(f"@web_scrape.py Appended {self.text_content[-1]}")
-                    formatted_courses.append(course_string)
-                    
-                    
-                return self.text_content
-        
-        elif 'search.lib.asu.edu' in url and selenium:
-            self.driver.get(url)
-            time.sleep(1)
-            self.logger.info(" @web_scrape.py \nLogin to ASU Library")
-            book_results = []
-            self.handle_feedback_popup(self.driver)
-            self.logger.info(" @web_scrape.py \nHandling feedback popup")
-            try:
-                # Find and click on the first book title link
-                first_book_link = WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, ".result-item-text div"))
-                )
-                first_book_link.click()
-                print("\nBook Title Clicked")
-                
-                time.sleep(2)
-                
-                if nested_book_link := self.driver.find_element(By.CSS_SELECTOR, ".result-item-text div"):
-                    nested_book_link.click()
-                    
-                book_details = WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
-                )
-                # Wait for book details to be present
-                print("\nBook Details fetched")
-                
-                
-                for _ in range(3):
-                    
-                    book_details = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
-                    )
-                    self.handle_feedback_popup(self.driver)
-                    
-                    # Extract book title
-                    author_view = self.driver.find_element(By.CSS_SELECTOR,
-                                                            "div.result-item-text.layout-fill.layout-column.flex")
-                    print("\nAuthors fetched")
-
-                    title = author_view.find_element(By.CSS_SELECTOR, "h3.item-title").text.strip()
-                    print("\nBook Title fetched")
-
-                    # Extract Authors
-                    authors = []
-
-                    try:
-                        author_div = author_view.find_element(By.XPATH,
-                                                                "//div[contains(@class, 'item-detail') and contains(@class, 'reduce-lines-display')]")
-
-                        # Find all author elements within this div
-                        author_elements = author_div.find_elements(By.CSS_SELECTOR,
-                                                                    "span[data-field-selector='creator'], span[data-field-selector='contributor']")
-
-                        if len(author_elements) > 0:
-                            for element in author_elements:
-                                author_text = element.text.strip()
-                                if author_text and author_text not in authors:
-                                    authors.append(author_text)
-                        else:
-                            author_div = book_details.find_element(By.XPATH, "//div[.//span[@title='Author']]")
-
-                            author_elements = author_div.find_elements(By.CSS_SELECTOR,
-                                                                        "a span[ng-bind-html='$ctrl.highlightedText']")
-
-                            if not author_elements:
-                                author_elements = book_details.find_elements(By.XPATH,
-                                                                                "//div[contains(@class, 'item-details-element')]//a//span[contains(@ng-bind-html, '$ctrl.highlightedText')]")
-                            if len(author_elements) > 0:
-                                for element in author_elements:
-                                    author_text = element.text.strip()
-                                    if author_text and author_text not in authors:
-                                        authors.append(author_text)
-                        print("\nAuthors fetched")
-
-                    except Exception as e:
-                        authors = 'N/A'
-
-                    try:
-                        publisher = book_details.find_element(By.CSS_SELECTOR,
-                                                                "span[data-field-selector='publisher']").text.strip()
-                        print("\nPublisher fetched")
-                    except:
-                        print("\nNo Publisher found")
-                        publisher = "N/A"
-
-                    # Extract publication year
-                    try:
-                        year = book_details.find_element(By.CSS_SELECTOR,
-                                                            "span[data-field-selector='creationdate']").text.strip()
-                    except:
-                        print("\nNo Book details found")
-                        year = "N/A"
-
-                    # Extract availability
-                    try:
-                        location_element = book_details.find_element(By.CSS_SELECTOR, "h6.md-title")
-                        availability = location_element.text.strip()
-                        print("\nAvailability found with first method")
-
-                    except Exception as e:
-                        # Find the first link in the exception block
-                        location_element = book_details.find_elements(By.CSS_SELECTOR,
-                                                                        "a.item-title.md-primoExplore-theme")
-                    try:
-                        
-                        if isinstance(location_element, list):
-                            availability = location_element[0].get_attribute('href')
-                        else:
-                            availability = location_element.get_attribute('href')
-                        print("\nAvailability found with second method")
-
-                        if availability is None:
-                            location_element = book_details.find_elements(By.CSS_SELECTOR,
-                                                                            "h6.md-title ng-binding zero-margin")
-                            availability = location_element.text.strip()
-                            print("\nAvailablility found with third method")
-                    except:
-                        print("\nNo availability found")
-                        availability = "N/A"
-
-                    try:
-                        # Use more flexible locator strategies
-                        links = self.driver.find_elements(By.XPATH, "//a[contains(@ui-sref, 'sourceRecord')]")
-
-                        if isinstance(links, list) and len(links) > 0:
-                            link = links[0].get_attribute('href')
-                            print("\nFetched Link")
-                        else:
-                            link = 'N/A'
-                            print("\nNo link Found")
-                    except Exception as e:
-                        print("\nNo link Found")
-                        link = 'N/A'
-
-                    # Compile book result
-                    book_result = {
-                        "title": title,
-                        "authors": authors,
-                        "publisher": publisher,
-                        "year": year,
-                        "availability": availability,
-                        "link": link
-                    }
-
-                    book_results.append(book_result)
-
-                    try:
-                        next_button = WebDriverWait(self.driver, 5).until(
-                            EC.element_to_be_clickable((By.XPATH, "//button[contains(@ng-click, '$ctrl.getNextRecord()')]"))
-                        )
-                        self.driver.execute_script("arguments[0].click();", next_button)
-                        
-                        time.sleep(3)
-
-                        print("\nClicked next button")
-
-                        self.handle_feedback_popup(self.driver)
-
-                    except Exception as e:
-                        print(f"Failed to click next button: {e}")
-
-                if len(book_results) == 0:
-                    return False
-
-                for book in book_results:
-                    book_string = f"Title: {book['title']}\n"
-                    book_string += f"Authors: {', '.join(book['authors']) if book['authors'] else 'N/A'}\n"
-                    book_string += f"Publisher: {book['publisher']}\n"
-                    book_string += f"Publication Year: {book['year']}\n"
-                    book_string += f"Availability: {book['availability']}\n"
-                    book_string += f"Link: {book['link']}\n"
-
-                    self.text_content.append({
-                        'content': book_string,
-                        'metadata': {
-                            'url': book['link'],
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
-                    self.logger("\nAppended book details: %s" % self.text_content[-1])
-
-                return self.text_content
-
+                    self.logger.info(" @web_scrape.py Langchain method failed")
             except Exception as e:
-                print(f"\nFailed to scrape book details: {e}")
-                return False
-     
-        elif 'lib.asu.edu' in url and selenium:
-            self.logger.info(" @web_scrape.py \nLogin to ASU Library Hours")
-            def extract_query_parameters(query):
-                pattern = r'(\w+)=([^&]*)'
-                matches = re.findall(pattern, query)
-                parameters = [{param: value} for param, value in matches]
-                self.logger.info(f"@web_scrape.py Extracted parameters: {parameters}")
-                return parameters
-
-            # Classify the extracted parameters into lists
-            library_names = []
-            dates = []
-            results = []
-
-            # Extract parameters from the query string
-            params = extract_query_parameters(optional_query)
-
-            # Populate the lists based on parameter types
-            for param in params:
-                for key, value in param.items():
-                    if key == 'library_names' and value != 'None':
-                        library_names.append(value.replace("['", "").replace("']", ""))
-                    if key == 'date' and value != 'None':
-                        dates.append(value.replace("['","").replace("']",""))
-            self.logger.info(f"@web_scrape.py Library names: {library_names}")
-            try:
-                # Navigate to library hours page
-                try:
-                    self.driver.get(url)
-                    self.logger.info(f"@web_scrape.py Navigated to URL: {url}")
-                except Exception as e:
-                    self.logger.error(f"@web_scrape.py Error navigating to URL: {e}")
-                    return f"Error navigating to URL: {str(e)}"
-
-                # Wait for page to load
-                try:
-                    WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CLASS_NAME, "s-lc-whw"))
-                    )
-                    self.logger.info(" @web_scrape.py Page loaded successfully")
-                except Exception as e:
-                    self.logger.error(f"@web_scrape.py Error waiting for page to load: {e}")
-                    return f"Error waiting for page to load: {str(e)}"
+                self.logger.error(f"@web_scrape.py Error fetching content from {url}: {str(e)}")
+                await asyncio.sleep(8) 
+                continue  
+            else:
+                jina_url = f"https://r.jina.ai/{url}"
+                response = requests.get(jina_url, headers=self.headers, timeout=30)
+                response.raise_for_status()
                 
-                # Handle cookie popup
-                try:
-                    cookie_button = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.CLASS_NAME, "accept-btn"))
-                    )
-                    cookie_button.click()
-                    self.logger.info(" @web_scrape.py Cookie popup handled successfully")
-                except Exception as e:
-                    self.logger.warning(f"@web_scrape.py Error handling cookie popup: {e}")
-
-                # Map library names to their row identifiers
-                library_map = {
-                    "Tempe Campus - Noble Library": "Noble Library",
-                    "Tempe Campus - Hayden Library": "Hayden Library",
-                    "Downtown Phoenix Campus - Fletcher Library": "Downtown campus Library",
-                    "West Campus - Library": "Fletcher (West Valley)",
-                    "Polytechnic Campus - Library": "Polytechnic"
-                }
-
-                self.logger.info(f"@web_scrape.py Library map: {library_map}")
-                # Process each library and date
-                for library_name in library_names: 
-                    
-                    for date in dates:    
-                        iterations = 0
-                        is_date_present = False
-
-                        while not is_date_present:
-                            # Find all date headers in the thead
-                            try:
-                                date_headers = self.driver.find_elements(
-                                    By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
-                                )
-                            except Exception as e:
-                                self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
-                                return f"Error finding date headers: {str(e)}"
-                            
-                            # Extract text from date headers
-                            try:
-                                header_dates = [header.text.strip() for header in date_headers]
-                            except Exception as e:
-                                self.logger.error(f"@web_scrape.py Error extracting text from date headers: {e}")
-                                return f"Error extracting text from date headers: {str(e)}"
-                            
-                            # Remove line breaks and additional whitespace
-                            try:
-                                header_dates = [date.lower().split('\n')[0] for date in header_dates]
-                            except Exception as e:
-                                self.logger.error(f"@web_scrape.py Error processing date headers: {e}")
-                                return f"Error processing date headers: {str(e)}"
-                                
-                            # Check if requested date is in the list of header dates
-                            is_date_present = date.lower() in header_dates
-                            
-                            if not is_date_present:
-                                try:
-                                    next_button = self.driver.find_element(By.ID, "s-lc-whw-next-0")
-                                    next_button.click()
-                                    time.sleep(0.2)  # Allow page to load
-                                except Exception as e:
-                                    self.logger.error(f"@web_scrape.py Error clicking next button: {e}")
-                                    return f"Error clicking next button: {str(e)}"
-                            
-                            iterations += 1
-                        
-                        # Optional: self.logger.info debug information
-                        self.logger.info(f"@web_scrape.py Available Dates: {header_dates}")
-                        self.logger.info(f"@web_scrape.py Requested Date: {date}")
-                        self.logger.info(f"@web_scrape.py Date Present: {is_date_present}")
-                        
-                    
-                        self.logger.info(" @web_scrape.py \nhello")
-                        mapped_library_names = library_map.get(str(library_name))
-                        self.logger.info(f"@web_scrape.py Mapped library names: {mapped_library_names}")
-                        
-                        # Find library row
-                        try:
-                            library_row = self.driver.find_element(
-                                By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
-                            )
-                            self.logger.info(f"@web_scrape.py Found library row: {library_row.text}")
-                        except Exception as e:
-                            self.logger.error(f"@web_scrape.py Error finding library row: {e}")
-                            return f"Error finding library row: {str(e)}"
-                        
-                        
-                        self.logger.info(" @web_scrape.py \nFound library row")
-
-                        # Find date column index
-                        try:
-                            date_headers = self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
-                            self.logger.info(f"@web_scrape.py Found date headers: {[header.text for header in date_headers]}")
-                        except Exception as e:
-                            self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
-                            return f"Error finding date headers: {str(e)}"
-                        
-                        self.logger.info(f"@web_scrape.py Found date_headers")
-                        
-                        date_column_index = None
-                        for index, header in enumerate(date_headers, start=0):
-                            self.logger.info(f"@web_scrape.py header.text.lower() = {header.text.lower()}")  
-                            self.logger.info(f"@web_scrape.py date.lower() = {date.lower()}")  
-                            if date.lower() == header.text.lower():
-                                date_column_index = index+1 if index==0 else index
-                                self.logger.info(" @web_scrape.py \nFound date column index")
-                                break
-
-                        if date_column_index is None:
-                            self.logger.info(" @web_scrape.py \nNo date info found")
-                            continue  # Skip if date not found
-                        
-                        self.logger.info(f"@web_scrape.py Found date column index {date_column_index}")
-                        # Extract status
-                        try:
-                            status_cell = library_row.find_elements(By.TAG_NAME, "td")[date_column_index]
-                            self.logger.info(f"@web_scrape.py Found library row elements : {status_cell}")
-                        except Exception as e:
-                            self.logger.error(f"@web_scrape.py Error finding status cell: {e}")
-                            return f"Error finding status cell: {str(e)}"
-                        try:
-                            status = status_cell.find_element(By.CSS_SELECTOR, "span").text
-                            self.logger.info(f"@web_scrape.py Found library status elements : {status}")
-                        except Exception as e:
-                            self.logger.info(f"@web_scrape.py Status cell HTML: {status_cell.get_attribute('outerHTML')}")
-                            self.logger.error(f"@web_scrape.py Error extracting library status: {e}")
-                            
-                        
-
-                        # Append to results
-                        library_result = {
-                            'library': mapped_library_names,
-                            'date': date,
-                            'status': status
-                        }
-                        self.logger.info(f"@web_scrape.py mapping {library_result}")
-                        results.append(library_result)
-
-                # Convert results to formatted string for text_content
-                self.logger.info(f"@web_scrape.py Results : {results}")
-                for library in results:
-                    lib_string = f"Library: {library['library']}\n"
-                    lib_string += f"Date: {library['date']}\n"
-                    lib_string += f"Status: {library['status']}\n"
-                    
+                text = response.text
+                self.logger.info(f"@web_scrape.py Raw text response for https://r.jina.ai/{url}\n{text}")
+                
+                if "LOADING..." in text.upper() or "requires javascript to be enabled" in text.lower() or "supported browser" in text.lower() or "captcha" in text.lower():
+                    self.logger.warning(f"@web_scrape.py LOADING response detected for {url}. Retry attempt {attempt + 1}")
+                    await asyncio.sleep(8)  # Wait before retrying
+                    continue
+                self.logger.info(" @web_scrape.py Scrarping successfull")
+                if text and len(text.strip()) > 50:
                     self.text_content.append({
-                        'content': lib_string,
+                        'content': text,
                         'metadata': {
                             'url': url,
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         }
                     })
                     
-                self.logger.info(self.text_content)
-                
-                return self.text_content
-
-            except Exception as e:
-                return f"Error retrieving library status: {str(e)}"
-        
-        elif 'asu.libcal.com' in url and selenium:
-            # Navigate to the URL
-            self.driver.get(url)
+                    self.logger.info(self.text_content[-1])
+                    return self.text_content
+                  
             
-            # Wait for page to load
-            
-            try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, 'panel'))
-                )
-                
-                # Parse page source with BeautifulSoup
-                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-                
-                
-                # Reset text_content for new scrape
-                self.text_content = []
-                
-                # Find all study room panels
-                study_rooms = soup.find_all('div', class_='panel panel-default')
-                
-                for room in study_rooms:
-                    # Extract study room name
-                    study_room_name = room.find('h2', class_='panel-title').text.split('\n')[0].strip()
-                    # Extract the date (consistent across all rooms)
-                    date = room.find('p').text.strip()  # "Friday, December 6, 2024"
-                    
-                    # Find all available time slots
-                    available_times = []
-                    time_slots = room.find_all('div', class_='checkbox')
-                    
-                    for slot in time_slots:
-                        time_text = slot.find('label').text.strip()
-                        available_times.append(time_text)
-                    
-                    # Append to text_content
-                    self.text_content.append({
-                        'content': f"""Library: {optional_query}\nStudy Room: {study_room_name}\nDate: {date}\nAvailable slots: {', '.join(available_times)}""",
-                        'metadata': {
-                            'url': url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
-                return self.text_content
-            except Exception as e:
-                self.logger.error(f"@web_scrape.py Error scraping library calendar: {e}")
-                return False
-        
-        elif 'asu-shuttles.rider.peaktransit.com' in url and selenium:
-            query = optional_query
-            # Navigate to the URL
-            try:
-                # Create a fresh browser instance for this operation to prevent tab crashes
-                self.driver.get(url)
-                # Wait for route list to load
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#route-list .route-block .route-name'))
-                )
-                # Target the route list container first
-                route_list = self.driver.find_element(By.CSS_SELECTOR, "div#route-list.route-block-container")
-                
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-block'))
-                )
-                route_blocks = route_list.find_elements(By.CSS_SELECTOR, "div.route-block")
-                
-                iterate_Y = 0
-                results=[]
-                button_times = 0
-                iterate_X=0
-                route = None
-                for route_block in route_blocks:
-                    WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-name'))
-                    )
-                    route_name = route_block.find_element(By.CSS_SELECTOR, "div.route-name")
-                    self.logger.info(" @web_scrape.py \nloacted routenames")
-                    if "Tempe-Downtown" in route_name.text and  "Tempe-Downtown" in query:
-                        button_times =5
-                        route = route_name.text
-                        route_block.click()
-                        self.logger.info(" @web_scrape.py \nclicked")
-                        break
-                    elif "Tempe-West" in route_name.text and "Tempe-West" in query:
-                        button_times=5
-                        route = route_name.text
-                        route_block.click()
-                        self.logger.info(" @web_scrape.py \nclicked")
-                        break
-                    elif "Mercado" in route_name.text and "Mercado" in query:
-                        button_times = 2
-                        iterate_X = 12
-                        iterate_Y = 8
-                        route = route_name.text
-
-                        route_block.click()
-                        self.logger.info(" @web_scrape.py \nMercado")
-                        break
-                    elif "Polytechnic" in route_name.text and "Polytechnic" in query:
-                        button_times = 2
-                        route_block.click()
-                        iterate_X = 10
-                        iterate_Y = 17
-                        route = route_name.text
-
-                    
-                        self.logger.info(" @web_scrape.py \nPolytechnic")
-                        break
-                
-                time.sleep(2)
-                
-                # try:
-                #     # Find the map element
-                #     map_element = WebDriverWait(self.driver, 10).until(
-                #         EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Map']"))
-                #     )
-                    
-                #     # Create an ActionChains instance to perform scroll zoom out
-                #     actions = ActionChains(self.driver)
-                    
-                #     # Scroll to zoom out once (positive delta value zooms out)
-                #     actions.move_to_element(map_element).scroll_by_amount(0, 100).perform()
-                    
-                #     self.logger.info("@web_scrape.py Zoomed out using mouse scroll")
-                #     time.sleep(0.5)  # Short pause to let the zoom effect complete
-                # except Exception as e:
-                #     self.logger.error(f"@web_scrape.py Failed to zoom out using mouse scroll: {e}")
-                
-                try:
-                    # First click on map camera controls button
-                    camera_controls = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Map camera controls']"))
-                    )
-                    camera_controls.click()
-                    time.sleep(0.5)  # Short pause to let controls expand
-
-                    # Then find and click the zoom out button
-                    zoom_out_button = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Zoom out']"))
-                    )
-                    
-                    # Click zoom out button multiple times based on button_times parameter
-                    for _ in range(button_times):
-                        zoom_out_button.click()
-                        time.sleep(0.5)  # Short pause between clicks
-
-                except Exception as e:
-                    self.logger.info(f"@web_scrape.py Error with map controls: {e}")
-                    # Try alternative method using JavaScript
-                    
-
-                map_div = None
-                try:
-                    # Method 1: JavaScript click
-                    map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
-                    self.driver.execute_script("arguments[0].click();", map_div)
-                    self.logger.info(" @web_scrape.py \nfirst method worked")
-                
-                except Exception as first_error:
-                    try:
-                        # Method 2: ActionChains click
-                        map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
-                        actions = ActionChains(self.driver)
-                        actions.move_to_element(map_div).click().perform()
-                        self.logger.info(" @web_scrape.py \nsecond method worked")
-                    
-                    except Exception as second_error:
-                        try:
-                            # Method 3: Move and click with offset
-                            map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
-                            actions = ActionChains(self.driver)
-                            actions.move_to_element_with_offset(map_div, 10, 10).click().perform()
-                            self.logger.info(" @web_scrape.py \nthird method worked")
-                                 
-                        except Exception as third_error:
-                            self.logger.info(f"@web_scrape.py All click methods failed: {first_error}, {second_error}, {third_error}")
-                try:
-                    actions = ActionChains(self.driver)
-                    
-                    if "Mercado" in query:
-                        # Move map to different directions
-                        directions_x = [
-                            (300, 0), 
-                        ]
-                        directions_y = [
-                            (0, 300),   
-                        ]
-                        
-                        for i in range(0, iterate_X):
-                            
-                            for dx, dy in directions_x:
-                                # Click and hold on map
-                                actions.move_to_element(map_div).click_and_hold()
-                                
-                                # Move by offset
-                                actions.move_by_offset(dx, dy)
-                                
-                                # Release mouse button
-                                actions.release()
-                                
-                                # Perform the action
-                                actions.perform()
-                                self.logger.info(" @web_scrape.py \nmoved")
-                                # Wait a moment between movements
-                        self.logger.info(" @web_scrape.py \niterating over y")        
-                        for i in range(0, iterate_Y):
-                            for dx, dy in directions_y:
-                                actions.move_to_element(map_div).click_and_hold()
-                                actions.move_by_offset(dx, dy)
-                                actions.release()
-                                actions.perform()
-                                self.logger.info(" @web_scrape.py \nmoved")
-                    
-                    if "Polytechnic" in query:
-                        self.logger.info(" @web_scrape.py \npoly")
-                        # Move map to different directions
-                        directions_x = [
-                            (-300, 0),
-                        ]
-                        directions_y = [
-                            (0, -300),   
-                        ]
-                        
-                        for i in range(0, iterate_X):
-                            
-                            for dx, dy in directions_x:
-                                # Click and hold on map
-                                actions.move_to_element(map_div).click_and_hold()
-                                
-                                # Move by offset
-                                actions.move_by_offset(dx, dy)
-                                actions.move_by_offset(dx, dy)
-                                
-                                # Release mouse button
-                                actions.release()
-                                
-                                # Perform the action
-                                actions.perform()
-                                self.logger.info(" @web_scrape.py \nmoved")
-                                # Wait a moment between movements
-                        self.logger.info(" @web_scrape.py \niterating over y")        
-                        for i in range(0, iterate_Y):
-                            
-                            for dx, dy in directions_y:
-                                actions.move_to_element(map_div).click_and_hold()
-                                actions.move_by_offset(dx, dy)
-                                actions.release()
-                                actions.perform()
-                                self.logger.info(" @web_scrape.py \nmoved")
-                    
-                    map_markers = self.driver.find_elements(By.CSS_SELECTOR, 
-                        'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
-                    
-                    for marker in map_markers:
-                        try:
-                            parent_div = marker.find_element(By.XPATH, '..')
-                            self.driver.execute_script("arguments[0].click();", parent_div)
-                            
-                            dialog = WebDriverWait(self.driver, 10).until(
-                                EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="dialog"]'))
-                            )
-                            
-                            dialog_html = dialog.get_attribute('outerHTML')
-                            soup = BeautifulSoup(dialog_html, 'html.parser')
-                            
-                            stop_name_elem = soup.find('div', class_='stop-name')
-                            if stop_name_elem:
-                                stop_name = stop_name_elem.find('h2').get_text(strip=True)
-                                routes = soup.find_all('div', class_='route-name')
-                                
-                                station_routes = []
-                                for route in routes:
-                                    route_name = route.get_text(strip=True)
-                                    bus_blocks = route.find_next_siblings('div', class_='bus-block')
-                                    
-                                    # Safer extraction of bus times
-                                    try:
-                                        next_bus_time = bus_blocks[0].find('div', class_='bus-time').get_text(strip=True) if bus_blocks else 'N/A'
-                                        second_bus_time = bus_blocks[1].find('div', class_='bus-time').get_text(strip=True) if len(bus_blocks) > 1 else 'N/A'
-                                        
-                                        station_routes.append({
-                                            'Route': route_name,
-                                            'Next Bus': next_bus_time,
-                                            'Second Bus': second_bus_time
-                                        })
-                                        self.logger.info(f"@web_scrape.py \nRoute: {route_name}, Next Bus: {next_bus_time}, Second Bus: {second_bus_time}")
-                                    except IndexError:
-                                        # Skip routes without bus times
-                                        continue
-                                
-                                # Only append if station_routes is not empty
-                                if station_routes:
-                                    parsed_stations = [{
-                                        'Station': stop_name,
-                                        'Routes': station_routes
-                                    }]
-                                    self.logger.info(f"@web_scrape.py \nParsed station: {parsed_stations}")
-                                    results.extend(parsed_stations)
-                            
-                        except Exception as e:
-                            # Log the error without stopping the entire process
-                            self.logger.info(f"@web_scrape.py Error processing marker: {e}")
-                            continue
-                except Exception as e:
-                    self.logger.info(f"@web_scrape.py Error processing map markers: {e}")
-                    return False
-                
-                
-                self.logger.info("Results : %s" % results)
-
-                content = [
-                    f"Station: {result['Station']}\n"
-                    f"Route: {route['Route']}\n"
-                    f"Next Bus: {route['Next Bus']}\n"
-                    f"Second Bus: {route['Second Bus']}\n"
-                    for result in results
-                    for route in result['Routes']
-                ]
-                self.logger.info(f"Content: {content}")
-                for c in content:
-                    self.text_content.append({
-                        'content': c,
-                        'metadata': {
-                            'url': url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-
-                        }
-                    })
-                    self.logger.info(f"@web_scrape.py Appended shuttle status: {c}")
-                
-                        
-                return self.text_content
-            
-            except Exception as e:
-                self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
-                return False
-                # Branch for Workday pages
-                
-        elif 'myworkday.com' in url and selenium:
-            self.logger.info("Detected Workday URL – delegating to Workday scraper.")
-            if not optional_query or not optional_query.strip():
-                self.logger.error("No search keyword provided for Workday jobs.")
-                return []  # or return a message indicating that a search query is required
-            results= await self.scrape_asu_workday_jobs(optional_query=optional_query)
-            
-            self.text_content.append({
-                        'content': results,
-                        'metadata': {
-                            'url': url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
-    
-        else:
-            self.logger.error("@web_scrape.py NO CHOICE FOR SCRAPER!")
-            
-        return False
+        return []
     
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
@@ -1162,11 +243,10 @@ class ASUWebScraper:
                     self.logger.info(f"@web_scrape.py Found {len(search_results)} : {search_results} Google search results")
                     
                     for url in search_results:
-                        await self.scrape_content(url=url)
+                        await self.scrape_static_content(url=url)
 
                 except Exception as e:
                     self.logger.error(f"@web_scrape.py Error extracting search results: {e}")
-                                # Handle ASU Campus Labs pages
             
             if 'asu.campuslabs.com/engage' in search_url:
                 self.logger.info(f"@web_scrape.py Searching for ASU Campus Labs links {search_url}")
@@ -1210,7 +290,7 @@ class ASUWebScraper:
                 
                 for url in search_results:
                     self.logger.info(f"@web_scrape.py Scraping content from {url}")
-                    await self.scrape_content(url=url)
+                    await self.scrape_static_content(url=url)
                                 
             if 'x.com' in search_url or 'facebook.com' in search_url or "instagram.com" in search_url:
                 if optional_query:
@@ -1232,141 +312,340 @@ class ASUWebScraper:
                 try:
                     self.logger.info(f"@web_scrape.py Searching for ASU scholarships links {search_url}")
                     # Get base domain based on URL
-                    base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
                     
-                    self.driver.get(search_url)
-                    WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
-                    
-                    # Handle cookie consent for goglobal
-                    self.logger.info(" @web_scrape.py \nHandling cookie consent")
-                    try:
-                        cookie_button = WebDriverWait(self.driver, 5).until(
-                            EC.element_to_be_clickable((By.CSS_SELECTOR, '.accept-btn'))
-                        )
-                        self.driver.execute_script("arguments[0].click();", cookie_button)
-                        time.sleep(2)
-                    except Exception as cookie_error:
-                        self.logger.warning(f"@web_scrape.py Cookie consent handling failed: {cookie_error}")
-                    
-                    if optional_query:
-                        self.logger.info(" @web_scrape.py \nOptional query :: %s" % optional_query)
-                        self.logger.info(f"@web_scrape.py Searching for {search_url} links")
-                        # Parse query parameters
-                        query_params = dict(param.split('=') for param in optional_query.split('&') if '=' in param)
-                        
-                        # Define filter mappings based on site
-                        filter_mapping = {
-                            'goglobal.asu.edu': {
-                                'academiclevel': '#edit-field-ss-student-type-target-id',
-                                'citizenship_status': '#edit-field-ss-citizenship-status-target-id',
-                                'gpa': '#edit-field-ss-my-gpa-target-id',
-                                # 'college': '#edit-field-college-ss-target-id',
-                            },
-                            'onsa.asu.edu': {
-                                'search_bar_query': 'input[name="combine"]',
-                                'citizenship_status': 'select[name="field_citizenship_status"]',
-                                'eligible_applicants': 'select[name="field_eligible_applicants"]',
-                                'focus': 'select[name="field_focus"]',
-                            }
-                        }
-                        
-                        # Determine which site's filter mapping to use
-                        site_filters = filter_mapping['goglobal.asu.edu'] if 'goglobal.asu.edu' in search_url else filter_mapping['onsa.asu.edu']
-                        self.logger.info(f"@web_scrape.py Using filter mapping: {site_filters}")
-                        # Apply filters with robust error handling
-                        for param, value in query_params.items():
-                            if param in site_filters and value:
-                                try:
-                                    filter_element = WebDriverWait(self.driver, 10).until(
-                                        EC.element_to_be_clickable((By.CSS_SELECTOR, site_filters[param]))
-                                    )
-                                    
-                                    # Scroll element into view
-                                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", filter_element)
-                                    time.sleep(1)
-                                    
-                                    self.logger.info(f"@web_scrape.py Applying filter {param} with value {value}")
-                                    
-                                    # Handle different input types
-                                    if filter_element.tag_name == 'select':
-                                        Select(filter_element).select_by_visible_text(value)
-                                        self.logger.info(f"@web_scrape.py Selected {value} in {param}")
-                                    elif filter_element.tag_name == 'input':
-                                        filter_element.clear()
-                                        filter_element.send_keys(value)
-                                        filter_element.send_keys(Keys.ENTER)
-                                        self.logger.info(f"@web_scrape.py Entered {value} in {param}")
-                                    
-                                    time.sleep(1)
-                                except Exception as filter_error:
-                                    self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
-                                    pass  # Click search button with multiple retry mechanism
-                        search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
-                        for selector in search_button_selectors:
-                            try:
-                                search_button = WebDriverWait(self.driver, 10).until(
-                                    EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                                )
-                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
-                                time.sleep(1)
-                                self.driver.execute_script("arguments[0].click();", search_button)
-                                self.logger.info(f"@web_scrape.py Clicked search button with selector {selector}")
-                                break
-                            except Exception as e:
-                                self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
-                                self.logger.error(f"Search button click failed for selector {selector}: {e}")
-                    
-                    # Extract scholarship links with improved URL construction
-                    link_selectors = {
-                        'goglobal': 'td[headers="view-title-table-column"] a',
-                        'onsa': 'td a'
-                    }
-                    
-                    current_selector = link_selectors['goglobal'] if "goglobal" in search_url else link_selectors['onsa']
-                    
-                    self.logger.info(f"@web_scrape.py Using selector: {current_selector}")
-                    
-                    scholarship_links = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, current_selector))
-                    )
-                    
-                    self.logger.info(f"@web_scrape.py Found {len(scholarship_links)} scholarship links")
-                    
-                    for link in scholarship_links[:3]:
-                        href = link.get_attribute('href')
-                        if href:
-                            if href.startswith('/'):
-                                search_results.append(f"{base_url}{href}")
-                            elif href.startswith('http'):
-                                search_results.append(href)
-                            else:
-                                search_results.append(f"{base_url}/{href}")
-                    
-                    self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ")
+                    search_results = await self.scrape_asu_scholarship(url=url, query=optional_query)
                     
                     for url in search_results:
                         self.logger.info(f"@web_scrape.py Scraping content from {url}")
-                        await self.scrape_content(url=url)
+                        await self.scrape_static_content(url=url)
                     
                 except Exception as e:
                     self.logger.error(f"@web_scrape.py Error in scholarship search: {str(e)}")
+           
 
-            
-            if 'catalog.apps.asu.edu' in search_url or  'search.lib.asu.edu' in search_url :
+            if 'catalog.apps.asu.edu' in search_url:
                 self.logger.info(f"@web_scrape.py Searching for ASU catalog links {search_url}")
-                await self.scrape_content(search_url, selenium=True)
+                detailed_courses = await self.scrape_asu_courses(url=url, query=optional_query)
+                
+                formatted_courses = []
+                for course in detailed_courses:
+                    course_string = f"Title: {course['title']}\n"
+                    course_string += f"Description: {course['description']}\n"
+                    course_string += f"Enrollment Requirements: {course['enrollment_requirements']}\n"                    
+                    course_string += f"Instructor: {course['instructor']}\n"
+                    course_string += f"Location: {course['location']}\n"
+                    course_string += f"Course Number: {course['number']}\n"
+                    course_string += f"Units: {course['units']}\n"
+                    course_string += f"Dates: {course['dates']}\n"
+                    course_string += f"Offered By: {course['offered_by']}\n"
+                    course_string += f"Repeatable for Credit: {course['repeatable_for_credit']}\n"
+                    course_string += f"Component: {course['component']}\n"
+                    course_string += f"Last Day to Enroll: {course['last_day_to_enroll']}\n"
+                    course_string += f"Drop Deadline: {course['drop_deadline']}\n"
+                    course_string += f"Course Withdrawal Deadline: {course['course_withdrawal_deadline']}\n"
+                    course_string += f"Consent: {course['consent']}\n"
+                    course_string += f"Course Notes: {course['course_notes']}\n"
+                    course_string += f"Fees: {course['fees']}\n"
+
+                    # Add reserved seats information
+                    if course.get('reserved_seats'):
+                        course_string += "Reserved Seats:\n"
+                        for group in course['reserved_seats']:
+                            course_string += f"- Group: {group['group']}\n"
+                            course_string += f"  Available Seats: {group['available_seats']}\n"
+                            course_string += f"  Students Enrolled: {group['students_enrolled']}\n"
+                            course_string += f"  Total Reserved Seats: {group['total_seats_reserved']}\n"
+                            course_string += f"  Reserved Until: {group['reserved_until']}\n"
+                    
+                    self.text_content.append({
+                            'content': course_string,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            }
+                        })
+                    self.logger.info(f"@web_scrape.py Appended {self.text_content[-1]}")
+                    formatted_courses.append(course_string)
+                    
+                        
+                    return self.text_content
             
-            if 'myworkday.com' in search_url or 'lib.asu.edu' in search_url or "asu.libcal.com" in search_url or "asu-shuttles.rider.peaktransit.com" in search_url:                    
-                self.logger.info(f"@web_scrape.py Searching for ASU links {search_url}")
-                await self.scrape_content(search_url, selenium=True, optional_query=optional_query)
+            if 'search.lib.asu.edu' in search_url :
+                self.logger.info(f"@web_scrape.py Searching for ASU library links {search_url}")
+                self.logger.info(" @web_scrape.py \nLogin to ASU Library Hours")
             
-            self.logger.info(f"Retrieved textcontent : {self.text_content}")
+                book_results = await self.scrape_asu_library_catalog(url=url, query=optional_query)
+                
+                for book in book_results:
+                    book_string = f"Title: {book['title']}\n"
+                    book_string += f"Authors: {', '.join(book['authors']) if book['authors'] else 'N/A'}\n"
+                    book_string += f"Publisher: {book['publisher']}\n"
+                    book_string += f"Publication Year: {book['year']}\n"
+                    book_string += f"Availability: {book['availability']}\n"
+                    book_string += f"Link: {book['link']}\n"
+
+                    self.text_content.append({
+                        'content': book_string,
+                        'metadata': {
+                            'url': book['link'],
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
+                    self.logger("\nAppended book details: %s" % self.text_content[-1])
+
+                return self.text_content
+            
+            if 'lib.asu.edu' in search_url:
+                self.logger.info(" @web_scrape.py \nLogin to ASU Library Hours")
+            
+                results = await self.scrape_asu_library_hours(url=url, query=optional_query)
+                
+                for library in results:
+                    lib_string = f"Library: {library['library']}\n"
+                    lib_string += f"Date: {library['date']}\n"
+                    lib_string += f"Status: {library['status']}\n"
+                    
+                    self.text_content.append({
+                        'content': lib_string,
+                        'metadata': {
+                            'url': url,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
+                    
+                self.logger.info(self.text_content)
+                
+                return self.text_content
+            
+            if 'asu.libcal.com' in search_url:
+                # Navigate to the URL
+                self.driver.get(url)
+                
+                # Wait for page to load
+                
+                try:
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, 'panel'))
+                    )
+                    
+                    # Parse page source with BeautifulSoup
+                    soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                    
+                    
+                    # Reset text_content for new scrape
+                    self.text_content = []
+                    
+                    # Find all study room panels
+                    study_rooms = soup.find_all('div', class_='panel panel-default')
+                    
+                    for room in study_rooms:
+                        # Extract study room name
+                        study_room_name = room.find('h2', class_='panel-title').text.split('\n')[0].strip()
+                        # Extract the date (consistent across all rooms)
+                        date = room.find('p').text.strip()  # "Friday, December 6, 2024"
+                        
+                        # Find all available time slots
+                        available_times = []
+                        time_slots = room.find_all('div', class_='checkbox')
+                        
+                        for slot in time_slots:
+                            time_text = slot.find('label').text.strip()
+                            available_times.append(time_text)
+                        
+                        # Append to text_content
+                        self.text_content.append({
+                            'content': f"""Library: {optional_query}\nStudy Room: {study_room_name}\nDate: {date}\nAvailable slots: {', '.join(available_times)}""",
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            }
+                        })
+                    return self.text_content
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error scraping library calendar: {e}")
+                    return []
+            
+            if 'asu-shuttles.rider.peaktransit.com' in search_url:
+                # Navigate to the URL
+                try:
+                    results = await self.scrape_asu_shuttle_status(url=url, query=optional_query)
+
+                    content = [
+                        f"Station: {result['Station']}\n"
+                        f"Route: {route['Route']}\n"
+                        f"Next Bus: {route['Next Bus']}\n"
+                        f"Second Bus: {route['Second Bus']}\n"
+                        for result in results
+                        for route in result['Routes']
+                    ]
+                    self.logger.info(f"Content: {content}")
+                    for c in content:
+                        self.text_content.append({
+                            'content': c,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+
+                            }
+                        })
+                        self.logger.info(f"@web_scrape.py Appended shuttle status: {c}")
+                    
+                            
+                    return self.text_content
+                
+                except Exception as e:
+                    self.logger.info(f"@web_scrape.py Error extracting shuttle status: {e}")
+                    return False
+                    # Branch for Workday pages
+            
+            if 'myworkday.com' in search_url:                    
+                self.logger.info("Detected Workday URL – delegating to Workday scraper.")
+                if not optional_query or not optional_query.strip():
+                    self.logger.error("No search keyword provided for Workday jobs.")
+                    return []  # or return a message indicating that a search query is required
+                results= await self.scrape_asu_workday_jobs(url=url,optional_query=optional_query)
+                
+                self.text_content.append({
+                            'content': results,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            }
+                        })
+                self.logger.info(f"@web_scrape.py Appended Workday job results: {results}")
+                
+                return self.text_content
         
         # self.driver.quit()
 
         return self.text_content
 
-    async def scrape_asu_workday_jobs(self, optional_query) -> List[Dict[str, str]]:
+    async def scrape_asu_course_catalog(self, url, query) -> List[Dict[str, str]]:
+        self.driver.get(url)
+        self.logger.info(" @web_scrape.py \nLogin to ASU Catalog")
+        
+        self.handle_cookie(self.driver)
+        course_elements = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "class-accordion"))
+        )
+        self.logger.info(" @web_scrape.py \nCourse elements loaded")
+
+        detailed_courses = []
+        
+        for course in course_elements[:7]:
+            try:
+                course_title_element = course.find_element(By.CSS_SELECTOR, ".course .bold-hyperlink")
+                course_title = course_title_element.text
+                
+                # Use JavaScript click to handle potential interception
+                self.driver.execute_script("arguments[0].click();", course_title_element)
+                self.logger.info(" @web_scrape.py \nSuccessfully clicked on the course")
+
+                # Wait for dropdown to load
+                details_element = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "class-details"))
+                )
+                
+                # Extract additional details
+                course_info = {
+                    'title': course_title,
+                }
+                try:
+                    course_info['description'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Description')]/following-sibling::p").text
+                except:
+                    course_info['description'] = 'N/A'
+                try:
+                    course_info['enrollment_requirements'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Enrollment Requirements')]/following-sibling::p").text
+                except:
+                    course_info['enrollment_requirements'] = 'N/A'
+                try:
+                    location_element = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Location')]/following-sibling::p")
+                    location_link = location_element.find_element(By.TAG_NAME, "a")
+                    course_info['location'] = location_link.text
+                except Exception as e:
+                    self.logger.info(f"@web_scrape.py Error in web_scrap course location : {e}")
+                    course_info['location'] = 'N/A'
+                try:
+                    course_info['number'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Number')]/following-sibling::p").text
+                except:
+                    course_info['number'] = 'N/A'
+                try:
+                    course_info['units'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Units')]/following-sibling::p").text
+                except:
+                    course_info['units'] = 'N/A'
+                try:
+                    course_info['dates'] = details_element.find_element(By.CLASS_NAME, "text-nowrap").text
+                except:
+                    course_info['dates'] = 'N/A'
+                try:
+                    course_info['offered_by'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Offered By')]/following-sibling::p").text
+                except:
+                    course_info['offered_by'] = 'N/A'
+                try:
+                    course_info['repeatable_for_credit'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Repeatable for credit')]/following-sibling::p").text
+                except:
+                    course_info['repeatable_for_credit'] = 'N/A'
+                try:
+                    course_info['component'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Component')]/following-sibling::p").text
+                except:
+                    course_info['component'] = 'N/A'
+                try:
+                    course_info['last_day_to_enroll'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Last day to enroll')]/following-sibling::p").text
+                except:
+                    course_info['last_day_to_enroll'] = 'N/A'
+                try:
+                    course_info['drop_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Drop deadline')]/following-sibling::p").text
+                except:
+                    course_info['drop_deadline'] = 'N/A'
+                try:
+                    course_info['course_withdrawal_deadline'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course withdrawal deadline')]/following-sibling::p").text
+                except:
+                    course_info['course_withdrawal_deadline'] = 'N/A'
+                try:
+                    course_info['consent'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Consent')]/following-sibling::p").text
+                except:
+                    course_info['consent'] = 'N/A'
+                try:
+                    course_info['course_notes'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Course Notes')]/following-sibling::p").text
+                except:
+                    course_info['course_notes'] = 'N/A'
+                try:
+                    course_info['fees'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Fees')]/following-sibling::p").text
+                except:
+                    course_info['fees'] = 'N/A'
+                    
+                try:
+                    course_info['instructor'] = details_element.find_element(By.XPATH, ".//h5[contains(text(), 'Instructor')]/following-sibling::a").text
+                except:
+                    course_info['instructor'] = 'N/A'
+                
+                
+                # Extract reserved seats information
+                try:
+                    reserved_seats_table = details_element.find_element(By.CLASS_NAME, "reserved-seats")
+                    reserved_groups = []
+                    rows = reserved_seats_table.find_elements(By.TAG_NAME, "tr")[1:-1]  # Skip header and last row
+                    for row in rows:
+                        cols = row.find_elements(By.TAG_NAME, "td")
+                        reserved_groups.append({
+                            'group': cols[0].text,
+                            'available_seats': cols[1].text,
+                            'students_enrolled': cols[2].text,
+                            'total_seats_reserved': cols[3].text,
+                            'reserved_until': cols[4].text
+                        })
+                    course_info['reserved_seats'] = reserved_groups
+                except:
+                    course_info['reserved_seats'] = []
+                    self.logger.info(" @web_scrape.py \nNo reserved seats information found")
+                
+                detailed_courses.append(course_info)
+                self.logger.info(f"@web_scrape.py \nAppended course details: {course_info}")
+                
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Error processing course {e}")
+    
+    async def scrape_asu_workday_jobs(self, url,query) -> List[Dict[str, str]]:
         """
         Scrapes the ASU Workday Student Jobs page:
         1) Opens the page and waits up to 2 minutes for manual login,
@@ -1374,8 +653,8 @@ class ASUWebScraper:
         3) Returns up to 'max_results' job listings 
             (each with title, detail header, and detail text) as a list of dicts.
         """
-        keyword = optional_query.get('keyword', '')
-        max_results = optional_query.get('max_results', 5)
+        keyword = query.get('keyword', '')
+        max_results = query.get('max_results', 5)
         self.logger.info(f"Starting Workday scrape with keyword='{keyword}'")
         driver = self.driver
         url = "https://www.myworkday.com/asu/d/task/1422$3898.htmld"
@@ -1477,7 +756,251 @@ class ASUWebScraper:
 
         self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
         return formatted_results
+    
+    async def scrape_asu_shuttle_status(self, url, query) -> List[Dict[str, str]]:
+            self.driver.get(url)
+            # Wait for route list to load
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#route-list .route-block .route-name'))
+            )
+            # Target the route list container first
+            route_list = self.driver.find_element(By.CSS_SELECTOR, "div#route-list.route-block-container")
             
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-block'))
+            )
+            route_blocks = route_list.find_elements(By.CSS_SELECTOR, "div.route-block")
+            
+            iterate_Y = 0
+            results=[]
+            button_times = 0
+            iterate_X=0
+            route = None
+            for route_block in route_blocks:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'div.route-name'))
+                )
+                route_name = route_block.find_element(By.CSS_SELECTOR, "div.route-name")
+                self.logger.info(" @web_scrape.py \nloacted routenames")
+                if "Tempe-Downtown" in route_name.text and  "Tempe-Downtown" in query:
+                    button_times =5
+                    route = route_name.text
+                    route_block.click()
+                    self.logger.info(" @web_scrape.py \nclicked")
+                    break
+                elif "Tempe-West" in route_name.text and "Tempe-West" in query:
+                    button_times=5
+                    route = route_name.text
+                    route_block.click()
+                    self.logger.info(" @web_scrape.py \nclicked")
+                    break
+                elif "Mercado" in route_name.text and "Mercado" in query:
+                    button_times = 2
+                    iterate_X = 12
+                    iterate_Y = 8
+                    route = route_name.text
+
+                    route_block.click()
+                    self.logger.info(" @web_scrape.py \nMercado")
+                    break
+                elif "Polytechnic" in route_name.text and "Polytechnic" in query:
+                    button_times = 2
+                    route_block.click()
+                    iterate_X = 10
+                    iterate_Y = 17
+                    route = route_name.text
+
+                
+                    self.logger.info(" @web_scrape.py \nPolytechnic")
+                    break
+            
+            time.sleep(2)
+            
+            
+            try:
+                # First click on map camera controls button
+                camera_controls = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Map camera controls']"))
+                )
+                camera_controls.click()
+                time.sleep(0.5)  # Short pause to let controls expand
+
+                # Then find and click the zoom out button
+                zoom_out_button = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Zoom out']"))
+                )
+                
+                # Click zoom out button multiple times based on button_times parameter
+                for _ in range(button_times):
+                    zoom_out_button.click()
+                    time.sleep(0.5)  # Short pause between clicks
+
+            except Exception as e:
+                self.logger.info(f"@web_scrape.py Error with map controls: {e}")
+                # Try alternative method using JavaScript
+                
+
+            map_div = None
+            try:
+                # Method 1: JavaScript click
+                map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
+                self.driver.execute_script("arguments[0].click();", map_div)
+                self.logger.info(" @web_scrape.py \nfirst method worked")
+            
+            except Exception as first_error:
+                try:
+                    # Method 2: ActionChains click
+                    map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
+                    actions = ActionChains(self.driver)
+                    actions.move_to_element(map_div).click().perform()
+                    self.logger.info(" @web_scrape.py \nsecond method worked")
+                
+                except Exception as second_error:
+                    try:
+                        # Method 3: Move and click with offset
+                        map_div = self.driver.find_element(By.CSS_SELECTOR, "div[aria-label='Map']")
+                        actions = ActionChains(self.driver)
+                        actions.move_to_element_with_offset(map_div, 10, 10).click().perform()
+                        self.logger.info(" @web_scrape.py \nthird method worked")
+                                
+                    except Exception as third_error:
+                        self.logger.info(f"@web_scrape.py All click methods failed: {first_error}, {second_error}, {third_error}")
+            try:
+                actions = ActionChains(self.driver)
+                
+                if "Mercado" in query:
+                    # Move map to different directions
+                    directions_x = [
+                        (300, 0), 
+                    ]
+                    directions_y = [
+                        (0, 300),   
+                    ]
+                    
+                    for i in range(0, iterate_X):
+                        
+                        for dx, dy in directions_x:
+                            # Click and hold on map
+                            actions.move_to_element(map_div).click_and_hold()
+                            
+                            # Move by offset
+                            actions.move_by_offset(dx, dy)
+                            
+                            # Release mouse button
+                            actions.release()
+                            
+                            # Perform the action
+                            actions.perform()
+                            self.logger.info(" @web_scrape.py \nmoved")
+                            # Wait a moment between movements
+                    self.logger.info(" @web_scrape.py \niterating over y")        
+                    for i in range(0, iterate_Y):
+                        for dx, dy in directions_y:
+                            actions.move_to_element(map_div).click_and_hold()
+                            actions.move_by_offset(dx, dy)
+                            actions.release()
+                            actions.perform()
+                            self.logger.info(" @web_scrape.py \nmoved")
+                
+                if "Polytechnic" in query:
+                    self.logger.info(" @web_scrape.py \npoly")
+                    # Move map to different directions
+                    directions_x = [
+                        (-300, 0),
+                    ]
+                    directions_y = [
+                        (0, -300),   
+                    ]
+                    
+                    for i in range(0, iterate_X):
+                        
+                        for dx, dy in directions_x:
+                            # Click and hold on map
+                            actions.move_to_element(map_div).click_and_hold()
+                            
+                            # Move by offset
+                            actions.move_by_offset(dx, dy)
+                            actions.move_by_offset(dx, dy)
+                            
+                            # Release mouse button
+                            actions.release()
+                            
+                            # Perform the action
+                            actions.perform()
+                            self.logger.info(" @web_scrape.py \nmoved")
+                            # Wait a moment between movements
+                    self.logger.info(" @web_scrape.py \niterating over y")        
+                    for i in range(0, iterate_Y):
+                        
+                        for dx, dy in directions_y:
+                            actions.move_to_element(map_div).click_and_hold()
+                            actions.move_by_offset(dx, dy)
+                            actions.release()
+                            actions.perform()
+                            self.logger.info(" @web_scrape.py \nmoved")
+                
+                map_markers = self.driver.find_elements(By.CSS_SELECTOR, 
+                    'div[role="button"]  img[src="https://maps.gstatic.com/mapfiles/transparent.png"]')
+                
+                for marker in map_markers:
+                    try:
+                        parent_div = marker.find_element(By.XPATH, '..')
+                        self.driver.execute_script("arguments[0].click();", parent_div)
+                        
+                        dialog = WebDriverWait(self.driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, 'div[role="dialog"]'))
+                        )
+                        
+                        dialog_html = dialog.get_attribute('outerHTML')
+                        soup = BeautifulSoup(dialog_html, 'html.parser')
+                        
+                        stop_name_elem = soup.find('div', class_='stop-name')
+                        if stop_name_elem:
+                            stop_name = stop_name_elem.find('h2').get_text(strip=True)
+                            routes = soup.find_all('div', class_='route-name')
+                            
+                            station_routes = []
+                            for route in routes:
+                                route_name = route.get_text(strip=True)
+                                bus_blocks = route.find_next_siblings('div', class_='bus-block')
+                                
+                                # Safer extraction of bus times
+                                try:
+                                    next_bus_time = bus_blocks[0].find('div', class_='bus-time').get_text(strip=True) if bus_blocks else 'N/A'
+                                    second_bus_time = bus_blocks[1].find('div', class_='bus-time').get_text(strip=True) if len(bus_blocks) > 1 else 'N/A'
+                                    
+                                    station_routes.append({
+                                        'Route': route_name,
+                                        'Next Bus': next_bus_time,
+                                        'Second Bus': second_bus_time
+                                    })
+                                    self.logger.info(f"@web_scrape.py \nRoute: {route_name}, Next Bus: {next_bus_time}, Second Bus: {second_bus_time}")
+                                except IndexError:
+                                    # Skip routes without bus times
+                                    continue
+                            
+                            # Only append if station_routes is not empty
+                            if station_routes:
+                                parsed_stations = [{
+                                    'Station': stop_name,
+                                    'Routes': station_routes
+                                }]
+                                self.logger.info(f"@web_scrape.py \nParsed station: {parsed_stations}")
+                                results.extend(parsed_stations)
+                        
+                    except Exception as e:
+                        # Log the error without stopping the entire process
+                        self.logger.info(f"@web_scrape.py Error processing marker: {e}")
+                        continue
+            
+            except Exception as e:
+                self.logger.info(f"@web_scrape.py Error processing map markers: {e}")
+                return []
+            
+            
+            self.logger.info("Results : %s" % results)   
+            
+            return results     
     
     async def login_user_credentials(self):
         """Create an incognito Chrome window and sign into MyASU with user credentials"""
@@ -1548,6 +1071,356 @@ class ASUWebScraper:
             self.logger.error(f"@web_scrape.py Error in login_user_credentials: {str(e)}")
             return False
 
+    async def scrape_asu_library_hours(self, url, query) -> List[Dict[str, str]]:
+
+        def extract_query_parameters(query):
+                pattern = r'(\w+)=([^&]*)'
+                matches = re.findall(pattern, query)
+                parameters = [{param: value} for param, value in matches]
+                self.logger.info(f"@web_scrape.py Extracted parameters: {parameters}")
+                return parameters
+
+        # Classify the extracted parameters into lists
+        library_names = []
+        dates = []
+        results = []
+
+        # Extract parameters from the query string
+        params = extract_query_parameters(query)
+
+        # Populate the lists based on parameter types
+        for param in params:
+            for key, value in param.items():
+                if key == 'library_names' and value != 'None':
+                    library_names.append(value.replace("['", "").replace("']", ""))
+                if key == 'date' and value != 'None':
+                    dates.append(value.replace("['","").replace("']",""))
+        self.logger.info(f"@web_scrape.py Library names: {library_names}")
+        # Navigate to library hours page
+        try:
+            self.driver.get(url)
+            self.logger.info(f"@web_scrape.py Navigated to URL: {url}")
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error navigating to URL: {e}")
+            return f"Error navigating to URL: {str(e)}"
+
+        # Wait for page to load
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "s-lc-whw"))
+            )
+            self.logger.info(" @web_scrape.py Page loaded successfully")
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error waiting for page to load: {e}")
+            return f"Error waiting for page to load: {str(e)}"
+        
+        # Handle cookie popup
+        try:
+            cookie_button = WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "accept-btn"))
+            )
+            cookie_button.click()
+            self.logger.info(" @web_scrape.py Cookie popup handled successfully")
+        except Exception as e:
+            self.logger.warning(f"@web_scrape.py Error handling cookie popup: {e}")
+
+        # Map library names to their row identifiers
+        library_map = {
+            "Tempe Campus - Noble Library": "Noble Library",
+            "Tempe Campus - Hayden Library": "Hayden Library",
+            "Downtown Phoenix Campus - Fletcher Library": "Downtown campus Library",
+            "West Campus - Library": "Fletcher (West Valley)",
+            "Polytechnic Campus - Library": "Polytechnic"
+        }
+
+        self.logger.info(f"@web_scrape.py Library map: {library_map}")
+        # Process each library and date
+        for library_name in library_names: 
+            
+            for date in dates:    
+                iterations = 0
+                is_date_present = False
+
+                while not is_date_present:
+                    # Find all date headers in the thead
+                    try:
+                        date_headers = self.driver.find_elements(
+                            By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']"
+                        )
+                    except Exception as e:
+                        self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
+                        return f"Error finding date headers: {str(e)}"
+                    
+                    # Extract text from date headers
+                    try:
+                        header_dates = [header.text.strip() for header in date_headers]
+                    except Exception as e:
+                        self.logger.error(f"@web_scrape.py Error extracting text from date headers: {e}")
+                        return f"Error extracting text from date headers: {str(e)}"
+                    
+                    # Remove line breaks and additional whitespace
+                    try:
+                        header_dates = [date.lower().split('\n')[0] for date in header_dates]
+                    except Exception as e:
+                        self.logger.error(f"@web_scrape.py Error processing date headers: {e}")
+                        return f"Error processing date headers: {str(e)}"
+                        
+                    # Check if requested date is in the list of header dates
+                    is_date_present = date.lower() in header_dates
+                    
+                    if not is_date_present:
+                        try:
+                            next_button = self.driver.find_element(By.ID, "s-lc-whw-next-0")
+                            next_button.click()
+                            time.sleep(0.2)  # Allow page to load
+                        except Exception as e:
+                            self.logger.error(f"@web_scrape.py Error clicking next button: {e}")
+                            return f"Error clicking next button: {str(e)}"
+                    
+                    iterations += 1
+                
+                # Optional: self.logger.info debug information
+                self.logger.info(f"@web_scrape.py Available Dates: {header_dates}")
+                self.logger.info(f"@web_scrape.py Requested Date: {date}")
+                self.logger.info(f"@web_scrape.py Date Present: {is_date_present}")
+                
+            
+                self.logger.info(" @web_scrape.py \nhello")
+                mapped_library_names = library_map.get(str(library_name))
+                self.logger.info(f"@web_scrape.py Mapped library names: {mapped_library_names}")
+                
+                # Find library row
+                try:
+                    library_row = self.driver.find_element(
+                        By.XPATH, f"//tr[contains(., '{mapped_library_names}')]"
+                    )
+                    self.logger.info(f"@web_scrape.py Found library row: {library_row.text}")
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error finding library row: {e}")
+                    return f"Error finding library row: {str(e)}"
+                
+                
+                self.logger.info(" @web_scrape.py \nFound library row")
+
+                # Find date column index
+                try:
+                    date_headers = self.driver.find_elements(By.XPATH, "//thead/tr/th/span[@class='s-lc-whw-head-date']")
+                    self.logger.info(f"@web_scrape.py Found date headers: {[header.text for header in date_headers]}")
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error finding date headers: {e}")
+                    return f"Error finding date headers: {str(e)}"
+                
+                self.logger.info(f"@web_scrape.py Found date_headers")
+                
+                date_column_index = None
+                for index, header in enumerate(date_headers, start=0):
+                    self.logger.info(f"@web_scrape.py header.text.lower() = {header.text.lower()}")  
+                    self.logger.info(f"@web_scrape.py date.lower() = {date.lower()}")  
+                    if date.lower() == header.text.lower():
+                        date_column_index = index+1 if index==0 else index
+                        self.logger.info(" @web_scrape.py \nFound date column index")
+                        break
+
+                if date_column_index is None:
+                    self.logger.info(" @web_scrape.py \nNo date info found")
+                    continue  # Skip if date not found
+                
+                self.logger.info(f"@web_scrape.py Found date column index {date_column_index}")
+                # Extract status
+                try:
+                    status_cell = library_row.find_elements(By.TAG_NAME, "td")[date_column_index]
+                    self.logger.info(f"@web_scrape.py Found library row elements : {status_cell}")
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error finding status cell: {e}")
+                    return f"Error finding status cell: {str(e)}"
+                try:
+                    status = status_cell.find_element(By.CSS_SELECTOR, "span").text
+                    self.logger.info(f"@web_scrape.py Found library status elements : {status}")
+                except Exception as e:
+                    self.logger.info(f"@web_scrape.py Status cell HTML: {status_cell.get_attribute('outerHTML')}")
+                    self.logger.error(f"@web_scrape.py Error extracting library status: {e}")
+                    
+                
+
+                # Append to results
+                library_result = {
+                    'library': mapped_library_names,
+                    'date': date,
+                    'status': status
+                }
+                self.logger.info(f"@web_scrape.py mapping {library_result}")
+                results.append(library_result)
+
+        # Convert results to formatted string for text_content
+        self.logger.info(f"@web_scrape.py Results : {results}")
+        
+        return results
+
+    async def scrape_asu_library_catalog(self, url, query) -> List[Dict[str, str]]:
+        self.driver.get(url)
+        time.sleep(1)
+        self.logger.info(" @web_scrape.py \nLogin to ASU Library")
+        book_results = []
+        self.handle_feedback_popup(self.driver)
+        self.logger.info(" @web_scrape.py \nHandling feedback popup")
+        # Find and click on the first book title link
+        first_book_link = WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".result-item-text div"))
+        )
+        first_book_link.click()
+        print("\nBook Title Clicked")
+        
+        time.sleep(2)
+        
+        if nested_book_link := self.driver.find_element(By.CSS_SELECTOR, ".result-item-text div"):
+            nested_book_link.click()
+            
+        book_details = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
+        )
+        # Wait for book details to be present
+        print("\nBook Details fetched")
+        
+        
+        for _ in range(3):
+            
+            book_details = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.full-view-inner-container.flex"))
+            )
+            self.handle_feedback_popup(self.driver)
+            
+            # Extract book title
+            author_view = self.driver.find_element(By.CSS_SELECTOR,
+                                                    "div.result-item-text.layout-fill.layout-column.flex")
+            print("\nAuthors fetched")
+
+            title = author_view.find_element(By.CSS_SELECTOR, "h3.item-title").text.strip()
+            print("\nBook Title fetched")
+
+            # Extract Authors
+            authors = []
+
+            try:
+                author_div = author_view.find_element(By.XPATH,
+                "//div[contains(@class, 'item-detail') and contains(@class, 'reduce-lines-display')]")
+
+                # Find all author elements within this div
+                author_elements = author_div.find_elements(By.CSS_SELECTOR,
+            "span[data-field-selector='creator'], span[data-field-selector='contributor']")
+
+                if len(author_elements) > 0:
+                    for element in author_elements:
+                        author_text = element.text.strip()
+                        if author_text and author_text not in authors:
+                            authors.append(author_text)
+                else:
+                    author_div = book_details.find_element(By.XPATH, "//div[.//span[@title='Author']]")
+
+                    author_elements = author_div.find_elements(By.CSS_SELECTOR,
+                        "a span[ng-bind-html='$ctrl.highlightedText']")
+
+                    if not author_elements:
+                        author_elements = book_details.find_elements(By.XPATH,
+                    "//div[contains(@class, 'item-details-element')]//a//span[contains(@ng-bind-html, '$ctrl.highlightedText')]")
+                    if len(author_elements) > 0:
+                        for element in author_elements:
+                            author_text = element.text.strip()
+                            if author_text and author_text not in authors:
+                                authors.append(author_text)
+                print("\nAuthors fetched")
+
+            except Exception as e:
+                authors = 'N/A'
+
+            try:
+                publisher = book_details.find_element(By.CSS_SELECTOR,
+                    "span[data-field-selector='publisher']").text.strip()
+                print("\nPublisher fetched")
+            except:
+                print("\nNo Publisher found")
+                publisher = "N/A"
+
+            # Extract publication year
+            try:
+                year = book_details.find_element(By.CSS_SELECTOR,
+                            "span[data-field-selector='creationdate']").text.strip()
+            except:
+                print("\nNo Book details found")
+                year = "N/A"
+
+            # Extract availability
+            try:
+                location_element = book_details.find_element(By.CSS_SELECTOR, "h6.md-title")
+                availability = location_element.text.strip()
+                print("\nAvailability found with first method")
+
+            except Exception as e:
+                # Find the first link in the exception block
+                location_element = book_details.find_elements(By.CSS_SELECTOR,
+                    "a.item-title.md-primoExplore-theme")
+            try:
+                
+                if isinstance(location_element, list):
+                    availability = location_element[0].get_attribute('href')
+                else:
+                    availability = location_element.get_attribute('href')
+                print("\nAvailability found with second method")
+
+                if availability is None:
+                    location_element = book_details.find_elements(By.CSS_SELECTOR,
+                                    "h6.md-title ng-binding zero-margin")
+                    availability = location_element.text.strip()
+                    print("\nAvailablility found with third method")
+            except:
+                print("\nNo availability found")
+                availability = "N/A"
+
+            try:
+                # Use more flexible locator strategies
+                links = self.driver.find_elements(By.XPATH, "//a[contains(@ui-sref, 'sourceRecord')]")
+
+                if isinstance(links, list) and len(links) > 0:
+                    link = links[0].get_attribute('href')
+                    print("\nFetched Link")
+                else:
+                    link = 'N/A'
+                    print("\nNo link Found")
+            except Exception as e:
+                print("\nNo link Found")
+                link = 'N/A'
+
+            # Compile book result
+            book_result = {
+                "title": title,
+                "authors": authors,
+                "publisher": publisher,
+                "year": year,
+                "availability": availability,
+                "link": link
+            }
+
+            book_results.append(book_result)
+
+            try:
+                next_button = WebDriverWait(self.driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(@ng-click, '$ctrl.getNextRecord()')]"))
+                )
+                self.driver.execute_script("arguments[0].click();", next_button)
+                
+                time.sleep(3)
+
+                print("\nClicked next button")
+
+                self.handle_feedback_popup(self.driver)
+
+            except Exception as e:
+                print(f"Failed to click next button: {e}")
+
+        if len(book_results) == 0:
+            return False
+        
+        return book_results
+    
     async def logout_user_credentials(self):
         """Logout and close the incognito window associated with the user session"""
         try:
@@ -1585,6 +1458,122 @@ class ASUWebScraper:
         except Exception as e:
             self.logger.error(f"@web_scrape.py Error in logout_user_credentials: {str(e)}")
             return False
+    
+    async def scrape_asu_scholarships(self, url ,query ):
+        self.driver.get(url)
+        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
+        
+        base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
+        
+        search_results=[]
+        # Handle cookie consent for goglobal
+        self.logger.info(" @web_scrape.py \nHandling cookie consent")
+        try:
+            cookie_button = WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, '.accept-btn'))
+            )
+            self.driver.execute_script("arguments[0].click();", cookie_button)
+            time.sleep(2)
+        except Exception as cookie_error:
+            self.logger.warning(f"@web_scrape.py Cookie consent handling failed: {cookie_error}")
+        
+        if query:
+            self.logger.info(" @web_scrape.py \nOptional query :: %s" % query)
+            self.logger.info(f"@web_scrape.py Searching for {url} links")
+            # Parse query parameters
+            query_params = dict(param.split('=') for param in query.split('&') if '=' in param)
+            
+            # Define filter mappings based on site
+            filter_mapping = {
+                'goglobal.asu.edu': {
+                    'academiclevel': '#edit-field-ss-student-type-target-id',
+                    'citizenship_status': '#edit-field-ss-citizenship-status-target-id',
+                    'gpa': '#edit-field-ss-my-gpa-target-id',
+                    # 'college': '#edit-field-college-ss-target-id',
+                },
+                'onsa.asu.edu': {
+                    'search_bar_query': 'input[name="combine"]',
+                    'citizenship_status': 'select[name="field_citizenship_status"]',
+                    'eligible_applicants': 'select[name="field_eligible_applicants"]',
+                    'focus': 'select[name="field_focus"]',
+                }
+            }
+            
+            # Determine which site's filter mapping to use
+            site_filters = filter_mapping['goglobal.asu.edu'] if 'goglobal.asu.edu' in url else filter_mapping['onsa.asu.edu']
+            self.logger.info(f"@web_scrape.py Using filter mapping: {site_filters}")
+            # Apply filters with robust error handling
+            for param, value in query_params.items():
+                if param in site_filters and value:
+                    try:
+                        filter_element = WebDriverWait(self.driver, 10).until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, site_filters[param]))
+                        )
+                        
+                        # Scroll element into view
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", filter_element)
+                        time.sleep(1)
+                        
+                        self.logger.info(f"@web_scrape.py Applying filter {param} with value {value}")
+                        
+                        # Handle different input types
+                        if filter_element.tag_name == 'select':
+                            Select(filter_element).select_by_visible_text(value)
+                            self.logger.info(f"@web_scrape.py Selected {value} in {param}")
+                        elif filter_element.tag_name == 'input':
+                            filter_element.clear()
+                            filter_element.send_keys(value)
+                            filter_element.send_keys(Keys.ENTER)
+                            self.logger.info(f"@web_scrape.py Entered {value} in {param}")
+                        
+                        time.sleep(1)
+                    except Exception as filter_error:
+                        self.logger.warning(f"@web_scrape.py Could not apply filter {param}: {filter_error}")
+                        pass  # Click search button with multiple retry mechanism
+            search_button_selectors = ['input[type="submit"]', 'button[type="submit"]', '.search-button']
+            for selector in search_button_selectors:
+                try:
+                    search_button = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", search_button)
+                    time.sleep(1)
+                    self.driver.execute_script("arguments[0].click();", search_button)
+                    self.logger.info(f"@web_scrape.py Clicked search button with selector {selector}")
+                    break
+                except Exception as e:
+                    self.logger.warning(f"@web_scrape.py Search button click failed for selector {selector}: {e}")
+                    self.logger.error(f"Search button click failed for selector {selector}: {e}")
+        
+        # Extract scholarship links with improved URL construction
+        link_selectors = {
+            'goglobal': 'td[headers="view-title-table-column"] a',
+            'onsa': 'td a'
+        }
+        
+        current_selector = link_selectors['goglobal'] if "goglobal" in url else link_selectors['onsa']
+        
+        self.logger.info(f"@web_scrape.py Using selector: {current_selector}")
+        
+        scholarship_links = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, current_selector))
+        )
+        
+        self.logger.info(f"@web_scrape.py Found {len(scholarship_links)} scholarship links")
+        
+        for link in scholarship_links[:3]:
+            href = link.get_attribute('href')
+            if href:
+                if href.startswith('/'):
+                    search_results.append(f"{base_url}{href}")
+                elif href.startswith('http'):
+                    search_results.append(href)
+                else:
+                    search_results.append(f"{base_url}/{href}")
+        
+        self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ") 
+        
+        return search_results
     # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
     # disabled temprarily
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
