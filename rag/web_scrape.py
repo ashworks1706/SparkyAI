@@ -1394,7 +1394,7 @@ class ASUWebScraper:
             self.text_content = []
             # Initialize variables
             query = optional_query
-            sport = query.get("sport")
+            sport = query.get("sport", "None")
             query_date = query.get("date", "None")
             query_time = query.get("time", "None")
             query_rival_team = query.get("rival_team", "None")
@@ -1409,7 +1409,7 @@ class ASUWebScraper:
                 )
                 # Clear any existing text and type the search term
                 search_bar.clear()
-                self.logger.info(f"@web_scrape.py \nSport: {sport}")
+                # self.logger.info(f"@web_scrape.py \nSport: {sport}")
                 search_bar.send_keys(sport)
                 search_bar.send_keys(Keys.RETURN)  # Press Enter
                 time.sleep(3)
@@ -1423,9 +1423,9 @@ class ASUWebScraper:
                 except TimeoutException:
                     self.logger.error("@web_scrape.py No game elements found within timeout period")
                     return False
-                # store game info
+                # store game info, only top 5 because it clutters if i do more
                 content=[]
-                for game in games:
+                for game in games[:5]:
                     try:
                         # Wait for game content to be visible
                         WebDriverWait(self.driver, 5).until(
@@ -1481,31 +1481,30 @@ class ASUWebScraper:
 
                         # store content
                         game_content = [
-                            f"Sport : {game_sport}\n",
-                            f"Date : {game_date}\n",
-                            f"Time : {game_time}\n",
-                            f"Location : {game_location}\n",
-                            f"Rival Team : {game_rival_team}\n",
-                            f"Themes : {game_themes}\n",
-                            f"Ticket Link : {ticket_link if ticket_link else "N/A"}\n",
-                            f"Event Link : {event_link if event_link else "N/A"}\n",
+                            f"Sport : {game_sport}\n"
+                            f"Date : {game_date}\n"
+                            f"Time : {game_time}\n"
+                            f"Location : {game_location}\n"
+                            f"Rival Team : {game_rival_team}\n"
+                            f"Themes : {game_themes if game_themes else "N/A"}\n"
+                            f"Ticket Link : {ticket_link if ticket_link else "N/A"}\n"
+                            f"Event Link : {event_link if event_link else "N/A"}\n"
                             f"Extra Links : {extra_links if extra_links else "N/A"}\n"
                         ]
-                            
-                        content.append(game_content)
+                        content.append("".join(game_content))
                     except Exception as e:
                         self.logger.error(f"@web_scrape.py Error processing game information: {e}")
                         continue
-
                 if content:
-                    # content = set(content)
-                    self.text_content.append({
-                        'content': content,
-                        'metadata': {
-                            'url': url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
+                    content = set(content)
+                    for c in content:
+                        self.text_content.append({
+                            'content': c,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            }
+                        })
                     self.logger.info(" @web_scrape.py \nAppended content to text_content")
                 else:
                     self.logger.warning(f'@web_scrape.py No content found for {url}')

@@ -83,7 +83,7 @@ class SportsModel:
                                       ),
                                       "match_time": content.Schema(
                                           type=content.Type.STRING,
-                                          description="Specific match time in HH:MM timezone 12-hour format (e.g., '1:00 p.m.(PT)', '2:00 p.m. (MST)')"
+                                          description="Specific match time in HH:MM timezone 12-hour format (e.g., '1:00 p.m. (PT)', '2:00 p.m. (MST)')"
                                       ),
                                       "rival_team": content.Schema(
                                           type=content.Type.STRING,

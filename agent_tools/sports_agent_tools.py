@@ -50,7 +50,7 @@ class Sports_Agent_Tools:
 
         
         url = "sundevils.com/tickets"
-        return await self.utils.asu_scraper.scrape_content(url=url, query_type=sport, selenium=True, optional_query=optional_query)
+        return await self.utils.perform_web_search(search_url=url, optional_query=optional_query)
         
 
    
