@@ -62,22 +62,25 @@ class ASUDiscordBot:
             interaction: Discord interaction
         """
         try:
+            
             if self.discord_state.get('user_session_id') == None:
                 await interaction.response.send_message(
                     "You are already logged out.",
                     ephemeral=True
                 )
                 return
+            await interaction.response.defer(thinking=True)
+            global task_message
+            task_message = await interaction.edit_original_response(content="Starting the logout process...")
+            
             
             await self.asu_scraper.logout_user_credentials()
-            
             # Reset user session ID and other states
             self.discord_state.update(user_session_id=None)
-            await interaction.response.send_message(
-                "You have successfully logged out.",
-                ephemeral=True
-            )
             
+            await self.utils.start_animation(task_message)
+            
+            self.utils.stop_animation(task_message, "Successfully logged out of MYASU!")
             
             self.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged out")
         
@@ -122,7 +125,7 @@ class ASUDiscordBot:
             
             # If user is a member, show the login modal
             modal = LoginModal(self)
-            await self.asu_scraper.login_user_credentials()
+            
             await interaction.response.send_modal(modal)
             self.logger.info(f"@discord_bot.py Login modal sent to user {interaction.user.name}")
         

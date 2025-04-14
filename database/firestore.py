@@ -132,8 +132,6 @@ class Firestore:
         
         return doc_ref.id  # Return the document ID for reference
     
-    
-    
     # This method is used to check if the user exists in Firestore and add them if not.
     async def check_and_add_user(self):
         # Check if the user already exists in the Firestore database

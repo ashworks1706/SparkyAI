@@ -1,3 +1,4 @@
+from httpcore import TimeoutException
 from utils.common_imports import *
 
 import subprocess
@@ -77,138 +78,15 @@ class ASUWebScraper:
         
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=self.chrome_options)
     
-    def handle_feedback_popup(self,driver):
-        if self.popup:
-            pass
-        else:
-            try:
-                self.logger.info(" @web_scrape.py \nHandling feedback popup")
-                # Wait for the popup to be present
-                popup = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "fsrDeclineButton"))
-                )
-                
-                # Click the "No thanks" button
-                popup.click()
-                self.logger.info(" @web_scrape.py \nFeedback popup clicked")
-                # Optional: Wait for popup to disappear
-                WebDriverWait(driver, 5).until(
-                    EC.invisibility_of_element_located((By.ID, "fsrFullScreenContainer"))
-                )
-                
-                self.popup = True
-            except Exception as e:
-
-                pass
-    
-    def handle_cookie(self,driver):
-        if self.popup: 
-            pass
-        else:
-            try:
-                self.logger.info(" @web_scrape.py \nHandling feedback popup")
-                cookie_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.ID, "rcc-confirm-button"))
-                )
-                cookie_button.click()
-                self.logger.info(" @web_scrape.py \nSuccessfully clciked on cookie button")
-            except:
-                pass
-       
-    async def scrape_static_content(self, url: str, max_retries: int = 3) -> bool:
-        """Scrape content using Jina.ai"""
-        
-        self.logger.info(f"@web_scrape.py Scraping static url : {url} ")
-        self.logger.info(f"@web_scrape.py max_retries : {max_retries} ")
-        try:
-            self.logger.info(" @web_scrape.py \nUpdating text in Discord")
-            await self.utils.update_text("Understanding Results...")
-            self.logger.info(" @web_scrape.py \nText updated in Discord")
-        except:
-            self.logger.error(" @web_scrape.py \nError updating text in Discord")
-            pass
-        if isinstance(url, dict):
-            url = url.get('url', '')
-        
-        # Ensure url is a string and not empty
-        if not isinstance(url, str) or not url:
-            self.logger.error(f"@web_scrape.py Invalid URL: {url}")
-            return False
-        
-        # Validate and format the URL
-        try:
-            parsed_url = urlparse(url)
-            if not parsed_url.scheme:
-                url = f"https://{url}"
-                parsed_url = urlparse(url)
-            if not parsed_url.netloc:
-                self.logger.error(f"@web_scrape.py Malformed URL: {url}")
-                return False
-        except Exception as e:
-            self.logger.error(f"@web_scrape.py Error parsing URL: {url}, Exception: {str(e)}")
-            return False
-        
-        
-        self.logger.info(f"@web_scrape.py Visiting URL: {url}")
-        
-        
-        for attempt in range(max_retries):
-            try:
-                loader = UnstructuredURLLoader(urls=[url])
-                documents = loader.load()
-                
-                if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content.lower() and not "supported browser" in documents[0].page_content.lower() and not "captcha" in documents[0].page_content.lower():
-                    self.text_content.append({
-                            'content': documents[0].page_content,
-                            'metadata': {
-                                'url': url,
-                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                'title': documents[0].metadata.get('title', ''),
-                                'description': documents[0].metadata.get('description', ''),
-                            }
-                        })
-                    return self.text_content
-                else:
-                    self.logger.info(" @web_scrape.py Langchain method failed")
-            except Exception as e:
-                self.logger.error(f"@web_scrape.py Error fetching content from {url}: {str(e)}")
-                await asyncio.sleep(8) 
-                continue  
-            else:
-                jina_url = f"https://r.jina.ai/{url}"
-                response = requests.get(jina_url, headers=self.headers, timeout=30)
-                response.raise_for_status()
-                
-                text = response.text
-                self.logger.info(f"@web_scrape.py Raw text response for https://r.jina.ai/{url}\n{text}")
-                
-                if "LOADING..." in text.upper() or "requires javascript to be enabled" in text.lower() or "supported browser" in text.lower() or "captcha" in text.lower():
-                    self.logger.warning(f"@web_scrape.py LOADING response detected for {url}. Retry attempt {attempt + 1}")
-                    await asyncio.sleep(8)  # Wait before retrying
-                    continue
-                self.logger.info(" @web_scrape.py Scrarping successfull")
-                if text and len(text.strip()) > 50:
-                    self.text_content.append({
-                        'content': text,
-                        'metadata': {
-                            'url': url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
-                    
-                    self.logger.info(self.text_content[-1])
-                    return self.text_content
-                  
-            
-        return []
-    
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
         session_exists = self.discord_state.get('user_session_id')
         
+        
         if session_exists !=None:
             self.driver=self.login_sessions[session_exists]
-            
+        else:
+            self.logout_user_credentials(user_id=self.discord_state.get('user_id'))    
             
         search_results = []
         try:
@@ -520,6 +398,131 @@ class ASUWebScraper:
 
         return self.text_content
 
+    async def scrape_static_content(self, url: str, max_retries: int = 3) -> bool:
+        """Scrape content using Jina.ai"""
+        
+        self.logger.info(f"@web_scrape.py Scraping static url : {url} ")
+        self.logger.info(f"@web_scrape.py max_retries : {max_retries} ")
+        try:
+            self.logger.info(" @web_scrape.py \nUpdating text in Discord")
+            await self.utils.update_text("Understanding Results...")
+            self.logger.info(" @web_scrape.py \nText updated in Discord")
+        except:
+            self.logger.error(" @web_scrape.py \nError updating text in Discord")
+            pass
+        if isinstance(url, dict):
+            url = url.get('url', '')
+        
+        # Ensure url is a string and not empty
+        if not isinstance(url, str) or not url:
+            self.logger.error(f"@web_scrape.py Invalid URL: {url}")
+            return False
+        
+        # Validate and format the URL
+        try:
+            parsed_url = urlparse(url)
+            if not parsed_url.scheme:
+                url = f"https://{url}"
+                parsed_url = urlparse(url)
+            if not parsed_url.netloc:
+                self.logger.error(f"@web_scrape.py Malformed URL: {url}")
+                return False
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error parsing URL: {url}, Exception: {str(e)}")
+            return False
+        
+        
+        self.logger.info(f"@web_scrape.py Visiting URL: {url}")
+        
+        
+        for attempt in range(max_retries):
+            try:
+                loader = UnstructuredURLLoader(urls=[url])
+                documents = loader.load()
+                
+                if documents and documents[0].page_content and len(documents[0].page_content.strip()) > 50 and not "requires javascript to be enabled" in documents[0].page_content.lower() and not "supported browser" in documents[0].page_content.lower() and not "captcha" in documents[0].page_content.lower():
+                    self.text_content.append({
+                            'content': documents[0].page_content,
+                            'metadata': {
+                                'url': url,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                'title': documents[0].metadata.get('title', ''),
+                                'description': documents[0].metadata.get('description', ''),
+                            }
+                        })
+                    return self.text_content
+                else:
+                    self.logger.info(" @web_scrape.py Langchain method failed")
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Error fetching content from {url}: {str(e)}")
+                await asyncio.sleep(8) 
+                continue  
+            else:
+                jina_url = f"https://r.jina.ai/{url}"
+                response = requests.get(jina_url, headers=self.headers, timeout=30)
+                response.raise_for_status()
+                
+                text = response.text
+                self.logger.info(f"@web_scrape.py Raw text response for https://r.jina.ai/{url}\n{text}")
+                
+                if "LOADING..." in text.upper() or "requires javascript to be enabled" in text.lower() or "supported browser" in text.lower() or "captcha" in text.lower():
+                    self.logger.warning(f"@web_scrape.py LOADING response detected for {url}. Retry attempt {attempt + 1}")
+                    await asyncio.sleep(8)  # Wait before retrying
+                    continue
+                self.logger.info(" @web_scrape.py Scrarping successfull")
+                if text and len(text.strip()) > 50:
+                    self.text_content.append({
+                        'content': text,
+                        'metadata': {
+                            'url': url,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
+                    
+                    self.logger.info(self.text_content[-1])
+                    return self.text_content
+                  
+            
+        return []
+    
+    def handle_feedback_popup(self,driver):
+        if self.popup:
+            pass
+        else:
+            try:
+                self.logger.info(" @web_scrape.py \nHandling feedback popup")
+                # Wait for the popup to be present
+                popup = WebDriverWait(driver, 5).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "fsrDeclineButton"))
+                )
+                
+                # Click the "No thanks" button
+                popup.click()
+                self.logger.info(" @web_scrape.py \nFeedback popup clicked")
+                # Optional: Wait for popup to disappear
+                WebDriverWait(driver, 5).until(
+                    EC.invisibility_of_element_located((By.ID, "fsrFullScreenContainer"))
+                )
+                
+                self.popup = True
+            except Exception as e:
+
+                pass
+    
+    def handle_cookie(self,driver):
+        if self.popup: 
+            pass
+        else:
+            try:
+                self.logger.info(" @web_scrape.py \nHandling feedback popup")
+                cookie_button = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.ID, "rcc-confirm-button"))
+                )
+                cookie_button.click()
+                self.logger.info(" @web_scrape.py \nSuccessfully clciked on cookie button")
+            except:
+                pass
+    
     async def scrape_asu_course_catalog(self, url, query) -> List[Dict[str, str]]:
         self.driver.get(url)
         self.logger.info(" @web_scrape.py \nLogin to ASU Catalog")
@@ -1001,76 +1004,7 @@ class ASUWebScraper:
             self.logger.info("Results : %s" % results)   
             
             return results     
-    
-    async def login_user_credentials(self):
-        """Create an incognito Chrome window and sign into MyASU with user credentials"""
-        try:
-            asu_rite = self.discord_state.get('user_asu_rite')
-            password = self.discord_state.get('user_password')
-            session_id = self.discord_state.get('user_session_id')
-            
-            if not asu_rite or not password or not session_id:
-                self.logger.error("@web_scrape.py Missing credentials or session ID")
-                self.logger.info(f"@web_scrape.py asu_rite: {asu_rite}, password: {password}, session_id: {session_id}")
-                return False
-            
-            # Create incognito Chrome window for this user session
-            incognito_options = Options()
-            incognito_options.add_argument("--incognito")
-            incognito_options.add_argument('--no-sandbox')
-            incognito_options.add_argument('--disable-dev-shm-usage')
-            incognito_options.add_argument('--disable-gpu')
-            incognito_options.add_argument('--window-size=1920,1080')
-            
-            # Apply the same binary location logic as the main driver
-            if platform.system() == 'Linux':
-                incognito_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
-            elif 'microsoft' in platform.uname().release.lower():  # WSL detection
-                incognito_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
-                
-            logged_in_driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=incognito_options)
-            
-            # Navigate to MyASU login page and authenticate
-            try:
-                logged_in_driver.get("https://weblogin.asu.edu/cas/login")
-                
-                # Wait for login form to appear
-                username_field = WebDriverWait(logged_in_driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "username"))
-                )
-                password_field = logged_in_driver.find_element(By.ID, "password")
-                
-                # Input credentials
-                username_field.send_keys(asu_rite)
-                password_field.send_keys(password)
-                
-                # Submit the form
-                submit_button = logged_in_driver.find_element(By.NAME, "submit")
-                submit_button.click()
-                
-                # Wait for successful login
-                WebDriverWait(logged_in_driver, 15).until(
-                    EC.presence_of_element_located((By.ID, "asu-header"))
-                )
-                
-                self.logger.info(f"@web_scrape.py Successfully logged in for session {session_id}")
-                
-                # Store the logged in driver in the sessions list
-                self.logged_in_driver = logged_in_driver
-                self.login_sessions.append(logged_in_driver)
-                self.discord_state['user_session_id'] = len(self.login_sessions) - 1
-                
-                return True
-                
-            except Exception as e:
-                self.logger.error(f"@web_scrape.py Login failed: {str(e)}")
-                logged_in_driver.quit()
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"@web_scrape.py Error in login_user_credentials: {str(e)}")
-            return False
-
+      
     async def scrape_asu_library_hours(self, url, query) -> List[Dict[str, str]]:
 
         def extract_query_parameters(query):
@@ -1421,6 +1355,136 @@ class ASUWebScraper:
         
         return book_results
     
+    async def login_user_credentials(self):
+        """Create an incognito Chrome window and sign into MyASU with user credentials"""
+        try:
+            asu_rite = self.discord_state.get('user_asu_rite')
+            password = self.discord_state.get('user_password')
+            session_id = self.discord_state.get('user_session_id')
+            
+            if not asu_rite or not password or not session_id:
+                self.logger.error("@web_scrape.py Missing credentials or session ID")
+                self.logger.info(f"@web_scrape.py asu_rite: {asu_rite}, password: {password}, session_id: {session_id}")
+                return False
+            
+            # Create incognito Chrome window for this user session
+            incognito_options = Options()
+            incognito_options.add_argument("--incognito")
+            incognito_options.add_argument('--no-sandbox')
+            incognito_options.add_argument('--disable-dev-shm-usage')
+            incognito_options.add_argument('--disable-gpu')
+            incognito_options.add_argument('--window-size=1920,1080')
+            
+            # Apply the same binary location logic as the main driver
+            if platform.system() == 'Linux':
+                incognito_options.binary_location = '/usr/bin/google-chrome-stable'  # Standard Linux path
+            elif 'microsoft' in platform.uname().release.lower():  # WSL detection
+                incognito_options.binary_location = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe'
+                
+            logged_in_driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=incognito_options)
+            
+            # Navigate to MyASU login page and authenticate
+            try:
+                await self.utils.update_text("Going to MyASU Login Portal...")
+                
+                logged_in_driver.get("https://weblogin.asu.edu/cas/login")
+                
+                # Wait for login form to appear
+                username_field = WebDriverWait(logged_in_driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "username"))
+                )
+                password_field = logged_in_driver.find_element(By.ID, "password")
+                
+                
+                await self.utils.update_text("Entering ASU Credentials...")
+                
+                # Input credentials
+                username_field.send_keys(asu_rite)
+                password_field.send_keys(password)
+                
+                # Submit the form
+                submit_button = logged_in_driver.find_element(By.NAME, "submitBtn")
+                submit_button.click()
+                
+                # Check for login errors
+                try:
+                    error_message = WebDriverWait(logged_in_driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "div#loginErrorsPanel div.title"))
+                    ).text
+                    self.logger.error(f"@web_scrape.py 1414 Login failed: {error_message}")
+                    await self.utils.update_text(f"Login failed: {error_message}")
+                    logged_in_driver.quit()
+                    return False
+                except:
+                    # No error message, continue to Duo authentication
+                    pass
+                
+                
+                # Check for Duo Push
+                try:
+                    duo_push_element = WebDriverWait(logged_in_driver, 10).until(
+                        EC.presence_of_element_located((By.ID, "auth-view-wrapper"))
+                    )
+                    await self.utils.update_text("**Please Accept DUO Access from your end!**")
+                    
+                    
+                    # Check if Duo Push timed out
+                    
+                except TimeoutException:
+                    self.logger.error("@web_scrape.py Timeout waiting for DUO authentication.")
+                    await self.utils.update_text("Timeout waiting for DUO authentication. Please try again.")
+                    logged_in_driver.quit()
+                    return False
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py An error occurred during DUO authentication: {e}")
+                    await self.utils.update_text(f"An error occurred during DUO authentication: {e}")
+                    logged_in_driver.quit()
+                    return False
+                
+                # Check for "Is this your device?" prompt and handle it
+                try:
+                    trust_device_button = WebDriverWait(logged_in_driver, 30).until(
+                        EC.presence_of_element_located((By.ID, "trust-browser-button"))
+                    )
+                    trust_device_button.click()
+                    self.logger.info("@web_scrape.py Clicked 'Yes, this is my device'")
+                    await self.utils.update_text("Clicked 'Yes, this is my device'")
+                except TimeoutException:
+                    self.logger.info("@web_scrape.py 'Yes, this is my device' prompt did not appear.")
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error handling 'Yes, this is my device' prompt: {e}")
+                    await self.utils.update_text(f"Error handling 'Yes, this is my device' prompt: {e}")
+                try:
+                    # Wait for successful login
+                    WebDriverWait(logged_in_driver, 60).until(
+                        EC.presence_of_element_located((By.XPATH, "//span[text()='Sign In Successful']"))
+                    )
+                    self.logger.info("@web_scrape.py Login successful - found 'Sign In Successful' element")
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error waiting for successful login: {e}")
+                    await self.utils.update_text(f"Error waiting for successful login: {e}")
+                    logged_in_driver.quit()
+                    return False
+                
+                self.logger.info(f"@web_scrape.py Successfully logged in for session {session_id}")
+                
+                # Store the logged in driver in the sessions list
+                self.logged_in_driver = logged_in_driver
+                self.login_sessions.append(logged_in_driver)
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py 1479 Login failed: {str(e)}")
+                self.discord_state.update(user_session_id=None)
+                
+                logged_in_driver.quit()
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error in login_user_credentials: {str(e)}")
+            return False
+    
     async def logout_user_credentials(self):
         """Logout and close the incognito window associated with the user session"""
         try:
@@ -1463,7 +1527,7 @@ class ASUWebScraper:
         self.driver.get(url)
         WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
         
-        base_url = "https://goglobal.asu.edu" if "goglobal" in search_url else "https://onsa.asu.edu"
+        base_url = "https://goglobal.asu.edu" if "goglobal" in url else "https://onsa.asu.edu"
         
         search_results=[]
         # Handle cookie consent for goglobal
@@ -1574,6 +1638,10 @@ class ASUWebScraper:
         self.logger.info(f"@web_scrape.py Found {len(search_results)} scholarship links - ") 
         
         return search_results
+    
+    
+    
+    
     # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
     # disabled temprarily
     # async def discord_search(self, query: str, channel_ids: List[int], limit: int = 40) -> List[Dict[str, str]]:
