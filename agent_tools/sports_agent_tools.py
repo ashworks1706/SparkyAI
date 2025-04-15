@@ -34,5 +34,22 @@ class Sports_Agent_Tools:
          
         
         return await self.utils.perform_web_search(search_url)
+    
+    async def get_ticketing_info(self, search_bar_query: str = None, sport: str = None, match_date: str = None, match_time: str = None, rival_team: str = None, location: str = None):
+        if not any([search_bar_query, sport]):
+            return "Please provide at least one sport to perform the search."
+
+        # optional query should be any other data, example date, location, etc.
+        optional_query = {
+            "sport": sport,
+            "date": match_date,
+            "time": match_time,
+            "rival_team": rival_team,
+            "location": location
+        }
+        
+        url = "sundevils.com/tickets"
+        return await self.utils.perform_web_search(search_url=url, optional_query=optional_query, doc_title="ASU Ticketing", doc_category="sports")
+        
 
    

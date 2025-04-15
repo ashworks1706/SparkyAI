@@ -1,4 +1,5 @@
 from utils.common_imports import *
+import torch
 class VectorStore:
     
     """A from utils.common_imports import *
@@ -91,11 +92,15 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
         """Initialize the embedding model."""
         self.logger.info(f"@vector_store.py Initializing embedding model: {model_name}")
         try:
+            if torch.cuda.is_available():
+                device = 'cuda'
+            elif torch.backends.mps.is_available():
+                device = 'mps'
+            else:
+                device = 'cpu'
             self.embedding_model = HuggingFaceEmbeddings(
                 model_name=model_name,
-                model_kwargs={'device': 'cpu'}
-                #model_kwargs={'device': 'cuda'}
-                # rename to : "cpu" if no gpu is found
+                model_kwargs={'device': device}
             )
             self.vector_size = len(self.embedding_model.embed_query("test"))
             self.logger.info(f"@vector_store.py Embedding model initialized with vector size: {self.vector_size}")

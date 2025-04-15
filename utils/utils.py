@@ -148,7 +148,6 @@ classwith task tracking and logging."""
                 raise ValueError("No documents found matching the query")
             
             self.logger.info(documents) 
-            
             self.logger.info(f"@utils.py \nPreprocessing documents...")
             
             try: 
