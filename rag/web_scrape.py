@@ -57,7 +57,7 @@ class ASUWebScraper:
             ).decode().strip()
             driver_version = driver_out.split()[1]
             
-            logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
+            # logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
             # #if chrome_version != driver_version:
             #     #raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
@@ -82,12 +82,11 @@ class ASUWebScraper:
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
         session_exists = self.discord_state.get('user_session_id')
-        
-        
+             
         if session_exists !=None:
             self.driver=self.login_sessions[session_exists]
         else:
-            self.logout_user_credentials(user_id=self.discord_state.get('user_id'))    
+            await self.logout_user_credentials()    
             
         search_results = []
         try:
@@ -395,10 +394,30 @@ class ASUWebScraper:
                 
                 return self.text_content
         
+            if 'sundevils.com/tickets' in search_url:
+                self.logger.info("Detected Sundevils Tickets URL – delegating to Sundevils scraper.")
+                if not search_url.startswith('http'):
+                    search_url = 'https://' + search_url
+                results = await self.scrape_sundevils_tickets(url=search_url, query=optional_query)
+                
+                if not results:
+                    self.logger.warning(f'@web_scrape.py No content found for {search_url}')
+                    return []
+                for c in results:
+                    self.text_content.append({
+                        'content': c,
+                        'metadata': {
+                            'url': search_url,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                    })
+                
+                self.logger.info(f"@web_scrape.py Appended Sundevils ticket results: {results}")
+                return self.text_content
         # self.driver.quit()
 
         return self.text_content
-
+    
     async def scrape_static_content(self, url: str, max_retries: int = 3) -> bool:
         """Scrape content using Jina.ai"""
         
@@ -1640,8 +1659,116 @@ class ASUWebScraper:
         
         return search_results
     
-    
-    
+    async def scrape_sundevils_tickets(self, url, query) -> List[Dict[str,str]]:
+        self.logger.info(" @web_scrape.py \nInitializing Ticketing Scraper")
+        self.text_content = []
+        # Initialize variables
+        sport = query.get("sport", "None")
+        query_date = query.get("date", "None")
+        query_time = query.get("time", "None")
+        query_rival_team = query.get("rival_team", "None")
+        query_location = query.get("location", "None")
+        # Initialize driver
+        try:
+            self.driver.get(url)
+            wait = WebDriverWait(self.driver, 15)
+            # wait for search bar to load
+            search_bar = wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "sc-gEkIjz"))
+            )
+            # Clear any existing text and type the search term
+            search_bar.clear()
+            # self.logger.info(f"@web_scrape.py \nSport: {sport}")
+            search_bar.send_keys(sport)
+            search_bar.send_keys(Keys.RETURN)  # Press Enter
+            time.sleep(3)
+            # Find relevant games
+            try:
+                # Wait for game elements to be present
+                games = wait.until(
+                    EC.presence_of_all_elements_located((By.CLASS_NAME, "sc-lizKOf"))
+                )
+            except TimeoutException:
+                self.logger.error("@web_scrape.py No game elements found within timeout period")
+                return False
+            # store game info, only top 5 because it clutters if i do more
+            content=[]
+            for game in games[:5]:
+                try:
+                    # Wait for game content to be visible
+                    WebDriverWait(self.driver, 5).until(
+                        EC.visibility_of(game)
+                    )
+                    # Check if game content is empty
+                    if game.text.strip() == "":
+                        continue
+
+                    game_information = game.text.split("\n")
+                    if len(game_information) < 1:  # Minimum required fields
+                        self.logger.warning(f"@web_scrape.py Incomplete game information found: {game_information}")
+                        continue
+
+                    # data we want to send the user
+                    game_sport = game_information[0]
+                    game_date = game_information[1] + " " + game_information[2]
+                    game_time = game_information[3] + " " + game_information[4]
+                    game_location = game_information[5]
+                    game_rival_team = game_information[6]
+                    game_themes = []
+                    for theme in game_information[7:]:
+                        if theme != "Buy tickets" and theme != "Event details" and theme != "History":
+                            game_themes.append(theme)
+
+                    # game links
+                    links = game.find_elements(By.TAG_NAME, "a")
+                    extra_links = []
+                    event_link = None
+                    ticket_link = None
+                    for link in links:
+                        if link.text == "Buy tickets":
+                            ticket_link = link.get_attribute("href")
+                        elif link.text == "Event details":
+                            event_link = link.get_attribute("href")
+                        else:
+                            extra_links.append(link.get_attribute("href"))
+
+                    # before storing content, make check if it game meets optional queries
+                    if query_date:
+                        # self.logger.info(f"@web_scrape.py Game date: {game_date} Query date: {query_date}")
+                        if game_date != query_date:
+                            continue
+                    if query_time:
+                        if game_time != query_time:
+                            continue
+                    if query_rival_team:
+                        if game_rival_team != query_rival_team:
+                            continue
+                    if query_location:
+                        if game_location != query_location:
+                            continue
+
+                    # store content
+                    game_content = [
+                        f"Sport : {game_sport}\n"
+                        f"Date : {game_date}\n"
+                        f"Time : {game_time}\n"
+                        f"Location : {game_location}\n"
+                        f"Rival Team : {game_rival_team}\n"
+                        f"Themes : {game_themes if game_themes else "N/A"}\n"
+                        f"Ticket Link : {ticket_link if ticket_link else "N/A"}\n"
+                        f"Event Link : {event_link if event_link else "N/A"}\n"
+                        f"Extra Links : {extra_links if extra_links else "N/A"}\n"
+                    ]
+                        
+                    content.extend(game_content)
+                except Exception as e:
+                    self.logger.error(f"@web_scrape.py Error processing game information: {e}")
+                    continue
+            return content
+
+        except Exception as e:
+            self.logger.error(f"@web_scrape.py Error processing search results: {e}")
+            return False    
     
     # await self.discord_search(query=optional_query, channel_ids=[1323386884554231919,1298772258491203676,1256079393009438770,1256128945318002708], limit=30)
     # disabled temprarily

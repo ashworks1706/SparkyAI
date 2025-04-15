@@ -47,10 +47,9 @@ class Sports_Agent_Tools:
             "rival_team": rival_team,
             "location": location
         }
-
         
         url = "sundevils.com/tickets"
-        return await self.utils.perform_web_search(search_url=url, optional_query=optional_query)
+        return await self.utils.perform_web_search(search_url=url, optional_query=optional_query, doc_title="ASU Ticketing", doc_category="sports")
         
 
    
