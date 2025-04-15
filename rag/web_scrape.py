@@ -59,8 +59,8 @@ class ASUWebScraper:
             
             # logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            # #if chrome_version != driver_version:
-            #     #raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            if chrome_version != driver_version:
+                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
