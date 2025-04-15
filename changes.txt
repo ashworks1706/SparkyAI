@@ -5,6 +5,9 @@ web_scrape.py
     - Added support for macOS
     - Line 52-53
 
+    - Line 89
+    - replaced existing code "self.logout_user_credentials(user_id=session_exists)" with "await self.logout_user_credentials()"    
+
 vector_store.py
     - Line 1
     - Added torch import
