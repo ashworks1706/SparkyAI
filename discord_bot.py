@@ -7,7 +7,7 @@ class ASUDiscordBot:
     """Discord bot for handling ASU-related questions"""
 
     # Your existing __init__ method, but add the login command
-    def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger,asu_scraper ):
+    def __init__(self, config, app_config, agents, middleware, utils,vector_store,logger,asu_scraper ):
         """
         Initialize the Discord bot.
         
@@ -20,14 +20,13 @@ class ASUDiscordBot:
         self.config = config or BotConfig(app_config)
         self.app_config= app_config
         self.agents = agents
-        self.firestore = firestore
+        self.middleware = middleware
         self.utils = utils
         self.asu_scraper = asu_scraper
         self.vector_store = vector_store
         
         # Initialize Discord client
-        self.discord_state = discord_state
-        self.client = discord_state.get('discord_client')
+        self.client = middleware.get('discord_client')
         self.tree = app_commands.CommandTree(self.client)
         
         @self.client.event
@@ -63,24 +62,17 @@ class ASUDiscordBot:
         """
         try:
             
-            if self.discord_state.get('user_session_id') == None:
-                await interaction.response.send_message(
-                    "You are already logged out.",
-                    ephemeral=True
-                )
-                return
             await interaction.response.defer(thinking=True)
+            
             global task_message
             task_message = await interaction.edit_original_response(content="Starting the logout process...")
             
             
-            await self.asu_scraper.logout_user_credentials()
-            # Reset user session ID and other states
-            self.discord_state.update(user_session_id=None)
+            await self.asu_scraper.logout_user_credentials(user_id=interaction.user.id)
             
             await self.utils.start_animation(task_message)
             
-            self.utils.stop_animation(task_message, "Successfully logged out of MYASU!")
+            await self.utils.stop_animation(task_message, "Successfully logged out of MYASU!")
             
             self.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged out")
         
@@ -97,12 +89,6 @@ class ASUDiscordBot:
             interaction: Discord interaction
         """
         try:
-            if self.discord_state.get('user_session_id') != None:
-                await interaction.response.send_message(
-                    f"You are already logged in. Please log out first. Session ID : {self.discord_state.get('user_session_id')}",
-                    ephemeral=True
-                )
-                return
             # Check if user is part of the server
             target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
             user_id = interaction.user.id
@@ -170,8 +156,8 @@ class ASUDiscordBot:
                     
             except discord.NotFound:
                 return "You are not part of AIM Discord Server. Access to command is restricted."
-        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
-        self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
+        self.middleware.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
+        self.middleware.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:
             if not await self._validate_channel(interaction):
@@ -188,7 +174,7 @@ class ASUDiscordBot:
 
     async def _validate_channel(self, interaction: discord.Interaction) -> bool:
         """Validate if command is used in correct channel"""
-        if not self.discord_state.get('request_in_dm') and interaction.channel.id != self.app_config.get_discord_allowed_chat_id():
+        if not self.middleware.get('request_in_dm') and interaction.channel.id != self.app_config.get_discord_allowed_chat_id():
             await interaction.response.send_message(
                 "Please use this command in the designated channel: #general",
                 ephemeral=True
@@ -227,10 +213,10 @@ class ASUDiscordBot:
             
             
             
-            self.firestore.update_message("user_message", question)
+            self.middleware.update_message("user_message", question)
             await self.vector_store.store_to_vector_db()
             await self.utils.perform_raptor_tree_update()
-            document_id = await self.firestore.push_message()
+            document_id = await self.middleware.push_message()
             self.logger.info(f"@discord_bot.py Message pushed with document ID: {document_id}")
 
         except asyncio.TimeoutError:

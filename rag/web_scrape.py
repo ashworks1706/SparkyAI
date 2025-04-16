@@ -5,10 +5,10 @@ import subprocess
 import platform
 
 class ASUWebScraper:
-    def __init__(self,discord_state,utils,logger):
-        self.discord_client = discord_state.get('discord_client')
+    def __init__(self,middleware,utils,logger):
+        self.discord_client = middleware.get('discord_client')
         self.utils = utils
-        self.discord_state = discord_state
+        self.middleware = middleware
         self.text_content = []
         self.logged_in_driver= None
         self.chrome_options = Options()
@@ -29,7 +29,6 @@ class ASUWebScraper:
 
         self.logger= logger
         
-        self.login_sessions = []
         # logger.info(" @web_scrape.py Enter Chrome binary location")
         logger.info('/usr/bin/google-chrome-stable # Standard Linux path')
         logger.info('/mnt/c/Program Files/Google/Chrome/Application/chrome.exe # Standard WSL path')
@@ -81,12 +80,18 @@ class ASUWebScraper:
     
     async def engine_search(self, search_url: str =None, optional_query : str = None ) -> List[Dict[str, str]]:
         """Handle both Google search results and ASU Campus Labs pages using Selenium"""
-        session_exists = self.discord_state.get('user_session_id')
-             
-        if session_exists !=None:
-            self.driver=self.login_sessions[session_exists]
+        
+        user_id = self.middleware.get('user_id') 
+        user_sessions = self.middleware.get('logged_in_sessions')
+            
+        if user_id not in user_sessions or not user_sessions[user_id]:
+            self.logger.info(f"@web_scrape.py User : {user_id} session does not exist")
+        elif user_id in user_sessions and user_sessions[user_id]:
+            self.logger.info(f"@web_scrape.py User : {user_id} session exists in {user_sessions}")
+            self.logged_in_driver = user_sessions[user_id]   
         else:
-            await self.logout_user_credentials()    
+            self.logger.info(f"@web_scrape.py User : {user_id} session does not exist, defaulting to normal driver")        
+        
             
         search_results = []
         try:
@@ -377,16 +382,24 @@ class ASUWebScraper:
                     # Branch for Workday pages
             
             if 'myworkday.com' in search_url:                    
-                self.logger.info("Detected Workday URL – delegating to Workday scraper.")
-                if not optional_query or not optional_query.strip():
-                    self.logger.error("No search keyword provided for Workday jobs.")
-                    return []  # or return a message indicating that a search query is required
-                results= await self.scrape_asu_workday_jobs(url=url,optional_query=optional_query)
+                self.logger.info("@web_scrape.py Detected Workday URL – delegating to Workday scraper.")
+                
+                if not self.logged_in_driver:
+                    self.logger.info("@web_scrape.py User not logged in. Prompting for login.")
+                    return "Student needs to login to MyASU by using command /login in order to access jobs"
+                
+                if not optional_query:
+                    self.logger.error("@web_scrape.py No search keyword provided for Workday jobs.")
+                    return "Please provide at least one search bar query"  # or return a message indicating that a search query is required
+                
+                
+                
+                results= await self.scrape_asu_workday_jobs(search_url,optional_query)
                 
                 self.text_content.append({
                             'content': results,
                             'metadata': {
-                                'url': url,
+                                'url': search_url,
                                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                             }
                         })
@@ -676,14 +689,13 @@ class ASUWebScraper:
         3) Returns up to 'max_results' job listings 
             (each with title, detail header, and detail text) as a list of dicts.
         """
+        
         keyword = query.get('keyword', '')
         max_results = query.get('max_results', 5)
         self.logger.info(f"Starting Workday scrape with keyword='{keyword}'")
-        driver = self.driver
+        driver = self.logged_in_driver
         url = "https://www.myworkday.com/asu/d/task/1422$3898.htmld"
         driver.get(url)
-
-        self.logger.info("Please log in if prompted. Waiting 2 minutes…")
 
         SEARCH_BAR_SELECTOR = "input[data-automation-id='textInputBox']"
         
@@ -728,11 +740,11 @@ class ASUWebScraper:
             
             action_key = Keys.COMMAND  # or Keys.CONTROL on Windows
             webdriver.ActionChains(driver)\
-                .key_down(action_key)\
-                .click(job_div)\
-                .key_up(action_key)\
-                .perform()
-                
+            .key_down(action_key)\
+            .click(job_div)\
+            .key_up(action_key)\
+            .perform()
+            
             time.sleep(2)
             driver.switch_to.window(driver.window_handles[-1])
 
@@ -1375,16 +1387,14 @@ class ASUWebScraper:
         
         return book_results
     
-    async def login_user_credentials(self):
+    async def login_user_credentials(self, user_id, asu_rite, password):
         """Create an incognito Chrome window and sign into MyASU with user credentials"""
         try:
-            asu_rite = self.discord_state.get('user_asu_rite')
-            password = self.discord_state.get('user_password')
-            session_id = self.discord_state.get('user_session_id')
             
-            if not asu_rite or not password or not session_id:
+            
+            if not user_id or not asu_rite or not password:
                 self.logger.error("@web_scrape.py Missing credentials or session ID")
-                self.logger.info(f"@web_scrape.py asu_rite: {asu_rite}, password: {password}, session_id: {session_id}")
+                self.logger.info(f"@web_scrape.py asu_rite: {asu_rite}, password: {password}, user_id: {user_id}")
                 return False
             
             # Create incognito Chrome window for this user session
@@ -1486,18 +1496,16 @@ class ASUWebScraper:
                     logged_in_driver.quit()
                     return False
                 
-                self.logger.info(f"@web_scrape.py Successfully logged in for session {session_id}")
+                self.logger.info(f"@web_scrape.py Successfully logged in ")
                 
                 # Store the logged in driver in the sessions list
-                self.logged_in_driver = logged_in_driver
-                self.login_sessions.append(logged_in_driver)
+                await self.middleware.login_user_session_credentials(user_id, asu_rite, logged_in_driver)
+                
                 
                 return True
                 
             except Exception as e:
                 self.logger.error(f"@web_scrape.py 1479 Login failed: {str(e)}")
-                self.discord_state.update(user_session_id=None)
-                
                 logged_in_driver.quit()
                 return False
                 
@@ -1505,39 +1513,43 @@ class ASUWebScraper:
             self.logger.error(f"@web_scrape.py Error in login_user_credentials: {str(e)}")
             return False
     
-    async def logout_user_credentials(self):
+    async def logout_user_credentials(self,user_id):
         """Logout and close the incognito window associated with the user session"""
         try:
-            session_id = self.discord_state.get('user_session_id')
+            self.logger.info(f"@web_scrape.py Attempting to log out user {user_id}")
+            user_sessions = self.middleware.get('logged_in_sessions')
             
-            if session_id is None or session_id == None:
+            if user_id not in user_sessions or not user_sessions[user_id]:
                 self.logger.error("@web_scrape.py No active session to logout")
                 return False
             
-            if 0 <= session_id < len(self.login_sessions):
-                # Get the driver associated with this session
-                driver = self.login_sessions[session_id]
-                
-                # Try to navigate to logout page
-                try:
-                    driver.get("https://weblogin.asu.edu/cas/logout")
-                    self.logger.info(f"@web_scrape.py Navigated to logout page for session {session_id}")
-                except:
-                    self.logger.warning(f"@web_scrape.py Could not navigate to logout page for session {session_id}")
-                
-                # Close the browser
+            # Get the driver associated with this session
+            driver = user_sessions[user_id]
+            
+            # Try to navigate to logout page
+            try:
+                driver.get("https://weblogin.asu.edu/cas/logout")
+                self.logger.info(f"@web_scrape.py Navigated to logout page for session")
+            except Exception as e:
+                self.logger.warning(f"@web_scrape.py Could not navigate to logout page for session: {e}")
+            
+            # Close the browser
+            try:
                 driver.quit()
-                
-                # Remove the session from our list
-                self.login_sessions.pop(session_id)
-                self.discord_state['user_session_id'] = None
-                
-                self.logger.info(f"@web_scrape.py Session {session_id} successfully logged out")
-                return True
-                
-            else:
-                self.logger.error(f"@web_scrape.py Invalid session ID: {session_id}")
+                self.logger.info(f"@web_scrape.py Driver quit successfully for user {user_id}")
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Error while quitting driver: {e}")
+            
+            try:
+                await self.middleware.logout_user_session_credentials(user_id)
+                self.logger.info(f"@web_scrape.py Session credentials successfully logged out from middleware for user {user_id}")
+            except Exception as e:
+                self.logger.error(f"@web_scrape.py Error logging out user session credentials from middleware: {e}")
                 return False
+            
+            self.logger.info(f"@web_scrape.py Session for user {user_id} successfully logged out")
+            return True
+                
                 
         except Exception as e:
             self.logger.error(f"@web_scrape.py Error in logout_user_credentials: {str(e)}")

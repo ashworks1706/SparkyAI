@@ -3,15 +3,14 @@ from utils.common_imports import *
 class Superior_Agent_Tools:
     
     # This class contains the tools and methods for the superior agent to interact with other agents and perform various tasks.
-    def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, vector_store, asu_data_processor, middleware, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
         self.vector_store = vector_store
         self.asu_data_processor = asu_data_processor
         self.app_config = app_config
-        self.firestore = firestore
-        self.discord_state = discord_state
+        self.middleware = middleware
         self.utils = utils
         self.shuttle_status_agent = shuttle_status_agent
         self.discord_agent = discord_agent
@@ -25,10 +24,10 @@ class Superior_Agent_Tools:
         self.logger = logger
         self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
         self.model_id = "gemini-2.0-flash-exp"
-        self.discord_client = self.discord_state.get('discord_client')
-        self.guild = self.discord_state.get('target_guild')
-        self.user_id = self.discord_state.get('user_id')
-        self.user = self.discord_state.get('user')
+        self.discord_client = self.middleware.get('discord_client')
+        self.guild = self.middleware.get('target_guild')
+        self.user_id = self.middleware.get('user_id')
+        self.user = self.middleware.get('user')
         self.google_search_tool = Tool(google_search=GoogleSearch())
 
     def get_final_url(self, url):
@@ -52,8 +51,8 @@ class Superior_Agent_Tools:
         
     async def get_user_profile_details(self) -> str:
         """Retrieve user profile details from the Discord server"""
-        self.guild = self.discord_state.get('target_guild')
-        self.user_id = self.discord_state.get('user_id')
+        self.guild = self.middleware.get('target_guild')
+        self.user_id = self.middleware.get('user_id')
         self.logger.info(f"@superior_agent_tools.py Discord Model: Handling user profile details request for user ID: {self.user_id}")
 
         if not self.request_in_dm:
@@ -136,7 +135,7 @@ class Superior_Agent_Tools:
         self.group_chat.update_text(instruction_to_agent)
         
         try:
-            response = await self.news_agent.determine_action(instruction_to_agent, special_instructions)
+            response = await self.news_media_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
             self.logger.error(f"@superior_agent_tools.py Error in access news media agent: {str(e)}")
@@ -176,9 +175,9 @@ class Superior_Agent_Tools:
             return "Student Jobs Agent Not Responsive"
     
     async def send_bot_feedback(self, feedback: str) -> str:
-        self.user = self.discord_state.get('user') 
-        self.discord_client = self.discord_state.get('discord_client')
-        self.guild = self.discord_state.get('target_guild')
+        self.user = self.middleware.get('user') 
+        self.discord_client = self.middleware.get('discord_client')
+        self.guild = self.middleware.get('target_guild')
         
         await self.utils.update_text("Opening feedbacks...")
         
@@ -224,9 +223,9 @@ class Superior_Agent_Tools:
             self.conversations[user_id].pop(0)
 
     async def access_rag_search_agent(self, original_query: str, detailed_query: str, generalized_query: str, relative_query: str, categories: list):
-        self.firestore.update_message("category", categories)
+        self.middleware.update_message("category", categories)
         
-        user_id = self.discord_state.get('user_id')
+        user_id = self.middleware.get('user_id')
         responses = []
         self.logger.info(f"@superior_agent_tools.py Action Model: accessing Google Search with instruction {original_query}")
         try:
@@ -250,6 +249,7 @@ class Superior_Agent_Tools:
 
             responses = [resp for resp in responses if resp ]
             if not responses:
+                responses = "None"
                 self.logger.error("@superior_agent_tools.py No results found in database")
         except Exception as e:
             self.logger.error("@superior_agent_tools.py Error in database search ")
@@ -309,7 +309,7 @@ class Superior_Agent_Tools:
                 response_text = str(responses)
 
             # Save the interaction to chat history
-            user_id = self.discord_state.get('user_id')
+            user_id = self.middleware.get('user_id')
             self._save_message(user_id, "user", original_query)
             self._save_message(user_id, "model", response_text)
 
@@ -336,5 +336,5 @@ class Superior_Agent_Tools:
                 return None
             return response_text
         except Exception as e:
-            self.logger.info(f"@superior_agent_tools.py Google Search Exception {e}")
+            self.logger.error(f"@superior_agent_tools.py Google Search Exception {e}")
             return responses

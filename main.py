@@ -16,13 +16,14 @@ class Main:
         self.logger = logging.getLogger(__name__)
         # Initializing app_config to get prompts, agent details and important secrets
         self.app_config = AppConfig()  
-        # Initializing discord state class to dynamically update discord states since the server starts later
-        self.discord_state = DiscordState()
+        
+        self.logger.info("Setting up Middleware State @ Main")
+        self.middleware = Middleware()
         
         self.logger.info("Setting up Vector store @ Main")
         try:
             # initializing vector store for qdrant vector database
-            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=True)
+            self.vector_store = VectorStore(logger=self.logger, app_config=self.app_config, force_recreate=False)
             self.logger.info("VectorStore initialized successfully in @ Main")
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorStore: {str(e)}")
@@ -36,15 +37,14 @@ class Main:
         self.logger.info("Setting up GroupChat @ Main")
         self.asu_data_processor = DataPreprocessor(self.app_config,genai=genai,logger=self.logger)
         self.logger.info("Setting up ASU Data Processor @ Main")
-        self.firestore = Firestore(self.discord_state)
-        self.logger.info("Setting up ASU Firestore @ Main")
+        
         self.utils = Utils(vector_store_class=self.vector_store, asu_data_processor=self.asu_data_processor, asu_scraper=None, logger=self.logger,group_chat=self.group_chat)
         self.logger.info("Setting up ASU Utils @ Main")
-        self.asu_scraper = ASUWebScraper(self.discord_state, self.utils, self.logger)
+        self.asu_scraper = ASUWebScraper(self.middleware, self.utils, self.logger)
         self.logger.info("Setting up ASU Web Scraper @ Main")
         self.utils.asu_scraper = self.asu_scraper
         self.logger.info("Setting up ASU Utils @ Main")
-        self.agents = Agents(self.vector_store, self.asu_data_processor, self.firestore, genai, self.discord_state, self.utils, self.app_config, self.logger, self.group_chat)
+        self.agents = Agents(self.vector_store, self.asu_data_processor, self.middleware, genai, self.utils, self.app_config, self.logger, self.group_chat)
         self.logger.info("Setting up ASU Agents @ Main")
 
         if self.vector_store:
@@ -60,7 +60,7 @@ class Main:
         if not self.vector_store:
             self.logger.error("Cannot start bot: VectorStore not initialized")
             return
-        bot = ASUDiscordBot(config,app_config, self.agents, self.firestore, self.discord_state, self.utils, self.vector_store, self.logger, self.asu_scraper)
+        bot = ASUDiscordBot(config,app_config, self.agents, self.middleware, self.utils, self.vector_store, self.logger, self.asu_scraper)
         
         
         try:

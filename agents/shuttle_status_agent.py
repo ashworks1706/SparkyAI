@@ -1,10 +1,9 @@
 from utils.common_imports import *
 class Shuttle_Status_Model:
     
-    def __init__(self,firestore,genai,app_config,logger,shuttle_status_agent_tools,discord_state):
+    def __init__(self,middleware,genai,app_config,logger,shuttle_status_agent_tools):
         self.logger = logger
         self.agent_tools= shuttle_status_agent_tools
-        self.discord_state = discord_state
         self.app_config= app_config
         self.model = genai.GenerativeModel(
             model_name="gemini-2.0-flash",
@@ -54,7 +53,7 @@ class Shuttle_Status_Model:
             ],
             tool_config={'function_calling_config': 'ANY'},
         )
-        self.firestore = firestore
+        self.middleware = middleware
         self.chat=None
         self.last_request_time = time.time()
         self.request_counter = 0
@@ -99,7 +98,7 @@ class Shuttle_Status_Model:
             
         self.last_request_time = current_time
         self.request_counter += 1
-        user_id = self.discord_state.get("user_id")
+        user_id = self.middleware.get("user_id")
         self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
 
 
@@ -108,7 +107,7 @@ class Shuttle_Status_Model:
         """Determines and executes the appropriate action based on the user query"""
         try:
             self._initialize_model()
-            user_id = self.discord_state.get("user_id")
+            user_id = self.middleware.get("user_id")
             final_response = ""
             
 
@@ -129,10 +128,10 @@ class Shuttle_Status_Model:
                 if hasattr(part, 'function_call') and part.function_call:
                     
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message("shuttle_status_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
+                    self.middleware.update_message("shuttle_status_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
                 elif hasattr(part, 'text') and part.text.strip():
                     text = part.text.strip()
-                    self.firestore.update_message("shuttle_status_agent_message", f"Text Response : {text}")
+                    self.middleware.update_message("shuttle_status_agent_message", f"Text Response : {text}")
                     if not text.startswith("This query") and not "can be answered directly" in text:
                         final_response = text.strip()
                         self.logger.info(f"@shuttle_status_agent.py text response : {final_response}")

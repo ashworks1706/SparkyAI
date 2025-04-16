@@ -46,30 +46,21 @@ class LoginModal(discord.ui.Modal):
                 )
                 return
                 
-            # Store the credentials safely in Firestore with user ID
-            await self.bot.firestore.login_user_credentials(user_id, asurite_id, password)
-            
-            # await interaction.response.send_message(
-            #     "You have successfully logged in via your ASURite!\nKeep in mind that this is a temporary login and will expire in 6 hours.\nIf you have any issues, please contact the ACM Discord Bot team.",
-            #     ephemeral=True
-            # )
-            
             await interaction.response.defer(thinking=True)
             
             global task_message
             task_message = await interaction.edit_original_response(content="Starting the login process...")
             await self.bot.utils.start_animation(task_message)
-            resp = await self.bot.asu_scraper.login_user_credentials()
+            
+            resp = await self.bot.asu_scraper.login_user_credentials(user_id, asurite_id, password)
             
             if resp:
-                
+            
                 await self.bot.utils.stop_animation(task_message, "Successfully logged in to MYASU!")
             else:
                 await self.bot.utils.stop_animation(task_message, " Failed to log in to MYASU. Please check your credentials.")
-                await self.bot.asu_scraper.login_user_credentials()
             
             
-            self.bot.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged in with ASUrite ID")
             
         except discord.NotFound:
             await interaction.response.send_message(

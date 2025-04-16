@@ -1,9 +1,9 @@
 from utils.common_imports import *
 class SuperiorModel:
     
-    def __init__(self, firestore,genai,app_config,logger,superior_agent_tools):
+    def __init__(self, middleware,genai,app_config,logger,superior_agent_tools):
         self.logger = logger
-        self.firestore = firestore
+        self.middleware = middleware
         self.app_config = app_config
         self.agent_tools=superior_agent_tools
         self.model = genai.GenerativeModel(model_name="gemini-2.0-flash",
@@ -336,7 +336,7 @@ class SuperiorModel:
             if hasattr(part, 'text') and part.text.strip():
                 text_response += f"\n{part.text.strip()}"
                 self.logger.info(f"@superior_agent.py text response : {text_response}")
-                self.firestore.update_message("superior_agent_message", f"Text Response : {text_response} ")
+                self.middleware.update_message("superior_agent_message", f"Text Response : {text_response} ")
             if hasattr(part, 'function_call') and part.function_call:
                 has_function_call = True
                 function_call = part.function_call
@@ -348,8 +348,8 @@ class SuperiorModel:
                     }
                 }
                 self.logger.info(f"@superior_agent.py @ Superior Agent formed function call : {temp_func}")
-                self.firestore.update_message("superior_agent_message", f"temp_func")
-                self.logger.info(f"@superior_agent.py @superior_agent.py Updated Firestore message")
+                self.middleware.update_message("superior_agent_message", f"temp_func")
+                self.logger.info(f"@superior_agent.py @superior_agent.py Updated Middleware message")
         self.logger.info(f"@superior_agent.py @Superior Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
         return text_response, has_function_call, function_call
 
@@ -381,7 +381,7 @@ class SuperiorModel:
                     break
                 self.logger.info(f"@superior_agent.py @superior_agent.py @ Superior Agent : function call requested")
                 function_result = await self.execute_function(function_call)
-                self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
+                self.middleware.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
                 self.logger.info(f"@superior_agent.py @superior_agent.py \nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question. Remaining function tries : {max_depth}""")
                 max_depth-=1

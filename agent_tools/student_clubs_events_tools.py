@@ -1,8 +1,8 @@
 from utils.common_imports import *
 
 class Student_Clubs_Events_Agent_Tools:
-    def __init__(self,firestore,utils,logger):
-        self.firestore = firestore
+    def __init__(self,middleware,utils,logger):
+        self.middleware = middleware
         self.utils = utils
         self.visited_urls = set()
         self.max_depth = 2

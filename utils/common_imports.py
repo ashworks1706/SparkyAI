@@ -51,6 +51,8 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchAny, MatchVal
 ## Google 
 import firebase_admin
 from firebase_admin import credentials, firestore
+from datetime import timedelta
+
 
 
 # Selenium Imports
@@ -84,8 +86,7 @@ from config.bot_config import BotConfig
 
 from rag.data_processor import DataPreprocessor
 from rag.agents import Agents
-from database.firestore import Firestore
-from utils.discord_state import DiscordState
+from database.middleware import Middleware
 from utils.utils import Utils
 from discord_bot import ASUDiscordBot
 from rag.web_scrape import ASUWebScraper

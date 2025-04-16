@@ -4,10 +4,10 @@ import time
 from typing import Dict, List
 
 class StudentJobsModel:
-    def __init__(self, firestore, genai, app_config, logger, jobs_agent_tools, discord_state):
+    def __init__(self, middleware, genai, app_config, logger, jobs_agent_tools):
         self.logger = logger
         self.agent_tools = jobs_agent_tools
-        self.discord_state = discord_state
+        self.middleware = middleware
         self.app_config = app_config
 
         # Create the Gemini model with a function declaration for Workday scraping.
@@ -53,7 +53,7 @@ class StudentJobsModel:
             ],
             tool_config={'function_calling_config': 'ANY'},
         )
-        self.firestore = firestore
+        self.middleware = middleware
         self.chat = None
         self.last_request_time = time.time()
         self.request_counter = 0
@@ -121,13 +121,13 @@ class StudentJobsModel:
             for part in response.parts:
                 if hasattr(part, 'function_call') and part.function_call:
                     final_response = await self.execute_function(part.function_call)
-                    self.firestore.update_message(
-                        "jobs_agent_message", 
+                    self.middleware.update_message(
+                        "student_jobs_agent_message", 
                         f"Function called {part.function_call}  Function Response {final_response}"
                     )
                 elif hasattr(part, 'text') and part.text.strip():
                     text = part.text.strip()
-                    self.firestore.update_message("jobs_agent_message", f"Text Response: {text}")
+                    self.middleware.update_message("student_jobs_agent_message", f"Text Response: {text}")
                     if not text.startswith("This query") and "can be answered directly" not in text:
                         final_response = text
                         self.logger.info(f"@student_jobs_agent.py: Plain text response: {final_response}")
