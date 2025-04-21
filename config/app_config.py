@@ -58,7 +58,9 @@ class AppConfig:
         self.student_jobs_agent_instruction = config_data.get('STUDENT_JOBS_AGENT_INSTRUCTION', '')
         self.courses_agent_prompt = config_data.get('COURSES_AGENT_PROMPT', '')
         self.courses_agent_instruction = config_data.get('COURSES_AGENT_INSTRUCTION', '')
-        
+        self.campus_agent_prompt = config_data.get('CAMPUS_AGENT_PROMPT', '')
+        self.campus_agent_instruction = config_data.get('CAMPUS_AGENT_INSTRUCTION', '')
+
         print("Config loaded successfully @ AppConfig")
 
     def get_huggingfacehub_api_token(self):
@@ -148,3 +150,10 @@ class AppConfig:
         return self.courses_agent_prompt
     def get_courses_agent_instruction(self):
         return self.courses_agent_instruction
+
+    def get_campus_agent_prompt(self): 
+        return self.campus_agent_prompt
+    def get_campus_agent_instruction(self): 
+        return self.campus_agent_instruction
+
+

@@ -262,6 +262,21 @@ class SuperiorModel:
                     ),
                 ),
                 genai.protos.FunctionDeclaration(
+                    name="access_campus_agent",
+                    description="Locate ASU buildings / rooms via Campus‑Agent",
+                    parameters=content.Schema(
+                        type=content.Type.OBJECT,
+                        properties={
+                            "instruction_to_agent": content.Schema(type=content.Type.STRING,
+                                                                description="Tasks for the agent"),
+                            "special_instructions": content.Schema(type=content.Type.STRING,
+                                                                description="Remarks / context"),
+                        },
+                        required=["instruction_to_agent", "special_instructions"],
+                    ),
+                ),
+
+                genai.protos.FunctionDeclaration(
                     name="access_student_jobs_agent",
                     description="Has ability to search for ASU student jobs information",
                     parameters=content.Schema(
@@ -279,6 +294,7 @@ class SuperiorModel:
                     required= ["instruction_to_agent","special_instructions"],
                     ),
                 ),
+
 
                
                 ],
@@ -315,6 +331,7 @@ class SuperiorModel:
             'access_news_media_agent': self.agent_tools.access_news_media_agent,
             'access_scholarship_agent': self.agent_tools.access_scholarship_agent,
             'access_student_jobs_agent': self.agent_tools.access_student_jobs_agent,
+            'access_campus_agent'      : self.agent_tools.access_campus_agent,
         }
 
         function_name = function_call.name

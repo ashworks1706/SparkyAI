@@ -3,7 +3,11 @@ from utils.common_imports import *
 class Superior_Agent_Tools:
     
     # This class contains the tools and methods for the superior agent to interact with other agents and perform various tasks.
-    def __init__(self, vector_store, asu_data_processor, middleware, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, vector_store, asu_data_processor, middleware, utils,
+                 app_config, shuttle_status_agent, discord_agent, courses_agent,
+                 library_agent, news_media_agent, scholarship_agent, sports_agent,
+                 student_clubs_events_agent, student_jobs_agent, campus_agent,
+                 logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
@@ -21,6 +25,7 @@ class Superior_Agent_Tools:
         self.sports_agent = sports_agent
         self.student_clubs_events_agent = student_clubs_events_agent
         self.student_jobs_agent = student_jobs_agent
+        self.campus_agent = campus_agent
         self.logger = logger
         self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
         self.model_id = "gemini-2.0-flash-exp"
@@ -173,7 +178,17 @@ class Superior_Agent_Tools:
         except Exception as e:
             self.logger.error(f"@superior_agent_tools.py Error in access student jobs agent: {str(e)}")
             return "Student Jobs Agent Not Responsive"
-    
+    #  place below access_student_jobs_agent()
+    async def access_campus_agent(self,instruction_to_agent: str,special_instructions: str):
+        self.logger.info(f"[sup‑tools] campus agent call {instruction_to_agent}")
+        self.group_chat.update_text(instruction_to_agent)
+        try:
+            return await self.campus_agent.determine_action(instruction_to_agent,
+                                                            special_instructions)
+        except Exception as e:
+            self.logger.error(f"Campus‑Agent error {e}")
+            return "Campus‑Agent not responsive"
+
     async def send_bot_feedback(self, feedback: str) -> str:
         self.user = self.middleware.get('user') 
         self.discord_client = self.middleware.get('discord_client')

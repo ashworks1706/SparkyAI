@@ -47,6 +47,7 @@ class Middleware:
                 "news_media_agent_message": [],
                 "student_club_agent_message": [],
                 "student_jobs_agent_message": [],
+                "campus_agent_message": [],
                 "user_id": "",
                 "user_message": "",
                 "time": "",

@@ -13,10 +13,10 @@ class ASUWebScraper:
         self.logged_in_driver= None
         self.chrome_options = Options()
         # if you want to start chrome supressed enable this comment
-        self.chrome_options.add_argument('--headless')  
+        #self.chrome_options.add_argument('--headless')  
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument('--disable-gpu')
+        #self.chrome_options.add_argument('--disable-gpu')
         self.chrome_options.add_argument('--window-size=1920,1080')
         self.chrome_options.add_argument('--ignore-certificate-errors')
         self.chrome_options.add_argument('--disable-extensions')
@@ -58,8 +58,8 @@ class ASUWebScraper:
             
             # logger.info(f"@web_scrape.py Chrome: {chrome_version}, Chromedriver: {driver_version}")
             # bypass this by commenting out the next line
-            if chrome_version != driver_version:
-                raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
+            #if chrome_version != driver_version:
+                #raise RuntimeError(f"@web_scrape.py Mismatch: Chrome {chrome_version} vs Driver {driver_version}")
                 
         except IndexError as e:
             logger.error(f"@web_scrape.py Version parsing failed. Raw output:\nChrome: {chrome_out}\nDriver: {driver_out}")
@@ -406,30 +406,56 @@ class ASUWebScraper:
                 self.logger.info(f"@web_scrape.py Appended Workday job results: {results}")
                 
                 return self.text_content
-        
-            if 'sundevils.com/tickets' in search_url:
-                self.logger.info("Detected Sundevils Tickets URL – delegating to Sundevils scraper.")
-                if not search_url.startswith('http'):
-                    search_url = 'https://' + search_url
-                results = await self.scrape_sundevils_tickets(url=search_url, query=optional_query)
                 
-                if not results:
-                    self.logger.warning(f'@web_scrape.py No content found for {search_url}')
-                    return []
-                for c in results:
-                    self.text_content.append({
-                        'content': c,
-                        'metadata': {
-                            'url': search_url,
-                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        }
-                    })
+            # ── interactive campus‑map (uses Selenium) ───────────────────────────
+            # inside engine_search (…)  ────────────────────────────────────────────────────
+            if "asu.edu/map/interactive" in search_url:
+                self.logger.info("Detected Campus‑Map URL – delegating to campus‑agent.")
                 
-                self.logger.info(f"@web_scrape.py Appended Sundevils ticket results: {results}")
-                return self.text_content
-        # self.driver.quit()
+                if not optional_query or not optional_query.get("loc"):
+                    return "Please supply a building code or keyword, e.g. `PSH`."
 
-        return self.text_content
+                result_dict = await self.scrape_asu_campus_interactive(optional_query)
+                result_text = (
+                    f"Building : {result_dict['building']}\n"
+                    f"Google‑Maps URL : {result_dict['maps_url']}"
+                )
+
+                self.text_content.append({
+                    "content":  result_text,
+                    "metadata": {
+                        "url":       search_url,
+                        "timestamp": datetime.now().strftime("%Y‑%m‑%d %H:%M:%S"),
+                    }
+                })
+                return self.text_content
+
+
+
+
+            if 'sundevils.com/tickets' in search_url:
+                        self.logger.info("Detected Sundevils Tickets URL – delegating to Sundevils scraper.")
+                        if not search_url.startswith('http'):
+                            search_url = 'https://' + search_url
+                        results = await self.scrape_sundevils_tickets(url=search_url, query=optional_query)
+                        
+                        if not results:
+                            self.logger.warning(f'@web_scrape.py No content found for {search_url}')
+                            return []
+                        for c in results:
+                            self.text_content.append({
+                                'content': c,
+                                'metadata': {
+                                    'url': search_url,
+                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                }
+                            })
+                        
+                        self.logger.info(f"@web_scrape.py Appended Sundevils ticket results: {results}")
+                        return self.text_content
+                # self.driver.quit()
+
+            return self.text_content
     
     async def scrape_static_content(self, url: str, max_retries: int = 3) -> bool:
         """Scrape content using Jina.ai"""
@@ -791,7 +817,70 @@ class ASUWebScraper:
 
         self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
         return formatted_results
-    
+   
+
+    # ── add / replace inside ASUWebScraper ─────────────────────────────────────────
+    async def scrape_asu_campus_interactive(self, query: Dict[str, str]) -> Dict[str, str]:
+            """
+            Uses the *same* headless `self.driver` you already spin‑up in __init__
+            to open the interactive map, look up a building code / keyword, and return
+            its friendly title **plus** the first Google‑Maps link that ASU exposes
+            on the “Additional Building Information” page.
+            """
+            keyword = (query or {}).get("loc", "").strip()
+            if not keyword:
+                return {"building": "N/A", "maps_url": "N/A"}
+
+            URL   = "https://www.asu.edu/map/interactive/"
+            d     = self.driver
+            wait  = WebDriverWait(d, 30)
+
+            d.get(URL)                           # ➊ go to the map (headless)
+            d.maximize_window()
+
+            # ➋ hop into the <iframe> that contains the Esri app
+            wait.until(EC.frame_to_be_available_and_switch_to_it(
+                (By.CSS_SELECTOR, "iframe.map"))
+            )
+
+            # ➌ search for the building / keyword
+            box = wait.until(EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "input.searchInput"))
+            )
+            box.clear()
+            box.send_keys(keyword, Keys.ENTER)
+
+            # ➍ wait for the popup‑header to appear and capture its text
+            building_name = wait.until(EC.visibility_of_element_located(
+                (By.CSS_SELECTOR, "div.esri-popup__title, div.header"))
+            ).text.strip()
+
+            # ➎ click “Additional Building Information” (scrolled into view first)
+            pane     = d.find_element(By.CSS_SELECTOR, "div.contentPane")
+            add_link = pane.find_element(
+                By.XPATH, ".//a[contains(., 'Additional Building Information')]"
+            )
+            d.execute_script("arguments[0].scrollIntoView({block:'center'});", add_link)
+            d.execute_script("arguments[0].click();", add_link)
+
+            # ➏ switch to the *new* tab that just opened
+            time.sleep(5)
+            d.switch_to.window(d.window_handles[-1])
+
+            # ➐ grab the first Google‑Maps URL on that page
+            gmaps_url = wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//a[contains(@href,'google.com/maps')]"))
+            ).get_attribute("href")
+
+            # ➑ close that tab and restore original context
+            d.close()
+            d.switch_to.window(d.window_handles[0])
+            d.switch_to.default_content()
+
+            return {"building": building_name, "maps_url": gmaps_url}
+
+
+
     async def scrape_asu_shuttle_status(self, url, query) -> List[Dict[str, str]]:
             self.driver.get(url)
             # Wait for route list to load

@@ -106,5 +106,7 @@ from background.shuttles import Shuttles
 from background.scholarships_goglobal import Scholarships_GoGlobal
 from background.scholarships_onsa import Scholarships_Onsa
 
+# utils/common_imports.py  (or wherever you collect singletons)
+
 
 

@@ -9,6 +9,8 @@ from agents.scholarship_agent import ScholarshipModel
 from agents.sports_agent import SportsModel
 from agents.student_clubs_events_agent import StudentClubsEventsModel
 from agents.student_jobs_agent import StudentJobsModel
+from agents.campus_agent import CampusAgentModel
+
 
 from agent_tools.discord_agent_tools import Discord_Agent_Tools
 from agent_tools.shuttle_status_agent_tools import Shuttle_Status_Agent_Tools
@@ -20,7 +22,7 @@ from agent_tools.scholarship_agent_tools import Scholarship_Agent_Tools
 from agent_tools.sports_agent_tools import Sports_Agent_Tools
 from agent_tools.student_clubs_events_tools import Student_Clubs_Events_Agent_Tools
 from agent_tools.student_jobs_agent_tools import Student_Jobs_Agent_Tools
-
+from agent_tools.campus_agent_tools import Campus_Agent_Tools
 class Agents:
     def __init__(self, vector_store, asu_data_processor, middleware, genai, utils, app_config, logger, group_chat):
         self.vector_store = vector_store
@@ -41,6 +43,8 @@ class Agents:
         self.sports_agent_tools = Sports_Agent_Tools(middleware, utils, logger)
         self.student_clubs_events_agent_tools = Student_Clubs_Events_Agent_Tools(middleware, utils, logger)
         self.student_jobs_agent_tools = Student_Jobs_Agent_Tools(middleware, utils, logger)
+        self.campus_agent_tools = Campus_Agent_Tools(middleware, utils, logger)
+
 
         self.logger.info(f"@agents.py Initialized Agent Tools")
 
@@ -74,7 +78,10 @@ class Agents:
         self.student_jobs_agent = StudentJobsModel(self.middleware, self.genai, self.app_config, logger, self.student_jobs_agent_tools)
         self.logger.info(f"@agents.py Initialized StudentJobsModel Instance")
 
-        self.superior_agent_tools = Superior_Agent_Tools(self.vector_store, self.asu_data_processor,middleware, utils, app_config, self.shuttle_status_agent,self.discord_agent, self.courses_agent, self.library_agent, self.news_media_agent,self.scholarship_agent, self.sports_agent, self.student_clubs_events_agent,self.student_jobs_agent, logger, self.group_chat
+        self.campus_agent = CampusAgentModel(middleware, genai, app_config, logger,self.campus_agent_tools)
+        self.logger.info(f"@agents.py Initialized CampusAgentModel Instance")
+
+        self.superior_agent_tools = Superior_Agent_Tools(self.vector_store, self.asu_data_processor,middleware, utils, app_config, self.shuttle_status_agent,self.discord_agent, self.courses_agent, self.library_agent, self.news_media_agent,self.scholarship_agent, self.sports_agent, self.student_clubs_events_agent,self.student_jobs_agent, self.campus_agent,logger, self.group_chat
         )
         
         self.superior_agent = SuperiorModel(self.middleware, self.genai, self.app_config, self.logger, self.superior_agent_tools)
