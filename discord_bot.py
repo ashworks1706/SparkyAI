@@ -42,13 +42,13 @@ class ASUDiscordBot:
         
         @self.tree.command(
             name="login",
-            description="Login with your ASUrite credentials"
+            description="Give Sparky better knowledge about you! Transparent Secured Privacy."
         )
         async def login(interaction: discord.Interaction):
             await self._handle_login_command(interaction)
         @self.tree.command(
             name="logout",
-            description="Login with your ASUrite credentials"
+            description="Logout your credentials from Sparky!"
         )
         async def logout(interaction: discord.Interaction):
             await self._handle_logout_command(interaction)

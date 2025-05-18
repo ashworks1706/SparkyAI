@@ -940,7 +940,6 @@ class ASUWebScraper:
             
             time.sleep(2)
             
-            
             try:
                 # First click on map camera controls button
                 camera_controls = WebDriverWait(self.driver, 10).until(
