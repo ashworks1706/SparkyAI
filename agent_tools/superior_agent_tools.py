@@ -3,15 +3,18 @@ from utils.common_imports import *
 class Superior_Agent_Tools:
     
     # This class contains the tools and methods for the superior agent to interact with other agents and perform various tasks.
-    def __init__(self, vector_store, asu_data_processor, firestore, discord_state, utils, app_config, shuttle_status_agent, discord_agent, courses_agent, library_agent, news_media_agent, scholarship_agent, sports_agent, student_clubs_events_agent, student_jobs_agent, logger, group_chat):
+    def __init__(self, vector_store, asu_data_processor, middleware, utils,
+                 app_config, shuttle_status_agent, discord_agent, courses_agent,
+                 library_agent, news_media_agent, scholarship_agent, sports_agent,
+                 student_clubs_events_agent, student_jobs_agent, campus_agent,
+                 logger, group_chat):
         self.group_chat = group_chat
 
         self.conversations = {}
         self.vector_store = vector_store
         self.asu_data_processor = asu_data_processor
         self.app_config = app_config
-        self.firestore = firestore
-        self.discord_state = discord_state
+        self.middleware = middleware
         self.utils = utils
         self.shuttle_status_agent = shuttle_status_agent
         self.discord_agent = discord_agent
@@ -22,13 +25,14 @@ class Superior_Agent_Tools:
         self.sports_agent = sports_agent
         self.student_clubs_events_agent = student_clubs_events_agent
         self.student_jobs_agent = student_jobs_agent
+        self.campus_agent = campus_agent
         self.logger = logger
         self.client = genai_vertex.Client(api_key=self.app_config.get_api_key())
         self.model_id = "gemini-2.0-flash-exp"
-        self.discord_client = self.discord_state.get('discord_client')
-        self.guild = self.discord_state.get('target_guild')
-        self.user_id = self.discord_state.get('user_id')
-        self.user = self.discord_state.get('user')
+        self.discord_client = self.middleware.get('discord_client')
+        self.guild = self.middleware.get('target_guild')
+        self.user_id = self.middleware.get('user_id')
+        self.user = self.middleware.get('user')
         self.google_search_tool = Tool(google_search=GoogleSearch())
 
     def get_final_url(self, url):
@@ -52,8 +56,8 @@ class Superior_Agent_Tools:
         
     async def get_user_profile_details(self) -> str:
         """Retrieve user profile details from the Discord server"""
-        self.guild = self.discord_state.get('target_guild')
-        self.user_id = self.discord_state.get('user_id')
+        self.guild = self.middleware.get('target_guild')
+        self.user_id = self.middleware.get('user_id')
         self.logger.info(f"@superior_agent_tools.py Discord Model: Handling user profile details request for user ID: {self.user_id}")
 
         if not self.request_in_dm:
@@ -136,7 +140,7 @@ class Superior_Agent_Tools:
         self.group_chat.update_text(instruction_to_agent)
         
         try:
-            response = await self.news_agent.determine_action(instruction_to_agent, special_instructions)
+            response = await self.news_media_agent.determine_action(instruction_to_agent, special_instructions)
             return response
         except Exception as e:
             self.logger.error(f"@superior_agent_tools.py Error in access news media agent: {str(e)}")
@@ -174,11 +178,21 @@ class Superior_Agent_Tools:
         except Exception as e:
             self.logger.error(f"@superior_agent_tools.py Error in access student jobs agent: {str(e)}")
             return "Student Jobs Agent Not Responsive"
-    
+    #  place below access_student_jobs_agent()
+    async def access_campus_agent(self,instruction_to_agent: str,special_instructions: str):
+        self.logger.info(f"[sup‑tools] campus agent call {instruction_to_agent}")
+        self.group_chat.update_text(instruction_to_agent)
+        try:
+            return await self.campus_agent.determine_action(instruction_to_agent,
+                                                            special_instructions)
+        except Exception as e:
+            self.logger.error(f"Campus‑Agent error {e}")
+            return "Campus‑Agent not responsive"
+
     async def send_bot_feedback(self, feedback: str) -> str:
-        self.user = self.discord_state.get('user') 
-        self.discord_client = self.discord_state.get('discord_client')
-        self.guild = self.discord_state.get('target_guild')
+        self.user = self.middleware.get('user') 
+        self.discord_client = self.middleware.get('discord_client')
+        self.guild = self.middleware.get('target_guild')
         
         await self.utils.update_text("Opening feedbacks...")
         
@@ -224,9 +238,9 @@ class Superior_Agent_Tools:
             self.conversations[user_id].pop(0)
 
     async def access_rag_search_agent(self, original_query: str, detailed_query: str, generalized_query: str, relative_query: str, categories: list):
-        self.firestore.update_message("category", categories)
+        self.middleware.update_message("category", categories)
         
-        user_id = self.discord_state.get('user_id')
+        user_id = self.middleware.get('user_id')
         responses = []
         self.logger.info(f"@superior_agent_tools.py Action Model: accessing Google Search with instruction {original_query}")
         try:
@@ -250,6 +264,7 @@ class Superior_Agent_Tools:
 
             responses = [resp for resp in responses if resp ]
             if not responses:
+                responses = "None"
                 self.logger.error("@superior_agent_tools.py No results found in database")
         except Exception as e:
             self.logger.error("@superior_agent_tools.py Error in database search ")
@@ -271,37 +286,59 @@ class Superior_Agent_Tools:
         try:     
             # Generate response
             response = self.client.models.generate_content(
-                model=self.model_id,
-                contents=prompt,
-                config=GenerateContentConfig(
-                    tools=[self.google_search_tool],
-                    response_modalities=["TEXT"],
-                    system_instruction=f"{self.app_config.get_google_agent_instruction()}",
-                    max_output_tokens=600
-                )
+            model=self.model_id,
+            contents=prompt,
+            config=GenerateContentConfig(
+                tools=[self.google_search_tool],
+                response_modalities=["TEXT"],
+                system_instruction=f"{self.app_config.get_google_agent_instruction()}",
+                max_output_tokens=600
+            )
             )
             self.logger.info(f"@superior_agent_tools.py Google search agent response : {response}")
-            grounding_sources = [self.get_final_url(chunk.web.uri) for candidate in response.candidates if candidate.grounding_metadata and candidate.grounding_metadata.grounding_chunks for chunk in candidate.grounding_metadata.grounding_chunks if chunk.web]
             
-            self.utils.update_ground_sources(grounding_sources)
+            # Safely extract grounding sources
+            grounding_sources = []
+            try:
+                for candidate in response.candidates:
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                        for chunk in candidate.grounding_metadata.grounding_chunks:
+                            if hasattr(chunk, 'web') and chunk.web and hasattr(chunk.web, 'uri'):
+                                final_url = self.get_final_url(chunk.web.uri)
+                                if final_url and isinstance(final_url, str):
+                                    grounding_sources.append(final_url)
+            except Exception as e:
+                self.logger.error(f"@superior_agent_tools.py Error extracting grounding sources: {e}")
+                
+                self.utils.update_ground_sources(grounding_sources)
+                
+                # Safely extract response text
+                response_text = ""
+            try:
+                if response.candidates and response.candidates[0].content and hasattr(response.candidates[0].content, 'parts'):
+                    response_text = "".join([part.text for part in response.candidates[0].content.parts if hasattr(part, 'text') and part.text])
+            except Exception as e:
+                self.logger.error(f"@superior_agent_tools.py Error extracting response text: {e}")
             
-            response_text = "".join([part.text for part in response.candidates[0].content.parts if part.text])
+            if not response_text and responses:
+                response_text = str(responses)
 
             # Save the interaction to chat history
+            user_id = self.middleware.get('user_id')
             self._save_message(user_id, "user", original_query)
             self._save_message(user_id, "model", response_text)
 
             self.logger.info(response_text)
             
-            if 'search agent' not in response_text.lower():
+            if response_text and 'search agent' not in response_text.lower():
                 processed_docs = await self.asu_data_processor.process_documents(
                     documents=[{
-                                'content': response_text,
-                                'metadata': {
-                                    'url': grounding_sources,
-                                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                }
-                            }], 
+                        'content': response_text,
+                        'metadata': {
+                            'url': grounding_sources,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        }
+                        }], 
                     search_context= self.group_chat.get_text(),
                     title = detailed_query, category = categories[0]
                 )
@@ -314,5 +351,5 @@ class Superior_Agent_Tools:
                 return None
             return response_text
         except Exception as e:
-            self.logger.info(f"@superior_agent_tools.py Google Search Exception {e}")
+            self.logger.error(f"@superior_agent_tools.py Google Search Exception {e}")
             return responses

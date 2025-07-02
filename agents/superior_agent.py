@@ -1,9 +1,9 @@
 from utils.common_imports import *
 class SuperiorModel:
     
-    def __init__(self, firestore,genai,app_config,logger,superior_agent_tools):
+    def __init__(self, middleware,genai,app_config,logger,superior_agent_tools):
         self.logger = logger
-        self.firestore = firestore
+        self.middleware = middleware
         self.app_config = app_config
         self.agent_tools=superior_agent_tools
         self.model = genai.GenerativeModel(model_name="gemini-2.0-flash",
@@ -71,17 +71,30 @@ class SuperiorModel:
                         items=content.Schema(
                             type=content.Type.STRING,
                             enum=[
-                            "libraries_status", 
                             "shuttles_status", 
-                            "clubs_info", 
-                            "scholarships_info", 
-                            "job_updates", 
-                            "library_resources",  
-                            "classes_info", 
                             "events_info", 
                             "news_info", 
+                            "clubs_info", 
+                            "study_rooms_status", 
+                            "courses_catalog", 
                             "social_media_updates", 
+                            "scholarships_info", 
+                            "library_catalog",  
+                            "student_jobs", 
                             ]
+                            
+                            # "shuttles_status": self.shuttle_docs,
+                            # "events_info": self.event_docs,
+                            # "news_info": self.news_docs,
+                            # "clubs_info": self.club_docs,
+                            # "study_rooms_status": self.study_room_docs,
+                            # "courses_catalog": self.course_docs,
+                            # "social_media_updates": self.social_media_instagram_docs,
+                            # "social_media_updates": self.social_media_x_docs,
+                            # "social_media_updates": self.social_media_facebook_docs,
+                            # "scholarships_info": self.scholarships_goglobal_docs,
+                            # "scholarships_info": self.scholarships_onsa_docs,
+                            # "library_catalog": self.library_catalog_docs
                         ),
                         description="Documents Category Filter"
                         ),
@@ -249,6 +262,21 @@ class SuperiorModel:
                     ),
                 ),
                 genai.protos.FunctionDeclaration(
+                    name="access_campus_agent",
+                    description="Locate ASU buildings / rooms via Campus‑Agent",
+                    parameters=content.Schema(
+                        type=content.Type.OBJECT,
+                        properties={
+                            "instruction_to_agent": content.Schema(type=content.Type.STRING,
+                                                                description="Tasks for the agent"),
+                            "special_instructions": content.Schema(type=content.Type.STRING,
+                                                                description="Remarks / context"),
+                        },
+                        required=["instruction_to_agent", "special_instructions"],
+                    ),
+                ),
+
+                genai.protos.FunctionDeclaration(
                     name="access_student_jobs_agent",
                     description="Has ability to search for ASU student jobs information",
                     parameters=content.Schema(
@@ -266,6 +294,7 @@ class SuperiorModel:
                     required= ["instruction_to_agent","special_instructions"],
                     ),
                 ),
+
 
                
                 ],
@@ -302,6 +331,7 @@ class SuperiorModel:
             'access_news_media_agent': self.agent_tools.access_news_media_agent,
             'access_scholarship_agent': self.agent_tools.access_scholarship_agent,
             'access_student_jobs_agent': self.agent_tools.access_student_jobs_agent,
+            'access_campus_agent'      : self.agent_tools.access_campus_agent,
         }
 
         function_name = function_call.name
@@ -323,7 +353,7 @@ class SuperiorModel:
             if hasattr(part, 'text') and part.text.strip():
                 text_response += f"\n{part.text.strip()}"
                 self.logger.info(f"@superior_agent.py text response : {text_response}")
-                self.firestore.update_message("superior_agent_message", f"Text Response : {text_response} ")
+                self.middleware.update_message("superior_agent_message", f"Text Response : {text_response} ")
             if hasattr(part, 'function_call') and part.function_call:
                 has_function_call = True
                 function_call = part.function_call
@@ -335,8 +365,8 @@ class SuperiorModel:
                     }
                 }
                 self.logger.info(f"@superior_agent.py @ Superior Agent formed function call : {temp_func}")
-                self.firestore.update_message("superior_agent_message", f"temp_func")
-                self.logger.info(f"@superior_agent.py @superior_agent.py Updated Firestore message")
+                self.middleware.update_message("superior_agent_message", f"temp_func")
+                self.logger.info(f"@superior_agent.py @superior_agent.py Updated Middleware message")
         self.logger.info(f"@superior_agent.py @Superior Agent : text_Response :{text_response}\n has_function_call {has_function_call}\n function_call {function_call} ")
         return text_response, has_function_call, function_call
 
@@ -368,7 +398,7 @@ class SuperiorModel:
                     break
                 self.logger.info(f"@superior_agent.py @superior_agent.py @ Superior Agent : function call requested")
                 function_result = await self.execute_function(function_call)
-                self.firestore.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
+                self.middleware.update_message("superior_agent_message", f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question.""")
                 self.logger.info(f"@superior_agent.py @superior_agent.py \nAction Model @ Function result is: %s", function_result)
                 response = await self.chat.send_message_async(f"""(User cannot see this response) System Generated - \n{function_call.name}\nResponse: {function_result}\nAnalyze the response and answer the user's question. Feel free to use more functions inorder to answer question. Remaining function tries : {max_depth}""")
                 max_depth-=1

@@ -3625,7 +3625,7 @@ User's question,Function call
       ""detailed_query"": ""ASU Counseling Services options and availability for students"",
       ""generalized_query"": ""Mental health resources for college students"",
       ""relative_query"": ""How to schedule an appointment with ASU Counseling Services"",
-      ""categories"": [""libraries_status"", ""classes_info""]
+      ""categories"": [""study_rooms_status"", ""courses_catalog""]
     }
   }
 }
@@ -3639,7 +3639,7 @@ User's question,Function call
       ""detailed_query"": ""Current operating hours for Hayden Library at Arizona State University"",
       ""generalized_query"": ""ASU library hours"",
       ""relative_query"": ""Changes in ASU library hours during exam periods"",
-      ""categories"": [""libraries_status"", ""classes_info""]
+      ""categories"": [""study_rooms_status"", ""courses_catalog""]
     }
   }
 }

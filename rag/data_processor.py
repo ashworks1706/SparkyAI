@@ -28,7 +28,7 @@ class DataPreprocessor:
                                 title: str = None, 
                                 category: str = None) -> List[Document]:
         """Process documents with advanced error handling and multiple retry mechanism."""
-        self.logger.info(f"@data_processor.py Processing documents with title={title} category={category}")
+        self.logger.info(f"@data_processor.py Processing  \n{documents} with title={title} category={category}")
         self.doc_title = title
         self.doc_category = category
 

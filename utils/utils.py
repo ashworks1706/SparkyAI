@@ -5,6 +5,7 @@ class Utils:
         """Initialize the Utils from utils.common_imports import *
 classwith task tracking and logging."""
         try:
+            self.logger=logger
             self.tasks = []
             self.asu_data_processor = asu_data_processor
             self.asu_scraper = asu_scraper
@@ -14,8 +15,7 @@ classwith task tracking and logging."""
             self.ground_sources =[]
             self.cached_queries=[]
             self.vector_store_class = vector_store_class
-            self.vector_store = vector_store_class.get_vector_store()
-            self.logger=logger
+            self.vector_store = self.vector_store_class.get_vector_store()
             self.raptor_retriever = RaptorRetriever(vector_store_class=self.vector_store_class,logger=self.logger, vector_store=self.vector_store)
             self.group_chat=group_chat
             self.logger.info(f"@utils.py Group Chat setup successfully {group_chat}")
@@ -23,14 +23,17 @@ classwith task tracking and logging."""
             self.logger.info(f"@utils.py \nUtils instance initialized successfully")
         except Exception as e:
             self.logger.error(f"@utils.py Failed to initialize Utils: {e}")
+            pass
 
     async def start_animation(self, message):
         """Start the loading animation using Discord's built-in thinking indicator"""
         try:
             self.message = message
             self.logger.info(f"@utils.py Animation started for message: {message.id}")
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to start animation: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to start animation:")
+            pass
+        
 
     async def update_text(self, new_content):
         """Update text while maintaining task history"""
@@ -58,8 +61,9 @@ classwith task tracking and logging."""
             await self.message.edit(content=content)
             self.logger.info(f"@utils.py Message updated with {len(display_lines)} tasks")
 
-        except Exception as e:
-            self.logger.error(f"@utils.py Failed to update text: {e}")
+        except:
+            self.logger.error(f"@utils.py Failed to update text")
+            pass
             # Optionally, you could re-raise the exception or handle it differently
 
     async def stop_animation(self, message=None, final_content=None,View=None):
@@ -138,13 +142,17 @@ classwith task tracking and logging."""
             try:
                 documents = await self.asu_scraper.engine_search(search_url, optional_query)
             except Exception as e:
-                self.logger.error(f"@utils.py Error during web search: {str(e)}")
+                self.logger.error(f"@utils.py 145 Error during web search: {str(e)}")
                 raise ValueError("Failed to perform web search")
+            
+            if type(documents) == str:
+                self.logger.info(f"@utils.py 149 No documents found matching the query")
+                return documents
+            
             if not documents:
-                raise ValueError("No documents found matching the query")
+                raise ValueError("@utils.py 153 No documents found matching the query")
             
-            self.logger.info(documents)
-            
+            self.logger.info(documents) 
             self.logger.info(f"@utils.py \nPreprocessing documents...")
             
             try: 
@@ -155,7 +163,7 @@ classwith task tracking and logging."""
                     title = doc_title, category = doc_category
                 )
             except Exception as e:
-                self.logger.error(f"@utils.py Error during document processing: {str(e)}")
+                self.logger.error(f"@utils.py 161 Error during document processing: {str(e)}")
                 raise ValueError("Failed to process documents")
             
             self.logger.info(f"@utils.py \nDocuments processed successfully")
@@ -167,14 +175,14 @@ classwith task tracking and logging."""
                 self.logger.info(f"@utils.py \nUpdating RAPTOR tree with new documents")
                 self.raptor_retriever.queue_raptor_tree(processed_docs)
             except Exception as e:  
-                self.logger.error(f"@utils.py Error updating RAPTOR tree: {str(e)}")
+                self.logger.error(f"@utils.py 171 Error updating RAPTOR tree: {str(e)}")
                 raise ValueError("Failed to update RAPTOR tree")
             
             self.logger.info(f"@utils.py \nStoring documents in vector store")
             try:
                 store = self.vector_store_class.queue_documents(processed_docs)
             except Exception as e:
-                self.logger.error(f"@utils.py Error storing documents in vector store: {str(e)}")
+                self.logger.error(f"@utils.py 180 Error storing documents in vector store: {str(e)}")
                 raise ValueError("Failed to store documents in vector store")
             
             
@@ -207,7 +215,7 @@ classwith task tracking and logging."""
                                 elif isinstance(item, str):
                                     extracted_urls.append(item)
             except Exception as e:
-                self.logger.error(f"@utils.py Error processing individual document: {str(e)}")
+                self.logger.error(f"@utils.py Error 213 processing individual document: {str(e)}")
                 self.logger.error(f"@utils.py Documents : {processed_docs}")
                 # Continue with next document   
                 
@@ -218,104 +226,9 @@ classwith task tracking and logging."""
             return results
 
         except Exception as e:
-            self.logger.error(f"@utils.py Error in web search: {str(e)}")
+            self.logger.error(f"@utils.py Error 224 in web search: {str(e)}")
             return "No results found on web"
        
-    # async def perform_similarity_search(self, query: str, categories: list):
-    #     try:
-    #         self.logger.info(f"@utils.py Performing similarity search with query: {query}")
-    #         if not self.vector_store:
-    #             self.logger.info(f"@utils.py \nVector Store not initialized")
-    #             raise ValueError("Vector store not properly initialized")
-
-    #         # Correct filter construction using Qdrant's Filter class
-    #         filter_conditions = None
-    #         try:
-    #             if categories and len(categories) > 0:
-    #                 filter_conditions = Filter(
-    #                     must=[
-    #                         FieldCondition(
-    #                             key="metadata.category", 
-    #                             match=MatchAny(any=categories)
-    #                         )
-    #                     ]
-    #                 )
-    #                 self.logger.info(f"@utils.py Filter conditions created for categories: {categories}")
-    #         except Exception as e:
-    #             self.logger.error(f"@utils.py Error creating filter conditions: {str(e)}")
-    #             # Continue without filters if there's an error
-
-    #         # Perform similarity search with optional filtering
-    #         try:
-    #             # Get more results than needed to allow for date-based sorting
-    #             raw_results = self.vector_store.similarity_search_with_score(
-    #                 query, 
-    #                 k=20,  # Get more results to sort by date
-    #                 filter=filter_conditions
-    #             )
-                
-    #             # Extract documents and their scores
-    #             scored_results = [(doc, score) for doc, score in raw_results]
-                
-    #             # Group documents by similar scores (within 0.05 similarity threshold)
-    #             # Then sort each group by timestamp
-    #             threshold = 0.05
-    #             score_groups = {}
-                
-    #             for doc, score in scored_results:
-    #                 # Round score to group similar scores
-    #                 score_group = round(score / threshold) * threshold
-    #                 if score_group not in score_groups:
-    #                     score_groups[score_group] = []
-    #                 score_groups[score_group].append((doc, score))
-                
-    #             # Sort each group by timestamp (newer first)
-    #             for group in score_groups.values():
-    #                 group.sort(key=lambda x: x[0].metadata.get('timestamp', ''), reverse=True)
-                
-    #             # Flatten groups back to a single list, preserving primary sort by score
-    #             sorted_groups = sorted(score_groups.items(), key=lambda x: x[0])
-    #             final_results = []
-    #             for _, group in sorted_groups:
-    #                 final_results.extend([doc for doc, _ in group])
-                
-    #             # Take only the documents (without scores)
-    #             results = final_results[:10]  # Limit to 10 final results
-                
-    #             self.logger.info(f"@utils.py Similarity search completed, found {len(results)} results prioritized by relevance and recency")
-    #         except Exception as e:
-    #             self.logger.error(f"@utils.py Error during vector store similarity search: {str(e)}")
-    #             return None
-
-    #         # Check if results are empty
-    #         if not results:
-    #             self.logger.info(f"@utils.py \nNo documents found in vector store")
-    #             return "No documents found in database"
-    #         try:
-    #             documents = []
-    #             for doc in results:
-    #                 doc_info = {
-    #                     'content': doc.page_content,
-    #                     'metadata': doc.metadata,
-    #                     'timestamp': doc.metadata.get('timestamp'),
-    #                     'url': doc.metadata.get('url'),
-    #                     'category': doc.metadata.get('category')
-    #                 }
-    #                 documents.append(doc_info)
-
-    #             self.logger.info(f"@utils.py Retrieved and processed {len(documents)} documents from vector store")
-    #             return documents
-    #         except Exception as e:
-    #             self.logger.error(f"@utils.py Error processing similarity search results: {str(e)}")
-    #             return None
-
-    #     except Exception as e:
-    #         self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
-    #         return None
-
-    #     except Exception as e:
-    #         self.logger.error(f"@utils.py Error during similarity search: {str(e)}")
-    #         return None
     
     async def perform_similarity_search(self, query: str, categories: list):
         try:

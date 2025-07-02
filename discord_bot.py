@@ -1,11 +1,13 @@
 from utils.verify_button import VerifyButton
-
+from utils.login_modal import LoginModal
 from utils.common_imports import * 
+
 class ASUDiscordBot:
     
     """Discord bot for handling ASU-related questions"""
 
-    def __init__(self, config, app_config, agents, firestore, discord_state, utils,vector_store,logger ):
+    # Your existing __init__ method, but add the login command
+    def __init__(self, config, app_config, agents, middleware, utils,vector_store,logger,asu_scraper ):
         """
         Initialize the Discord bot.
         
@@ -18,13 +20,13 @@ class ASUDiscordBot:
         self.config = config or BotConfig(app_config)
         self.app_config= app_config
         self.agents = agents
-        self.firestore = firestore
+        self.middleware = middleware
         self.utils = utils
+        self.asu_scraper = asu_scraper
         self.vector_store = vector_store
         
         # Initialize Discord client
-        self.discord_state = discord_state
-        self.client = discord_state.get('discord_client')
+        self.client = middleware.get('discord_client')
         self.tree = app_commands.CommandTree(self.client)
         
         @self.client.event
@@ -37,7 +39,87 @@ class ASUDiscordBot:
         )
         async def ask(interaction: discord.Interaction, question: str):
             await self._handle_ask_command(interaction, question)
-                  
+        
+        @self.tree.command(
+            name="login",
+            description="Give Sparky better knowledge about you! Transparent Secured Privacy."
+        )
+        async def login(interaction: discord.Interaction):
+            await self._handle_login_command(interaction)
+        @self.tree.command(
+            name="logout",
+            description="Logout your credentials from Sparky!"
+        )
+        async def logout(interaction: discord.Interaction):
+            await self._handle_logout_command(interaction)
+    
+    async def _handle_logout_command(self, interaction: discord.Interaction) -> None:
+        """
+        Handle the logout command.
+        
+        Args:
+            interaction: Discord interaction
+        """
+        try:
+            
+            await interaction.response.defer(thinking=True)
+            
+            global task_message
+            task_message = await interaction.edit_original_response(content="Starting the logout process...")
+            
+            
+            await self.asu_scraper.logout_user_credentials(user_id=interaction.user.id)
+            
+            await self.utils.start_animation(task_message)
+            
+            await self.utils.stop_animation(task_message, "Successfully logged out of MYASU!")
+            
+            self.logger.info(f"@discord_bot.py User {interaction.user.name} successfully logged out")
+        
+        except Exception as e:
+            error_msg = f"Error processing logout command: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            await self._send_error_response(interaction)
+    
+    async def _handle_login_command(self, interaction: discord.Interaction) -> None:
+        """
+        Handle the login command.
+        
+        Args:
+            interaction: Discord interaction
+        """
+        try:
+            # Check if user is part of the server
+            target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
+            user_id = interaction.user.id
+            
+            if target_guild:
+                try:
+                    member = await target_guild.fetch_member(user_id)
+                    if not member:
+                        await interaction.response.send_message(
+                            "You are not part of Discord Server. Access to command is restricted.",
+                            ephemeral=True
+                        )
+                        return
+                except discord.NotFound:
+                    await interaction.response.send_message(
+                        "You are not part of Discord Server. Access to command is restricted.",
+                        ephemeral=True
+                    )
+                    return
+            
+            # If user is a member, show the login modal
+            modal = LoginModal(self)
+            
+            await interaction.response.send_modal(modal)
+            self.logger.info(f"@discord_bot.py Login modal sent to user {interaction.user.name}")
+        
+        except Exception as e:
+            error_msg = f"Error processing login command: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            await self._send_error_response(interaction)
+                             
     async def _handle_ask_command(
         self,
         interaction: discord.Interaction,
@@ -57,7 +139,6 @@ class ASUDiscordBot:
         target_guild = self.client.get_guild(self.app_config.get_discord_target_guild_id())
         user_has_mod_role= None
         member = None
-        user_voice_channel_id=None
         # Reset all states
 
         if target_guild:
@@ -69,17 +150,14 @@ class ASUDiscordBot:
                         role.name == required_role_name for role in member.roles
                     )
                     
-                    # Check voice state
-                    if member.voice:
-                        user_voice_channel_id = member.voice.channel.id
                 else:
                     return "You are not part of AIM Discord Server. Access to command is restricted."
 
                     
             except discord.NotFound:
                 return "You are not part of AIM Discord Server. Access to command is restricted."
-        self.discord_state.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,user_voice_channel_id=user_voice_channel_id, discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
-        self.firestore.update_collection("direct_messages" if request_in_dm else "guild_messages" )
+        self.middleware.update(user=user, target_guild=target_guild, request_in_dm=request_in_dm,user_id=user_id, guild_user = member, user_has_mod_role=user_has_mod_role,discord_post_channel_name = self.app_config.get_discord_post_channel_name(),  discord_mod_role_name = self.app_config.get_discord_mod_role_name())
+        self.middleware.update_collection("direct_messages" if request_in_dm else "guild_messages" )
          
         try:
             if not await self._validate_channel(interaction):
@@ -96,7 +174,7 @@ class ASUDiscordBot:
 
     async def _validate_channel(self, interaction: discord.Interaction) -> bool:
         """Validate if command is used in correct channel"""
-        if not self.discord_state.get('request_in_dm') and interaction.channel.id != self.app_config.get_discord_allowed_chat_id():
+        if not self.middleware.get('request_in_dm') and interaction.channel.id != self.app_config.get_discord_allowed_chat_id():
             await interaction.response.send_message(
                 "Please use this command in the designated channel: #general",
                 ephemeral=True
@@ -135,10 +213,10 @@ class ASUDiscordBot:
             
             
             
-            self.firestore.update_message("user_message", question)
+            self.middleware.update_message("user_message", question)
             await self.vector_store.store_to_vector_db()
             await self.utils.perform_raptor_tree_update()
-            document_id = await self.firestore.push_message()
+            document_id = await self.middleware.push_message()
             self.logger.info(f"@discord_bot.py Message pushed with document ID: {document_id}")
 
         except asyncio.TimeoutError:

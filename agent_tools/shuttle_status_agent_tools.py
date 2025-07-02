@@ -1,11 +1,11 @@
 from utils.common_imports import *
 
 class Shuttle_Status_Agent_Tools:
-    def __init__(self, firestore,utils,logger):
-        self.firestore = firestore
+    def __init__(self, middleware,utils,logger):
+        self.middleware = middleware
         self.utils = utils
         self.logger = logger
-        self.visited_urls = set()
+        self.visited_urls = set() 
         self.max_depth = 2
         self.max_links_per_page = 3
                 
