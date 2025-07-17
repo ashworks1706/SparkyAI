@@ -1,8 +1,14 @@
 from utils.common_imports import *
+import logging
+#from google.cloud import firestore
+from firebase_admin import firestore
 
 class Middleware:
     # This class is used to manage the state of the Discord bot and its interactions, and interact with Firestore.
-    def __init__(self):
+    def __init__(self, logger: logging.Logger | None = None):
+        # ─── Logger ───────────────────────────────────────────────
+        self.logger = logger or logging.getLogger(__name__)
+        self.logger.debug("@middleware.py Middleware initialised")
         # Discord State initialization
         try:
             nest_asyncio.apply()
@@ -41,6 +47,7 @@ class Middleware:
                 "shuttle_status_agent_message": [],
                 "courses_agent_message": [],
                 "student_club_events_agent_message": [],
+                "student_clubs_events_agent_message": [],
                 "library_agent_message": [],
                 "sports_agent_message": [],
                 "scholarship_agent_message": [],
@@ -76,17 +83,19 @@ class Middleware:
         return "\n".join([f"{attr}: {getattr(self, attr)}" for attr in vars(self) if not attr.startswith('__')])
 
     # Firestore methods
-    def update_collection(self, collection):
-        collections = self.db.collections()
-        collection_names = [col.id for col in collections]
-        print(f"@middleware.py Existing collections: {collection_names}")
+    def update_collection(self, collection: str):
+        # list existing top-level collections
+        existing = [c.id for c in self.db.collections()]
+        self.logger.info("@middleware.py Existing collections: %s", existing)
 
-        print(f"@middleware.py Updating Firestore collection to: {collection}")
-        if not collection in collection_names:
-            raise ValueError(f"@middleware.py Collection '{collection}' does not exist.")
+        if collection not in existing:
+            self.logger.info("@middleware.py Creating missing collection '%s'", collection)
+            # add a placeholder doc so Firestore actually creates it
+            self.db.collection(collection).document("_init").set({"created": True})
 
         self.collection = collection
-        print(f"@middleware.py Firestore collection updated to: {self.collection}")
+        self.logger.info("@middleware.py Firestore collection set to: %s", self.collection)
+
 
     def update_message(self, property, value):
         if property in self.document:

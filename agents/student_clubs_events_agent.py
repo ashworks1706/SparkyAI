@@ -1,12 +1,36 @@
-from utils.common_imports import *
+# student_clubs_events_agent.py
+
+import time
+from typing import List, Dict, Any
+from datetime import datetime
+from urllib.parse import quote_plus
+
+from utils.common_imports import *   # brings in discord, content, HarmCategory, HarmBlockThreshold, etc.
+
 class StudentClubsEventsModel:
-    
-    def __init__(self,middleware,genai,app_config,logger,student_clubs_events_agent_tools):
-        self.logger = logger
-        self.agent_tools= student_clubs_events_agent_tools
+    """
+    Agent for scraping ASU clubs & events via SunDevilCentral.
+    Relies on an injected `genai` client, and two helper tools:
+      - get_latest_club_information
+      - get_latest_event_updates
+    """
+
+    def __init__(
+        self,
+        middleware,
+        genai,                  # <-- the injected GenAI client, *not* a top‐level import
+        app_config,
+        logger,
+        student_clubs_events_agent_tools,
+    ):
         self.middleware = middleware
-        self.app_config= app_config
-        self.model = genai.GenerativeModel(
+        self.genai = genai
+        self.app_config = app_config
+        self.logger = logger
+        self.agent_tools = student_clubs_events_agent_tools
+
+        # build the Gemini chat with our two functions declared
+        self.model = self.genai.GenerativeModel(
             model_name="gemini-2.0-flash",
             generation_config={
                 "temperature": 0.0,
@@ -19,255 +43,108 @@ class StudentClubsEventsModel:
                 HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
                 HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
             },
-            system_instruction = f"""
-            {self.app_config.get_student_clubs_events_agent_instruction()}
-            """,
+            system_instruction=self.app_config.get_student_clubs_events_agent_instruction(),
             tools=[
-                genai.protos.Tool(
+                self.genai.protos.Tool(
                     function_declarations=[
-
-                        genai.protos.FunctionDeclaration(
+                        self.genai.protos.FunctionDeclaration(
                             name="get_latest_club_information",
-                            description="Searches for clubs or organizations information with Sun Devil Search Engine",
+                            description="Scrape the ASU student organizations via SunDevilCentral",
                             parameters=content.Schema(
                                 type=content.Type.OBJECT,
                                 properties={
                                     "search_bar_query": content.Schema(
                                         type=content.Type.STRING,
-                                        description="Search Query",
+                                        description="Optional keyword filter",
                                     ),
                                     "organization_campus": content.Schema(
                                         type=content.Type.ARRAY,
-                                        items=content.Schema(
-                                            type=content.Type.STRING,
-                                            enum=[
-                                                "ASU Downtown",
-                                                "ASU Online",
-                                                "ASU Polytechnic",
-                                                "ASU Tempe",
-                                                "ASU West Valley",
-                                                "Fraternity & Sorority Life",
-                                                "Housing & Residential Life"
-                                            ]
-                                        ),
-                                        description="Club/Organization campus pick from [ASU Downtown, ASU Online, ASU Polytechnic, ASU Tempe, ASU West Valley, Fraternity & Sorority Life, Housing & Residential Life]"
-                                    ),
-                                    "organization_category": content.Schema(
-                                        type=content.Type.ARRAY,
-                                        items=content.Schema(
-                                            type=content.Type.STRING,
-                                            enum=[
-                                                "Academic",
-                                                "Barrett",
-                                                "Creative/Performing Arts",
-                                                "Cultural/Ethnic",
-                                                "Distinguished Student Organization",
-                                                "Fulton Organizations",
-                                                "Graduate",
-                                                "Health/Wellness",
-                                                "International",
-                                                "LGBTQIA+",
-                                                "Political",
-                                                "Professional",
-                                                "Religious/Faith/Spiritual",
-                                                "Service",
-                                                "Social Awareness",
-                                                "Special Interest",
-                                                "Sports/Recreation",
-                                                "Sustainability",
-                                                "Technology",
-                                                "Veteran Groups",
-                                                "W.P. Carey Organizations",
-                                                "Women"
-                                            ]
-                                        ),
-                                        description="Club/Organization Category, pick from [Academic, Barrett, Creative/Performing Arts, Cultural/Ethnic, Distinguished Student Organization, Fulton Organizations, Graduate, Health/Wellness, International, LGBTQIA+, Political, Professional, Religious/Faith/Spiritual, Service, Social Awareness, Special Interest, Sports/Recreation, Sustainability, Technology, Veteran Groups, W.P. Carey Organizations, Women]"
+                                        items=content.Schema(type=content.Type.STRING),
+                                        description="Optional campus filter",
                                     ),
                                 },
-                                    required=["search_bar_query", "organization_category"]
-                            )
+                            ),
                         ),
-                         genai.protos.FunctionDeclaration(
-                              name="get_latest_event_updates",
-                              description="Searches for events information with Sun Devil Search Engine",
-                              parameters=content.Schema(
-                                  type=content.Type.OBJECT,
-                                  properties={
-                                      "search_bar_query": content.Schema(
-                                          type=content.Type.STRING,
-                                          description="Search Query"
-                                      ),
-                                      "event_campus": content.Schema(
-                                          type=content.Type.ARRAY,
-                                          items=content.Schema(
-                                              type=content.Type.STRING,
-                                              enum=[
-                                                "ASU Downtown",
-                                                "ASU Online",
-                                                "ASU Polytechnic",
-                                                "ASU Tempe",
-                                                "ASU West Valley",
-                                                "Fraternity & Sorority Life",
-                                                "Housing & Residential Life"
-                                            ]
-                                          ),
-                                          description="Event campus pick from [ASU Downtown, ASU Online, ASU Polytechnic, ASU Tempe, ASU West Valley, Fraternity & Sorority Life, Housing & Residential Life]"
-                                      ),
-                                      "event_category": content.Schema(
-                                          type=content.Type.ARRAY,
-                                          items=content.Schema(
-                                              type=content.Type.STRING,
-                                              enum=[
-                                                "ASU New Student Experience",
-                                                "ASU Sync",
-                                                "ASU Welcome Event",
-                                                "Barrett Student Organization",
-                                                "Career and Professional Development",
-                                                "Club Meetings",
-                                                "Community Service",
-                                                "Cultural",
-                                                "DeStress Fest",
-                                                "Entrepreneurship & Innovation",
-                                                "Graduate",
-                                                "International",
-                                                "Social",
-                                                "Sports/Recreation",
-                                                "Sustainability"
-                                            ]
-                                          ),
-                                          description="Event Category, pick from [ASU New Student Experience, ASU Sync, ASU Welcome Event, Barrett Student Organization, Career and Professional Development, Club Meetings, Community Service, Cultural, DeStress Fest, Entrepreneurship & Innovation, Graduate, International, Social, Sports/Recreation, Sustainability]"
-                                      ),
-                                      "event_theme": content.Schema(
-                                          type=content.Type.ARRAY,
-                                          items=content.Schema(
-                                              type=content.Type.STRING,
-                                              enum=[
-                                                "Arts",
-                                                "Athletics",
-                                                "Community Service",
-                                                "Cultural",
-                                                "Fundraising",
-                                                "GroupBusiness",
-                                                "Social",
-                                                "Spirituality",
-                                                "ThoughtfulLearning"
-                                            ]
-                                          ),
-                                          description="Event Theme, pick from [Arts, Athletics, Community Service, Cultural, Fundraising, GroupBusiness, Social, Spirituality, ThoughtfulLearning]"
-                                      ),
-                                      "event_perk": content.Schema(
-                                          type=content.Type.ARRAY,
-                                          items=content.Schema(
-                                              type=content.Type.STRING,
-                                              enum=[
-                                                "Credit",
-                                                "Free Food",
-                                                "Free Stuff"
-                                            ]
-                                          ),
-                                          description="Event Perk, pick from [Credit, Free Food, Free Stuff]"
-                                      ),
-                                      "shortcut_date": content.Schema(
-                                          type=content.Type.STRING,
-                                          description="Event Shortcut date, pick from [tomorrow, this_weekend]"
-                                      ),
-                                  },
-                                  required=["search_bar_query", "event_category"]
-                              ),
-                          ),
-                  ],
-                ),
+                        self.genai.protos.FunctionDeclaration(
+                            name="get_latest_event_updates",
+                            description="Scrape the ASU events via SunDevilCentral",
+                            parameters=content.Schema(
+                                type=content.Type.OBJECT,
+                                properties={
+                                    "search_bar_query": content.Schema(
+                                        type=content.Type.STRING,
+                                        description="Optional keyword filter",
+                                    ),
+                                    "event_campus": content.Schema(
+                                        type=content.Type.ARRAY,
+                                        items=content.Schema(type=content.Type.STRING),
+                                        description="Optional campus filter",
+                                    ),
+                                },
+                            ),
+                        ),
+                    ]
+                )
             ],
-            tool_config={'function_calling_config': 'ANY'},
+            tool_config={"function_calling_config": "ANY"},
         )
-        self.middleware = middleware
-        self.chat=None
+
+        self.chat = None
         self.last_request_time = time.time()
-        self.request_counter = 0
-        self.conversations: Dict[str, List[Dict[str, str]]] = {}
-        
-    async def execute_function(self, function_call):
-        """Execute the called function and return its result"""
-        function_name = function_call.name
-        function_args = function_call.args
-        
-        function_mapping = {
-            
-            'get_latest_club_information': self.agent_tools.get_latest_club_information,
-            'get_latest_event_updates': self.agent_tools.get_latest_event_updates,
-        }
-        
-            
-        if function_name in function_mapping:
-            function_to_call = function_mapping[function_name]
-            func_response = await function_to_call(**function_args)
-            # response = await self.chat.send_message_async(f"{function_name} response : {func_response}")
-            self.logger.info(f"@student_clubs_events_agent.py Student Club : Function loop response : {func_response}")
-            
-            if func_response:
-                return func_response
-            else:
-                self.logger.error(f"@student_clubs_events_agent.py Error extracting text from response: {e}")
-                return "Error processing response"
-            
-            
-        else:
-            raise ValueError(f"Unknown function: {function_name}")
-   
-        
+
     def _initialize_model(self):
-        if not self.model:
-            return self.logger.error("@student_clubs_events_agent.py Model not initialized at ActionFunction")
-            
-        # Rate limiting check
-        current_time = time.time()
-        if current_time - self.last_request_time < 1.0: 
-            raise Exception("Rate limit exceeded")
-            
-        self.last_request_time = current_time
-        self.request_counter += 1
-        user_id = self.middleware.get("user_id")
-        self.chat = self.model.start_chat(history=[],enable_automatic_function_calling=True)
+        """Simple rate‐limit and chat init."""
+        now = time.time()
+        if now - self.last_request_time < 1.0:
+            raise Exception("Rate limit exceeded (1 req/sec)")
+        self.last_request_time = now
+        self.chat = self.model.start_chat(
+            history=[], enable_automatic_function_calling=True
+        )
 
+    async def execute_function(self, function_call):
+        name = function_call.name
+        args = function_call.args
 
-        
-    async def determine_action(self,instruction_to_agent:str,special_instructions:str) -> str:
-        """Determines and executes the appropriate action based on the user query"""
+        dispatch = {
+            "get_latest_club_information": self.agent_tools.get_latest_club_information,
+            "get_latest_event_updates": self.agent_tools.get_latest_event_updates,
+        }
+        if name not in dispatch:
+            raise ValueError(f"Unknown function: {name}")
+
+        result = await dispatch[name](**args)
+        return result or f"No results found for `{name}`."
+
+    async def determine_action(self, instruction: str, special_instructions: str) -> str:
+        """
+        1) Init the chat
+        2) Ask Gemini which function to call (if any)
+        3) Call it and return its result, or any plain-text answer
+        """
         try:
             self._initialize_model()
-            user_id = self.middleware.get("user_id")
-            final_response = ""
-            
 
             prompt = f"""
-                ### Context:
-                - Current Date and Time: {datetime.now().strftime('%H:%M %d') + ('th' if 11<=int(datetime.now().strftime('%d'))<=13 else {1:'st',2:'nd',3:'rd'}.get(int(datetime.now().strftime('%d'))%10,'th')) + datetime.now().strftime(' %B, %Y') }
-                - Superior Agent Instruction: {instruction_to_agent}
-                - Superior Agent Remarks: {special_instructions}
+### Context
+- Date & Time: {datetime.now().strftime("%Y-%m-%d %H:%M")}
+- Instruction: {instruction}
+- Remarks: {special_instructions}
 
-                {self.app_config.get_student_clubs_events_agent_prompt()}
-                
-                """
-
+{self.app_config.get_student_clubs_events_agent_prompt()}
+"""
             response = await self.chat.send_message_async(prompt)
-            self.logger.info(f"@student_clubs_events_agent.py Internal response @ Student Club Model : {response}")
-            
+            final_text = ""
+
             for part in response.parts:
-                if hasattr(part, 'function_call') and part.function_call:
-                    
-                    final_response = await self.execute_function(part.function_call)
-                    self.middleware.update_message("student_clubs_events_agent_message", f"Function called {part.function_call}  Function Response {final_response} ")
-                elif hasattr(part, 'text') and part.text.strip():
-                    text = part.text.strip()
-                    self.middleware.update_message("student_clubs_events_agent_message", f"Text Response : {text}")
-                    if not text.startswith("This query") and not "can be answered directly" in text:
-                        final_response = text.strip()
-                        self.logger.info(f"@student_clubs_events_agent.py text response : {final_response}")
-        
-        # Return only the final message
-            return final_response if final_response else "Student Club agent fell off! Error 404"
-            
+                if getattr(part, "function_call", None):
+                    # Gemini wants us to run one of our tools
+                    final_text = await self.execute_function(part.function_call)
+                elif getattr(part, "text", "").strip():
+                    # A plain AI response
+                    final_text = part.text.strip()
+
+            return final_text or "Sorry, I couldn’t find anything."
         except Exception as e:
-            self.logger.error(f"@student_clubs_events_agent.py Internal Error @ Student Club Model : {str(e)}")
-            return "I apologize, but I couldn't generate a response at this time. Please try again."
-        
+            self.logger.error(f"StudentClubsEventsModel error: {e}", exc_info=True)
+            return "I’m sorry — something went wrong. Please try again later."

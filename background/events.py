@@ -80,7 +80,7 @@ class Events:
         if not any([search_bar_query, event_category, event_theme, event_campus]):
             return "At least one parameter of this function is required. Neither Search query and organization category and organization campus received. Please provide at least one parameter to perform search."
         
-        search_url = "https://asu.campuslabs.com/engage/events"
+        search_url = "https://sundevilcentral.eoss.asu.edu/events"
         params = []
         
         if event_campus:

@@ -14,7 +14,7 @@ class Clubs:
         if not any([search_bar_query, organization_category, organization_campus]):
             return "At least one parameter of this function is required. Neither Search query and organization category and organization campus received. Please provide at least one parameter to perform search."
         
-        search_url = "https://asu.campuslabs.com/engage/organizations"
+        search_url = "https://sundevilcentral.eoss.asu.edu/club_signup"
         params = []
         organization_campus_ids = {
             "ASU Downtown": "257211",

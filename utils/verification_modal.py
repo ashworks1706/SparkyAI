@@ -20,6 +20,7 @@ class VerificationModal(discord.ui.Modal):
         logger.info(f"@verification_modal.py VerificationModal initialized with config: %s", config)
 
     async def on_submit(self, interaction: discord.Interaction):
+
         logger.info(f"@verification_modal.py Form submitted with email: %s", self.email.value)
         if not self.stored_otp:  # First submission - email only
             if self.validate_asu_email(self.email.value):
