@@ -344,6 +344,13 @@ These papers have significantly contributed to the field of vector similarity se
 
 This project is licensed under the [MIT License](LICENSE).
 
+
+## Immediate Updates Needed
+
+- Dockerize the codebase
+- Develop ML Ops Pipeline
+- Update and Migrate to SDC platform
+
 ## Contact
 
 - Author: Ash
