@@ -8,7 +8,7 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
     def __init__(self, logger,app_config=False,
                  force_recreate: bool = False,
                 #  host: str = "10.10.0.9",
-                 host: str = "localhost",
+                 host: str = os.environ.get("HOST_QDRANT", "localhost"),
                  port: int = 6333,
                  collection_name: str = "asu_docs",
                  model_name: str = "BAAI/bge-large-en-v1.5",

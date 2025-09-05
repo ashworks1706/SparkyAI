@@ -239,89 +239,101 @@ The bot requires several API keys and configuration files to function properly.
 
 ---
 
-### 5. Set Up Qdrant Vector Database
+### 5. Install Docker
 
-The bot uses Qdrant for vector-based similarity search. Run Qdrant using Docker.
+The project uses Docker for containerization, which simplifies deployment and ensures consistent environments across different systems.
 
-#### Install Docker (if not installed):
+Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system:
+- **Windows**: Install Docker Desktop with WSL2 backend
+- **macOS**: Install Docker Desktop
+- **Linux**: Install Docker and Docker Compose separately
 
-Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system.
-
-#### Start Qdrant:
-
-Run the following command to start Qdrant on port `6333`:
-
+For Linux users, install Docker Compose if not included with your Docker installation:
 ```bash
-docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+sudo apt-get install docker-compose  # Debian/Ubuntu
+sudo dnf install docker-compose      # Fedora
 ```
-
-> **Note:** On Windows, replace `$(pwd)` with `%cd%` or `${PWD}` if using PowerShell.
 
 ---
 
-### 6. Install Chrome Dependencies (for Web Scraping)
+### 6. Run the Bot with Docker
 
-The bot uses Selenium for web scraping. Ensure Chrome and Chromedriver are installed.
+The project has been containerized with Docker to handle all dependencies (including Chrome/Chromedriver for web scraping) and services automatically. The setup is optimized for cross-platform compatibility (Linux, Windows WSL, macOS).
 
-#### On Linux:
-
-```bash
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb 
-sudo apt install ./google-chrome-stable_current_amd64.deb 
-
-sudo wget https://chromedriver.storage.googleapis.com/index.html?path=133.0.6943.141
-unzip chromedriver_linux64.zip
-sudo mv chromedriver /usr/local/bin/
-sudo chmod +x /usr/local/bin/chromedriver
-
-sudo apt-get install chromium-chromedriver xvfb libxss1 libnss3 libatk1.0-0 libgtk-3-0
-```
-
-#### On Windows:
-
-1. Download and install [Google Chrome](https://www.google.com/chrome/).
-2. Download the appropriate Chromedriver version from [Chromedriver Downloads](https://chromedriver.chromium.org/downloads).
-3. Add Chromedriver to your system PATH.
-
----
-
-### 7. Run the Bot
-
-Start the bot by running the `main.py` script:
+#### Build and start all services:
 
 ```bash
-python main.py
+# For Docker Compose v2 (newer installations)
+docker compose up -d
+
+# For Docker Compose v1 (older installations)
+docker-compose up -d
 ```
 
-If everything is set up correctly, you should see logs indicating that the bot has started successfully.
+This command will:
+- Build the Docker image with all required dependencies
+- Start the main application (Discord bot)
+- Start the background fetch service
+- Set up and run the Qdrant vector database
+- Configure networking between services
+
+#### View application logs:
+
+```bash
+# View logs for the main Discord bot
+docker compose logs -f app
+
+# View logs for the background fetch service
+docker compose logs -f background-fetch
+```
+
+#### Stop all services:
+
+```bash
+docker compose down
+```
+
+If everything is set up correctly, you should see logs indicating that the bot has started successfully when you check the app logs.
+
+#### Platform-Specific Notes:
+
+- **Windows/WSL**: The Docker setup includes virtual display configuration for headless Chrome
+- **macOS M1/M2/M3 Users**: The image will automatically use the ARM64 architecture
+- **Linux**: Includes all necessary system libraries for Chrome
 
 ---
 
 ### Troubleshooting Common Issues
 
-1. **Qdrant Not Running:**
+1. **Docker Container Issues:**
 
-   - Ensure Docker is installed and running.
-   - Verify that port `6333` is available on your system.
-   - Check Qdrant logs for errors by running:
+   - Ensure Docker and Docker Compose are installed and running.
+   - Check container status with `docker-compose ps`
+   - View specific container logs with:
      ```bash
-     docker logs 
+     docker-compose logs -f service_name
      ```
+   - Restart services with `docker-compose restart service_name`
+
 2. **Missing API Keys:**
 
-   - Double-check that your `config.json` file is correctly formatted and placed in the `config/` folder.
-   - Ensure all required keys are present.
-3. **Chromedriver Errors:**
+   - Double-check that your `config/appConfig.json` file is correctly formatted.
+   - Ensure `config/firebase_secret.json` is properly set up.
+   - Make sure these files are in the config directory before building Docker images.
 
-   - Make sure you have installed a compatible version of Chromedriver for your version of Chrome.
-   - Verify that Chromedriver is in your system PATH.
-4. **Dependency Issues:**
+3. **Network Issues:**
 
-   - If you encounter dependency errors, try upgrading pip and reinstalling requirements:
+   - Ensure ports 6333 and 6334 are available for Qdrant.
+   - Check if services can communicate using the Docker network.
+   - Verify no firewall is blocking container communications.
+
+4. **Volume Permissions:**
+
+   - Check permissions on mounted volumes if you encounter access issues:
      ```bash
-     pip install --upgrade pip
-     pip install -r requirements.txt --force-reinstall
+     ls -la config/ logs/ qdrant_storage/
      ```
+   - Fix permissions if needed: `sudo chown -R $(id -u):$(id -g) config/ logs/ qdrant_storage/`
 
 ## Contributing
 
@@ -345,9 +357,77 @@ These papers have significantly contributed to the field of vector similarity se
 This project is licensed under the [MIT License](LICENSE).
 
 
+## Advanced Docker Configuration
+
+### Docker Architecture
+
+The project uses a multi-service Docker architecture:
+
+1. **app**: The main Discord bot service
+   - Runs the core application (main.py)
+   - Handles Discord interactions and user queries
+   - Connects to the Qdrant vector database
+
+2. **background-fetch**: Background data collection service
+   - Runs background_fetch.py to update data periodically
+   - Scrapes websites and processes new information
+   - Updates vector embeddings in the database
+
+3. **qdrant**: Vector database service
+   - Stores and indexes document embeddings
+   - Provides efficient vector similarity search
+   - Persists data in a volume for durability
+
+### Configuration Details
+
+When running with Docker, configuration files are mounted as volumes:
+- `./config:/app/config`: Mount your configuration directory
+- `./logs:/app/logs`: Store logs persistently
+- `./qdrant_storage:/qdrant/storage`: Store vector database data
+
+Ensure your `config/appConfig.json` and `config/firebase_secret.json` are properly configured before starting the containers.
+
+### Advanced Docker Commands
+
+#### Service Management:
+
+```bash
+# Start a specific service
+docker-compose up -d app
+
+# Restart a specific service
+docker-compose restart background-fetch
+
+# Check service status
+docker-compose ps
+
+# Scale background workers (if needed)
+docker-compose up -d --scale background-fetch=3
+```
+
+#### Resource Monitoring:
+
+```bash
+# Monitor resource usage
+docker stats
+
+# View all container logs
+docker-compose logs
+```
+
+#### Development Workflow:
+
+```bash
+# Rebuild a specific service after code changes
+docker-compose build app
+docker-compose up -d app
+
+# Run a command in a running container
+docker-compose exec app python -c "import sys; print(sys.version)"
+```
+
 ## Immediate Updates Needed
 
-- Dockerize the codebase
 - Develop ML Ops Pipeline
 - Update and Migrate to SDC platform
 

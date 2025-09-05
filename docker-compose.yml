@@ -1,0 +1,62 @@
+version: '3'
+
+services:
+  # Main application service
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python main.py
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOST_QDRANT=qdrant
+      # Add environment check for different platforms
+      - PYTHONDONTWRITEBYTECODE=1
+      - DISPLAY=:99
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - sparky_network
+  
+  # Background fetch service (for scheduled data updates)
+  background-fetch:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: python background_fetch.py
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HOST_QDRANT=qdrant
+      # Add environment check for different platforms
+      - PYTHONDONTWRITEBYTECODE=1
+      - DISPLAY=:99
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    networks:
+      - sparky_network
+
+  # Vector database service
+  qdrant:
+    image: qdrant/qdrant
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    restart: unless-stopped
+    networks:
+      - sparky_network
+    # Make storage path compatible across platforms
+    command: ["./qdrant", "--storage-path", "/qdrant/storage"]
+
+networks:
+  sparky_network:
+    driver: bridge

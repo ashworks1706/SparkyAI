@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Logs
+logs/
+*.log
+
+# Environment and configuration
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Development files
+.git
+.github
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+tests/
+test/
+
+# Qdrant storage (will be mounted as a volume)
+qdrant_storage/
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Temporary files
+.DS_Store
+Thumbs.db
+.ipynb_checkpoints
