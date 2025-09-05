@@ -10,8 +10,6 @@ from agents.sports_agent import SportsModel
 from agents.student_clubs_events_agent import StudentClubsEventsModel
 from agents.student_jobs_agent import StudentJobsModel
 from agents.campus_agent import CampusAgentModel
-
-
 from agent_tools.discord_agent_tools import Discord_Agent_Tools
 from agent_tools.shuttle_status_agent_tools import Shuttle_Status_Agent_Tools
 from agent_tools.superior_agent_tools import Superior_Agent_Tools
@@ -23,6 +21,8 @@ from agent_tools.sports_agent_tools import Sports_Agent_Tools
 from agent_tools.student_clubs_events_tools import Student_Clubs_Events_Agent_Tools
 from agent_tools.student_jobs_agent_tools import Student_Jobs_Agent_Tools
 from agent_tools.campus_agent_tools import Campus_Agent_Tools
+
+
 class Agents:
     def __init__(self, vector_store, asu_data_processor, middleware, genai, utils, app_config, logger, group_chat):
         self.vector_store = vector_store

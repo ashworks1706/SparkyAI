@@ -817,7 +817,6 @@ class ASUWebScraper:
 
         self.logger.info(f"Scraped {len(all_jobs_data)} job records for keyword='{keyword}'")
         return formatted_results
-   
 
     # ── add / replace inside ASUWebScraper ─────────────────────────────────────────
     async def scrape_asu_campus_interactive(self, query: Dict[str, str]) -> Dict[str, str]:
@@ -878,8 +877,6 @@ class ASUWebScraper:
             d.switch_to.default_content()
 
             return {"building": building_name, "maps_url": gmaps_url}
-
-
 
     async def scrape_asu_shuttle_status(self, url, query) -> List[Dict[str, str]]:
             self.driver.get(url)
