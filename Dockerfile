@@ -18,7 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     xvfb \
     libxi6 \
-    libgconf-2-4 \
     libxss1 \
     libnss3 \
     libatk1.0-0 \
@@ -41,11 +40,8 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub > /usr/share/
     && rm -rf /var/lib/apt/lists/*
 
 # Install ChromeDriver with better error handling
-RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d. -f1) \
-    && echo "Detected Chrome version: $CHROME_VERSION" \
-    && CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}") \
-    && echo "Installing ChromeDriver version: $CHROMEDRIVER_VERSION" \
-    && wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" \
+RUN LATEST_CHROMEDRIVER=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE) \
+    && wget -q "https://chromedriver.storage.googleapis.com/${LATEST_CHROMEDRIVER}/chromedriver_linux64.zip" \
     && unzip chromedriver_linux64.zip -d /usr/local/bin \
     && chmod +x /usr/local/bin/chromedriver \
     && rm chromedriver_linux64.zip
