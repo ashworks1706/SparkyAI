@@ -240,16 +240,19 @@ classto manage vector storage operations using Qdrant with enhanced logging and 
     def _initialize_vector_store(self) -> None:
         """Initialize the QdrantVectorStore."""
         self.logger.info(f"@vector_store.py  Initializing QdrantVectorStore")
-        self.vector_store = QdrantVectorStore(
-            client=self.client,
-            collection_name=self.collection_name,
-            embedding=self.embedding_model,
-            content_payload_key="page_content",
-            metadata_payload_key="metadata",
-            distance=Distance.COSINE
-        )
-        
-    # return number of documents present in databse 
+        try:
+            self.vector_store = QdrantVectorStore(
+                client=self.client,
+                collection_name=self.collection_name,
+                embedding=self.embedding_model,
+                content_payload_key="page_content",
+                metadata_payload_key="metadata",
+                distance=Distance.COSINE
+            )
+        except Exception as e:
+            self.logger.error(f"@vector_store.py Failed to initialize QdrantVectorStore: {str(e)}", exc_info=True)
+
+    # return number of documents present in database
     def get_document_count(self) -> int:
         """Get the number of documents in the vector store."""
         try:

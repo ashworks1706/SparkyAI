@@ -52,10 +52,11 @@ services:
       - "6333:6333"
       - "6334:6334"
     restart: unless-stopped
+
     networks:
       - sparky_network
     # Make storage path compatible across platforms
-    command: ["./qdrant", "--storage-path", "/qdrant/storage"]
+    command: ["./qdrant"]
 
 networks:
   sparky_network:
