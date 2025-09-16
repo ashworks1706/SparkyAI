@@ -38,7 +38,7 @@ SparkyAI leverages a complex architecture to deliver accurate and context-aware 
 - **Multi-Method Search**: Combines RAPTOR, similarity search, MIPS, and ScaNN for comprehensive and efficient information retrieval.
 - **Result Deduplication**: Implements intelligent merging and deduplication of search results from multiple methods.
 
-## Advanced Architecture
+## Architecture
 
 ![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
 
@@ -244,11 +244,13 @@ The bot requires several API keys and configuration files to function properly.
 The project uses Docker for containerization, which simplifies deployment and ensures consistent environments across different systems.
 
 Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system:
+
 - **Windows**: Install Docker Desktop with WSL2 backend
 - **macOS**: Install Docker Desktop
 - **Linux**: Install Docker and Docker Compose separately
 
 For Linux users, install Docker Compose if not included with your Docker installation:
+
 ```bash
 sudo apt-get install docker-compose  # Debian/Ubuntu
 sudo dnf install docker-compose      # Fedora
@@ -271,6 +273,7 @@ docker-compose up -d
 ```
 
 This command will:
+
 - Build the Docker image with all required dependencies
 - Start the main application (Discord bot)
 - Start the background fetch service
@@ -314,19 +317,16 @@ If everything is set up correctly, you should see logs indicating that the bot h
      docker-compose logs -f service_name
      ```
    - Restart services with `docker-compose restart service_name`
-
 2. **Missing API Keys:**
 
    - Double-check that your `config/appConfig.json` file is correctly formatted.
    - Ensure `config/firebase_secret.json` is properly set up.
    - Make sure these files are in the config directory before building Docker images.
-
 3. **Network Issues:**
 
    - Ensure ports 6333 and 6334 are available for Qdrant.
    - Check if services can communicate using the Docker network.
    - Verify no firewall is blocking container communications.
-
 4. **Volume Permissions:**
 
    - Check permissions on mounted volumes if you encounter access issues:
@@ -355,7 +355,6 @@ These papers have significantly contributed to the field of vector similarity se
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
 
 ## Immediate Updates Needed
 
