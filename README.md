@@ -1,8 +1,6 @@
-# SparkyAI - University Copilot
+# SparkyAI: A Multi-Agent University Copilot for Retrieval-Augmented Academic Assistance
 
-This repository has been recently made public, the old repository had exposed credential issues.
-
-A Discord bot designed to assist Arizona State University (ASU) students with access to resources, including news, events, scholarships, courses, and more.
+SparkyAI is a Discord-native university copilot designed for Arizona State University (ASU) students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. The project combines retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses are not only fluent but also grounded in retrievable evidence and institutional context. This repository was made public after credential hardening and infrastructure cleanup from an older private development history.
 
 ![{2B61349D-750C-4418-A76E-15CB3AAB0B8B}](https://github.com/user-attachments/assets/642fd6d6-5232-4347-b1dc-3e78d3d0c758)
 
@@ -10,359 +8,149 @@ A Discord bot designed to assist Arizona State University (ASU) students with ac
 
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
 
-SparkyAI leverages a complex architecture to deliver accurate and context-aware responses:
+## Abstract
 
-- **Retrieval-Augmented Generation (RAG)**: Combines vector search with large language models for precise information retrieval.
-- **Multi-Agent System**: Utilizes specialized AI agents or targeted task execution.
-- **Vector Database**: Implements Qdrant for efficient semantic search and document retrieval.
+Modern campus assistants must operate under three simultaneous constraints: broad domain coverage, high retrieval precision, and robust interaction continuity across users and channels. SparkyAI addresses this constraint triad through a hierarchical multi-agent architecture in which a superior routing model dispatches queries to specialized functional agents and retrieval pipelines. The system integrates Qdrant-based semantic indexing, RAPTOR-inspired hierarchical retrieval, cross-encoder reranking, and asynchronous service orchestration, yielding a practical framework for institution-scale question answering and task support. The objective is not merely to answer isolated questions, but to synthesize reliable, source-aware responses from dynamic campus data surfaces.
 
-## Features
+## System Overview
 
-- **Maximum Inner Product Search (MIPS)**: Optimized vector similarity search for large-scale datasets.
-- **RAPTOR Retrieval**: Hierarchical document representation for nuanced information retrieval.
-- **Multi-step Reasoning**: Synthesizes information from multiple sources to answer complex queries.
-- **Dynamic Content Extraction**: Combines Selenium-based scraping with AI-powered content refinement.
-- **Automatic Version Control**: Intelligent document updating based on timestamp comparisons.
-- **Cross-Encoder Reranking**: Implements a cross-encoder model to rerank initial retrieval results, improving the relevance of top results.
-- **HNSWlib Integration**: Incorporates a graph-based approach for efficient in-memory searches, complementing existing vector search methods.
-- **ScaNN Integration**: Utilizes Google's ScaNN library for scalable and efficient handling of large-scale, high-dimensional vector datasets.
-- **Custom Embedding Model**: Utilizes the BAAI/bge-large-en-v1.5 model for high-quality text embeddings.
-- **Cross-Encoder Reranking**: Implements the cross-encoder/ms-marco-MiniLM-L-6-v2 model to rerank initial retrieval results, improving the relevance of top results
+At runtime, SparkyAI behaves as an orchestrated sequence of inference and retrieval stages rather than a single monolithic chatbot call. User input enters through Discord commands, where contextual metadata such as user identity, server channel, and moderation constraints are captured. A superior agent then estimates the required action class and either answers directly or delegates control to one or more domain agents. These domain agents are configured to access focused resources, including ASU news streams, sports schedules, scholarship portals, student organizations, library status endpoints, and employment systems. Retrieved documents are normalized, filtered, and reranked before final response synthesis.
 
-## Performance Optimizations
+The architecture is designed as a retrieval-first decision process. Instead of treating generation as the primary source of truth, SparkyAI prioritizes evidence acquisition and then composes natural language around ranked context. This design reduces unsupported claims and improves user trust when compared with purely parametric generation.
 
-- **Batch Processing**: Efficient document storage and retrieval in configurable batches.
-- **Caching Mechanisms**: Implements strategic caching for frequently accessed data.
-- **Asynchronous Operations**: Utilizes asyncio for non-blocking I/O operations.
-- **Retry Mechanisms**: Robust error handling with configurable retry attempts for critical operations.
-- **Multi-Method Search**: Combines RAPTOR, similarity search, MIPS, and ScaNN for comprehensive and efficient information retrieval.
-- **Result Deduplication**: Implements intelligent merging and deduplication of search results from multiple methods.
+## Mathematical Framing
 
-## Architecture
+The retrieval layer can be formalized as a maximum inner product objective over query and document embeddings. Given a user query embedding $q \in \mathbb{R}^d$ and candidate document embeddings $x_i \in \mathbb{R}^d$, initial relevance is approximated by
 
-![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
+$$
+i^* = \arg\max_i \langle q, x_i \rangle,
+$$
 
-![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
+which corresponds to the MIPS criterion used in dense retrieval systems.
 
-## Key Features
+Because a single similarity pass is insufficient for multi-source campus data, SparkyAI composes a hybrid score from multiple retrieval channels. If $s_{\text{sim}}$, $s_{\text{raptor}}$, and $s_{\text{ann}}$ denote normalized scores from semantic similarity, hierarchical RAPTOR retrieval, and approximate nearest-neighbor pathways, then candidate ranking can be described as
 
-The code implements the following key features:
+$$
+S(d \mid q) = \alpha\, s_{\text{sim}}(d,q) + \beta\, s_{\text{raptor}}(d,q) + \gamma\, s_{\text{ann}}(d,q), \quad \alpha+\beta+\gamma=1.
+$$
 
-### Web Scraping & Summarization
+A cross-encoder reranker then refines top-$k$ candidates with a relevance posterior,
 
-The `ASUWebScraper` class handles web scraping of ASU pages:
+$$
+P(r=1\mid q,d) = \sigma\!\big(f_{\theta}(q,d)\big),
+$$
 
-- Uses Selenium for dynamic content and BeautifulSoup for static HTML parsing
-- Implements methods for scraping specific ASU resources like course catalogs, library resources, and job postings
-- Extracts content using both Selenium-based scraping and Jina AI-powered content extraction
+where $f_{\theta}$ is the cross-encoder scoring function and $\sigma$ is the logistic transform. Final answer grounding is effectively a constrained conditional generation objective,
 
-The `DataPreprocessor` class handles summarization:
+$$
+\hat{y} = \arg\max_y\; P\big(y\mid q, D_k\big),
+$$
 
-- Cleans and structures scraped text using NLP techniques like tokenization and lemmatization
-- Uses AI agents (likely the Gemini model) to refine and summarize content
+with $D_k$ denoting the reranked supporting context set.
 
-### Discord Integration
+## Architectural Components
 
-The `DiscordState` class manages the Discord bot's state and interactions:
+The platform is organized around a superior routing agent, specialist domain agents, retrieval/indexing services, and persistence middleware. The superior layer determines whether a request is informational, action-oriented, or hybrid. Specialist agents execute scoped tool calls for domains such as courses, scholarships, events, sports, media, and campus logistics. The retrieval subsystem stores and serves embeddings through Qdrant and supplements dense retrieval with hierarchical abstractions inspired by RAPTOR. A preprocessing pipeline performs extraction, cleaning, and summarization from both static and dynamic sources, including Selenium-assisted collection where JavaScript rendering is necessary.
 
-- Initializes Discord intents for message content and member access
-- Tracks user information, roles, and channel details
-- Provides methods to update and retrieve bot state
+Persistent data management is bifurcated by function. Firestore is used for chat histories and interaction-state continuity, while tabular moderation and oversight operations are handled through Google Sheets integration in the current architecture. This separation allows conversational memory and operational analytics to evolve independently without coupling every concern into a single backend.
 
-### AI-Driven Information Retrieval
+## Agentic Reasoning and Control Flow
 
-The system uses a Retrieval-Augmented Generation (RAG) architecture:
+SparkyAI’s reasoning process can be viewed as hierarchical policy selection. Let $a \in \mathcal{A}$ denote an action policy where $\mathcal{A}$ includes direct response, retrieval search, or specialist delegation. The superior agent approximates
 
-- The `VectorStore` class manages document storage and retrieval using Qdrant vector database
-- Implements semantic search capabilities using HuggingFace embeddings
-- The `Utils` class contains methods for similarity search and database querying
-- The `RAPTOR ` class reranks and creates a tree of documents
+$$
+a^* = \arg\max_{a \in \mathcal{A}} P(a \mid q, c),
+$$
 
-### Utils Class Enhancements
+where $q$ is the user query and $c$ is interaction context (history, channel state, and metadata). Delegated agents then instantiate tool-level calls and return structured evidence for response composition. This reduces prompt overload, since each agent solves a narrower subproblem with domain-specific constraints.
 
-- **Multi-Method Search**: Orchestrates searches across RAPTOR, similarity, and MIPS methods.
-- **Result Merging**: Intelligently combines and deduplicates results from various search methods.
-- **Ground Source Management**: Tracks and manages unique source URLs for comprehensive information retrieval.
-- **Caching**: Implements query and document ID caching for improved performance.
+## Data Processing and Retrieval Pipeline
 
-### Webhooks
+Ingestion begins with source collection from institutional pages and related endpoints. Raw content is cleaned and segmented into retrieval units suitable for embedding and indexing. Embeddings are generated with `BAAI/bge-large-en-v1.5`, and top candidates are retrieved through similarity and ANN mechanisms. RAPTOR-style hierarchy construction supports coarse-to-fine retrieval when queries are broad or compositional. The system then applies reranking, deduplication, and source consolidation before generation. This ordering is important: by delaying generation until after ranking and merge operations, SparkyAI improves factual alignment and reduces contradictory context windows.
 
-The system uses various sets of custom web scraping functions with search query manipulation to fetch most results-
+## Model Adaptation and Fine-Tuning Context
 
-- The `ASUWebScraper` class can be extended to fetch data from different ASU platforms
+The repository includes a fine-tuning track for the superior decision layer using approximately 560 examples of interaction trajectories. The dataset distribution spans factual prompts, action-oriented requests that require function calls, hybrid prompts requiring both reasoning and tooling, and adversarial or jailbreak-style inputs requiring robust safety behavior. In practical terms, this tuning objective is less about linguistic style and more about improving policy selection quality under realistic student workflows.
 
-## Database Integration
+## Technology Stack
 
-The ASU Discord Bot utilizes two database systems for different purposes:
+SparkyAI is implemented primarily in Python and deploys on a containerized stack. Core model orchestration uses Gemini APIs with LangChain-adjacent retrieval patterns. NLP preprocessing and embedding workflows rely on Hugging Face ecosystem components and NLTK utilities. Vector retrieval is backed by Qdrant, while dynamic web extraction uses Selenium and BeautifulSoup. Runtime deployment is orchestrated with Docker and Docker Compose, and service-level persistence is provided by Firestore and auxiliary Google Sheets integration.
 
-### Vector Store Operations
+## Setup and Local Execution
 
-- **Qdrant Integration**: Utilizes Qdrant for efficient vector storage and retrieval.
-- **MIPS Search**: Implements Maximum Inner Product Search for optimized similarity queries.
-- **HNSWlib Indexing**: Builds and uses HNSW indexes for fast approximate nearest neighbor search.
-- **Automatic Index Building**: Dynamically constructs search indexes for improved query performance.
-
-### Google Sheets Database
-
-The `GoogleSheet` class manages interactions with a Google Sheets database, primarily used for moderator oversight and user tracking.
-
-Key features:
-
-- User Management: Stores and retrieves user information, including Discord IDs, names, and email addresses.
-- Function Call Tracking: Increments counters for various bot function calls, allowing moderators to monitor usage patterns.
-- Data Retrieval: Provides methods to fetch all users or specific user data.
-- Data Updates: Allows updating user-specific information in the spreadsheet.
-
-Implementation details:
-
-- Uses the Google Sheets API for read and write operations.
-- Implements methods like `get_all_users()`, `add_new_user()`, and `update_user_column()`.
-- Provides error handling and logging for database operations.
-
-### Firestore Database
-
-The `Firestore` class manages interactions with Google's Firestore, used for storing bot-related data and chat histories.
-
-Key features:
-
-- Chat History: Stores complete conversation histories between users and the bot.
-- Message Categorization: Organizes messages by different agent types (action, discord, google, live status, search).
-- Real-time Updates: Leverages Firestore's real-time capabilities for instant data synchronization.
-
-Implementation details:
-
-- Initializes a Firestore client using Firebase Admin SDK.
-- Implements methods to update collections, add new messages, and retrieve chat histories.
-- Stores messages with timestamps and user IDs for comprehensive tracking.
-
-### The modular architecture allows for easy extension:
-
-- Multiple agent classes (e.g., `SuperiorAgent`,  `RAGSearchAgent`, `ShuttleStatusAgent`) can be customized for different tasks
-- The `AppConfig` class centralizes configuration management, making it easy to add new features
-- The use of asynchronous programming (async/await) throughout the codebase allows for efficient handling of concurrent operations
-
-## Technologies Used
-
-- **AI/ML**: Gemini, LangChain, TensorFlow
-- **NLP**: Hugging Face Transformers, NLTK
-- **Embeddings**: BAAI/bge-large-en-v1.5 model
-- **Cross Encoder**:  cross-encoder/ms-marco-MiniLM-L-6-v2
-- **Vector Search**: Qdrant
-- **Web Scraping**: Selenium, BeautifulSoup4
-- **APIs**: Discord API, Firebase API
-- **Databases**: Firestore, Notion
-- **Asynchronous Programming**: asyncio
-- **Containerization**: Docker
-
-## Agent Descriptions
-
-| Name                                      | What It Does                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Superior Agent**                  | Handles main messages, decides on direct responses or function calls, and utilizes multiple agents/functions as needed. |
-| **RAG Search Agent**                | Performs search over RAG knowledge base, has also access to general Google search utilityfor queries                   |
-| **News Media Agent**                | Access to asu social media and asu news                                                                                 |
-| **Shuttle Status Agent**            | access to asu campus rider portal                                                                                       |
-| **Discord Agent**                   | access to discord channels : announcements, feedbacks, customer service, polls, posts,                                  |
-| **Library Agent**                   | access to library.asu and live rooms status asu                                                                         |
-| **Sports Agent**                    | access to sundevilathletics.asu                                                                                         |
-| **Student Jobs Agent**              | access to workday.asu                                                                                                   |
-| **Student Clubs Events<br />Agent** | access to sundevilsync.asu                                                                                              |
-|                                           | access to scholarships.asu                                                                                              |
-
-### Finetune
-
-We are finetuning gemini 1.5 flash model (Superior Agent) with our custom dataset containing 560 examples of different interactions between agents with humans aswell as agents with other agents to increase the accuracy of reasoning aswell as general responses to students:
-
-| **Category**               | **Description**                                                                                 | **Proportion (%)** | **Number of Examples** |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------- |
-| **Factual Questions**      | Questions requiring concise, factual answers, such as "What are the library hours?"                   | 23.6%                    | 130                          |
-| **Action-Based Questions** | Queries requiring JSON function calls, such as "Find the latest scholarships."                        | 32.7%                    | 180                          |
-| **Hybrid Questions**       | Queries needing reasoning + a function call, such as "Can you summarize this and get related events?" | 32.7%                    | 180                          |
-| **Jailbreak Commands**     | Edge-case inputs requiring safe acknowledgment or refusal                                             | 10.9%                    | 60                           |
-
-### Extensible Design
-
-## Getting Started
-
-Follow these steps to set up and run the ASU Discord Bot on your local machine.
-
-### 1. Clone the Repository
-
-First, clone the repository to your local machine using Git.
+To reproduce the environment, clone the repository and enter the project directory.
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git
-cd sparkyai
+cd SparkyAI
 ```
 
----
-
-### 2. Set Up a Virtual Environment
-
-Create and activate a Python virtual environment to isolate dependencies.
-
-#### On Linux/Mac:
+Create and activate a virtual environment before dependency installation.
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-#### On Windows:
+On Windows, use the equivalent activation command:
 
 ```bash
 python -m venv venv
 venv\Scripts\activate
 ```
 
----
-
-### 3. Install Dependencies
-
-Install all required Python.12.3 packages from the `requirements.txt` file.
+Install dependencies from `requirements.txt`.
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+Create `config/appConfig.json` following the sample schema in `__sample__appConfig.json`, then place Firebase credentials in `config/firebase_secret.json` using `__sample_firebase_secret.json` as structure guidance.
 
-### 4. Configure API Keys and Credentials
-
-The bot requires several API keys and configuration files to function properly.
-
-1. **Create a `appConfig.json` file** in the `config/` folder with the following structure [Example](/__sample__appConfig.json):
-2. **Add Firebase API credentials** [Example](/__sample_firebase_secret.json):
-
-   - Download the `firebase_secret.json` file from your Firebase Cloud Console.
-   - Place it in the `config/` folder.
-
----
-
-### 5. Install Docker
-
-The project uses Docker for containerization, which simplifies deployment and ensures consistent environments across different systems.
-
-Follow [Docker installation instructions](https://docs.docker.com/get-docker/) for your operating system:
-
-- **Windows**: Install Docker Desktop with WSL2 backend
-- **macOS**: Install Docker Desktop
-- **Linux**: Install Docker and Docker Compose separately
-
-For Linux users, install Docker Compose if not included with your Docker installation:
+Containerized execution is the recommended path because Chrome/Chromedriver dependencies for scraping are already provisioned in the Docker workflow.
 
 ```bash
-sudo apt-get install docker-compose  # Debian/Ubuntu
-sudo dnf install docker-compose      # Fedora
+docker compose up -d
 ```
 
----
-
-### 6. Run the Bot with Docker
-
-The project has been containerized with Docker to handle all dependencies (including Chrome/Chromedriver for web scraping) and services automatically. The setup is optimized for cross-platform compatibility (Linux, Windows WSL, macOS).
-
-#### Build and start all services:
+If your environment uses legacy Compose binaries, use:
 
 ```bash
-# For Docker Compose v2 (newer installations)
-docker compose up -d
-
-# For Docker Compose v1 (older installations)
 docker-compose up -d
 ```
 
-This command will:
-
-- Build the Docker image with all required dependencies
-- Start the main application (Discord bot)
-- Start the background fetch service
-- Set up and run the Qdrant vector database
-- Configure networking between services
-
-#### View application logs:
+The main services include the Discord bot runtime, background fetch worker, and Qdrant. Logs can be streamed through:
 
 ```bash
-# View logs for the main Discord bot
 docker compose logs -f app
-
-# View logs for the background fetch service
 docker compose logs -f background-fetch
 ```
 
-#### Stop all services:
+Shutdown is performed with:
 
 ```bash
 docker compose down
 ```
 
-If everything is set up correctly, you should see logs indicating that the bot has started successfully when you check the app logs.
+## Operational Notes and Troubleshooting
 
-#### Platform-Specific Notes:
+Most startup failures in local deployments arise from configuration incompleteness, missing secrets, or container networking constraints. If services fail to initialize, first verify that Docker is healthy and all declared containers are up. Next validate that `config/appConfig.json` and `config/firebase_secret.json` are present and correctly formatted. If retrieval endpoints are unavailable, confirm that Qdrant ports `6333` and `6334` are free and reachable within the container network. On Linux hosts, volume permission mismatches can block startup; when this occurs, normalize ownership for `config/`, `logs/`, and `qdrant_storage/` to the active user.
 
-- **Windows/WSL**: The Docker setup includes virtual display configuration for headless Chrome
-- **macOS M1/M2/M3 Users**: The image will automatically use the ARM64 architecture
-- **Linux**: Includes all necessary system libraries for Chrome
+## Research Lineage and Citations
 
----
+SparkyAI’s retrieval design draws from literature on inner-product search, approximate nearest-neighbor indexing, and hierarchical retrieval. Relevant references include reverse MIPS formulations, ScaNN and anisotropic quantization for accelerated high-dimensional search, and RAPTOR for tree-organized abstraction in retrieval workflows. The current project integrates these ideas into a practical campus-assistant implementation where latency, evidence quality, and domain coverage must be jointly optimized.
 
-### Troubleshooting Common Issues
+1. Amagata, D., & Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. *ACM Transactions on the Web, 17*(4), 1-23. https://dl.acm.org/doi/pdf/10.1145/3587215
+2. Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog. https://research.google/blog/announcing-scann-efficient-vector-similarity-search/
+3. Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., & Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. *ICML*. https://arxiv.org/pdf/1908.10396
+4. Dong, W., Moses, C., & Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint. https://www.arxiv.org/pdf/2411.06158
+5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint. https://arxiv.org/pdf/2401.18059v1
+6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint. https://arxiv.org/pdf/1509.01469
 
-1. **Docker Container Issues:**
+## Contribution and Contact
 
-   - Ensure Docker and Docker Compose are installed and running.
-   - Check container status with `docker-compose ps`
-   - View specific container logs with:
-     ```bash
-     docker-compose logs -f service_name
-     ```
-   - Restart services with `docker-compose restart service_name`
-2. **Missing API Keys:**
-
-   - Double-check that your `config/appConfig.json` file is correctly formatted.
-   - Ensure `config/firebase_secret.json` is properly set up.
-   - Make sure these files are in the config directory before building Docker images.
-3. **Network Issues:**
-
-   - Ensure ports 6333 and 6334 are available for Qdrant.
-   - Check if services can communicate using the Docker network.
-   - Verify no firewall is blocking container communications.
-4. **Volume Permissions:**
-
-   - Check permissions on mounted volumes if you encounter access issues:
-     ```bash
-     ls -la config/ logs/ qdrant_storage/
-     ```
-   - Fix permissions if needed: `sudo chown -R $(id -u):$(id -g) config/ logs/ qdrant_storage/`
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request for any ideas or improvements.
-
-## Citations
-
-This project draws inspiration from and builds upon the following research papers:
-
-1. [Amagata, D., &amp; Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. ACM Transactions on the Web, 17(4), 1-23](https://dl.acm.org/doi/pdf/10.1145/3587215)
-2. [Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog](https://research.google/blog/announcing-scann-efficient-vector-similarity-search/)
-3. [Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., &amp; Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. International Conference on Machine Learning (ICML)](https://arxiv.org/pdf/1908.10396)
-4. [Dong, W., Moses, C., &amp; Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint arXiv:2404.00774](https://www.arxiv.org/pdf/2411.06158)
-5. [Kandpal, N., Jiang, H., Kong, X., Teng, J., &amp; Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint arXiv:2401.18059v1](https://arxiv.org/pdf/2401.18059v1)
-6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
-
-These papers have significantly contributed to the field of vector similarity search, maximum inner product search (MIPS), and efficient indexing techniques, which are fundamental to this project's approach.
+Contributions are welcomed through issues and pull requests, particularly for improvements in retrieval quality, reliability engineering, and agent safety controls. For project context and collaboration inquiries, reach out to Ash at [ashworks.dev](https://ashworks.dev) or via [linkedin.com/ashworks](https://linkedin.com/ashworks).
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
-
-## Immediate Updates Needed
-
-- Develop ML Ops Pipeline
-- Update and Migrate to SDC platform
-
-## Contact
-
-- Author: Ash
-- Portfolio: [ashworks.dev](https://ashworks.dev)
-- LinkedIn: [linkedin.com/ashworks](https://linkedin.com/ashworks)
+This project is distributed under the [MIT License](LICENSE).
