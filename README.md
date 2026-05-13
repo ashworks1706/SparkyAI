@@ -10,7 +10,7 @@ SparkyAI is a Discord-native university copilot designed for Arizona State Unive
 
 ## Abstract
 
-Modern campus assistants must operate under three simultaneous constraints: broad domain coverage, high retrieval precision, and robust interaction continuity across users and channels. SparkyAI addresses this constraint triad through a hierarchical multi-agent architecture in which a superior routing model dispatches queries to specialized functional agents and retrieval pipelines. The system integrates Qdrant-based semantic indexing, RAPTOR-inspired hierarchical retrieval, cross-encoder reranking, and asynchronous service orchestration, yielding a practical framework for institution-scale question answering and task support. The objective is not merely to answer isolated questions, but to synthesize reliable, source-aware responses from dynamic campus data surfaces.
+Modern campus assistants must operate under three simultaneous constraints: broad domain coverage, high retrieval precision, and robust interaction continuity across users and channels. SparkyAI addresses this constraint triad through a hierarchical multi-agent architecture in which a superior routing model dispatches queries to specialized functional agents and retrieval pipelines. The system integrates Qdrant-based semantic indexing, RAPTOR-inspired hierarchical retrieval, cross-encoder reranking, and asynchronous service orchestration. The objective is not merely to answer isolated questions, but to synthesize reliable, source-aware responses from dynamic campus data surfaces.
 
 ## System Overview
 
@@ -47,6 +47,8 @@ $$
 $$
 
 with $D_k$ denoting the reranked supporting context set.
+
+In practice, $\alpha$, $\beta$, and $\gamma$ are treated as tunable hyperparameters selected through empirical validation on representative query traces, with periodic retuning as data distributions and source surfaces evolve.
 
 ## Architectural Components
 
@@ -140,12 +142,12 @@ Most startup failures in local deployments arise from configuration incompletene
 
 SparkyAI’s retrieval design draws from literature on inner-product search, approximate nearest-neighbor indexing, and hierarchical retrieval. Relevant references include reverse MIPS formulations, ScaNN and anisotropic quantization for accelerated high-dimensional search, and RAPTOR for tree-organized abstraction in retrieval workflows. The current project integrates these ideas into a practical campus-assistant implementation where latency, evidence quality, and domain coverage must be jointly optimized.
 
-1. Amagata, D., & Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. *ACM Transactions on the Web, 17*(4), 1-23. https://dl.acm.org/doi/pdf/10.1145/3587215
+1. Amagata, D., & Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. *ACM Transactions on the Web, 17*(4), 1-23. https://doi.org/10.1145/3587215
 2. Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog. https://research.google/blog/announcing-scann-efficient-vector-similarity-search/
-3. Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., & Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. *ICML*. https://arxiv.org/pdf/1908.10396
-4. Dong, W., Moses, C., & Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint. https://www.arxiv.org/pdf/2411.06158
-5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint. https://arxiv.org/pdf/2401.18059v1
-6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint. https://arxiv.org/pdf/1509.01469
+3. Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., & Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. *ICML*. https://arxiv.org/abs/1908.10396
+4. Dong, W., Moses, C., & Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint. https://arxiv.org/abs/2411.06158
+5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint. https://arxiv.org/abs/2401.18059
+6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint. https://arxiv.org/abs/1509.01469
 
 ## Contribution and Contact
 
