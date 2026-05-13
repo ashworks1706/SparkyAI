@@ -1,4 +1,4 @@
-# SparkyAI — ASU Discord Bot + agentic RAG system (not maintained)
+# SparkyAI — University Copilot
 
 SparkyAI is an old, no-longer-maintained project: a Discord bot built to help Arizona State University (ASU) students find information and complete small, concrete tasks across ASU’s web ecosystem. It combines retrieval-augmented generation (RAG) with a lightweight multi-agent/tool-routing architecture, plus a background ingestion pipeline that keeps a knowledge base fresh as pages change.
 
@@ -18,7 +18,7 @@ Student queries are rarely just “search and answer”. They are messy, time-se
 
 SparkyAI approached this with a retrieval-first design. For many requests, the model’s job is not to invent an answer, but to select, compress, and cite the right pieces of ASU-specific context, and only then generate a response.
 
-## How it works (conceptual forward pass)
+## How it works 
 
 A user message comes in through Discord. A supervisor-style agent decides whether to answer directly or to delegate to a specialized agent/tool. Delegation can mean pulling from the ASU knowledge base (RAG), running targeted web extraction, or calling a domain-specific workflow (for example, shuttles, library information, student jobs, clubs/events, and similar categories).
 
@@ -97,14 +97,16 @@ If you are interested in the next iterations of these ideas, see:
 
 ## References
 
-This project draws inspiration from work on vector similarity search, MIPS, approximate nearest neighbor indexing, and hierarchical retrieval:
+This project draws inspiration from and builds upon the following research papers:
 
-1. Amagata, D., & Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis.
-2. Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search.
-3. Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., & Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization.
-4. Dong, W., Moses, C., & Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search.
-5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval.
-6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search.
+1. [Amagata, D., &amp; Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. ACM Transactions on the Web, 17(4), 1-23](https://dl.acm.org/doi/pdf/10.1145/3587215)
+2. [Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog](https://research.google/blog/announcing-scann-efficient-vector-similarity-search/)
+3. [Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., &amp; Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. International Conference on Machine Learning (ICML)](https://arxiv.org/pdf/1908.10396)
+4. [Dong, W., Moses, C., &amp; Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint arXiv:2404.00774](https://www.arxiv.org/pdf/2411.06158)
+5. [Kandpal, N., Jiang, H., Kong, X., Teng, J., &amp; Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint arXiv:2401.18059v1](https://arxiv.org/pdf/2401.18059v1)
+6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
+
+These papers have significantly contributed to the field of vector similarity search, maximum inner product search (MIPS), and efficient indexing techniques, which are fundamental to this project's approach.
 
 ## License
 
