@@ -148,13 +148,12 @@ Most startup failures in local deployments arise from configuration incompletene
 
 SparkyAI’s retrieval design draws from literature on inner-product search, approximate nearest-neighbor indexing, and hierarchical retrieval. Relevant references include reverse MIPS formulations, ScaNN and anisotropic quantization for accelerated high-dimensional search, and RAPTOR for tree-organized abstraction in retrieval workflows. The current project integrates these ideas into a practical campus-assistant implementation where latency, evidence quality, and domain coverage must be jointly optimized.
 
-1. Amagata, D., & Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. *ACM Transactions on the Web, 17*(4), 1-23. https://doi.org/10.1145/3587215
-2. Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog. https://research.google/blog/announcing-scann-efficient-vector-similarity-search/
-3. Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., & Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. *ICML*. https://arxiv.org/abs/1908.10396
-4. Dong, W., Moses, C., & Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint. https://arxiv.org/abs/2411.06158
-5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint. https://arxiv.org/abs/2401.18059
-6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint. https://arxiv.org/abs/1509.01469
-
+1. [Amagata, D., &amp; Hara, T. (2023). Reverse Maximum Inner Product Search: Formulation, Algorithms, and Analysis. ACM Transactions on the Web, 17(4), 1-23](https://dl.acm.org/doi/pdf/10.1145/3587215)
+2. [Sun, P. (2020). Announcing ScaNN: Efficient Vector Similarity Search. Google Research Blog](https://research.google/blog/announcing-scann-efficient-vector-similarity-search/)
+3. [Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., &amp; Kumar, S. (2020). Accelerating Large-Scale Inference with Anisotropic Vector Quantization. International Conference on Machine Learning (ICML)](https://arxiv.org/pdf/1908.10396)
+4. [Dong, W., Moses, C., &amp; Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint arXiv:2404.00774](https://www.arxiv.org/pdf/2411.06158)
+5. [Kandpal, N., Jiang, H., Kong, X., Teng, J., &amp; Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint arXiv:2401.18059v1](https://arxiv.org/pdf/2401.18059v1)
+6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
 
 ## Project status and why it stopped
 
