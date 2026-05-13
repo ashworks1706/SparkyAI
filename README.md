@@ -1,6 +1,6 @@
-# SparkyAI: A Multi-Agent University Copilot for Retrieval-Augmented Academic Assistance
+# SparkyAI: A Multi-Agent University Copilot
 
-SparkyAI is a Discord-native university copilot designed for Arizona State University (ASU) students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. The project combines retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses are not only fluent but also grounded in retrievable evidence and institutional context. This repository was made public after credential hardening and infrastructure cleanup from an older private development history.
+SparkyAI is a Discord-native university copilot designed for Arizona State University (ASU) students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. The project combines retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses are not only fluent but also grounded in retrievable evidence and institutional context. The repository was made public after credential hardening and infrastructure cleanup from an older private development history.
 
 ![{2B61349D-750C-4418-A76E-15CB3AAB0B8B}](https://github.com/user-attachments/assets/642fd6d6-5232-4347-b1dc-3e78d3d0c758)
 
@@ -26,7 +26,7 @@ $$
 i^* = \arg\max_i \langle q, x_i \rangle,
 $$
 
-which corresponds to the MIPS criterion used in dense retrieval systems.
+where $i^*$ denotes the index of the candidate document with the highest relevance score under inner-product similarity. This corresponds to the MIPS criterion used in dense retrieval systems.
 
 Because a single similarity pass is insufficient for multi-source campus data, SparkyAI composes a hybrid score from multiple retrieval channels. If $s_{\text{sim}}$, $s_{\text{raptor}}$, and $s_{\text{ann}}$ denote normalized scores from semantic similarity, hierarchical RAPTOR retrieval, and approximate nearest-neighbor pathways, then candidate ranking can be described as
 
@@ -34,13 +34,13 @@ $$
 S(d \mid q) = \alpha\, s_{\text{sim}}(d,q) + \beta\, s_{\text{raptor}}(d,q) + \gamma\, s_{\text{ann}}(d,q), \quad \alpha+\beta+\gamma=1.
 $$
 
-A cross-encoder reranker then refines top-$k$ candidates with a relevance posterior,
+In this formulation, $s_{\text{sim}}$ captures embedding-space semantic proximity, $s_{\text{raptor}}$ captures hierarchy-informed retrieval quality, and $s_{\text{ann}}$ captures approximate nearest-neighbor relevance; each score is normalized to a common $[0,1]$ range per query before weighted composition. A cross-encoder reranker then refines top-$k$ candidates with a relevance posterior,
 
 $$
 P(r=1\mid q,d) = \sigma\!\big(f_{\theta}(q,d)\big),
 $$
 
-where $f_{\theta}$ is the cross-encoder scoring function and $\sigma$ is the logistic transform. Final answer grounding is effectively a constrained conditional generation objective,
+where $r=1$ indicates that a query-document pair is relevant, $f_{\theta}$ is the cross-encoder scoring function, and $\sigma$ is the logistic transform. Final answer grounding is effectively a constrained conditional generation objective,
 
 $$
 \hat{y} = \arg\max_y\; P\big(y\mid q, D_k\big),
@@ -70,7 +70,7 @@ Ingestion begins with source collection from institutional pages and related end
 
 ## Model Adaptation and Fine-Tuning Context
 
-The repository includes a fine-tuning track for the superior decision layer using approximately 560 examples of interaction trajectories. The dataset distribution spans factual prompts, action-oriented requests that require function calls, hybrid prompts requiring both reasoning and tooling, and adversarial or jailbreak-style inputs requiring robust safety behavior. In practical terms, this tuning objective is less about linguistic style and more about improving policy selection quality under realistic student workflows.
+The repository includes a fine-tuning track for the superior decision layer using approximately 560 examples of interaction trajectories. The dataset distribution spans factual prompts, action-oriented requests that require function calls, hybrid prompts requiring both reasoning and tooling, and safety-critical adversarial edge-case inputs requiring robust refusal and control behavior. In practical terms, this tuning objective is less about linguistic style and more about improving policy selection quality under realistic student workflows.
 
 ## Technology Stack
 
@@ -149,7 +149,7 @@ SparkyAI’s retrieval design draws from literature on inner-product search, app
 
 ## Contribution and Contact
 
-Contributions are welcomed through issues and pull requests, particularly for improvements in retrieval quality, reliability engineering, and agent safety controls. For project context and collaboration inquiries, reach out to Ash at [ashworks.dev](https://ashworks.dev) or via [linkedin.com/ashworks](https://linkedin.com/ashworks).
+Contributions are welcomed through issues and pull requests, particularly for improvements in retrieval quality, reliability engineering, and agent safety controls. For project context and collaboration inquiries, reach out to Ash at [ashworks.dev](https://ashworks.dev) or via [linkedin.com/in/ashworks](https://www.linkedin.com/in/ashworks).
 
 ## License
 
