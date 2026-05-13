@@ -167,8 +167,8 @@ Today I treat this repository as a marker of what my curiosity led me to build w
 
 If you are interested in the next iterations of these ideas, see:
 
-- `https://github.com/ashworks1706/kaelum` — exploring efficient, verifiable agent reasoning and routing.
-- `https://github.com/ashworks1706/piramid` — efforts focused on RAG latency issues for larger-scale applications.
+- [Kaelum](https://github.com/ashworks1706/kaelum) — exploring efficient, verifiable agent reasoning and routing.
+- [Piramid](https://github.com/ashworks1706/piramid) — efforts focused on RAG latency issues for larger-scale applications.
 
 
 ## License
