@@ -8,7 +8,8 @@ SparkyAI is a Discord-native university copilot designed for Arizona State Unive
 
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
 
-## Abstract
+
+## Problem
 
 Modern campus assistants must operate under three simultaneous constraints: broad domain coverage, high retrieval precision, and robust interaction continuity across users and channels. SparkyAI addresses this constraint triad through a hierarchical multi-agent architecture in which a superior routing model dispatches queries to specialized functional agents and retrieval pipelines. The system integrates Qdrant-based semantic indexing, RAPTOR-inspired hierarchical retrieval, cross-encoder reranking, and asynchronous service orchestration. The objective is not merely to answer isolated questions, but to synthesize reliable, source-aware responses from dynamic campus data surfaces.
 
@@ -51,6 +52,11 @@ with $D_k$ denoting the reranked supporting context set.
 In practice, $\alpha$, $\beta$, and $\gamma$ are treated as tunable hyperparameters selected through empirical validation on representative query traces, with periodic retuning as data distributions and source surfaces evolve.
 
 ## Architectural Components
+
+![image](https://github.com/user-attachments/assets/8fb16d4d-387c-402b-9b42-a8a25138dcc4)
+
+![image](https://github.com/user-attachments/assets/c2228237-c7e2-4f50-84e4-30ca07c7d2f0)
+
 
 The platform is organized around a superior routing agent, specialist domain agents, retrieval/indexing services, and persistence middleware. The superior layer determines whether a request is informational, action-oriented, or hybrid. Specialist agents execute scoped tool calls for domains such as courses, scholarships, events, sports, media, and campus logistics. The retrieval subsystem stores and serves embeddings through Qdrant and supplements dense retrieval with hierarchical abstractions inspired by RAPTOR. A preprocessing pipeline performs extraction, cleaning, and summarization from both static and dynamic sources, including Selenium-assisted collection where JavaScript rendering is necessary.
 
@@ -149,9 +155,22 @@ SparkyAI’s retrieval design draws from literature on inner-product search, app
 5. Kandpal, N., Jiang, H., Kong, X., Teng, J., & Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint. https://arxiv.org/abs/2401.18059
 6. Guo, R., Kumar, S., Choromanski, K., & Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint. https://arxiv.org/abs/1509.01469
 
-## Contribution and Contact
 
-Contributions are welcomed through issues and pull requests, particularly for improvements in retrieval quality, reliability engineering, and agent safety controls. For project context and collaboration inquiries, reach out to Ash at [ashworks.dev](https://ashworks.dev) or via [linkedin.com/in/ashworks](https://www.linkedin.com/in/ashworks).
+## Project status and why it stopped
+
+SparkyAI is not maintained. I stopped active work mainly because agentic systems are operationally expensive: multi-step tool calls, retrieval + reranking, retries, and background ingestion add real cost and latency. This repo also predates a lot of the modern baseline for production agent systems, so keeping it up-to-date would largely mean rebuilding core parts of it.
+
+Even so, the project was worth doing. It taught me a lot about where RAG actually fails in practice (stale pages, messy HTML, conflicting sources, long-tail queries) and where “agents” become expensive in real deployments (routing overhead, tool failures, rate limits, and the complexity of keeping state).
+
+Today I treat this repository as a marker of what my curiosity led me to build while trying to understand agents and advanced RAG latency management.
+
+## Where the work continued
+
+If you are interested in the next iterations of these ideas, see:
+
+- `https://github.com/ashworks1706/kaelum` — exploring efficient, verifiable agent reasoning and routing.
+- `https://github.com/ashworks1706/piramid` — efforts focused on RAG latency issues for larger-scale applications.
+
 
 ## License
 
