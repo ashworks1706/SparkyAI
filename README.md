@@ -34,7 +34,7 @@ $$
 S(d \mid q) = \alpha\, s_{\text{sim}}(d,q) + \beta\, s_{\text{raptor}}(d,q) + \gamma\, s_{\text{ann}}(d,q), \quad \alpha+\beta+\gamma=1.
 $$
 
-In this formulation, $s_{\text{sim}}$ captures embedding-space semantic proximity, $s_{\text{raptor}}$ captures hierarchy-informed retrieval quality, and $s_{\text{ann}}$ captures approximate nearest-neighbor relevance; each score is normalized to a common $[0,1]$ range per query before weighted composition. A cross-encoder reranker then refines top-$k$ candidates with a relevance posterior,
+In this formulation, $s_{\text{sim}}$ captures embedding-space semantic proximity, $s_{\text{raptor}}$ captures hierarchy-informed retrieval quality, and $s_{\text{ann}}$ captures approximate nearest-neighbor relevance; each score is normalized to a common $[0,1]$ range per query using min-max scaling before weighted composition. The coefficients $\alpha$, $\beta$, and $\gamma$ are explicit retrieval hyperparameters rather than derived constants. A cross-encoder reranker then refines top-$k$ candidates with a relevance posterior,
 
 $$
 P(r=1\mid q,d) = \sigma\!\big(f_{\theta}(q,d)\big),
