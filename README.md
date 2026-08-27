@@ -1,4 +1,4 @@
-- reviving this project now
+> This project is old and gone. A newer better version is in development. 
 
 # SparkyAI: A Multi-Agent University Copilot
 
