@@ -3,6 +3,7 @@
 use axum::{Router, routing::get};
 use tower_http::trace::TraceLayer;
 
+/// Full application router.
 pub fn router() -> Router {
     Router::new()
         .route("/health/live", get(crate::health::live))

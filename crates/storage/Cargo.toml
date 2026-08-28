@@ -23,3 +23,6 @@ redis.workspace = true
 qdrant-client.workspace = true
 reqwest.workspace = true
 secrecy.workspace = true
+
+[lints]
+workspace = true

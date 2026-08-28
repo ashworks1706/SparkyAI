@@ -1,3 +1,5 @@
+//! `RequestContext` — per-request state threaded through every call.
+
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -5,12 +7,16 @@ use uuid::Uuid;
 /// through every model call, tool call, and trace event. Never global.
 #[derive(Debug, Clone)]
 pub struct RequestContext {
+    /// Unique id for this request; the trace id.
     pub request_id: Uuid,
+    /// Caller identity as known to the edge adapter.
     pub user_id: String,
+    /// When the request entered the system.
     pub started_at: DateTime<Utc>,
 }
 
 impl RequestContext {
+    /// Creates a context with a fresh `request_id`.
     pub fn new(user_id: impl Into<String>) -> Self {
         Self {
             request_id: Uuid::new_v4(),

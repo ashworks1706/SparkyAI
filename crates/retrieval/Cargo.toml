@@ -23,3 +23,6 @@ reqwest.workspace = true
 scraper.workspace = true
 chromiumoxide.workspace = true
 qdrant-client.workspace = true
+
+[lints]
+workspace = true

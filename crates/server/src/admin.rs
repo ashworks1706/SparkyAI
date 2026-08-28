@@ -2,6 +2,7 @@
 
 use axum::Router;
 
+/// Admin routes, mounted under `/admin`.
 pub fn router() -> Router {
     Router::new()
 }

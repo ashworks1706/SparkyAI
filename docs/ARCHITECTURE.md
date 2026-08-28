@@ -33,7 +33,7 @@ crates/
 models/         Python post-training (Phase 6)
 ```
 
-Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. Adapters never import each other. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. Adapters never import each other. `scripts/check-deps.sh` enforces this in CI; `[workspace.lints]` enforces code rules in every crate. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
 
 ## Types
 

@@ -12,7 +12,7 @@ cargo run -p sparky-app -- serve|ingest|migrate         # needs .env (see .env.e
 docker compose -f deploy/docker-compose.yml up -d       # postgres, redis, qdrant, minio
 ```
 
-CI runs exactly those three. A change is not done until all pass.
+Plus `./scripts/check-deps.sh`, which fails if a crate imports something it shouldn't. CI runs all four. A change is not done until all pass.
 
 ## Layout
 
@@ -34,7 +34,9 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `crates/app/src/c
 
 ## Rules
 
-- `harness` depends on nothing in-repo. Adapters depend on `harness`. Only binaries depend on adapters.
+- One binary (`sparky-app`). `harness` depends on nothing in-repo; adapters depend only on `harness`; only `app` depends on adapters. Enforced by `scripts/check-deps.sh`.
+- Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
+- A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `harness` with a mock impl for tests.
 - The request path never makes external HTTP calls except to the model server and our own stores. Fetching pages is ingestion.

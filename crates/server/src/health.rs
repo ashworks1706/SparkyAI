@@ -2,6 +2,7 @@
 
 use axum::http::StatusCode;
 
+/// Process is up.
 pub async fn live() -> StatusCode {
     StatusCode::OK
 }

@@ -21,3 +21,6 @@ schemars.workspace = true
 secrecy.workspace = true
 rig-core.workspace = true
 rmcp.workspace = true
+
+[lints]
+workspace = true

@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         Cmd::Serve => wiring::serve(cfg).await,
-        Cmd::Ingest => wiring::ingest(cfg).await,
-        Cmd::Migrate => wiring::migrate(cfg).await,
+        Cmd::Ingest => wiring::ingest(cfg),
+        Cmd::Migrate => wiring::migrate(cfg),
     }
 }

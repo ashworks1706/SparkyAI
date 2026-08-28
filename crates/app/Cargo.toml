@@ -38,3 +38,6 @@ opentelemetry-otlp.workspace = true
 sentry.workspace = true
 sentry-tracing.workspace = true
 tonic = "0.14"
+
+[lints]
+workspace = true
