@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "apps/api", "apps/discord"]
 
 [workspace.package]
 version = "0.1.0"
@@ -43,7 +43,6 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 # config
 figment = { version = "0.10", features = ["env", "toml"] }
 dotenvy = "0.15"
-clap = { version = "4", features = ["derive", "env"] }
 
 # observability
 tracing = "0.1"

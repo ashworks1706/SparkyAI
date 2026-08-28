@@ -1,7 +1,7 @@
 services:
   api:
-    build: { context: .., dockerfile: deploy/docker/backend.Dockerfile }
-    command: ["api"]
+    build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
+    entrypoint: ["/sparky-api"]
     env_file: ../.env
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
@@ -16,8 +16,8 @@ services:
     restart: unless-stopped
 
   discord:
-    build: { context: .., dockerfile: deploy/docker/backend.Dockerfile }
-    command: ["discord"]
+    build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
+    entrypoint: ["/sparky-discord"]
     env_file: ../.env
     environment:
       SPARKY_API__BASE_URL: http://api:8080

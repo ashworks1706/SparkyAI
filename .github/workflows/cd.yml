@@ -19,8 +19,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: backend
-            dockerfile: deploy/docker/backend.Dockerfile
+          - name: rust
+            dockerfile: deploy/docker/rust.Dockerfile
           - name: ingest
             dockerfile: deploy/docker/ingest.Dockerfile
     steps:

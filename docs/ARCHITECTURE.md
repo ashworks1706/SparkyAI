@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository, several deployable units. The Rust backend is one binary run as separate processes (`api`, `discord`); ingestion is a Python worker; the web app is static. Services never call each other except at three edges — `discord → api`, `api → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
+One repository, several deployable units. `apps/` holds every process — `api` and `discord` (Rust), `ingest` (Python), `web` (static), `sandbox` (Phase 7) — and `crates/` holds the Rust libraries they share. Services never call each other except at three edges — `discord → api`, `api → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
@@ -13,9 +13,9 @@ flowchart LR
     U[Student / Moderator] -->|slash command| D[Discord]
     A[Admin · web] -->|HTTP| APP
 
-    subgraph backend [apps/backend — one binary, two processes]
-        BOT[sparky discord]
-        APP[sparky api<br/>harness · policy · retrieval · memory · jobs]
+    subgraph rust [apps/api · apps/discord]
+        BOT[sparky-discord]
+        APP[sparky-api<br/>harness · policy · retrieval · memory · jobs]
     end
     D --> BOT
     BOT -->|HTTP / SSE| APP
@@ -29,7 +29,7 @@ flowchart LR
     APP -.->|Phase 4| MCP[MCP servers]
     APP -.->|Phase 7| BW[Browser worker]
 
-    ING[services/ingest<br/>Python worker] --> WEB[Public ASU sites]
+    ING[apps/ingest<br/>Python worker] --> WEB[Public ASU sites]
     ING --> PG
     ING --> QD
     ING --> S3
@@ -56,22 +56,22 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 ## Layout
 
 ```
-apps/backend/          Rust workspace → binary `sparky`; processes: api | discord | migrate | dev
-  crates/
-    harness/           types, traits, agent loop, context assembly, JSONL tracing
-    model/             Rig CompletionModel wiring for vLLM; mock model
-    tools/             built-in Tool impls
-    retrieval/         query side: embed → dense + BM25 → fuse → rerank → Evidence
-    storage/           Postgres, Redis, Qdrant, object-store adapters; migrations (the schema contract)
-    discord/           serenity bot; HTTP/SSE client of `api`; links no harness
-    server/            axum routes: chat, health, admin
-    app/               config, telemetry, composition root
-apps/web/              static frontend + admin UI (Vite + React)
-services/ingest/       Python worker: fetch → snapshot → extract → chunk → embed → index
-services/sandbox/      Phase 7 browser worker
-models/                Python: datasets, training, eval runners
-evals/                 shared eval cases (data only)
-deploy/                compose, one Dockerfile per image, RunPod configs
+apps/
+  api/          Rust bin: axum routes + harness wiring. The only process that links the harness and talks to models/stores.
+  discord/      Rust bin: serenity bot; HTTP/SSE client of api. Never links the harness.
+  ingest/       Python worker: fetch → snapshot → extract → chunk → embed → index
+  web/          static frontend + admin UI (Vite + React)
+  sandbox/      Phase 7 browser worker
+crates/
+  harness/      types, traits, agent loop, context assembly, JSONL tracing
+  runtime/      config + telemetry bootstrap shared by the Rust apps
+  model/        Rig CompletionModel wiring for vLLM; mock model
+  tools/        built-in Tool impls
+  retrieval/    query side: embed → dense + BM25 → fuse → rerank → Evidence
+  storage/      Postgres, Redis, Qdrant, object-store adapters; migrations (the schema contract)
+models/         Python: datasets, training, eval runners
+evals/          shared eval cases (data only)
+deploy/         compose, one Dockerfile per image, RunPod configs
 ```
 
 Top-level folders are deployable units or shared data. Language is never a folder. Domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
@@ -80,18 +80,18 @@ Top-level folders are deployable units or shared data. Language is never a folde
 
 ```mermaid
 flowchart BT
-    H[harness<br/>types · traits · loop · policy · assembly · trace]
-    M[model<br/>Rig CompletionModel → vLLM · mock] --> H
-    T[tools<br/>public_search · discord_ops] --> H
-    R[retrieval<br/>hybrid · rerank · ingestion] --> H
-    S[storage<br/>postgres · redis · qdrant · object] --> H
-    D[discord<br/>serenity · HTTP client of api]
-    V[server<br/>axum routes] --> H
-    A[app<br/>config · telemetry · wiring] --> M & T & R & S & D & V
-    A --> H
+    H[crates/harness<br/>types · traits · loop · policy · assembly · trace]
+    RT[crates/runtime<br/>config · telemetry]
+    M[crates/model<br/>Rig CompletionModel → vLLM · mock] --> H
+    T[crates/tools] --> H
+    R[crates/retrieval<br/>hybrid · rerank] --> H
+    S[crates/storage<br/>postgres · redis · qdrant · object] --> H
+    API[apps/api<br/>axum routes · wiring] --> M & T & R & S & H & RT
+    D[apps/discord<br/>serenity · HTTP client of api] --> RT
+    D -.->|HTTP| API
 ```
 
-Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. `discord` imports nothing in-repo — it is a client of the API, not of the harness. Adapters never import each other. `apps/backend/check-deps.sh` enforces this in CI; `[workspace.lints]` enforces code rules in every crate. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+Dependency direction: `apps/api` → any crate → `harness`. `harness` and `runtime` import nothing in-repo. Adapter crates import only `harness`, never each other. `apps/discord` imports only `runtime` — it is a client of the API, not of the harness. `scripts/check-deps.sh` enforces this in CI; `[workspace.lints]` enforces code rules in every crate. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
 
 ## Types
 
@@ -182,7 +182,7 @@ pub trait Sandbox {   // Phase 7
 
 ## Request lifecycle
 
-1. `sparky discord` receives the slash command and POSTs it to `sparky api` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
+1. `sparky-discord` receives the slash command and POSTs it to `sparky-api` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
 2. `api` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
 3. Load conversation; recall memory; retrieve evidence if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
@@ -195,8 +195,8 @@ pub trait Sandbox {   // Phase 7
 
 ```mermaid
 sequenceDiagram
-    participant D as sparky discord
-    participant H as sparky api · harness
+    participant D as sparky-discord
+    participant H as sparky-api · harness
     participant C as Context assembly
     participant M as ModelProvider
     participant P as Policy
@@ -283,11 +283,11 @@ flowchart TD
 
 ## Knowledge
 
-Offline pipeline in `services/ingest` (Python): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Offline pipeline in `apps/ingest` (Python): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
 Request path: hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
 
-Ingestion (`services/ingest`, offline):
+Ingestion (`apps/ingest`, offline):
 
 ```mermaid
 flowchart LR
@@ -390,14 +390,14 @@ Separate worker process, never inside the app process. One isolated browser cont
 
 ## Deployment
 
-Two images: `sparkyai-backend` (run as `api` and `discord`) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Two images: `sparkyai-rust` (contains both `sparky-api` and `sparky-discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
     subgraph host [CPU host — Docker Compose]
-        BOT[sparky discord]
-        APP[sparky api]
-        ING[services/ingest]
+        BOT[sparky-discord]
+        APP[sparky-api]
+        ING[apps/ingest]
         PG[(postgres:17)]
         RD[(redis:7)]
         QD[(qdrant)]
@@ -422,7 +422,7 @@ flowchart TB
 
 ## First vertical slice (Phase 1–3 target)
 
-Discord slash command → `sparky discord` → `POST /chat` on `sparky api` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `services/ingest` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `sparky-discord` → `POST /chat` on `sparky-api` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
 
 ## Open decisions
 

@@ -1,4 +1,4 @@
-//! Router assembly.
+//! Router assembly: /chat (Phase 3), /health, /admin.
 
 use axum::{Router, routing::get};
 use tower_http::trace::TraceLayer;

@@ -46,7 +46,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 ### 0 — Archive, clean, scaffold
 1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Monorepo layout: `apps/backend` (Rust workspace, one binary, processes `api | discord | migrate`), `apps/web`, `services/ingest` (Python), `models`, `evals`, `deploy`. See ARCHITECTURE.md.
+3. Monorepo layout: `apps/{api,discord}` (Rust bins), `apps/ingest` (Python), `apps/web`, `apps/sandbox`, `crates/` (Rust libraries), `models`, `evals`, `deploy`. See ARCHITECTURE.md.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 
@@ -73,7 +73,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 **Exit:** correct, dated sources on the eval set; reproducible traces.
 
 ### 3 — Discord v0.3
-- `POST /chat` + SSE on `api`; `sparky discord` as a thin HTTP client of it
+- `POST /chat` + SSE on `sparky-api`; `sparky-discord` as a thin HTTP client of it
 - Conversation state in Postgres; Discord identity + role checks in `Policy`
 - Moderator ops with confirmation before any write: tickets, announcements, polls, escalation
 - First deployment

@@ -7,6 +7,7 @@ use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
 use secrecy::ExposeSecret;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
+/// Keeps Sentry and the OTLP exporter alive; flushes on drop.
 pub struct Guard {
     _sentry: Option<sentry::ClientInitGuard>,
     otel: Option<SdkTracerProvider>,
@@ -20,6 +21,7 @@ impl Drop for Guard {
     }
 }
 
+/// Installs the global `tracing` subscriber with fmt, Sentry, and optional OTLP layers.
 pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let sentry = cfg.sentry_dsn.as_ref().map(|dsn| {
         let mut opts = sentry::ClientOptions::default();

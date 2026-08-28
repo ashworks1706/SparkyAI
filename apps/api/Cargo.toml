@@ -1,0 +1,27 @@
+[package]
+name = "sparky-api"
+description = "HTTP API: the only process that links the harness and talks to models and stores"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "sparky-api"
+path = "src/main.rs"
+
+[dependencies]
+sparky-runtime = { path = "../../crates/runtime" }
+sparky-harness = { path = "../../crates/harness" }
+sparky-model = { path = "../../crates/model" }
+sparky-tools = { path = "../../crates/tools" }
+sparky-retrieval = { path = "../../crates/retrieval" }
+sparky-storage = { path = "../../crates/storage" }
+tokio.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true
