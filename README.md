@@ -11,6 +11,16 @@ SparkyAI is a Discord-native university copilot designed for Arizona State Unive
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
 
 
+## Project generations
+
+**v2 — 2026–present.** Ground-up open-source rebuild in Rust on `main`: a model-independent agent harness, MCP tools, permission-aware retrieval, service automation, and an open post-training track. Plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) · design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+**Original prototype — 2024–2025.** The Discord-native multi-agent copilot described below. Complete implementation preserved on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1) and the [`v1.0-original`](https://github.com/ashworks1706/SparkyAI/releases/tag/v1.0-original) release.
+
+---
+
+*Everything below this line documents the original prototype.*
+
 ## Problem
 
 Modern campus assistants must operate under three simultaneous constraints: broad domain coverage, high retrieval precision, and robust interaction continuity across users and channels. SparkyAI addresses this constraint triad through a hierarchical multi-agent architecture in which a superior routing model dispatches queries to specialized functional agents and retrieval pipelines. The system integrates Qdrant-based semantic indexing, RAPTOR-inspired hierarchical retrieval, cross-encoder reranking, and asynchronous service orchestration. The objective is not merely to answer isolated questions, but to synthesize reliable, source-aware responses from dynamic campus data surfaces.
@@ -88,63 +98,15 @@ SparkyAI is implemented primarily in Python and deploys on a containerized stack
 
 ## Setup and Local Execution
 
-To reproduce the environment, clone the repository and enter the project directory.
+v2 (`main`) is a Cargo workspace:
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git
 cd SparkyAI
+cargo test --workspace
 ```
 
-Create and activate a virtual environment before dependency installation.
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-On Windows, use the equivalent activation command:
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-Install dependencies from `requirements.txt`.
-
-```bash
-pip install -r requirements.txt
-```
-
-Create `config/appConfig.json` following the sample schema in `__sample__appConfig.json`, then place Firebase credentials in `config/firebase_secret.json` using `__sample_firebase_secret.json` as structure guidance.
-
-Containerized execution is the recommended path because Chrome/Chromedriver dependencies for scraping are already provisioned in the Docker workflow.
-
-```bash
-docker compose up -d
-```
-
-If your environment uses legacy Compose binaries, use:
-
-```bash
-docker-compose up -d
-```
-
-The main services include the Discord bot runtime, background fetch worker, and Qdrant. Logs can be streamed through:
-
-```bash
-docker compose logs -f app
-docker compose logs -f background-fetch
-```
-
-Shutdown is performed with:
-
-```bash
-docker compose down
-```
-
-## Operational Notes and Troubleshooting
-
-Most startup failures in local deployments arise from configuration incompleteness, missing secrets, or container networking constraints. If services fail to initialize, first verify that Docker is healthy and all declared containers are up. Next validate that `config/appConfig.json` and `config/firebase_secret.json` are present and correctly formatted. If retrieval endpoints are unavailable, confirm that Qdrant ports `6333` and `6334` are free and reachable within the container network. On Linux hosts, volume permission mismatches can block startup; when this occurs, normalize ownership for `config/`, `logs/`, and `qdrant_storage/` to the active user.
+Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/blob/archive/v1/README.md).
 
 ## Research Lineage and Citations
 
@@ -156,14 +118,6 @@ SparkyAI’s retrieval design draws from literature on inner-product search, app
 4. [Dong, W., Moses, C., &amp; Li, K. (2024). SOAR: Improved Indexing for Approximate Nearest Neighbor Search. arXiv preprint arXiv:2404.00774](https://www.arxiv.org/pdf/2411.06158)
 5. [Kandpal, N., Jiang, H., Kong, X., Teng, J., &amp; Chen, J. (2024). RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval. arXiv preprint arXiv:2401.18059v1](https://arxiv.org/pdf/2401.18059v1)
 6. [Guo, R., Kumar, S., Choromanski, K., &amp; Simcha, D. (2019). Quantization based Fast Inner Product Search. arXiv preprint arXiv:1509.01469](https://arxiv.org/pdf/1509.01469)
-
-## Project status and why it stopped
-
-SparkyAI is not maintained. I stopped active work mainly because agentic systems are operationally expensive: multi-step tool calls, retrieval + reranking, retries, and background ingestion add real cost and latency. This repo also predates a lot of the modern baseline for production agent systems, so keeping it up-to-date would largely mean rebuilding core parts of it.
-
-Even so, the project was worth doing. It taught me a lot about where RAG actually fails in practice (stale pages, messy HTML, conflicting sources, long-tail queries) and where “agents” become expensive in real deployments (routing overhead, tool failures, rate limits, and the complexity of keeping state).
-
-Today I treat this repository as a marker of what my curiosity led me to build while trying to understand agents and advanced RAG latency management.
 
 ## Where the work continued
 
