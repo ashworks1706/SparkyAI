@@ -9,8 +9,8 @@ use serde::Deserialize;
 pub struct Config {
     /// Process-level settings.
     pub app: App,
-    /// How to reach the API.
-    pub api: Api,
+    /// How to reach the engine.
+    pub engine: Engine,
     /// Discord credentials and guild.
     pub discord: Discord,
     /// Error reporting.
@@ -26,10 +26,10 @@ pub struct App {
     pub log_level: String,
 }
 
-/// How to reach the API.
+/// How to reach the engine.
 #[derive(Debug, Deserialize)]
-pub struct Api {
-    /// Base URL of the api process.
+pub struct Engine {
+    /// Base URL of the engine process.
     pub base_url: String,
     /// Shared secret presented on every request.
     pub service_token: SecretString,

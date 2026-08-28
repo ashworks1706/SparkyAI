@@ -7,7 +7,7 @@ cp .env.example .env            # fill in Discord token and RunPod URLs
 docker compose -f deploy/compose.yml up -d
 ```
 
-Starts api, discord, ingest, Postgres 17, Redis 7, Qdrant, MinIO. `api` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
+Starts engine, discord, ingest, Postgres 17, Redis 7, Qdrant, MinIO. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
 
 ## RunPod
 

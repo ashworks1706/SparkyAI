@@ -1,13 +1,13 @@
 [package]
-name = "api"
-description = "SparkyAI backend: HTTP API, harness, retrieval, memory, storage"
+name = "engine"
+description = "SparkyAI engine: agent, knowledge, storage, HTTP surface"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "api"
+name = "engine"
 path = "src/main.rs"
 
 [dependencies]

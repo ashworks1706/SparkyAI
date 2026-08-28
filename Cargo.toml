@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/api", "apps/discord"]
+members = ["apps/engine", "apps/discord"]
 
 [workspace.package]
 version = "0.1.0"

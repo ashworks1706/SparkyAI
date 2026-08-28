@@ -1,7 +1,7 @@
 services:
-  api:
+  engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
-    entrypoint: ["/api"]
+    entrypoint: ["/engine"]
     env_file: ../.env
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
@@ -20,8 +20,8 @@ services:
     entrypoint: ["/discord"]
     env_file: ../.env
     environment:
-      SPARKY_API__BASE_URL: http://api:8080
-    depends_on: [api]
+      SPARKY_ENGINE__BASE_URL: http://engine:8080
+    depends_on: [engine]
     restart: unless-stopped
 
   ingest:

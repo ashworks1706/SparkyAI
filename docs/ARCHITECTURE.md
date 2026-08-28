@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository; `apps/` holds every deployable — `api` and `discord` (Rust), `ingest` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `api` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → api`, `api → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
+One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `ingest` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `engine` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → engine`, `engine → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
@@ -13,9 +13,9 @@ flowchart LR
     U[Student / Moderator] -->|slash command| D[Discord]
     A[Admin · web] -->|HTTP| APP
 
-    subgraph rust [apps/api · apps/discord]
+    subgraph rust [apps/engine · apps/discord]
         BOT[discord]
-        APP[api<br/>harness · policy · retrieval · memory · jobs]
+        APP[engine<br/>agent · knowledge · storage · routes]
     end
     D --> BOT
     BOT -->|HTTP / SSE| APP
@@ -47,7 +47,7 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 - Facts come from retrieval or live observation, never from model weights.
 - Public sites are ingested offline. The request path never fetches a web page.
 - Every request carries its own `RequestContext`. No global mutable state.
-- Every replaceable dependency is a trait in `api/src/harness` with a mock for tests.
+- Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
 - Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing. We do not use `rig::Agent`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
@@ -57,16 +57,14 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 
 ```
 apps/
-  api/            Rust bin. The backend: HTTP routes + harness + retrieval + memory + storage.
-    src/harness/    types, traits, agent loop, context assembly, JSONL tracing — imports nothing else
-    src/model/      Rig CompletionModel wiring for vLLM; mock
-    src/tools/      built-in Tool impls
-    src/retrieval/  query side: embed → dense + BM25 → fuse → rerank → Evidence
+  engine/         Rust bin. The thing that thinks, finds, persists, and listens.
+    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → vLLM, mock) · tools
+    src/knowledge/  query-side retrieval: embed → dense + BM25 → fuse → rerank → Evidence
     src/storage/    Postgres, Redis, Qdrant, object-store adapters
     src/routes/     chat, health, admin
     src/{config,telemetry,wiring}.rs
     migrations/     the schema contract
-  discord/        Rust bin: serenity bot; HTTP/SSE client of api. Never links api.
+  discord/        Rust bin: serenity bot; HTTP/SSE client of engine. Never links it.
   ingest/         Python worker: fetch → snapshot → extract → chunk → embed → index
   inference/      vLLM on RunPod: env files and start script
   web/            static frontend + admin UI (Vite + React)
@@ -78,19 +76,21 @@ deploy/           compose + one Dockerfile per image
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-## Modules inside `api`
+## Modules inside `engine`
 
 ```mermaid
 flowchart BT
-    H[harness<br/>types · traits · loop · policy · assembly · trace]
-    M[model<br/>Rig CompletionModel → vLLM · mock] --> H
-    T[tools] --> H
-    R[retrieval<br/>hybrid · rerank] --> H
+    H[agent::harness<br/>types · traits · loop · policy · assembly · trace]
+    M[agent::model<br/>Rig CompletionModel → vLLM · mock] --> H
+    T[agent::tools] --> H
+    K[knowledge<br/>embed · hybrid · rerank] --> H
     S[storage<br/>postgres · redis · qdrant · object] --> H
-    W[routes · wiring] --> M & T & R & S & H
+    W[routes · wiring] --> M & T & K & S & H
 ```
 
-Dependency direction inside the crate: `routes`/`wiring` → adapters → `harness`. `harness` imports nothing else. Adapter modules import only `harness`, never each other. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `api` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+Dependency direction inside the crate: `routes`/`wiring` → everything; `agent::model`, `agent::tools`, `knowledge`, `storage` → `agent::harness` only, never each other; `agent::harness` → nothing. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+
+These three seams — `agent`, `knowledge`, `storage` — are where a process split would happen if a measured need ever appears (a second consumer of knowledge, independent scaling). Until then they are modules.
 
 ## Types
 
@@ -131,7 +131,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `api/src/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
+All in `engine/src/agent/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
 
 ```rust
 #[async_trait]
@@ -181,8 +181,8 @@ pub trait Sandbox {   // Phase 7
 
 ## Request lifecycle
 
-1. `discord` receives the slash command and POSTs it to `api` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
-2. `api` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
+1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
+2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
 3. Load conversation; recall memory; retrieve evidence if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
 5. Call the model; validate structured output. One correction attempt on invalid output, then stop.
@@ -195,7 +195,7 @@ pub trait Sandbox {   // Phase 7
 ```mermaid
 sequenceDiagram
     participant D as discord
-    participant H as api · harness
+    participant H as engine · harness
     participant C as Context assembly
     participant M as ModelProvider
     participant P as Policy
@@ -389,13 +389,13 @@ Separate worker process, never inside the app process. One isolated browser cont
 
 ## Deployment
 
-Two images: `sparkyai-rust` (contains both `api` and `discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Two images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
     subgraph host [CPU host — Docker Compose]
         BOT[discord]
-        APP[api]
+        APP[engine]
         ING[apps/ingest]
         PG[(postgres:17)]
         RD[(redis:7)]
@@ -421,7 +421,7 @@ flowchart TB
 
 ## First vertical slice (Phase 1–3 target)
 
-Discord slash command → `discord` → `POST /chat` on `api` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
 
 ## Open decisions
 

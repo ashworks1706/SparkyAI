@@ -5,17 +5,17 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 ## Commands
 
 ```
-cargo test --workspace                                  # apps/api + apps/discord
+cargo test --workspace                                  # apps/engine + apps/discord
 cargo clippy --workspace --all-targets -- -D warnings   # must be clean
 cargo fmt --all                                         # before commit
-./scripts/check-deps.sh                                 # api and discord never link each other
-cargo run -p api                                        # needs .env (see .env.example)
+./scripts/check-deps.sh                                 # engine and discord never link each other
+cargo run -p engine                                     # needs .env (see .env.example)
 cargo run -p discord
 
 cd apps/ingest && uv sync --extra dev && uv run pytest -q
 cd models      && uv sync --extra dev && uv run pytest -q
 cd apps/web    && npm ci && npm run lint && npm run build
-docker compose -f deploy/compose.yml up -d              # api, discord, ingest, postgres, redis, qdrant, minio
+docker compose -f deploy/compose.yml up -d              # engine, discord, ingest, postgres, redis, qdrant, minio
 ```
 
 CI runs all of these. A change is not done until the relevant ones pass.
@@ -25,8 +25,8 @@ CI runs all of these. A change is not done until the relevant ones pass.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/api/         Rust bin — the backend. Modules: harness, model, tools, retrieval, storage, routes.
-apps/discord/     Rust bin — serenity bot; HTTP/SSE client of api. Never links api.
+apps/engine/      Rust bin — the backend. Modules: agent/{harness,model,tools}, knowledge, storage, routes.
+apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
 apps/ingest/      Python worker — scrape → chunk → embed → index
 apps/inference/   vLLM on RunPod — env files + start script
 apps/web/         static frontend + admin UI (Vite + React)
@@ -37,7 +37,7 @@ deploy/           compose + one Dockerfile per image
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → api (HTTP), api → vLLM / MCP / sandbox. Everything else goes through Postgres, Qdrant, Redis, object storage. `apps/api/migrations` is the contract.
+Processes talk only via: discord → engine (HTTP), engine → vLLM / MCP / sandbox. Everything else goes through Postgres, Qdrant, Redis, object storage. `apps/engine/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -47,15 +47,15 @@ Processes talk only via: discord → api (HTTP), api → vLLM / MCP / sandbox. E
 
 ## Config
 
-All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/api/src/config.rs` and `apps/discord/src/config.rs` (Rust) and `settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
+All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/config.rs` and `apps/discord/src/config.rs` (Rust) and `settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
 
 ## Rules
 
-- Inside `apps/api`: `harness` imports nothing else in the crate; `model`, `tools`, `retrieval`, `storage` import only `harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `api` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `agent::harness` imports nothing else in the crate; `agent::model`, `agent::tools`, `knowledge`, `storage` import only `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
-- Every replaceable dependency sits behind a trait in `api/src/harness` with a mock impl for tests.
+- Every replaceable dependency sits behind a trait in `engine/src/agent/harness` with a mock impl for tests.
 - The request path never makes external HTTP calls except to the model server, MCP servers, and our own stores. Fetching pages is `apps/ingest`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.

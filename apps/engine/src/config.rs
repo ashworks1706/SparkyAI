@@ -9,8 +9,8 @@ use serde::Deserialize;
 pub struct Config {
     /// Process-level settings.
     pub app: App,
-    /// How clients reach the API.
-    pub api: Api,
+    /// How clients reach the engine.
+    pub engine: Engine,
     /// Discord bot settings.
     pub discord: Discord,
     /// Chat model endpoint.
@@ -42,10 +42,10 @@ pub struct App {
     pub log_level: String,
 }
 
-/// How the Discord bot and other clients reach the API.
+/// How the Discord bot and other clients reach the engine.
 #[derive(Debug, Deserialize)]
-pub struct Api {
-    /// Base URL of `sparky-api`.
+pub struct Engine {
+    /// Base URL of the engine process.
     pub base_url: String,
     /// Shared secret presented by internal clients.
     pub service_token: SecretString,

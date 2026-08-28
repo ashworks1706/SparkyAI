@@ -1,6 +1,6 @@
 [package]
 name = "discord"
-description = "SparkyAI Discord bot: an HTTP/SSE client of the api"
+description = "SparkyAI Discord bot: an HTTP/SSE client of the engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
