@@ -35,7 +35,8 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 | Memory / knowledge layer | Own implementation on Postgres + Qdrant |
 | Ingestion fetch | reqwest + scraper; chromiumoxide where JS is required |
 | Object storage | S3-compatible (MinIO locally) |
-| Post-training | Python: PyTorch, Transformers, PEFT, TRL |
+| Post-training | Python: TRL + PEFT (+ Unsloth), W&B, HF Hub |
+| Evals | Inspect AI, BFCL, lm-eval |
 | Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs |
 | Deploy | Docker Compose; GHCR images via CD; RunPod GPU pods for vLLM |
 

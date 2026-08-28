@@ -1,0 +1,15 @@
+base_model: outputs/dpo/merged
+output_dir: outputs/grpo
+dataset: data/processed/grpo_prompts.jsonl
+rewards: [schema_valid, correct_tool, correct_args, citation_present, policy_respected]
+num_generations: 8
+max_completion_length: 1024
+vllm:
+  enabled: true
+  gpu_memory_utilization: 0.4
+train:
+  epochs: 1
+  learning_rate: 1.0e-6
+  bf16: true
+wandb:
+  project: sparky-models

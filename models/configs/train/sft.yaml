@@ -1,0 +1,20 @@
+base_model: Qwen/Qwen3-14B
+output_dir: outputs/sft
+dataset: data/processed/sft.jsonl
+max_seq_length: 8192
+lora:
+  r: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+train:
+  epochs: 2
+  per_device_batch_size: 2
+  gradient_accumulation: 8
+  learning_rate: 2.0e-4
+  warmup_ratio: 0.03
+  bf16: true
+  gradient_checkpointing: true
+  load_in_4bit: true
+wandb:
+  project: sparky-models

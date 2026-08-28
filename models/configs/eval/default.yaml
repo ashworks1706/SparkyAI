@@ -1,0 +1,8 @@
+model: openai/Qwen/Qwen3-14B
+base_url: ${SPARKY_MODEL__BASE_URL}
+suites: [tool_selection, tool_args, grounding, memory, permissions, clarification, refusal, latency]
+judge: null   # set to a hosted model name to enable LLM-graded scorers
+bfcl:
+  categories: [simple, multiple, parallel, parallel_multiple, irrelevance]
+lm_eval:
+  tasks: [ifeval, gsm8k]
