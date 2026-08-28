@@ -3,8 +3,8 @@ target/
 .env
 .env.*
 !.env.example
-models/.venv
-models/uv.lock
+.venv/
+uv.lock
 .vscode
 .idea
 *.log

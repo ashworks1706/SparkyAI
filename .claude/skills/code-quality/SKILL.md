@@ -155,7 +155,7 @@ keeping any bespoke helper, check whether an installed dependency covers it.
   cruft. Migrate the callers, then delete the hand-rolled version.
 - **Follow the convention the project already chose.** `tracing` not
   `println!`; `thiserror` enums not `anyhow` in library crates; `SecretString`
-  for secrets; config through `crates/app/src/config.rs` only. One concept, one
+  for secrets; config through each app's `config.rs` only. One concept, one
   tool.
 - **Prefer the standard library.** A hand-rolled helper *or* a stale dependency
   doing what `std` already does can be deleted outright — the best reuse adds

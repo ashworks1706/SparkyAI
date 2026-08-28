@@ -1,7 +1,7 @@
 [project]
-name = "sparky-models"
+name = "training"
 version = "0.1.0"
-description = "Post-training, datasets, and evals for Sparky models"
+description = "Training: datasets, post-training, and evals for Sparky models"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.10",
@@ -30,16 +30,16 @@ eval = [
 dev = ["ruff>=0.9", "pytest>=8"]
 
 [project.scripts]
-sparky-data = "sparky_models.datasets.cli:app"
-sparky-train = "sparky_models.training.cli:app"
-sparky-eval = "sparky_models.evals.cli:app"
+data = "training.datasets.cli:app"
+train = "training.posttrain.cli:app"
+eval = "training.evals.cli:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sparky_models"]
+packages = ["src/training"]
 
 [tool.ruff]
 line-length = 100

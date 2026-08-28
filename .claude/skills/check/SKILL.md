@@ -10,7 +10,7 @@ Run from the repo root, in order, stopping at the first failure:
 3. `cargo test --workspace`
 4. `./scripts/check-deps.sh` (engine and discord must not link each other)
 
-If Python packages changed (`apps/ingest`, `models`): `uvx ruff check . && uvx ruff format --check . && uv run pytest -q` in that package. If `apps/web` changed: `npm run lint && npm run build`.
+If Python packages changed (`apps/scraper`, `apps/training`): `uvx ruff check . && uvx ruff format --check . && uv run pytest -q` in that package. If `apps/web` changed: `npm run lint && npm run build`.
 
 Fix failures at the source — never `#[allow(...)]` a lint or skip a test to get green. If a lint is genuinely wrong for a case, the allow goes on the smallest scope possible with a one-line reason.
 

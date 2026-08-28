@@ -21,8 +21,8 @@ jobs:
         include:
           - name: rust
             dockerfile: deploy/docker/rust.Dockerfile
-          - name: ingest
-            dockerfile: deploy/docker/ingest.Dockerfile
+          - name: scraper
+            dockerfile: deploy/docker/scraper.Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

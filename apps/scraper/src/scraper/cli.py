@@ -1,8 +1,13 @@
-"""`sparky-ingest run <source>|--all`, `schedule`, `status`."""
+"""`scraper run <source>|--all`, `scraper schedule`, `scraper status`."""
 
 import typer
 
 app = typer.Typer(no_args_is_help=True)
+
+
+@app.callback()
+def main() -> None:
+    """Scraper: keep the knowledge index fresh."""
 
 
 @app.command()

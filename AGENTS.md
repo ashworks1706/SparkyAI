@@ -12,10 +12,10 @@ cargo fmt --all                                         # before commit
 cargo run -p engine                                     # needs .env (see .env.example)
 cargo run -p discord
 
-cd apps/ingest && uv sync --extra dev && uv run pytest -q
-cd models      && uv sync --extra dev && uv run pytest -q
+cd apps/scraper  && uv sync --extra dev && uv run pytest -q
+cd apps/training && uv sync --extra dev && uv run pytest -q
 cd apps/web    && npm ci && npm run lint && npm run build
-docker compose -f deploy/compose.yml up -d              # engine, discord, ingest, postgres, redis, qdrant, minio
+docker compose -f deploy/compose.yml up -d              # engine, discord, scraper, postgres, redis, qdrant, minio
 ```
 
 CI runs all of these. A change is not done until the relevant ones pass.
@@ -27,12 +27,11 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 ```
 apps/engine/      Rust bin — the backend. Modules: agent/{harness,model,tools}, knowledge, storage, routes.
 apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
-apps/ingest/      Python worker — scrape → chunk → embed → index
+apps/scraper/     Python worker — fetch → chunk → embed → index
 apps/inference/   vLLM on RunPod — env files + start script
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Phase 7 browser worker
-models/           Python — datasets, training, eval runners
-evals/            shared eval data only
+apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose + one Dockerfile per image
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
@@ -56,7 +55,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/agent/harness` with a mock impl for tests.
-- The request path never makes external HTTP calls except to the model server, MCP servers, and our own stores. Fetching pages is `apps/ingest`.
+- The request path never makes external HTTP calls except to the model server, MCP servers, and our own stores. Fetching pages is `apps/scraper`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Errors: `thiserror` enums per crate, no `anyhow` in library crates, no `unwrap` outside tests.
@@ -71,7 +70,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Conventions
 
-- Tests live next to the code (`#[cfg(test)] mod tests`); integration tests in `crates/<name>/tests/`.
+- Tests live next to the code (`#[cfg(test)] mod tests`); integration tests in `apps/<name>/tests/`.
 - Public items have a one-line doc comment saying what, not how.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
 - The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.

@@ -10,4 +10,4 @@ npm run lint
 npm run build     # dist/
 ```
 
-Deployed as static files (Vercel or any static host). No runtime dependency on the Rust app; the admin UI (Phase 4) will live here too and talk to `sparky-app` over HTTP.
+Deployed as static files (Vercel or any static host). No runtime dependency on the engine; the admin UI (Phase 4) will live here too and talk to the engine over HTTP.

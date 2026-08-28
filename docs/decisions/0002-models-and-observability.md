@@ -14,4 +14,4 @@
 
 **Object storage.** MinIO locally; any S3-compatible bucket in deployment.
 
-**Postgres.** 17, via `sqlx` with migrations in `crates/storage/migrations`, applied by `sparky migrate`.
+**Postgres.** 17, via `sqlx` with migrations in `apps/engine/migrations`, applied by the engine at startup.

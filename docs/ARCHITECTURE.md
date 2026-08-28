@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `ingest` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `engine` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → engine`, `engine → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
+One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `scraper` and `training` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `engine` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → engine`, `engine → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
@@ -29,7 +29,7 @@ flowchart LR
     APP -.->|Phase 4| MCP[MCP servers]
     APP -.->|Phase 7| BW[Browser worker]
 
-    ING[apps/ingest<br/>Python worker] --> WEB[Public ASU sites]
+    ING[apps/scraper<br/>Python worker] --> WEB[Public ASU sites]
     ING --> PG
     ING --> QD
     ING --> S3
@@ -65,12 +65,11 @@ apps/
     src/{config,telemetry,wiring}.rs
     migrations/     the schema contract
   discord/        Rust bin: serenity bot; HTTP/SSE client of engine. Never links it.
-  ingest/         Python worker: fetch → snapshot → extract → chunk → embed → index
+  scraper/        Python worker: fetch → snapshot → extract → chunk → embed → index
   inference/      vLLM on RunPod: env files and start script
   web/            static frontend + admin UI (Vite + React)
   sandbox/        Phase 7 browser worker
-models/           Python: datasets, training, eval runners
-evals/            shared eval cases (data only)
+  training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
 deploy/           compose + one Dockerfile per image
 ```
 
@@ -282,11 +281,11 @@ flowchart TD
 
 ## Knowledge
 
-Offline pipeline in `apps/ingest` (Python): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Offline pipeline in `apps/scraper` (Python): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
 Request path: hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
 
-Ingestion (`apps/ingest`, offline):
+Ingestion (`apps/scraper`, offline):
 
 ```mermaid
 flowchart LR
@@ -389,14 +388,14 @@ Separate worker process, never inside the app process. One isolated browser cont
 
 ## Deployment
 
-Two images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Two images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects) and `sparkyai-scraper`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
     subgraph host [CPU host — Docker Compose]
         BOT[discord]
         APP[engine]
-        ING[apps/ingest]
+        ING[apps/scraper]
         PG[(postgres:17)]
         RD[(redis:7)]
         QD[(qdrant)]
@@ -421,7 +420,7 @@ flowchart TB
 
 ## First vertical slice (Phase 1–3 target)
 
-Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/scraper` feeding it), memory, MCP, browser — in that order.
 
 ## Open decisions
 

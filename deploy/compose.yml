@@ -24,8 +24,8 @@ services:
     depends_on: [engine]
     restart: unless-stopped
 
-  ingest:
-    build: { context: .., dockerfile: deploy/docker/ingest.Dockerfile }
+  scraper:
+    build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
     env_file: ../.env
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky

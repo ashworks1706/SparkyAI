@@ -6,7 +6,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 
 | Project | What | Language |
 |---|---|---|
-| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators: API, bot, ingestion, web | Rust · Python · TypeScript |
+| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators: engine, bot, scraper, web | Rust · Python · TypeScript |
 | **Sparky Models** | Post-trained open models for routing and tool use | Python (PyTorch, TRL, PEFT) |
 
 The agent harness is a module of the engine, not a separate product.
@@ -35,7 +35,7 @@ The agent harness is a module of the engine, not a separate product.
 | Cache / queue | Redis |
 | Vector store | Qdrant (adapter); Piramid later |
 | Memory / knowledge layer | Own implementation on Postgres + Qdrant |
-| Ingestion | Python worker (`services/ingest`): httpx + BeautifulSoup, Playwright where JS is required |
+| Scraper | Python worker (`apps/scraper`): httpx + BeautifulSoup, Playwright where JS is required |
 | Object storage | S3-compatible (MinIO locally) |
 | Post-training | Python: TRL + PEFT (+ Unsloth), W&B, HF Hub |
 | Evals | Inspect AI, BFCL, lm-eval |
@@ -47,7 +47,7 @@ The agent harness is a module of the engine, not a separate product.
 ### 0 — Archive, clean, scaffold
 1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Monorepo layout: `apps/{engine,discord}` (Rust bins), `apps/ingest` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `models`, `evals`, `deploy`. See ARCHITECTURE.md.
+3. Monorepo layout: `apps/{engine,discord}` (Rust bins), `apps/{scraper,training}` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `deploy`. See ARCHITECTURE.md.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 

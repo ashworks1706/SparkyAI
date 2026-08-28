@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [models, apps/ingest]
+        pkg: [apps/scraper, apps/training]
     defaults: { run: { working-directory: ${{ matrix.pkg }} } }
     steps:
       - uses: actions/checkout@v4
