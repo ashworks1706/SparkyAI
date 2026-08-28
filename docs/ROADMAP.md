@@ -18,7 +18,6 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 - Per-request context. No global state.
 - Trait per replaceable dependency: `ModelProvider`, `Tool`, `Retriever`, `MemoryStore`, `ConversationStore`, `Policy`, `TraceSink`, `Sandbox`.
 - Evals before training.
-- Create directories when something goes in them.
 
 ## Stack
 
@@ -53,7 +52,6 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
    crates/app          composition root, the one binary
    models/             Python post-training (later)
    ```
-   Only crates with code in them exist at any given time.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 

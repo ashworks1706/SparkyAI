@@ -1,0 +1,1 @@
+//! `Retriever` trait and `RetrievalQuery`.

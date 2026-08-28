@@ -32,7 +32,7 @@ crates/
 models/         Python post-training (Phase 6)
 ```
 
-Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. Adapters never import each other. A crate exists only once it has code; start as a module and extract when the boundary is useful.
+Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. Adapters never import each other. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
 
 ## Types
 

@@ -15,7 +15,7 @@ CI runs exactly those three. A change is not done until all pass.
 ## Layout
 
 ```
-crates/<name>/   one crate per row in ARCHITECTURE.md; create only when it has code
+crates/<name>/   one crate per row in ARCHITECTURE.md; module files are pre-scaffolded with a doc comment
 docs/            ROADMAP.md, ARCHITECTURE.md
 models/          Python post-training (Phase 6, not yet)
 ```
@@ -39,7 +39,7 @@ models/          Python post-training (Phase 6, not yet)
 - Tests live next to the code (`#[cfg(test)] mod tests`); integration tests in `crates/<name>/tests/`.
 - Public items have a one-line doc comment saying what, not how.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
-- Don't scaffold empty modules, placeholder files, or crates ahead of need.
+- The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.
 - Keep docs lean. No filler prose.
 
 ## Out of scope

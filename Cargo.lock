@@ -383,6 +383,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "sparky-app"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-discord",
+ "sparky-harness",
+ "sparky-model",
+ "sparky-retrieval",
+ "sparky-server",
+ "sparky-storage",
+ "sparky-tools",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sparky-discord"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sparky-harness"
 version = "0.1.0"
 dependencies = [
@@ -394,6 +426,71 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "sparky-model"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sparky-retrieval"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sparky-server"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sparky-storage"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sparky-tools"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "sparky-harness",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

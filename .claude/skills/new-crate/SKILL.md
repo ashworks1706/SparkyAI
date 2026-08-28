@@ -1,12 +1,11 @@
 ---
 name: new-crate
-description: Create a new workspace crate following repo conventions. Use when a row from docs/ARCHITECTURE.md's crate table is about to get its first real code.
+description: Create a new workspace crate following repo conventions. Use only when docs/ARCHITECTURE.md gains a new crate; existing crates are already scaffolded.
 ---
 
 Arguments: crate name (e.g. `model`, `retrieval`).
 
 1. Confirm the crate is listed in `docs/ARCHITECTURE.md`. If not, stop and ask — new crates are an architecture decision.
-2. Confirm there is real code to put in it. Empty crates aren't created.
 3. Create `crates/<name>/Cargo.toml`:
    - package name `sparky-<name>`
    - `version/edition/license/repository` all `.workspace = true`

@@ -1,0 +1,6 @@
+services:
+  app: {}
+  ingestion: {}
+  postgres: {}
+  redis: {}
+  qdrant: {}
