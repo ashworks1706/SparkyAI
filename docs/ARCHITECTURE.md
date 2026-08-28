@@ -6,6 +6,39 @@ One Rust binary. Modules talk through types and traits, not internal HTTP. Model
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
+## System context
+
+```mermaid
+flowchart LR
+    U[Student / Moderator] -->|slash command| D[Discord]
+    A[Admin] -->|HTTP| APP
+    D --> APP
+
+    subgraph one_process [sparky-app — one process]
+        APP[Discord adapter · HTTP · Harness · Policy · Jobs]
+    end
+
+    APP -->|OpenAI-compatible| VLLM[vLLM · Qwen3-14B]
+    APP -->|OpenAI-compatible| EMB[vLLM · embed + rerank]
+    APP --> PG[(PostgreSQL)]
+    APP --> RD[(Redis)]
+    APP --> QD[(Qdrant)]
+    APP --> S3[(Object storage)]
+    APP -.->|Phase 4| MCP[MCP servers]
+    APP -.->|Phase 7| BW[Browser worker]
+
+    ING[Ingestion worker<br/>same binary, ingest command] --> WEB[Public ASU sites]
+    ING --> PG
+    ING --> QD
+    ING --> S3
+    ING --> EMB
+
+    APP --> SEN[Sentry]
+    APP --> AX[Axiom / OTLP]
+```
+
+Solid arrows exist or are in the current phase; dashed are later phases. The request path never touches `WEB`.
+
 ## Rules
 
 - Open models only, served by vLLM behind an OpenAI-compatible HTTP API.
@@ -31,6 +64,19 @@ crates/
   server/       axum routes: health, admin
   app/          composition root; the one binary
 models/         Python post-training (Phase 6)
+```
+
+```mermaid
+flowchart BT
+    H[harness<br/>types · traits · loop · policy · assembly · trace]
+    M[model<br/>Rig CompletionModel → vLLM · mock] --> H
+    T[tools<br/>public_search · discord_ops] --> H
+    R[retrieval<br/>hybrid · rerank · ingestion] --> H
+    S[storage<br/>postgres · redis · qdrant · object] --> H
+    D[discord<br/>serenity → UserEvent] --> H
+    V[server<br/>axum routes] --> H
+    A[app<br/>config · telemetry · wiring] --> M & T & R & S & D & V
+    A --> H
 ```
 
 Dependency direction: `app` → adapters → `harness`. `harness` imports nothing in-repo. Adapters never import each other. `scripts/check-deps.sh` enforces this in CI; `[workspace.lints]` enforces code rules in every crate. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
@@ -135,6 +181,63 @@ pub trait Sandbox {   // Phase 7
 9. Persist turn, memory candidates that pass the write policy, and trace.
 10. Reply with citations.
 
+```mermaid
+sequenceDiagram
+    participant D as Discord adapter
+    participant H as Harness
+    participant C as Context assembly
+    participant M as ModelProvider
+    participant P as Policy
+    participant T as Tool
+    participant X as TraceSink
+
+    D->>H: UserEvent + RequestContext
+    H->>C: history · memory · evidence · tool defs
+    C-->>H: budgeted context
+    loop until final / limit / deadline / cancel
+        H->>M: generate(ctx, request)
+        M-->>H: text | tool calls
+        H->>X: model event
+        alt tool call
+            H->>P: authorize(ctx, action)
+            P-->>H: Allow | Deny | Confirm
+            opt Confirm
+                H-->>D: confirmation prompt
+                D-->>H: user decision
+            end
+            H->>T: call(ctx, args)
+            T-->>H: ToolOutput | ToolError
+            H->>X: tool event
+        end
+    end
+    H->>X: final + persist turn, memory
+    H-->>D: answer + citations
+```
+
+Agent loop states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Assemble
+    Assemble --> Generate
+    Generate --> Final: text only
+    Generate --> Authorize: tool call(s)
+    Generate --> Correct: invalid output
+    Correct --> Generate: one retry
+    Correct --> Failed: still invalid
+    Authorize --> Execute: Allow
+    Authorize --> Generate: Deny (fed back)
+    Authorize --> AwaitConfirm: Confirm
+    AwaitConfirm --> Execute: confirmed
+    AwaitConfirm --> Generate: denied / expired
+    Execute --> Generate: result appended
+    Execute --> Failed: timeout / error budget
+    Generate --> Failed: step limit / deadline / cancel
+    Final --> Persist
+    Failed --> Persist
+    Persist --> [*]
+```
+
 ## Tool risk classes
 
 | Class | Examples | Behavior |
@@ -148,11 +251,58 @@ pub trait Sandbox {   // Phase 7
 
 A confirmation is bound to one exact action payload, is single-use and short-lived, states what happens / where / with what data / whether reversible, and is recorded in the trace. If the payload changes, confirm again. External writes are never auto-retried without an idempotency key.
 
+```mermaid
+flowchart TD
+    C[Proposed tool call] --> RC{RiskClass}
+    RC -->|ReadPublic / PrepareWrite| RUN[Execute]
+    RC -->|ReadAuthenticated| SES{User session<br/>authorized?}
+    SES -->|yes| RUN
+    SES -->|no| DENY[Deny → model]
+    RC -->|ExternalWrite / Destructive| ROLE{Role permits?}
+    ROLE -->|no| DENY
+    ROLE -->|yes| TOK[Issue confirmation<br/>bound to payload hash]
+    TOK --> USER{User confirms<br/>within TTL?}
+    USER -->|yes, same payload| RUN
+    USER -->|no / expired / payload changed| DENY
+    RC -->|Forbidden| DENY
+    RUN --> TR[Trace: decision + token id]
+    DENY --> TR
+```
+
 ## Knowledge
 
 Offline pipeline: fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
 Request path: hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
+
+Ingestion (offline, `sparky-app ingest`):
+
+```mermaid
+flowchart LR
+    SRC[sources table] --> F[fetch<br/>reqwest / chromiumoxide]
+    F --> SNAP[(raw snapshot<br/>object storage)]
+    F --> HASH{content hash<br/>changed?}
+    HASH -->|no| SKIP[touch fetched_at]
+    HASH -->|yes| EX[extract + normalize]
+    EX --> CH[chunk]
+    CH --> EM[embed<br/>Qwen3-Embedding]
+    EM --> QD[(Qdrant<br/>chunks + payload)]
+    CH --> PG[(Postgres<br/>source_versions)]
+```
+
+Retrieval (request path):
+
+```mermaid
+flowchart LR
+    Q[query] --> QE[embed]
+    QE --> DENSE[Qdrant top-k<br/>filter: tenant, category]
+    Q --> BM[BM25 top-k<br/>Postgres FTS]
+    DENSE --> FUSE[RRF fusion]
+    BM --> FUSE
+    FUSE --> RR[rerank<br/>Qwen3-Reranker]
+    RR --> EV[Evidence: content · url · fetched_at · score]
+    EV --> CTX[context assembly]
+```
 
 ## Memory
 
@@ -166,6 +316,26 @@ Request path: hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fe
 | Task | state to continue a multi-step job |
 
 A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. Users can view and delete their memory (Phase 4). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
+
+Write path:
+
+```mermaid
+flowchart TD
+    T[completed turn] --> EXT[extract candidates]
+    EXT --> U{useful later?}
+    U -->|no| DROP[discard]
+    U --> ST{stable?}
+    ST -->|no| DROP
+    ST --> OWN{belongs to<br/>this user?}
+    OWN -->|no| DROP
+    OWN --> SENS{sensitivity<br/>permits storage?}
+    SENS -->|no| DROP
+    SENS --> DUP{duplicate of<br/>existing?}
+    DUP -->|yes| MERGE[update confidence / timestamp]
+    DUP -->|no| EXP[assign expiry]
+    EXP --> W[(memories)]
+    MERGE --> W
+```
 
 ## Storage
 
@@ -209,6 +379,32 @@ Separate worker process, never inside the app process. One isolated browser cont
 ## Deployment
 
 First: one app container, one ingestion worker from the same workspace, Postgres, Redis, Qdrant, object storage, vLLM on a RunPod GPU pod; Docker Compose. Browser workers are added in Phase 7 as separate containers. Split the monolith only when a measured need appears: independent scaling, failure isolation, hardware, or a security boundary.
+
+```mermaid
+flowchart TB
+    subgraph host [CPU host — Docker Compose]
+        APP[sparky-app serve]
+        ING[sparky-app ingest]
+        PG[(postgres:17)]
+        RD[(redis:7)]
+        QD[(qdrant)]
+        MN[(minio)]
+    end
+    subgraph runpod [RunPod]
+        V1[vLLM · Qwen3-14B<br/>A100 80GB · :8000]
+        V2[vLLM · embed :8001 · rerank :8002<br/>L4]
+    end
+    subgraph saas [SaaS]
+        DC[Discord]
+        SE[Sentry]
+        AX[Axiom]
+        GH[GHCR images]
+    end
+    DC <--> APP
+    APP --> V1 & V2 & PG & RD & QD & MN & SE & AX
+    ING --> V2 & PG & QD & MN
+    GH -.->|pull| APP & ING
+```
 
 ## First vertical slice (Phase 1–3 target)
 
