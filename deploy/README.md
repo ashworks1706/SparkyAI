@@ -3,11 +3,24 @@
 ## Local
 
 ```bash
-cp .env.example .env            # fill in Discord token and RunPod URLs
-just up            # or: docker compose -f deploy/compose.yml up -d
+just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, qdrant, minio)
+just engine        # then in separate shells: just knowledge, just discord, just web
+# or run everything in containers:
+just up            # docker compose -f deploy/compose.yml up -d
 ```
 
 Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17, Redis 7, Qdrant, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
+
+## Production
+
+```bash
+git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
+cp .env.example .env               # production values; SPARKY_APP__ENV=production
+SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no host ports
+just prod-logs engine
+```
+
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. vLLM stays on RunPod.
 
 ## RunPod
 

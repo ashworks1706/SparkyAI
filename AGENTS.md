@@ -7,7 +7,8 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 `just` is the entrypoint for every unit (`just` lists recipes). Install: https://just.systems.
 
 ```
-just check            # fmt-check, lint, test every unit — the gate; CI runs the same recipes
+just doctor | env | hooks | bootstrap   # first run
+just check            # fmt-check, lint, test every unit — the gate; CI and the pre-commit hook run the same recipes
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-knowledge  # ruff + pytest in apps/knowledge
 just check-training   # ruff + pytest in apps/training
@@ -21,7 +22,8 @@ just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, qdrant, minio only
-just up | down | logs # full compose stack
+just up | down | logs # full compose stack (dev, builds locally)
+just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
 just diagrams         # render ARCHITECTURE.md mermaid to verify syntax
 ```
 

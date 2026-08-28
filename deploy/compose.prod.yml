@@ -1,0 +1,26 @@
+# Production override: prebuilt images from GHCR, no build, no host ports except engine.
+# Usage: docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d
+services:
+  engine:
+    build: !reset null
+    image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
+  discord:
+    build: !reset null
+    image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
+  knowledge:
+    build: !reset null
+    image: ghcr.io/ashworks1706/sparkyai-knowledge:${SPARKY_IMAGE_TAG:-main}
+  scraper:
+    build: !reset null
+    image: ghcr.io/ashworks1706/sparkyai-knowledge:${SPARKY_IMAGE_TAG:-main}
+  sandbox:
+    build: !reset null
+    image: ghcr.io/ashworks1706/sparkyai-sandbox:${SPARKY_IMAGE_TAG:-main}
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  qdrant:
+    ports: !reset []
+  minio:
+    ports: !reset []

@@ -14,4 +14,4 @@
 
 **Object storage.** MinIO locally; any S3-compatible bucket in deployment.
 
-**Postgres.** 17, via `sqlx` with migrations in `apps/engine/migrations`, applied by the engine at startup.
+**Postgres.** 17, via `psycopg` in `apps/knowledge`, with migrations in `apps/knowledge/migrations` applied by `knowledge migrate` (updated per 0008).

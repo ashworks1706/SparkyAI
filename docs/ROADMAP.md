@@ -44,14 +44,14 @@ The agent harness is a module of the engine, not a separate product.
 
 ## Phases
 
-### 0 — Archive, clean, scaffold
-1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
-2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Monorepo layout: `apps/{engine,discord}` (Rust bins), `apps/{knowledge,training,sandbox}` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `deploy`. See ARCHITECTURE.md.
-4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
-5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
+### 0 — Archive, clean, scaffold ✅ (done 2026-08-28)
+1. ~~Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.~~
+2. ~~Remove v1 from `main`.~~
+3. ~~Monorepo layout: `apps/{engine,discord}` (Rust), `apps/{knowledge,training,sandbox}` (Python), `apps/inference`, `apps/web`, `deploy`. Every module scaffolded with a doc comment.~~
+4. ~~`docs/ARCHITECTURE.md` with diagrams; decisions 0001–0008.~~
+5. ~~`just check` gate; CI per unit; CD images to GHCR; pre-commit hook; Compose dev + prod.~~
 
-**Exit:** every unit builds and lints in CI; v1 is one `git checkout archive/v1` away.
+**Exit met:** every unit builds and lints in CI; `just bootstrap` gives a working dev environment; v1 is one `git checkout archive/v1` away.
 
 ### 1 — Harness module v0.1
 - Message / tool-call / tool-result types

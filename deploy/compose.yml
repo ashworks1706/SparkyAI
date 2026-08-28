@@ -2,7 +2,8 @@ services:
   engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
     entrypoint: ["/engine"]
-    env_file: ../.env
+    env_file:
+      - { path: ../.env, required: false }
     environment:
       SPARKY_KNOWLEDGE__BASE_URL: http://knowledge:8081
     ports: ["8080:8080"]
@@ -12,7 +13,8 @@ services:
   knowledge:
     build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
     entrypoint: ["knowledge-api"]
-    env_file: ../.env
+    env_file:
+      - { path: ../.env, required: false }
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
@@ -28,7 +30,8 @@ services:
   discord:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
     entrypoint: ["/discord"]
-    env_file: ../.env
+    env_file:
+      - { path: ../.env, required: false }
     environment:
       SPARKY_ENGINE__BASE_URL: http://engine:8080
     depends_on: [engine]
@@ -38,7 +41,8 @@ services:
     build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
     entrypoint: ["knowledge-scraper"]
     command: ["schedule"]
-    env_file: ../.env
+    env_file:
+      - { path: ../.env, required: false }
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
@@ -53,7 +57,8 @@ services:
   sandbox:
     build: { context: .., dockerfile: deploy/docker/sandbox.Dockerfile }
     profiles: [sandbox]
-    env_file: ../.env
+    env_file:
+      - { path: ../.env, required: false }
     environment:
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
     expose: ["8090"]

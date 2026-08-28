@@ -6,6 +6,25 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list --unsorted
 
+# ---------- first run ----------
+
+# Check required tools, .env, and git hooks
+doctor:
+    ./scripts/doctor.sh
+
+# Create .env from the example (no-op if it exists)
+env:
+    @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env — fill in tokens and RunPod URLs"; }
+
+# Install the pre-commit hook (runs the gate for touched units)
+hooks:
+    git config core.hooksPath .githooks
+    @echo "hooks installed: .githooks/pre-commit"
+
+# Everything a fresh clone needs: tools check, .env, hooks, deps, datastores
+bootstrap: env hooks setup infra
+    @echo "ready: run 'just engine' / 'just knowledge' / 'just discord' in separate shells, or 'just up' for everything in docker"
+
 # ---------- everything ----------
 
 # Format, lint, and test every unit
@@ -104,6 +123,17 @@ up *ARGS:
 
 down:
     docker compose -f deploy/compose.yml down
+
+# Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
+prod-up *ARGS:
+    docker compose -f deploy/compose.yml -f deploy/compose.prod.yml pull
+    docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d {{ARGS}}
+
+prod-down:
+    docker compose -f deploy/compose.yml -f deploy/compose.prod.yml down
+
+prod-logs *ARGS:
+    docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
 # Only the datastores, for running the apps on the host
 infra:

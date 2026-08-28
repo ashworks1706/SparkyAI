@@ -101,12 +101,14 @@ SparkyAI is implemented primarily in Python and deploys on a containerized stack
 v2 (`main`) is a monorepo: `apps/` (engine, discord, knowledge, training, sandbox, inference, web).
 
 ```bash
-git clone https://github.com/ashworks1706/SparkyAI.git
-cd SparkyAI
-just setup      # deps for every unit (needs cargo, uv, node, just)
-just check      # gate: fmt, lint, test, everything
+git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
+just doctor     # verify cargo, uv, node, docker, just, jq
+just bootstrap  # .env, git hooks, deps, datastores
+just check      # gate: fmt, lint, test for every unit
 just            # list all recipes
 ```
+
+Production: `just prod-up` (see `deploy/README.md`).
 
 See `AGENTS.md` for the recipes and `docs/ARCHITECTURE.md` for the layout.
 
