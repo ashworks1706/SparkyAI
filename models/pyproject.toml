@@ -1,5 +1,23 @@
 [project]
 name = "sparky-models"
 version = "0.1.0"
+description = "Post-training for Sparky models: SFT, DPO, GRPO"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "torch>=2.6",
+    "transformers>=4.51",
+    "datasets>=3.0",
+    "peft>=0.15",
+    "trl>=0.19",
+    "accelerate>=1.0",
+    "bitsandbytes>=0.45; sys_platform == 'linux'",
+    "openai>=1.60",
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.9", "pytest>=8"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

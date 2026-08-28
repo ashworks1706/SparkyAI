@@ -2,6 +2,9 @@
 **/*.rs.bk
 .env
 .env.*
+!.env.example
+models/.venv
+models/uv.lock
 .vscode
 .idea
 *.log

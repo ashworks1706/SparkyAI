@@ -7,11 +7,17 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+tokio.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
-async-trait.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+url.workspace = true
 tracing.workspace = true
+schemars.workspace = true
+secrecy.workspace = true
+rig-core.workspace = true
+rmcp.workspace = true

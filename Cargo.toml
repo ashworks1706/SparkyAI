@@ -9,11 +9,55 @@ license = "MIT"
 repository = "https://github.com/ashworks1706/SparkyAI"
 
 [workspace.dependencies]
+# core
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
-uuid = { version = "1", features = ["v4", "serde"] }
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+url = { version = "2", features = ["serde"] }
+schemars = "1"
+secrecy = { version = "0.10", features = ["serde"] }
+
+# llm / agents
+rig-core = "0.42"
+rmcp = { version = "3", features = ["client", "transport-child-process", "transport-streamable-http-client"] }
+
+# interfaces
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
+axum = "0.8"
+tower-http = { version = "0.7", features = ["trace", "cors", "timeout"] }
+
+# storage
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "postgres", "migrate", "uuid", "chrono", "json"] }
+redis = { version = "1", features = ["tokio-comp", "connection-manager"] }
+qdrant-client = "1.19"
+
+# web fetch
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "gzip", "stream"] }
+scraper = "0.27"
+chromiumoxide = "0.9"
+
+# config
+figment = { version = "0.10", features = ["env", "toml"] }
+dotenvy = "0.15"
+clap = { version = "4", features = ["derive", "env"] }
+
+# observability
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.33"
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "trace", "tls-ring"] }
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing"] }
+sentry-tracing = "0.49"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

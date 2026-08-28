@@ -8,6 +8,8 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 cargo test --workspace                                  # tests
 cargo clippy --workspace --all-targets -- -D warnings   # must be clean
 cargo fmt --all                                         # before commit
+cargo run -p sparky-app -- serve|ingest|migrate         # needs .env (see .env.example)
+docker compose -f deploy/docker-compose.yml up -d       # postgres, redis, qdrant, minio
 ```
 
 CI runs exactly those three. A change is not done until all pass.
@@ -25,6 +27,10 @@ models/          Python post-training (Phase 6, not yet)
 - **Rig** (`rig-core`): model clients, `Tool` schema, embeddings, vector stores. Never `rig::Agent` — the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - Everything else in the harness (loop, policy, context assembly, memory, tracing, replay) is written here.
+
+## Config
+
+All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `crates/app/src/config.rs`. Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
 
 ## Rules
 

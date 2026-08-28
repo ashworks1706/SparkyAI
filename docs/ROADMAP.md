@@ -27,15 +27,17 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 | LLM client / tools / embeddings | Rig (`rig-core`); our loop runs on its `CompletionModel`, not its `Agent` |
 | MCP | `rmcp` (official SDK) |
 | Model serving | vLLM (OpenAI-compatible HTTP) |
-| Baseline model | Qwen instruct, 7B–14B class |
+| Chat model | Qwen3-14B on vLLM (RunPod) |
+| Embeddings / reranker | Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B on vLLM |
 | Database | PostgreSQL |
 | Cache / queue | Redis |
 | Vector store | Qdrant (adapter); Piramid later |
 | Memory / knowledge layer | Own implementation on Postgres + Qdrant |
-| Ingestion fetch | reqwest + scraper; headless browser only where JS is required |
+| Ingestion fetch | reqwest + scraper; chromiumoxide where JS is required |
+| Object storage | S3-compatible (MinIO locally) |
 | Post-training | Python: PyTorch, Transformers, PEFT, TRL |
-| Tracing | OpenTelemetry + JSONL |
-| Deploy | Docker Compose; RunPod GPU pod for vLLM |
+| Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs |
+| Deploy | Docker Compose; GHCR images via CD; RunPod GPU pods for vLLM |
 
 ## Phases
 
