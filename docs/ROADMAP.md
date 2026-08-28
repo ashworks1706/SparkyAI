@@ -26,6 +26,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 | Harness / API / Discord | Rust — tokio, axum, serenity, serde, sqlx |
 | LLM client / tools / embeddings | Rig (`rig-core`); our loop runs on its `CompletionModel`, not its `Agent` |
 | MCP | `rmcp` (official SDK) |
+| Web | Vite + React + TypeScript + shadcn (`apps/web`); landing now, admin UI in Phase 4 |
 | Model serving | vLLM (OpenAI-compatible HTTP) |
 | Chat model | Qwen3-14B on vLLM (RunPod) |
 | Embeddings / reranker | Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B on vLLM |

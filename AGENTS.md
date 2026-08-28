@@ -10,6 +10,7 @@ cargo clippy --workspace --all-targets -- -D warnings   # must be clean
 cargo fmt --all                                         # before commit
 cargo run -p sparky-app -- serve|ingest|migrate         # needs .env (see .env.example)
 docker compose -f deploy/docker-compose.yml up -d       # postgres, redis, qdrant, minio
+cd apps/web && npm ci && npm run lint && npm run build   # web
 ```
 
 Plus `./scripts/check-deps.sh`, which fails if a crate imports something it shouldn't. CI runs all four. A change is not done until all pass.
@@ -18,6 +19,7 @@ Plus `./scripts/check-deps.sh`, which fails if a crate imports something it shou
 
 ```
 crates/<name>/   one crate per row in ARCHITECTURE.md; module files are pre-scaffolded with a doc comment
+apps/web/        landing site + future admin UI; Vite + React; static, no shared code with crates/
 docs/            ROADMAP.md, ARCHITECTURE.md
 models/          Python post-training (Phase 6, not yet)
 ```

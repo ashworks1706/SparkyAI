@@ -63,6 +63,8 @@ crates/
   discord/      serenity adapter → UserEvent
   server/       axum routes: health, admin
   app/          composition root; the one binary
+apps/
+  web/          landing site + admin UI (Phase 4); Vite + React, static, talks to server over HTTP
 models/         Python post-training (Phase 6)
 ```
 

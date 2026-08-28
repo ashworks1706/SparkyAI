@@ -8,3 +8,5 @@ models/uv.lock
 .vscode
 .idea
 *.log
+node_modules/
+apps/web/dist/

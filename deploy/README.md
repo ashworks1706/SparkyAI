@@ -20,6 +20,10 @@ Two pods, both from the `vllm/vllm-openai` image with `deploy/runpod/start.sh` a
 
 Set `SPARKY_MODEL__BASE_URL` etc. to `https://<pod-id>-<port>.proxy.runpod.net/v1`.
 
+## Web
+
+`apps/web` builds to static files: `npm run build` → `apps/web/dist`. Deploy to Vercel (root directory `apps/web`) or any static host. Not part of the Docker image.
+
 ## Images
 
 CI builds and pushes `ghcr.io/ashworks1706/sparkyai:<sha>` and `:main` on every push to `main`.
