@@ -48,6 +48,10 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `crates/app/src/c
 - Dependencies are declared in `[workspace.dependencies]` and referenced with `.workspace = true`.
 - Edition 2024. Follow rustfmt defaults; clippy warnings are errors.
 
+## Skills
+
+`.claude/skills/README.md` lists them. Use `rust-skills` when writing Rust, `postgres-strict` for schema/migrations, `test-driven-development` for features and fixes, `systematic-debugging` for bugs, `verification-before-completion` before saying anything is done, `security-audit-standard` before a release. `/check` is the gate.
+
 ## Conventions
 
 - Tests live next to the code (`#[cfg(test)] mod tests`); integration tests in `crates/<name>/tests/`.
