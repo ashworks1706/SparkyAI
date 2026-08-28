@@ -18,14 +18,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - run: ./scripts/check-deps.sh
+      - uses: extractions/setup-just@v3
+      - run: just check-rust
 
   web:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: apps/web } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,20 +30,18 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
+      - uses: extractions/setup-just@v3
+      - run: cd apps/web && npm ci
+      - run: just check-web
 
   python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [apps/scraper, apps/training]
-    defaults: { run: { working-directory: ${{ matrix.pkg }} } }
+        pkg: [scraper, training]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uvx ruff check .
-      - run: uvx ruff format --check .
-      - run: uv sync --extra dev
-      - run: uv run pytest -q
+      - uses: extractions/setup-just@v3
+      - run: cd apps/${{ matrix.pkg }} && uv sync --extra dev
+      - run: just check-${{ matrix.pkg }}

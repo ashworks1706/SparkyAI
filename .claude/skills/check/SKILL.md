@@ -1,17 +1,16 @@
 ---
 name: check
-description: Run the full pre-commit gate (fmt, clippy -D warnings, tests) and fix anything it reports. Use before every commit and after finishing any code change.
+description: Run the full gate (`just check`: fmt-check, lint, tests, dependency direction for every unit) and fix anything it reports. Use before every commit and after finishing any code change.
 ---
 
-Run from the repo root, in order, stopping at the first failure:
+Run `just check` from the repo root. It runs, per unit:
 
-1. `cargo fmt --all`
-2. `cargo clippy --workspace --all-targets -- -D warnings`
-3. `cargo test --workspace`
-4. `./scripts/check-deps.sh` (engine and discord must not link each other)
+- Rust: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `./scripts/check-deps.sh`
+- `apps/scraper`, `apps/training`: `ruff check`, `ruff format --check`, `pytest`
+- `apps/web`: `eslint`, `vite build`
 
-If Python packages changed (`apps/scraper`, `apps/training`): `uvx ruff check . && uvx ruff format --check . && uv run pytest -q` in that package. If `apps/web` changed: `npm run lint && npm run build`.
+If only one unit changed, `just check-rust` / `check-scraper` / `check-training` / `check-web` is fine.
 
-Fix failures at the source — never `#[allow(...)]` a lint or skip a test to get green. If a lint is genuinely wrong for a case, the allow goes on the smallest scope possible with a one-line reason.
+Fix failures at the source — never `#[allow(...)]` a lint, add a `# noqa`, or skip a test to get green. If a lint is genuinely wrong for a case, the allow goes on the smallest scope possible with a one-line reason.
 
-Report: which step failed (if any), what you changed, final status of all four.
+Report: which step failed (if any), what you changed, final status.

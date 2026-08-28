@@ -4,21 +4,25 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 
 ## Commands
 
-```
-cargo test --workspace                                  # apps/engine + apps/discord
-cargo clippy --workspace --all-targets -- -D warnings   # must be clean
-cargo fmt --all                                         # before commit
-./scripts/check-deps.sh                                 # engine and discord never link each other
-cargo run -p engine                                     # needs .env (see .env.example)
-cargo run -p discord
+`just` is the entrypoint for every unit (`just` lists recipes). Install: https://just.systems.
 
-cd apps/scraper  && uv sync --extra dev && uv run pytest -q
-cd apps/training && uv sync --extra dev && uv run pytest -q
-cd apps/web    && npm ci && npm run lint && npm run build
-docker compose -f deploy/compose.yml up -d              # engine, discord, scraper, postgres, redis, qdrant, minio
+```
+just check            # fmt-check, lint, test every unit — the gate; CI runs the same recipes
+just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
+just check-scraper    # ruff + pytest in apps/scraper
+just check-training   # ruff + pytest in apps/training
+just check-web        # eslint + vite build in apps/web
+just fmt              # format every unit in place
+just setup            # install every unit's deps
+just engine | discord # run a Rust app (needs .env, see .env.example)
+just scraper ...      # e.g. just scraper run library_hours
+just train | eval | data ...
+just infra            # postgres, redis, qdrant, minio only
+just up | down | logs # full compose stack
+just diagrams         # render ARCHITECTURE.md mermaid to verify syntax
 ```
 
-CI runs all of these. A change is not done until the relevant ones pass.
+A change is not done until `just check` passes.
 
 ## Layout
 

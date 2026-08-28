@@ -102,10 +102,13 @@ v2 (`main`) is a monorepo: `apps/` (engine, discord, scraper, training, inferenc
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git
-cd SparkyAI && cargo test --workspace
+cd SparkyAI
+just setup      # deps for every unit (needs cargo, uv, node, just)
+just check      # gate: fmt, lint, test, everything
+just            # list all recipes
 ```
 
-See `AGENTS.md` for every unit's commands and `docs/ARCHITECTURE.md` for the layout.
+See `AGENTS.md` for the recipes and `docs/ARCHITECTURE.md` for the layout.
 
 Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/blob/archive/v1/README.md).
 
