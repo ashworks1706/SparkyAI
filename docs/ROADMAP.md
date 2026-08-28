@@ -43,14 +43,15 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
 3. Cargo workspace:
    ```
-   crates/harness      agent runtime and traits
+   crates/harness      types, traits, agent loop, tracing
    crates/model        ModelProvider adapters
    crates/tools        built-in tools
    crates/retrieval    Retriever + ingestion
+   crates/storage      Postgres, Redis, Qdrant adapters
    crates/discord      serenity adapter
-   crates/server       axum API
+   crates/server       axum routes
+   crates/app          composition root, the one binary
    models/             Python post-training (later)
-   docs/
    ```
    Only crates with code in them exist at any given time.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
