@@ -13,6 +13,7 @@ Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target
 - Public sites are ingested offline. The request path never fetches a web page.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `harness` with a mock for tests.
+- Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing. We do not use `rig::Agent`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
 - Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
@@ -22,7 +23,7 @@ Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target
 ```
 crates/
   harness/      types, traits, agent loop, context assembly, JSONL tracing
-  model/        ModelProvider adapters: OpenAI-compatible (vLLM), mock
+  model/        Rig CompletionModel wiring for vLLM; mock model
   tools/        built-in Tool impls
   retrieval/    Retriever impls, ingestion jobs, chunking, embedding client
   storage/      Postgres, Redis, Qdrant, object-store adapters
@@ -73,7 +74,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters.
+All in `harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
 
 ```rust
 #[async_trait]

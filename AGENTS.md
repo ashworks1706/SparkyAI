@@ -20,6 +20,12 @@ docs/            ROADMAP.md, ARCHITECTURE.md
 models/          Python post-training (Phase 6, not yet)
 ```
 
+## Dependencies we build on
+
+- **Rig** (`rig-core`): model clients, `Tool` schema, embeddings, vector stores. Never `rig::Agent` — the loop is ours.
+- **rmcp**: MCP. Never hand-roll MCP.
+- Everything else in the harness (loop, policy, context assembly, memory, tracing, replay) is written here.
+
 ## Rules
 
 - `harness` depends on nothing in-repo. Adapters depend on `harness`. Only binaries depend on adapters.

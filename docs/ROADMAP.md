@@ -24,6 +24,8 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 | Layer | Choice |
 |---|---|
 | Harness / API / Discord | Rust — tokio, axum, serenity, serde, sqlx |
+| LLM client / tools / embeddings | Rig (`rig-core`); our loop runs on its `CompletionModel`, not its `Agent` |
+| MCP | `rmcp` (official SDK) |
 | Model serving | vLLM (OpenAI-compatible HTTP) |
 | Baseline model | Qwen instruct, 7B–14B class |
 | Database | PostgreSQL |
@@ -59,8 +61,8 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 
 ### 1 — Harness v0.1
 - Message / tool-call / tool-result types
-- `ModelProvider` trait + OpenAI-compatible adapter (streaming, structured output)
-- `Tool` trait, registry, JSON-schema generation, typed errors
+- Rig `CompletionModel` against vLLM; mock model for tests
+- `Tool` = Rig `Tool` + `RiskClass` + `RequestContext`; adapter so any Rig tool drops in
 - Agent loop: step limit, timeouts, retries, cancellation, parallel tool calls
 - `RequestContext` threaded through everything
 - `TraceSink` trait + JSONL; replay from trace
@@ -89,7 +91,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 - `MemoryStore` trait; memory kinds: working, conversation, episodic, semantic, profile
 - Write policy (useful, stable, sensitive, approved, expiry); user-visible memory with deletion
 - Personalized discovery and deadlines
-- MCP client
+- MCP client via `rmcp`
 - Admin: tools, sources, instructions, limits, trace inspection, approvals, rollback
 - Eval suites: tool selection/args, grounding, memory, permissions, clarification, refusal, latency
 
