@@ -9,7 +9,7 @@ default:
 # ---------- everything ----------
 
 # Format, lint, and test every unit
-check: check-rust check-scraper check-training check-web
+check: check-rust check-scraper check-training check-sandbox check-web
     @echo "all units ok"
 
 # Format every unit in place
@@ -17,19 +17,21 @@ fmt:
     cargo fmt --all
     cd apps/scraper  && uvx ruff format . && uvx ruff check --fix .
     cd apps/training && uvx ruff format . && uvx ruff check --fix .
+    cd apps/sandbox  && uvx ruff format . && uvx ruff check --fix .
     cd apps/web      && npx eslint . --fix
 
 # Install every unit's dependencies
 setup:
     cd apps/scraper  && uv sync --extra dev
     cd apps/training && uv sync --extra dev
+    cd apps/sandbox  && uv sync --extra dev
     cd apps/web      && npm ci
     cargo fetch
 
 # Remove build artifacts and virtualenvs
 clean:
     cargo clean
-    rm -rf apps/scraper/.venv apps/training/.venv apps/web/node_modules apps/web/dist
+    rm -rf apps/scraper/.venv apps/training/.venv apps/sandbox/.venv apps/web/node_modules apps/web/dist
 
 # ---------- rust: engine + discord ----------
 
@@ -48,13 +50,20 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# ---------- python: scraper + training ----------
+# ---------- python: scraper + training + sandbox ----------
 
 check-scraper:
     cd apps/scraper && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
+
+check-sandbox:
+    cd apps/sandbox && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
+
+# Sandbox worker CLI: just sandbox serve
+sandbox *ARGS:
+    cd apps/sandbox && uv run sandbox {{ARGS}}
 
 # Run the scraper CLI: just scraper run library_hours
 scraper *ARGS:
@@ -99,6 +108,7 @@ logs *ARGS:
 images:
     docker build -f deploy/docker/rust.Dockerfile -t sparkyai-rust .
     docker build -f deploy/docker/scraper.Dockerfile -t sparkyai-scraper .
+    docker build -f deploy/docker/sandbox.Dockerfile -t sparkyai-sandbox .
 
 # ---------- docs ----------
 

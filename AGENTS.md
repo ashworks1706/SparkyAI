@@ -11,6 +11,7 @@ just check            # fmt-check, lint, test every unit — the gate; CI runs t
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-scraper    # ruff + pytest in apps/scraper
 just check-training   # ruff + pytest in apps/training
+just check-sandbox    # ruff + pytest in apps/sandbox
 just check-web        # eslint + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
@@ -34,7 +35,7 @@ apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never li
 apps/scraper/     Python worker — fetch → chunk → embed → index
 apps/inference/   vLLM on RunPod — env files + start script
 apps/web/         static frontend + admin UI (Vite + React)
-apps/sandbox/     Phase 7 browser worker
+apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose + one Dockerfile per image
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/

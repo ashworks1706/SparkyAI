@@ -37,6 +37,16 @@ services:
       qdrant: { condition: service_started }
     restart: unless-stopped
 
+  # Phase 7. Not started by default: `just up --profile sandbox`.
+  sandbox:
+    build: { context: .., dockerfile: deploy/docker/sandbox.Dockerfile }
+    profiles: [sandbox]
+    env_file: ../.env
+    environment:
+      SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
+    expose: ["8090"]
+    restart: unless-stopped
+
   postgres:
     image: postgres:17-alpine
     environment:

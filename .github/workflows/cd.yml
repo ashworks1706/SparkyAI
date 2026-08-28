@@ -23,6 +23,8 @@ jobs:
             dockerfile: deploy/docker/rust.Dockerfile
           - name: scraper
             dockerfile: deploy/docker/scraper.Dockerfile
+          - name: sandbox
+            dockerfile: deploy/docker/sandbox.Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

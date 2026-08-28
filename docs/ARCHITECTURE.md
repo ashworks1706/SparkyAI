@@ -68,7 +68,7 @@ apps/
   scraper/        Python worker: fetch → snapshot → extract → chunk → embed → index
   inference/      vLLM on RunPod: env files and start script
   web/            static frontend + admin UI (Vite + React)
-  sandbox/        Phase 7 browser worker
+  sandbox/        Phase 7: Python + Playwright worker; HTTP task protocol; one context per user session
   training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
 deploy/           compose + one Dockerfile per image
 ```
@@ -384,11 +384,11 @@ One trace per request covering every model call, retrieval, memory access, tool 
 
 ## Sandboxed browser (Phase 7)
 
-Separate worker process, never inside the app process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
+Separate worker (`apps/sandbox`, Python + Playwright, FastAPI task protocol), never inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
 
 ## Deployment
 
-Two images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects) and `sparkyai-scraper`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects), `sparkyai-scraper`, and `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB

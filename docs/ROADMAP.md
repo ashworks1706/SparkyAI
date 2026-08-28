@@ -100,7 +100,7 @@ Only after Phase 4 yields clean interaction data.
 Release: weights, quantized variants, config, dataset description, evals, limitations.
 
 ### 7 — Sandboxed automation v0.6
-- `Sandbox` trait; isolated browser per task; allowlisted domains; credential isolation; limits; action logs; cleanup
+- `apps/sandbox` (Python + Playwright) behind the `Sandbox` trait; isolated context per session; allowlisted domains; credential isolation; limits; redacted action logs; cleanup
 - Human confirmation for any authenticated or consequential submission
 
 ### 8 — v1.0

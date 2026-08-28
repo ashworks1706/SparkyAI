@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pkg: [scraper, training]
+        pkg: [scraper, training, sandbox]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
