@@ -34,7 +34,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 | Cache / queue | Redis |
 | Vector store | Qdrant (adapter); Piramid later |
 | Memory / knowledge layer | Own implementation on Postgres + Qdrant |
-| Ingestion fetch | reqwest + scraper; chromiumoxide where JS is required |
+| Ingestion | Python worker (`services/ingest`): httpx + BeautifulSoup, Playwright where JS is required |
 | Object storage | S3-compatible (MinIO locally) |
 | Post-training | Python: TRL + PEFT (+ Unsloth), W&B, HF Hub |
 | Evals | Inspect AI, BFCL, lm-eval |
@@ -46,22 +46,11 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 ### 0 — Archive, clean, scaffold
 1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Cargo workspace:
-   ```
-   crates/harness      types, traits, agent loop, tracing
-   crates/model        ModelProvider adapters
-   crates/tools        built-in tools
-   crates/retrieval    Retriever + ingestion
-   crates/storage      Postgres, Redis, Qdrant adapters
-   crates/discord      serenity adapter
-   crates/server       axum routes
-   crates/app          composition root, the one binary
-   models/             Python post-training (later)
-   ```
+3. Monorepo layout: `apps/backend` (Rust workspace, one binary, processes `api | discord | migrate`), `apps/web`, `services/ingest` (Python), `models`, `evals`, `deploy`. See ARCHITECTURE.md.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 
-**Exit:** `main` is a clean Rust workspace that builds; v1 is one `git checkout archive/v1` away.
+**Exit:** every unit builds and lints in CI; v1 is one `git checkout archive/v1` away.
 
 ### 1 — Harness v0.1
 - Message / tool-call / tool-result types
@@ -84,7 +73,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 **Exit:** correct, dated sources on the eval set; reproducible traces.
 
 ### 3 — Discord v0.3
-- Thin serenity adapter → `RequestContext` → harness
+- `POST /chat` + SSE on `api`; `sparky discord` as a thin HTTP client of it
 - Conversation state in Postgres; Discord identity + role checks in `Policy`
 - Moderator ops with confirmation before any write: tickets, announcements, polls, escalation
 - First deployment

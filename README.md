@@ -98,13 +98,14 @@ SparkyAI is implemented primarily in Python and deploys on a containerized stack
 
 ## Setup and Local Execution
 
-v2 (`main`) is a Cargo workspace:
+v2 (`main`) is a monorepo: `apps/backend` (Rust), `apps/web`, `services/ingest` (Python), `models` (Python).
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git
-cd SparkyAI
-cargo test --workspace
+cd SparkyAI/apps/backend && cargo test --workspace
 ```
+
+See `AGENTS.md` for every unit's commands and `docs/ARCHITECTURE.md` for the layout.
 
 Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/blob/archive/v1/README.md).
 

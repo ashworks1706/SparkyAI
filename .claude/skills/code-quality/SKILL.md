@@ -42,9 +42,9 @@ Work in small, verifiable units — never one giant sweeping rewrite.
 1. **Map before you touch.** Read the folder. Find what's actually used: grep
    for every reference to a symbol/file across the whole tree (including dynamic
    or string-based references) before assuming anything is dead. Identify the
-   real public surface vs. internals. **Also read the manifests** (root
-   `Cargo.toml` `[workspace.dependencies]`, the crate's `Cargo.toml`,
-   `models/pyproject.toml`) and `AGENTS.md` / `docs/ARCHITECTURE.md` so you
+   real public surface vs. internals. **Also read the manifests** (`apps/backend/Cargo.toml`
+   `[workspace.dependencies]`, the crate's `Cargo.toml`, each Python
+   package's `pyproject.toml`, `apps/web/package.json`) and `AGENTS.md` / `docs/ARCHITECTURE.md` so you
    know what the project already has and what its boundaries are before you
    keep hand-rolling around them.
 2. **Change one concern at a time.** Rename, then stop. Extract, then stop. Each

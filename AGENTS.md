@@ -5,24 +5,38 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 ## Commands
 
 ```
+cd apps/backend
 cargo test --workspace                                  # tests
 cargo clippy --workspace --all-targets -- -D warnings   # must be clean
 cargo fmt --all                                         # before commit
-cargo run -p sparky-app -- serve|ingest|migrate         # needs .env (see .env.example)
-docker compose -f deploy/docker-compose.yml up -d       # postgres, redis, qdrant, minio
-cd apps/web && npm ci && npm run lint && npm run build   # web
+./check-deps.sh                                         # crate dependency direction
+cargo run -p sparky-app -- api|discord|migrate|dev      # needs .env (see .env.example)
+
+cd services/ingest && uv sync --extra dev && uv run pytest -q
+cd models          && uv sync --extra dev && uv run pytest -q
+cd apps/web        && npm ci && npm run lint && npm run build
+docker compose -f deploy/compose.yml up -d              # api, discord, ingest, postgres, redis, qdrant, minio
 ```
 
-Plus `./scripts/check-deps.sh`, which fails if a crate imports something it shouldn't. CI runs all four. A change is not done until all pass.
+CI runs all of these. A change is not done until the relevant ones pass.
 
 ## Layout
 
+One repo, several deployable units. Top-level folders are deployables or shared data; language is never a folder.
+
 ```
-crates/<name>/   one crate per row in ARCHITECTURE.md; module files are pre-scaffolded with a doc comment
-apps/web/        landing site + future admin UI; Vite + React; static, no shared code with crates/
-docs/            ROADMAP.md, ARCHITECTURE.md
-models/          Python post-training (Phase 6, not yet)
+apps/backend/     Rust workspace → one binary `sparky` with processes: api | discord | migrate | dev
+  crates/<name>/  one crate per row in ARCHITECTURE.md; modules pre-scaffolded with a doc comment
+apps/web/         static frontend + admin UI (Vite + React)
+services/ingest/  Python worker: scrape → chunk → embed → index
+services/sandbox/ Phase 7 browser worker
+models/           Python: datasets, training, eval runners
+evals/            shared eval data only
+deploy/           compose, one Dockerfile per image, runpod
+docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
+
+Services never call each other except: discord → api (HTTP), api → vLLM / MCP / sandbox. Everything else goes through Postgres, Qdrant, Redis, object storage. The schema in `apps/backend/crates/storage/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -32,16 +46,16 @@ models/          Python post-training (Phase 6, not yet)
 
 ## Config
 
-All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `crates/app/src/config.rs`. Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
+All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/backend/crates/app/src/config.rs` (Rust) and `settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
 
 ## Rules
 
-- One binary (`sparky-app`). `harness` depends on nothing in-repo; adapters depend only on `harness`; only `app` depends on adapters. Enforced by `scripts/check-deps.sh`.
+- One binary, several processes. `harness` depends on nothing in-repo; adapters depend only on `harness`; `discord` depends on nothing in-repo (it is an HTTP client of `api`); only `app` depends on adapters. Enforced by `apps/backend/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `harness` with a mock impl for tests.
-- The request path never makes external HTTP calls except to the model server and our own stores. Fetching pages is ingestion.
+- The request path never makes external HTTP calls except to the model server, MCP servers, and our own stores. Fetching pages is `services/ingest`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Errors: `thiserror` enums per crate, no `anyhow` in library crates, no `unwrap` outside tests.

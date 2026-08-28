@@ -6,7 +6,7 @@ description: Create a new workspace crate following repo conventions. Use only w
 Arguments: crate name (e.g. `model`, `retrieval`).
 
 1. Confirm the crate is listed in `docs/ARCHITECTURE.md`. If not, stop and ask — new crates are an architecture decision.
-3. Create `crates/<name>/Cargo.toml`:
+3. Create `apps/backend/crates/<name>/Cargo.toml`:
    - package name `sparky-<name>`
    - `version/edition/license/repository` all `.workspace = true`
    - one-line `description`

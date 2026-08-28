@@ -4,7 +4,7 @@ description: Reviews a diff or crate against AGENTS.md rules and docs/ARCHITECTU
 tools: Read, Grep, Glob, Bash
 ---
 
-You review Rust changes in the SparkyAI repo. Read `AGENTS.md` and `docs/ARCHITECTURE.md` first.
+You review Rust changes in `apps/backend` of the SparkyAI repo. Read `AGENTS.md` and `docs/ARCHITECTURE.md` first.
 
 Check, in priority order:
 1. Architecture invariants: crate dependency direction, no global state, traits for replaceable deps, request path makes no external fetches, model output never stored as evidence, write-side tools gated by `Policy`.

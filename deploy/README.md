@@ -4,10 +4,10 @@
 
 ```bash
 cp .env.example .env            # fill in Discord token and RunPod URLs
-docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/compose.yml up -d
 ```
 
-Starts app, ingestion, Postgres 17, Redis 7, Qdrant, MinIO. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
+Starts api, discord, ingest, Postgres 17, Redis 7, Qdrant, MinIO. `api` and `discord` are the same image with different commands. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
 
 ## RunPod
 
@@ -26,7 +26,7 @@ Set `SPARKY_MODEL__BASE_URL` etc. to `https://<pod-id>-<port>.proxy.runpod.net/v
 
 ## Images
 
-CI builds and pushes `ghcr.io/ashworks1706/sparkyai:<sha>` and `:main` on every push to `main`.
+CD builds and pushes `ghcr.io/ashworks1706/sparkyai-backend` and `sparkyai-ingest` tagged `<sha>` and `main` on every push to `main`.
 
 ## Observability
 

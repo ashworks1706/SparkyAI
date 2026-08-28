@@ -16,6 +16,13 @@ permissions:
 jobs:
   image:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: backend
+            dockerfile: deploy/docker/backend.Dockerfile
+          - name: ingest
+            dockerfile: deploy/docker/ingest.Dockerfile
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -27,10 +34,10 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: deploy/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ghcr.io/ashworks1706/sparkyai:${{ github.sha }}
-            ghcr.io/ashworks1706/sparkyai:main
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ghcr.io/ashworks1706/sparkyai-${{ matrix.name }}:${{ github.sha }}
+            ghcr.io/ashworks1706/sparkyai-${{ matrix.name }}:main
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

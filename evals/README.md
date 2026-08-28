@@ -1,6 +1,7 @@
-# Evals
+# evals
 
-Replayed traces run against a chosen model, prompt, tool set, and retrieval snapshot.
+Shared evaluation data. No code.
 
-- `cases/` — fixed ASU query set with expected sources
-- `suites/` — tool selection, arguments, grounding, memory, permissions, clarification, refusal, latency
+- `cases/` — JSONL per suite: input, expected tool / sources / behavior. Read by `models/` (Inspect runners) and by the backend's trace replay.
+
+Suites: tool_selection, tool_args, grounding, memory, permissions, clarification, refusal, latency.
