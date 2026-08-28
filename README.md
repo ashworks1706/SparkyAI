@@ -98,7 +98,7 @@ SparkyAI is implemented primarily in Python and deploys on a containerized stack
 
 ## Setup and Local Execution
 
-v2 (`main`) is a monorepo: `apps/` (api, discord, ingest, web), `crates/` (Rust libraries), `models/` (Python).
+v2 (`main`) is a monorepo: `apps/` (api, discord, ingest, inference, web), `models/` (Python).
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git

@@ -1,27 +1,47 @@
 [package]
-name = "sparky-api"
-description = "HTTP API: the only process that links the harness and talks to models and stores"
+name = "api"
+description = "SparkyAI backend: HTTP API, harness, retrieval, memory, storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "sparky-api"
+name = "api"
 path = "src/main.rs"
 
 [dependencies]
-sparky-runtime = { path = "../../crates/runtime" }
-sparky-harness = { path = "../../crates/harness" }
-sparky-model = { path = "../../crates/model" }
-sparky-tools = { path = "../../crates/tools" }
-sparky-retrieval = { path = "../../crates/retrieval" }
-sparky-storage = { path = "../../crates/storage" }
 tokio.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 anyhow.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+url.workspace = true
+schemars.workspace = true
+secrecy.workspace = true
+rig-core.workspace = true
+rmcp.workspace = true
 axum.workspace = true
 tower-http.workspace = true
+reqwest.workspace = true
+sqlx.workspace = true
+redis.workspace = true
+qdrant-client.workspace = true
+figment.workspace = true
+dotenvy.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+sentry.workspace = true
+sentry-tracing.workspace = true
+tonic.workspace = true
 
 [lints]
 workspace = true

@@ -12,11 +12,11 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release -p sparky-api -p sparky-discord
+RUN cargo build --release -p api -p discord
 
 FROM gcr.io/distroless/cc-debian12
-COPY --from=builder /app/target/release/sparky-api /sparky-api
-COPY --from=builder /app/target/release/sparky-discord /sparky-discord
-COPY crates/storage/migrations /migrations
+COPY --from=builder /app/target/release/api /api
+COPY --from=builder /app/target/release/discord /discord
+COPY apps/api/migrations /migrations
 EXPOSE 8080
-ENTRYPOINT ["/sparky-api"]
+ENTRYPOINT ["/api"]

@@ -48,6 +48,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "dotenvy",
+ "figment",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "qdrant-client",
+ "redis",
+ "reqwest 0.13.4",
+ "rig-core",
+ "rmcp",
+ "schemars",
+ "secrecy 0.10.3",
+ "sentry",
+ "sentry-tracing",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tower-http 0.7.0",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "arc-swap"
 version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -678,6 +715,25 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "ctutils",
+]
+
+[[package]]
+name = "discord"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dotenvy",
+ "figment",
+ "reqwest 0.13.4",
+ "secrecy 0.10.3",
+ "sentry",
+ "sentry-tracing",
+ "serde",
+ "serde_json",
+ "serenity",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3243,156 +3299,6 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "sparky-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "sparky-harness",
- "sparky-model",
- "sparky-retrieval",
- "sparky-runtime",
- "sparky-storage",
- "sparky-tools",
- "tokio",
- "tower-http 0.7.0",
- "tracing",
-]
-
-[[package]]
-name = "sparky-discord"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "reqwest 0.13.4",
- "secrecy 0.10.3",
- "serde",
- "serde_json",
- "serenity",
- "sparky-runtime",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "sparky-harness"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "rig-core",
- "rmcp",
- "schemars",
- "secrecy 0.10.3",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "sparky-model"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "reqwest 0.13.4",
- "rig-core",
- "serde",
- "serde_json",
- "sparky-harness",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "sparky-retrieval"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "qdrant-client",
- "rig-core",
- "serde",
- "serde_json",
- "sparky-harness",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "sparky-runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dotenvy",
- "figment",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "secrecy 0.10.3",
- "sentry",
- "sentry-tracing",
- "serde",
- "tonic",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "sparky-storage"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "qdrant-client",
- "redis",
- "reqwest 0.13.4",
- "secrecy 0.10.3",
- "serde",
- "serde_json",
- "sparky-harness",
- "sqlx",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "sparky-tools"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "schemars",
- "serde",
- "serde_json",
- "sparky-harness",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "uuid",
 ]
 
 [[package]]

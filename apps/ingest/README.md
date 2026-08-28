@@ -12,4 +12,4 @@ uv run sparky-ingest run --all
 
 Pipeline per source: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed (vLLM embed endpoint) → index (Qdrant chunks + Postgres `source_versions`).
 
-Reads `SPARKY_*` env like the backend. Schema is owned by `crates/storage/migrations`; this service never migrates.
+Reads `SPARKY_*` env like the backend. Schema is owned by `apps/api/migrations`; this service never migrates.

@@ -11,12 +11,12 @@ Starts api, discord, ingest, Postgres 17, Redis 7, Qdrant, MinIO. `api` and `dis
 
 ## RunPod
 
-Two pods, both from the `vllm/vllm-openai` image with `deploy/runpod/start.sh` as the start command:
+Two pods, both from the `vllm/vllm-openai` image with `apps/inference/start.sh` as the start command:
 
 | Pod | Env file | GPU | Port |
 |---|---|---|---|
-| chat | `runpod/vllm.env` | A100 80GB / H100 | 8000 |
-| embed + rerank | `runpod/embedding.env` | L4 / A10 | 8001, 8002 |
+| chat | `apps/inference/vllm.env` | A100 80GB / H100 | 8000 |
+| embed + rerank | `apps/inference/embedding.env` | L4 / A10 | 8001, 8002 |
 
 Set `SPARKY_MODEL__BASE_URL` etc. to `https://<pod-id>-<port>.proxy.runpod.net/v1`.
 

@@ -1,8 +1,8 @@
 //! Construct concrete adapters, hand them to the harness, build the router, serve.
 
-use sparky_runtime::Config;
+use crate::config::Config;
 
-/// Serves until shutdown.
+/// Serves until shutdown. Migrations run here before binding (Phase 2).
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
     tracing::info!(addr = %cfg.app.http_addr, "listening");

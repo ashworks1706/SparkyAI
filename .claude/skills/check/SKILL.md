@@ -8,7 +8,7 @@ Run from the repo root, in order, stopping at the first failure:
 1. `cargo fmt --all`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace`
-4. `./scripts/check-deps.sh`
+4. `./scripts/check-deps.sh` (api and discord must not link each other)
 
 If Python packages changed (`apps/ingest`, `models`): `uvx ruff check . && uvx ruff format --check . && uv run pytest -q` in that package. If `apps/web` changed: `npm run lint && npm run build`.
 

@@ -1,1 +1,1 @@
-//! Typed HTTP/SSE client for `sparky api`. Service token auth.
+//! Typed HTTP/SSE client for the api. Service token auth.

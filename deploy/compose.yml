@@ -1,7 +1,7 @@
 services:
   api:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
-    entrypoint: ["/sparky-api"]
+    entrypoint: ["/api"]
     env_file: ../.env
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
@@ -17,7 +17,7 @@ services:
 
   discord:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
-    entrypoint: ["/sparky-discord"]
+    entrypoint: ["/discord"]
     env_file: ../.env
     environment:
       SPARKY_API__BASE_URL: http://api:8080

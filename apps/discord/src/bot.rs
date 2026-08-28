@@ -1,6 +1,6 @@
 //! serenity client setup and event handler.
 
-use sparky_runtime::Config;
+use crate::config::Config;
 
 /// Connects to Discord and runs until shutdown.
 pub fn run(_cfg: Config) -> anyhow::Result<()> {

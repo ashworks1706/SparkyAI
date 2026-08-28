@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "apps/api", "apps/discord"]
+members = ["apps/api", "apps/discord"]
 
 [workspace.package]
 version = "0.1.0"
@@ -31,14 +31,12 @@ rmcp = { version = "3", features = ["client", "transport-child-process", "transp
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
 axum = "0.8"
 tower-http = { version = "0.7", features = ["trace", "cors", "timeout"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream"] }
 
 # storage
 sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "postgres", "migrate", "uuid", "chrono", "json"] }
 redis = { version = "1", features = ["tokio-comp", "connection-manager"] }
 qdrant-client = "1.19"
-
-# http client (discord → api)
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream"] }
 
 # config
 figment = { version = "0.10", features = ["env", "toml"] }
@@ -53,6 +51,7 @@ opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic", "trace", "tls-ring"] }
 sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing"] }
 sentry-tracing = "0.49"
+tonic = "0.14"
 
 [profile.release]
 lto = "thin"

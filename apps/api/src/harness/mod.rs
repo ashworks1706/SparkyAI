@@ -1,7 +1,5 @@
-//! Sparky Harness — model-independent agent runtime.
-//!
-//! Types, traits, the agent loop, context assembly, and tracing.
-//! See `docs/ARCHITECTURE.md`.
+//! Agent runtime: types, traits, loop, context assembly, tracing.
+//! Imports nothing else in this crate.
 
 pub mod agent;
 pub mod assemble;
@@ -17,5 +15,3 @@ pub mod retrieval;
 pub mod sandbox;
 pub mod tool;
 pub mod trace;
-
-pub use context::RequestContext;

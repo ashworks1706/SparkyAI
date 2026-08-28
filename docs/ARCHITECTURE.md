@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository, several deployable units. `apps/` holds every process — `api` and `discord` (Rust), `ingest` (Python), `web` (static), `sandbox` (Phase 7) — and `crates/` holds the Rust libraries they share. Services never call each other except at three edges — `discord → api`, `api → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
+One repository; `apps/` holds every deployable — `api` and `discord` (Rust), `ingest` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `api` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → api`, `api → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
@@ -14,8 +14,8 @@ flowchart LR
     A[Admin · web] -->|HTTP| APP
 
     subgraph rust [apps/api · apps/discord]
-        BOT[sparky-discord]
-        APP[sparky-api<br/>harness · policy · retrieval · memory · jobs]
+        BOT[discord]
+        APP[api<br/>harness · policy · retrieval · memory · jobs]
     end
     D --> BOT
     BOT -->|HTTP / SSE| APP
@@ -47,7 +47,7 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 - Facts come from retrieval or live observation, never from model weights.
 - Public sites are ingested offline. The request path never fetches a web page.
 - Every request carries its own `RequestContext`. No global mutable state.
-- Every replaceable dependency is a trait in `harness` with a mock for tests.
+- Every replaceable dependency is a trait in `api/src/harness` with a mock for tests.
 - Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing. We do not use `rig::Agent`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
@@ -57,41 +57,40 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 
 ```
 apps/
-  api/          Rust bin: axum routes + harness wiring. The only process that links the harness and talks to models/stores.
-  discord/      Rust bin: serenity bot; HTTP/SSE client of api. Never links the harness.
-  ingest/       Python worker: fetch → snapshot → extract → chunk → embed → index
-  web/          static frontend + admin UI (Vite + React)
-  sandbox/      Phase 7 browser worker
-crates/
-  harness/      types, traits, agent loop, context assembly, JSONL tracing
-  runtime/      config + telemetry bootstrap shared by the Rust apps
-  model/        Rig CompletionModel wiring for vLLM; mock model
-  tools/        built-in Tool impls
-  retrieval/    query side: embed → dense + BM25 → fuse → rerank → Evidence
-  storage/      Postgres, Redis, Qdrant, object-store adapters; migrations (the schema contract)
-models/         Python: datasets, training, eval runners
-evals/          shared eval cases (data only)
-deploy/         compose, one Dockerfile per image, RunPod configs
+  api/            Rust bin. The backend: HTTP routes + harness + retrieval + memory + storage.
+    src/harness/    types, traits, agent loop, context assembly, JSONL tracing — imports nothing else
+    src/model/      Rig CompletionModel wiring for vLLM; mock
+    src/tools/      built-in Tool impls
+    src/retrieval/  query side: embed → dense + BM25 → fuse → rerank → Evidence
+    src/storage/    Postgres, Redis, Qdrant, object-store adapters
+    src/routes/     chat, health, admin
+    src/{config,telemetry,wiring}.rs
+    migrations/     the schema contract
+  discord/        Rust bin: serenity bot; HTTP/SSE client of api. Never links api.
+  ingest/         Python worker: fetch → snapshot → extract → chunk → embed → index
+  inference/      vLLM on RunPod: env files and start script
+  web/            static frontend + admin UI (Vite + React)
+  sandbox/        Phase 7 browser worker
+models/           Python: datasets, training, eval runners
+evals/            shared eval cases (data only)
+deploy/           compose + one Dockerfile per image
 ```
 
-Top-level folders are deployable units or shared data. Language is never a folder. Domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
+Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-## Crates
+## Modules inside `api`
 
 ```mermaid
 flowchart BT
-    H[crates/harness<br/>types · traits · loop · policy · assembly · trace]
-    RT[crates/runtime<br/>config · telemetry]
-    M[crates/model<br/>Rig CompletionModel → vLLM · mock] --> H
-    T[crates/tools] --> H
-    R[crates/retrieval<br/>hybrid · rerank] --> H
-    S[crates/storage<br/>postgres · redis · qdrant · object] --> H
-    API[apps/api<br/>axum routes · wiring] --> M & T & R & S & H & RT
-    D[apps/discord<br/>serenity · HTTP client of api] --> RT
-    D -.->|HTTP| API
+    H[harness<br/>types · traits · loop · policy · assembly · trace]
+    M[model<br/>Rig CompletionModel → vLLM · mock] --> H
+    T[tools] --> H
+    R[retrieval<br/>hybrid · rerank] --> H
+    S[storage<br/>postgres · redis · qdrant · object] --> H
+    W[routes · wiring] --> M & T & R & S & H
 ```
 
-Dependency direction: `apps/api` → any crate → `harness`. `harness` and `runtime` import nothing in-repo. Adapter crates import only `harness`, never each other. `apps/discord` imports only `runtime` — it is a client of the API, not of the harness. `scripts/check-deps.sh` enforces this in CI; `[workspace.lints]` enforces code rules in every crate. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+Dependency direction inside the crate: `routes`/`wiring` → adapters → `harness`. `harness` imports nothing else. Adapter modules import only `harness`, never each other. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `api` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
 
 ## Types
 
@@ -132,7 +131,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
+All in `api/src/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
 
 ```rust
 #[async_trait]
@@ -182,7 +181,7 @@ pub trait Sandbox {   // Phase 7
 
 ## Request lifecycle
 
-1. `sparky-discord` receives the slash command and POSTs it to `sparky-api` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
+1. `discord` receives the slash command and POSTs it to `api` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
 2. `api` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
 3. Load conversation; recall memory; retrieve evidence if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
@@ -195,8 +194,8 @@ pub trait Sandbox {   // Phase 7
 
 ```mermaid
 sequenceDiagram
-    participant D as sparky-discord
-    participant H as sparky-api · harness
+    participant D as discord
+    participant H as api · harness
     participant C as Context assembly
     participant M as ModelProvider
     participant P as Policy
@@ -390,13 +389,13 @@ Separate worker process, never inside the app process. One isolated browser cont
 
 ## Deployment
 
-Two images: `sparkyai-rust` (contains both `sparky-api` and `sparky-discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Two images: `sparkyai-rust` (contains both `api` and `discord`; entrypoint selects) and `sparkyai-ingest`. Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
     subgraph host [CPU host — Docker Compose]
-        BOT[sparky-discord]
-        APP[sparky-api]
+        BOT[discord]
+        APP[api]
         ING[apps/ingest]
         PG[(postgres:17)]
         RD[(redis:7)]
@@ -422,7 +421,7 @@ flowchart TB
 
 ## First vertical slice (Phase 1–3 target)
 
-Discord slash command → `sparky-discord` → `POST /chat` on `sparky-api` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `discord` → `POST /chat` on `api` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/ingest` feeding it), memory, MCP, browser — in that order.
 
 ## Open decisions
 

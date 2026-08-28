@@ -6,9 +6,10 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 
 | Project | What | Language |
 |---|---|---|
-| **Sparky Harness** | Agent runtime: messages, model adapters, tools, MCP, memory, permissions, tracing, evals | Rust |
-| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators | Rust |
+| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators: API, bot, ingestion, web | Rust · Python · TypeScript |
 | **Sparky Models** | Post-trained open models for routing and tool use | Python (PyTorch, TRL, PEFT) |
+
+The agent harness is a module of the API, not a separate product.
 
 ## Principles
 
@@ -16,14 +17,14 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 - Facts live in retrieval, not weights. Models learn behavior.
 - Never scrape at query time. Ingestion is offline.
 - Per-request context. No global state.
-- Trait per replaceable dependency: `ModelProvider`, `Tool`, `Retriever`, `MemoryStore`, `ConversationStore`, `Policy`, `TraceSink`, `Sandbox`.
+- Trait per replaceable dependency in `api/src/harness`: `ModelProvider`, `Tool`, `Retriever`, `MemoryStore`, `ConversationStore`, `Policy`, `TraceSink`, `Sandbox`.
 - Evals before training.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Harness / API / Discord | Rust — tokio, axum, serenity, serde, sqlx |
+| API / Discord | Rust — tokio, axum, serenity, serde, sqlx |
 | LLM client / tools / embeddings | Rig (`rig-core`); our loop runs on its `CompletionModel`, not its `Agent` |
 | MCP | `rmcp` (official SDK) |
 | Web | Vite + React + TypeScript + shadcn (`apps/web`); landing now, admin UI in Phase 4 |
@@ -46,13 +47,13 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 ### 0 — Archive, clean, scaffold
 1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Monorepo layout: `apps/{api,discord}` (Rust bins), `apps/ingest` (Python), `apps/web`, `apps/sandbox`, `crates/` (Rust libraries), `models`, `evals`, `deploy`. See ARCHITECTURE.md.
+3. Monorepo layout: `apps/{api,discord}` (Rust bins), `apps/ingest` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `models`, `evals`, `deploy`. See ARCHITECTURE.md.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 
 **Exit:** every unit builds and lints in CI; v1 is one `git checkout archive/v1` away.
 
-### 1 — Harness v0.1
+### 1 — Harness module v0.1
 - Message / tool-call / tool-result types
 - Rig `CompletionModel` against vLLM; mock model for tests
 - `Tool` = Rig `Tool` + `RiskClass` + `RequestContext`; adapter so any Rig tool drops in
@@ -73,7 +74,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 **Exit:** correct, dated sources on the eval set; reproducible traces.
 
 ### 3 — Discord v0.3
-- `POST /chat` + SSE on `sparky-api`; `sparky-discord` as a thin HTTP client of it
+- `POST /chat` + SSE on `api`; `discord` as a thin HTTP client of it
 - Conversation state in Postgres; Discord identity + role checks in `Policy`
 - Moderator ops with confirmation before any write: tickets, announcements, polls, escalation
 - First deployment
@@ -103,7 +104,7 @@ Release: weights, quantized variants, config, dataset description, evals, limita
 - Human confirmation for any authenticated or consequential submission
 
 ### 8 — v1.0
-Stable harness API, documented traits, published evals, university-adapter template.
+Stable API, documented traits, published evals, university-adapter template.
 
 ## Out of scope until stated otherwise
 
