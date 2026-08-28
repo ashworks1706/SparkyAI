@@ -21,8 +21,8 @@ jobs:
         include:
           - name: rust
             dockerfile: deploy/docker/rust.Dockerfile
-          - name: scraper
-            dockerfile: deploy/docker/scraper.Dockerfile
+          - name: knowledge
+            dockerfile: deploy/docker/knowledge.Dockerfile
           - name: sandbox
             dockerfile: deploy/docker/sandbox.Dockerfile
     steps:

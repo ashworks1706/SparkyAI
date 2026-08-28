@@ -17,6 +17,5 @@ RUN cargo build --release -p engine -p discord
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/target/release/engine /engine
 COPY --from=builder /app/target/release/discord /discord
-COPY apps/engine/migrations /migrations
 EXPOSE 8080
 ENTRYPOINT ["/engine"]

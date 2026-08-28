@@ -1,6 +1,6 @@
 [package]
 name = "engine"
-description = "SparkyAI engine: agent, knowledge, storage, HTTP surface"
+description = "SparkyAI engine: the agent and its HTTP surface; stores live in apps/knowledge"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -28,9 +28,6 @@ rmcp.workspace = true
 axum.workspace = true
 tower-http.workspace = true
 reqwest.workspace = true
-sqlx.workspace = true
-redis.workspace = true
-qdrant-client.workspace = true
 figment.workspace = true
 dotenvy.workspace = true
 tracing.workspace = true

@@ -6,7 +6,7 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 
 | Project | What | Language |
 |---|---|---|
-| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators: engine, bot, scraper, web | Rust · Python · TypeScript |
+| **SparkyAI** | Discord (later web) copilot for ASU students and AI Society moderators: engine, bot, knowledge, web | Rust · Python · TypeScript |
 | **Sparky Models** | Post-trained open models for routing and tool use | Python (PyTorch, TRL, PEFT) |
 
 The agent harness is a module of the engine, not a separate product.
@@ -34,8 +34,8 @@ The agent harness is a module of the engine, not a separate product.
 | Database | PostgreSQL |
 | Cache / queue | Redis |
 | Vector store | Qdrant (adapter); Piramid later |
-| Memory / knowledge layer | Own implementation on Postgres + Qdrant |
-| Scraper | Python worker (`apps/scraper`): httpx + BeautifulSoup, Playwright where JS is required |
+| Memory | In `apps/knowledge` on Postgres + Qdrant |
+| Knowledge | Python service (`apps/knowledge`): FastAPI; psycopg, qdrant-client, redis, boto3; scraper with httpx + BeautifulSoup, Playwright where JS is required |
 | Object storage | S3-compatible (MinIO locally) |
 | Post-training | Python: TRL + PEFT (+ Unsloth), W&B, HF Hub |
 | Evals | Inspect AI, BFCL, lm-eval |
@@ -47,7 +47,7 @@ The agent harness is a module of the engine, not a separate product.
 ### 0 — Archive, clean, scaffold
 1. Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.
 2. On `main`, remove v1: all Python source, `finetune/`, `tests/` screenshots, Docker files, CI, `requirements.txt`. Keep `README.md`, `LICENSE`, `docs/`.
-3. Monorepo layout: `apps/{engine,discord}` (Rust bins), `apps/{scraper,training}` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `deploy`. See ARCHITECTURE.md.
+3. Monorepo layout: `apps/{engine,discord}` (Rust bins), `apps/{knowledge,training,sandbox}` (Python), `apps/inference` (vLLM config), `apps/web`, `apps/sandbox`, `deploy`. See ARCHITECTURE.md.
 4. `docs/ARCHITECTURE.md`: request lifecycle, crate boundaries, trait list.
 5. CI: `cargo fmt`, `cargo clippy`, `cargo test`.
 
@@ -75,14 +75,14 @@ The agent harness is a module of the engine, not a separate product.
 
 ### 3 — Discord v0.3
 - `POST /chat` + SSE on `engine`; `discord` as a thin HTTP client of it
-- Conversation state in Postgres; Discord identity + role checks in `Policy`
+- Conversation state via `knowledge`; Discord identity + role checks in `Policy`
 - Moderator ops with confirmation before any write: tickets, announcements, polls, escalation
 - First deployment
 
 **Exit:** AI Society uses it daily; failures inspectable from traces.
 
 ### 4 — Memory, MCP, admin v0.4
-- `MemoryStore` trait; memory kinds: working, conversation, episodic, semantic, profile
+- `/memory` in `knowledge` behind the `MemoryStore` trait; kinds: working, conversation, episodic, semantic, profile
 - Write policy (useful, stable, sensitive, approved, expiry); user-visible memory with deletion
 - Personalized discovery and deadlines
 - MCP client via `rmcp`

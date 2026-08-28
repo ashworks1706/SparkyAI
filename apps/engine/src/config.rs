@@ -15,18 +15,8 @@ pub struct Config {
     pub discord: Discord,
     /// Chat model endpoint.
     pub model: Model,
-    /// Embedding model endpoint.
-    pub embedding: Embedding,
-    /// Reranker endpoint.
-    pub reranker: Reranker,
-    /// `PostgreSQL`.
-    pub postgres: Postgres,
-    /// Redis.
-    pub redis: Redis,
-    /// Qdrant.
-    pub qdrant: Qdrant,
-    /// S3-compatible object storage.
-    pub object_store: ObjectStore,
+    /// The knowledge service: search, memory, conversations.
+    pub knowledge: Knowledge,
     /// Sentry and `OpenTelemetry`.
     pub telemetry: Telemetry,
 }
@@ -75,68 +65,13 @@ pub struct Model {
     pub max_tokens: u32,
 }
 
-/// Embedding model served by vLLM.
+/// The knowledge service.
 #[derive(Debug, Deserialize)]
-pub struct Embedding {
-    /// OpenAI-compatible base URL.
+pub struct Knowledge {
+    /// Base URL of `knowledge-api`.
     pub base_url: String,
-    /// API key for the endpoint.
-    pub api_key: SecretString,
-    /// Model name as served.
-    pub name: String,
-    /// Vector dimension; must match the `Qdrant` collection.
-    pub dim: u64,
-}
-
-/// Reranker served by vLLM.
-#[derive(Debug, Deserialize)]
-pub struct Reranker {
-    /// Base URL.
-    pub base_url: String,
-    /// API key for the endpoint.
-    pub api_key: SecretString,
-    /// Model name as served.
-    pub name: String,
-}
-
-/// `PostgreSQL` connection.
-#[derive(Debug, Deserialize)]
-pub struct Postgres {
-    /// Connection URL.
-    pub url: SecretString,
-    /// Pool size.
-    pub max_connections: u32,
-}
-
-/// Redis connection.
-#[derive(Debug, Deserialize)]
-pub struct Redis {
-    /// Connection URL.
-    pub url: SecretString,
-}
-
-/// Qdrant connection.
-#[derive(Debug, Deserialize)]
-pub struct Qdrant {
-    /// gRPC URL.
-    pub url: String,
-    /// API key, if the instance requires one.
-    pub api_key: Option<SecretString>,
-    /// Collection holding document chunks.
-    pub collection: String,
-}
-
-/// S3-compatible object storage.
-#[derive(Debug, Deserialize)]
-pub struct ObjectStore {
-    /// Endpoint URL.
-    pub endpoint: String,
-    /// Bucket name.
-    pub bucket: String,
-    /// Access key.
-    pub access_key: SecretString,
-    /// Secret key.
-    pub secret_key: SecretString,
+    /// Shared secret presented on every request.
+    pub service_token: SecretString,
 }
 
 /// Observability sinks. All optional.

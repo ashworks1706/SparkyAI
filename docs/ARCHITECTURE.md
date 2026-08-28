@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `scraper` and `training` (Python), `inference` (vLLM config), `web` (static), `sandbox` (Phase 7). No shared library layer: `engine` is one crate with strict module boundaries. Services never call each other except at three edges — `discord → engine`, `engine → vLLM / MCP / sandbox` — everything else goes through the datastores, whose schema is the contract.
+One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `knowledge`, `training`, `sandbox` (Python), `inference` (vLLM config), `web` (static). `knowledge` owns every store; nothing else opens a database connection. Services call each other only at these edges: `discord → engine`, `engine → knowledge`, `engine → vLLM / MCP / sandbox`, `knowledge → vLLM embed/rerank`.
 
 Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
 
@@ -21,15 +21,20 @@ flowchart LR
     BOT -->|HTTP / SSE| APP
 
     APP -->|OpenAI-compatible| VLLM[vLLM · Qwen3-14B]
-    APP -->|OpenAI-compatible| EMB[vLLM · embed + rerank]
-    APP --> PG[(PostgreSQL)]
-    APP --> RD[(Redis)]
-    APP --> QD[(Qdrant)]
-    APP --> S3[(Object storage)]
+    APP -->|HTTP| KN
     APP -.->|Phase 4| MCP[MCP servers]
-    APP -.->|Phase 7| BW[Browser worker]
+    APP -.->|Phase 7| BW[apps/sandbox]
 
-    ING[apps/scraper<br/>Python worker] --> WEB[Public ASU sites]
+    subgraph knowledge [apps/knowledge — one image, two processes]
+        KN[knowledge-api<br/>search · memory · conversations · sources]
+        ING[knowledge-scraper]
+    end
+    KN --> PG[(PostgreSQL)]
+    KN --> RD[(Redis)]
+    KN --> QD[(Qdrant)]
+    KN --> S3[(Object storage)]
+    KN -->|OpenAI-compatible| EMB[vLLM · embed + rerank]
+    ING --> WEB[Public ASU sites]
     ING --> PG
     ING --> QD
     ING --> S3
@@ -39,7 +44,7 @@ flowchart LR
     APP --> AX[Axiom / OTLP]
 ```
 
-Solid arrows exist or are in the current phase; dashed are later phases. Only `ING` touches `WEB`.
+Solid arrows exist or are in the current phase; dashed are later phases. Only `ING` touches `WEB`; only `apps/knowledge` touches the datastores.
 
 ## Rules
 
@@ -57,19 +62,21 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only `I
 
 ```
 apps/
-  engine/         Rust bin. The thing that thinks, finds, persists, and listens.
+  engine/         Rust bin. The agent and its HTTP surface. No database connections.
     src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → vLLM, mock) · tools
-    src/knowledge/  query-side retrieval: embed → dense + BM25 → fuse → rerank → Evidence
-    src/storage/    Postgres, Redis, Qdrant, object-store adapters
+    src/clients/    HTTP client for knowledge, implementing the harness store traits
     src/routes/     chat, health, admin
     src/{config,telemetry,wiring}.rs
-    migrations/     the schema contract
   discord/        Rust bin: serenity bot; HTTP/SSE client of engine. Never links it.
-  scraper/        Python worker: fetch → snapshot → extract → chunk → embed → index
+  knowledge/      Python. Owns every store. Two processes from one package:
+    knowledge-api   /search /memory /conversations /sources — called by engine
+    knowledge-scraper  fetch → snapshot → extract → chunk → embed → index, offline
+    src/knowledge/  api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
+    migrations/     the schema
+  training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
+  sandbox/        Phase 7: Python + Playwright worker; HTTP task protocol; one context per user session
   inference/      vLLM on RunPod: env files and start script
   web/            static frontend + admin UI (Vite + React)
-  sandbox/        Phase 7: Python + Playwright worker; HTTP task protocol; one context per user session
-  training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
 deploy/           compose + one Dockerfile per image
 ```
 
@@ -82,14 +89,15 @@ flowchart BT
     H[agent::harness<br/>types · traits · loop · policy · assembly · trace]
     M[agent::model<br/>Rig CompletionModel → vLLM · mock] --> H
     T[agent::tools] --> H
-    K[knowledge<br/>embed · hybrid · rerank] --> H
-    S[storage<br/>postgres · redis · qdrant · object] --> H
-    W[routes · wiring] --> M & T & K & S & H
+    C[clients::knowledge<br/>Retriever · MemoryStore · ConversationStore over HTTP] --> H
+    W[routes · wiring] --> M & T & C & H
 ```
 
-Dependency direction inside the crate: `routes`/`wiring` → everything; `agent::model`, `agent::tools`, `knowledge`, `storage` → `agent::harness` only, never each other; `agent::harness` → nothing. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+Dependency direction inside the crate: `routes`/`wiring` → everything; `agent::model`, `agent::tools`, `clients` → `agent::harness` only, never each other; `agent::harness` → nothing. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
 
-These three seams — `agent`, `knowledge`, `storage` — are where a process split would happen if a measured need ever appears (a second consumer of knowledge, independent scaling). Until then they are modules.
+## Inside `knowledge`
+
+`index/` is the reason scraper and api share a package: the chunker and embedding model used to *write* must be the ones used to *read*. `store/` is the only place a connection is opened. `api/schemas.py` is the wire contract with `engine/src/agent/harness`.
 
 ## Types
 
@@ -182,7 +190,7 @@ pub trait Sandbox {   // Phase 7
 
 1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
 2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
-3. Load conversation; recall memory; retrieve evidence if the query needs it.
+3. Call `knowledge`: load conversation, recall memory, retrieve evidence if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
 5. Call the model; validate structured output. One correction attempt on invalid output, then stop.
 6. For each proposed tool call: `Policy::authorize` → Allow / Deny / Confirm.
@@ -195,6 +203,7 @@ pub trait Sandbox {   // Phase 7
 sequenceDiagram
     participant D as discord
     participant H as engine · harness
+    participant K as knowledge-api
     participant C as Context assembly
     participant M as ModelProvider
     participant P as Policy
@@ -202,6 +211,8 @@ sequenceDiagram
     participant X as TraceSink
 
     D->>H: POST /chat (identity, roles, message)
+    H->>K: conversation · memory recall · search
+    K-->>H: turns · memories · Evidence
     H->>C: history · memory · evidence · tool defs
     C-->>H: budgeted context
     loop until final / limit / deadline / cancel
@@ -220,7 +231,8 @@ sequenceDiagram
             H->>X: tool event
         end
     end
-    H->>X: final + persist turn, memory
+    H->>K: append turn · memory write (policy-gated)
+    H->>X: final
     H-->>D: SSE stream: tokens, citations, confirmation prompts
 ```
 
@@ -281,11 +293,11 @@ flowchart TD
 
 ## Knowledge
 
-Offline pipeline in `apps/scraper` (Python): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Offline pipeline in `knowledge-scraper` (`apps/knowledge`): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
-Request path: hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
+Request path: engine → `POST /search` on `knowledge-api` → hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
 
-Ingestion (`apps/scraper`, offline):
+Ingestion (`knowledge-scraper`, offline):
 
 ```mermaid
 flowchart LR
@@ -300,7 +312,7 @@ flowchart LR
     CH --> PG[(Postgres<br/>source_versions)]
 ```
 
-Retrieval (request path):
+Retrieval (request path, inside `knowledge-api`):
 
 ```mermaid
 flowchart LR
@@ -358,7 +370,7 @@ flowchart TD
 | browser session secrets | encrypted, separate namespace |
 | traces | JSONL locally; OpenTelemetry in deployment |
 
-Redis may carry the queue; durable job state lives in Postgres so a Redis restart loses nothing.
+Redis may carry the queue; durable job state lives in Postgres so a Redis restart loses nothing. All of these are reached only through `apps/knowledge`.
 
 ## Background jobs
 
@@ -388,14 +400,15 @@ Separate worker (`apps/sandbox`, Python + Playwright, FastAPI task protocol), ne
 
 ## Deployment
 
-Images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects), `sparkyai-scraper`, and `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (contains `knowledge-api` and `knowledge-scraper`; entrypoint selects), and `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
     subgraph host [CPU host — Docker Compose]
         BOT[discord]
         APP[engine]
-        ING[apps/scraper]
+        KN[knowledge-api]
+        ING[knowledge-scraper]
         PG[(postgres:17)]
         RD[(redis:7)]
         QD[(qdrant)]
@@ -413,14 +426,15 @@ flowchart TB
     end
     DC <--> BOT
     BOT -->|HTTP| APP
-    APP --> V1 & V2 & PG & RD & QD & MN & SE & AX
+    APP --> V1 & KN & SE & AX
+    KN --> V2 & PG & RD & QD & MN
     ING --> V2 & PG & QD & MN
-    GH -.->|pull| BOT & APP & ING
+    GH -.->|pull| BOT & APP & KN & ING
 ```
 
 ## First vertical slice (Phase 1–3 target)
 
-Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `apps/scraper` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation from `knowledge` → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `knowledge-scraper` feeding it), memory, MCP, browser — in that order.
 
 ## Open decisions
 

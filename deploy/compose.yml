@@ -4,11 +4,21 @@ services:
     entrypoint: ["/engine"]
     env_file: ../.env
     environment:
+      SPARKY_KNOWLEDGE__BASE_URL: http://knowledge:8081
+    ports: ["8080:8080"]
+    depends_on: [knowledge]
+    restart: unless-stopped
+
+  knowledge:
+    build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
+    entrypoint: ["knowledge-api"]
+    env_file: ../.env
+    environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
       SPARKY_QDRANT__URL: http://qdrant:6334
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
-    ports: ["8080:8080"]
+    expose: ["8081"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -25,7 +35,9 @@ services:
     restart: unless-stopped
 
   scraper:
-    build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
+    build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
+    entrypoint: ["knowledge-scraper"]
+    command: ["schedule"]
     env_file: ../.env
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky

@@ -9,14 +9,16 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 ```
 just check            # fmt-check, lint, test every unit — the gate; CI runs the same recipes
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
-just check-scraper    # ruff + pytest in apps/scraper
+just check-knowledge  # ruff + pytest in apps/knowledge
 just check-training   # ruff + pytest in apps/training
 just check-sandbox    # ruff + pytest in apps/sandbox
 just check-web        # eslint + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
+just knowledge        # knowledge-api server
 just scraper ...      # e.g. just scraper run library_hours
+just migrate
 just train | eval | data ...
 just infra            # postgres, redis, qdrant, minio only
 just up | down | logs # full compose stack
@@ -30,9 +32,9 @@ A change is not done until `just check` passes.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin — the backend. Modules: agent/{harness,model,tools}, knowledge, storage, routes.
+apps/engine/      Rust bin — the agent + HTTP surface. Modules: agent/{harness,model,tools}, clients, routes. No DB connections.
 apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
-apps/scraper/     Python worker — fetch → chunk → embed → index
+apps/knowledge/   Python — owns every store. knowledge-api (search, memory, conversations, sources) + knowledge-scraper. Migrations live here.
 apps/inference/   vLLM on RunPod — env files + start script
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
@@ -41,7 +43,7 @@ deploy/           compose + one Dockerfile per image
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine (HTTP), engine → vLLM / MCP / sandbox. Everything else goes through Postgres, Qdrant, Redis, object storage. `apps/engine/migrations` is the contract.
+Processes talk only via: discord → engine, engine → knowledge, engine → vLLM / MCP / sandbox, knowledge → vLLM embed/rerank. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
 
 ## Dependencies we build on
 
@@ -55,12 +57,12 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Rules
 
-- Inside `apps/engine`: `agent::harness` imports nothing else in the crate; `agent::model`, `agent::tools`, `knowledge`, `storage` import only `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `agent::harness` imports nothing else in the crate; `agent::model`, `agent::tools`, `clients` import only `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/agent/harness` with a mock impl for tests.
-- The request path never makes external HTTP calls except to the model server, MCP servers, and our own stores. Fetching pages is `apps/scraper`.
+- The engine never opens a database connection; stores are reached through `apps/knowledge`. Fetching pages is `knowledge-scraper`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Errors: `thiserror` enums per crate, no `anyhow` in library crates, no `unwrap` outside tests.

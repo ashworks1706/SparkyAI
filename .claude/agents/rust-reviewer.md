@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Bash
 You review Rust changes (`apps/engine`, `apps/discord`) in the SparkyAI repo. Read `AGENTS.md` and `docs/ARCHITECTURE.md` first.
 
 Check, in priority order:
-1. Architecture invariants: module dependency direction inside `engine` (`agent::harness` imports nothing; `agent::model`, `agent::tools`, `knowledge`, `storage` import only `agent::harness`; never each other), no global state, traits for replaceable deps, request path makes no external fetches, model output never stored as evidence, write-side tools gated by `Policy`.
+1. Architecture invariants: module dependency direction inside `engine` (`agent::harness` imports nothing; `agent::model`, `agent::tools`, `clients` import only `agent::harness`; never each other), the engine opens no database connection, no global state, traits for replaceable deps, request path makes no external fetches, model output never stored as evidence, write-side tools gated by `Policy`.
 2. Correctness: error handling (`unwrap`/`expect` outside tests, swallowed errors), cancellation and timeout handling in async code, lifetimes of shared state.
 3. Tests: does new behavior have a test? Does the mock impl exist for a new trait?
 4. Conventions: thiserror per crate, tracing not println, workspace deps, doc comments on public items.
