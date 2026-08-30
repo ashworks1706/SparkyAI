@@ -1,5 +1,6 @@
 
 import { Heart } from "lucide-react";
+import BrandLogo from "@/components/brand/BrandLogo";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -9,9 +10,11 @@ const Footer = () => {
       <div className="container mx-auto px-4 md:px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
-            <div className="flex items-center space-x-2 mb-4">
-              <span className="text-xl font-bold text-sparky-maroon">Sparky<span className="text-sparky-gold">AI</span></span>
-            </div>
+            <BrandLogo
+              className="mb-4"
+              markClassName="h-14 w-auto"
+              wordmarkClassName="text-xl"
+            />
             <p className="text-gray-600 max-w-md">
             An AI University assistant leveraging multi-agent architecture with real-time data integration. Combines Self improvement CRAG and Firebase analytics for resource retrieval across courses, shuttles, jobs, sports, events and much more.
             </p>

@@ -109,7 +109,7 @@ data *ARGS:
 # ---------- web ----------
 
 check-web:
-    cd apps/web && npm run lint && npm run build
+    cd apps/web && npm run lint && npm test && npm run build
 
 # Vite dev server
 web:

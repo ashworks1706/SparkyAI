@@ -13,7 +13,7 @@ just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/che
 just check-knowledge  # ruff + pytest in apps/knowledge
 just check-training   # ruff + pytest in apps/training
 just check-sandbox    # ruff + pytest in apps/sandbox
-just check-web        # eslint + vite build in apps/web
+just check-web        # eslint + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)

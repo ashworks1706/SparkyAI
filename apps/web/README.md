@@ -7,6 +7,7 @@ cd apps/web
 npm ci
 npm run dev       # http://localhost:5173
 npm run lint
+npm test
 npm run build     # dist/
 ```
 

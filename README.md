@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/web/public/brand/sparkyai-logo.png" alt="SparkyAI dragon logo" width="180">
+</p>
+
 > SparkyAI is being revived. Originally developed in 2024 as a Discord-native multi-agent university copilot, the project is now undergoing a ground-up open-source rebuild. The original implementation and contributor history are preserved in this repository while SparkyAI evolves toward a more modular, low-level platform for agent tooling, knowledge retrieval, service automation, and model research. 
 
 # SparkyAI: A Multi-Agent University Copilot

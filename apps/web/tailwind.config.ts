@@ -1,3 +1,4 @@
+import typography from "@tailwindcss/typography";
 import tailwindcssAnimate from "tailwindcss-animate";
 
 import type { Config } from "tailwindcss";
@@ -27,6 +28,7 @@ export default {
 			fontFamily: {
 				sans: ['SF Pro Display', 'Inter', 'system-ui', 'sans-serif'],
 				mono: ['SF Mono', 'monospace'],
+				editorial: ['Noto Serif JP', 'Yu Mincho', 'Hiragino Mincho ProN', 'serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
@@ -149,5 +151,5 @@ export default {
 			},
 		}
 	},
-	plugins: [tailwindcssAnimate],
+	plugins: [tailwindcssAnimate, typography],
 } satisfies Config;

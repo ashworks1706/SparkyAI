@@ -1,22 +1,9 @@
-import { useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Link } from "react-router-dom";
+import { BrandMark } from "@/components/brand/BrandLogo";
 
 const Hero = () => {
-  const [open, setOpen] = useState(false);
-
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden pt-20" id="hero">
       {/* Background Elements */}
@@ -26,6 +13,9 @@ const Hero = () => {
 
       <div className="container mx-auto px-4 md:px-6 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
+          <BrandMark
+            className="mx-auto mb-5 h-28 w-auto animate-fade-down opacity-0 md:h-36"
+          />
             <div
             className="inline-block px-3 py-1 mb-6 rounded-full bg-sparky-maroon/10 text-sparky-maroon text-sm font-medium animate-fade-down opacity-0"
             style={{ animationDelay: "200ms" }}
@@ -65,32 +55,13 @@ const Hero = () => {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-down opacity-0"
             style={{ animationDelay: "800ms" }}
           >
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button className="bg-sparky-maroon hover:bg-sparky-maroon/90 text-white px-8 py-6">
-                  Get Started
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Sign up for Beta Access</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Join our beta program and be one of the first to experience SparkyAI.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction className="bg-sparky-maroon hover:bg-sparky-maroon/90 text-white ">Sign Up</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
             <Link to="https://github.com/ashworks1706/SparkyAI">
             <Button
               variant="outline"
               
               className="border-sparky-maroon text-sparky-maroon hover:bg-sparky-maroon hover:text-white transition-all px-8 py-6"
               >
-              Learn More
+              View Repository
             </Button>
               </Link>
           </div>

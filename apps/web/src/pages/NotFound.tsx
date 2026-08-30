@@ -3,6 +3,7 @@ import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand/BrandLogo";
 
 const NotFound = () => {
   const location = useLocation();
@@ -17,6 +18,7 @@ const NotFound = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
       <div className="text-center max-w-md">
+        <BrandMark className="mx-auto mb-6 h-24 w-auto" />
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-sparky-maroon/10 mb-8">
           <span className="text-5xl font-bold text-sparky-maroon">404</span>
         </div>

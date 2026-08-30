@@ -1,19 +1,16 @@
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Github, Linkedin, ExternalLink } from "lucide-react";
 
 const Contact = () => {
   return (
     <section className="py-20" id="contact">
       <div className="container mx-auto px-4 md:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="mx-auto max-w-3xl">
           <div>
             <div className="inline-block px-3 py-1 rounded-full bg-sparky-maroon/10 text-sparky-maroon text-sm font-medium mb-4">
               Get In Touch
             </div>
-            <h2 className="heading-lg mb-6">Ready to Experience SparkyAI?</h2>
+            <h2 className="heading-lg mb-6">Project Links</h2>
             <p className="text-gray-600 text-lg mb-8 max-w-lg">
               Have questions or want to learn more about SparkyAI? Reach out to us directly or check out our resources.
             </p>
@@ -64,38 +61,6 @@ const Contact = () => {
                 <span>Visit Portfolio</span>
                 <ExternalLink className="h-3 w-3" />
               </a>
-            </div>
-          </div>
-          
-          <div>
-            <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-              <h3 className="text-xl font-semibold mb-6">Send us a message</h3>
-              <form className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium text-gray-700">Name</label>
-                    <Input id="name" placeholder="Your name" />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium text-gray-700">Email</label>
-                    <Input id="email" type="email" placeholder="Your email" />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="subject" className="text-sm font-medium text-gray-700">Subject</label>
-                  <Input id="subject" placeholder="Message subject" />
-                </div>
-                
-                <div className="space-y-2">
-                  <label htmlFor="message" className="text-sm font-medium text-gray-700">Message</label>
-                  <Textarea id="message" placeholder="Your message" rows={5} />
-                </div>
-                
-                <Button className="w-full bg-sparky-maroon hover:bg-sparky-maroon/90 text-white">
-                  Send Message
-                </Button>
-              </form>
             </div>
           </div>
         </div>

@@ -1,22 +1,10 @@
 import { useState, useEffect } from "react";
-import { Menu, X, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Menu, X } from "lucide-react";
+import BrandLogo from "@/components/brand/BrandLogo";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
@@ -50,8 +38,8 @@ const Navbar = () => {
     >
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex items-center justify-between">
-          <a href="#" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-sparky-maroon">Sparky<span className="text-sparky-gold">AI</span></span>
+          <a href="#hero" aria-label="SparkyAI home">
+            <BrandLogo />
           </a>
 
           {/* Desktop Navigation */}
@@ -66,30 +54,6 @@ const Navbar = () => {
               </a>
             ))}
           </nav>
-
-          <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="hidden md:flex items-center space-x-1 border-sparky-maroon text-sparky-maroon hover:bg-sparky-maroon hover:text-white transition-all"
-              >
-                <span>Get Started</span>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Sign up for Beta Access</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Join our beta program and be one of the first to experience SparkyAI.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction className="bg-sparky-maroon hover:bg-sparky-maroon/90 text-white ">Sign Up</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           {/* Mobile Menu Button */}
           <button
@@ -116,29 +80,6 @@ const Navbar = () => {
                 {item.label}
               </a>
             ))}
-            <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="flex items-center justify-center space-x-1 border-sparky-maroon text-sparky-maroon hover:bg-sparky-maroon hover:text-white transition-all w-full"
-                >
-                  <span>Get Started</span>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Sign up for Beta Access</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Join our beta program and be one of the first to experience SparkyAI.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction className="bg-sparky-maroon hover:bg-sparky-maroon/90 text-white ">Sign Up</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </nav>
         </div>
       )}

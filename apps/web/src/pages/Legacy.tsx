@@ -8,7 +8,7 @@ import Agents from "@/components/sections/Agents";
 import Architecture from "@/components/sections/Architecture";
 import Contact from "@/components/sections/Contact";
 
-const Index = () => {
+const Legacy = () => {
   // Add smooth scroll behavior to anchor links
   useEffect(() => {
     const handleAnchorClick = (e: MouseEvent) => {
@@ -96,4 +96,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default Legacy;
