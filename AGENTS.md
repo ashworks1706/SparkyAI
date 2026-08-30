@@ -8,7 +8,7 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 
 ```
 just doctor | env | hooks | bootstrap   # first run
-just check            # fmt-check, lint, test every unit — the gate; CI and the pre-commit hook run the same recipes
+just check            # fmt-check, lint, test every unit — the gate; CI and the pre-commit hook run the same recipes, only for the units a change touches
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-knowledge  # ruff + pytest in apps/knowledge
 just check-training   # ruff + pytest in apps/training

@@ -39,7 +39,7 @@ Set `SPARKY_MODEL__BASE_URL` etc. to `https://<pod-id>-<port>.proxy.runpod.net/v
 
 ## Images
 
-CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-knowledge`, and `sparkyai-sandbox` tagged `<sha>` and `main` on every push to `main`.
+CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-knowledge`, and `sparkyai-sandbox` tagged `<sha>` and `main` on push to `main` — only the images whose inputs changed (`workflow_dispatch` rebuilds all). CI likewise runs only the units a change touches.
 
 ## Observability
 

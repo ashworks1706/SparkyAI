@@ -14,17 +14,55 @@ permissions:
   packages: write
 
 jobs:
+  # An image is rebuilt only when its inputs changed. workflow_dispatch rebuilds all.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.images.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - .github/workflows/cd.yml
+            rust:
+              - *shared
+              - apps/engine/**
+              - apps/discord/**
+              - Cargo.toml
+              - Cargo.lock
+              - deploy/docker/rust.Dockerfile
+            knowledge:
+              - *shared
+              - apps/knowledge/**
+              - deploy/docker/knowledge.Dockerfile
+            sandbox:
+              - *shared
+              - apps/sandbox/**
+              - deploy/docker/sandbox.Dockerfile
+      - id: images
+        env:
+          ALL: ${{ github.event_name == 'workflow_dispatch' }}
+          RUST: ${{ steps.filter.outputs.rust }}
+          KNOWLEDGE: ${{ steps.filter.outputs.knowledge }}
+          SANDBOX: ${{ steps.filter.outputs.sandbox }}
+        run: |
+          list=()
+          { [ "$ALL" = true ] || [ "$RUST" = true ]; } && list+=(rust)
+          { [ "$ALL" = true ] || [ "$KNOWLEDGE" = true ]; } && list+=(knowledge)
+          { [ "$ALL" = true ] || [ "$SANDBOX" = true ]; } && list+=(sandbox)
+          echo "list=$(printf '%s\n' "${list[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
+
   image:
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - name: rust
-            dockerfile: deploy/docker/rust.Dockerfile
-          - name: knowledge
-            dockerfile: deploy/docker/knowledge.Dockerfile
-          - name: sandbox
-            dockerfile: deploy/docker/sandbox.Dockerfile
+        name: ${{ fromJSON(needs.changes.outputs.images) }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -36,7 +74,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: deploy/docker/${{ matrix.name }}.Dockerfile
           push: true
           tags: |
             ghcr.io/ashworks1706/sparkyai-${{ matrix.name }}:${{ github.sha }}

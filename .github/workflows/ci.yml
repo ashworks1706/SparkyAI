@@ -10,7 +10,59 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Each unit's job runs only when that unit, or the tooling it depends on, changed.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      web: ${{ steps.filter.outputs.web }}
+      python: ${{ steps.python.outputs.pkgs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - justfile
+              - .github/workflows/ci.yml
+            rust:
+              - *shared
+              - apps/engine/**
+              - apps/discord/**
+              - Cargo.toml
+              - Cargo.lock
+              - scripts/check-deps.sh
+            web:
+              - *shared
+              - apps/web/**
+            knowledge:
+              - *shared
+              - apps/knowledge/**
+            training:
+              - *shared
+              - apps/training/**
+            sandbox:
+              - *shared
+              - apps/sandbox/**
+      - id: python
+        env:
+          KNOWLEDGE: ${{ steps.filter.outputs.knowledge }}
+          TRAINING: ${{ steps.filter.outputs.training }}
+          SANDBOX: ${{ steps.filter.outputs.sandbox }}
+        run: |
+          pkgs=()
+          [ "$KNOWLEDGE" = true ] && pkgs+=(knowledge)
+          [ "$TRAINING" = true ] && pkgs+=(training)
+          [ "$SANDBOX" = true ] && pkgs+=(sandbox)
+          echo "pkgs=$(printf '%s\n' "${pkgs[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
+
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +74,8 @@ jobs:
       - run: just check-rust
 
   web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,10 +89,13 @@ jobs:
       - run: just check-web
 
   python:
+    needs: changes
+    if: needs.changes.outputs.python != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        pkg: [knowledge, training, sandbox]
+        pkg: ${{ fromJSON(needs.changes.outputs.python) }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
