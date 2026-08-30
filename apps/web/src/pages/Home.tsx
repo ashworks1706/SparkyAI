@@ -50,7 +50,7 @@ const Home = () => (
       <div className="mx-auto grid h-full max-w-[1400px] grid-rows-[auto_1fr] items-center gap-3 md:grid-cols-[1fr_0.9fr] md:grid-rows-1 md:gap-12 lg:gap-20">
         <div className="z-10 self-end pb-2 md:self-center md:pb-0">
           <p className="mb-3 text-[0.65rem] font-medium uppercase tracking-[0.24em] text-stone-500 sm:text-xs">
-            学生生活のためのAI · Open source
+            学生生活のための
           </p>
           <h1 className="font-editorial text-[clamp(3rem,6vw,6.5rem)] font-medium leading-[0.88] tracking-[-0.06em]">
             SparkyAI
