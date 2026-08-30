@@ -47,7 +47,7 @@ The agent harness is a module of the engine, not a separate product.
 ### 0 — Archive, clean, scaffold ✅ (done 2026-08-28)
 1. ~~Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.~~
 2. ~~Remove v1 from `main`.~~
-3. ~~Monorepo layout: `apps/{engine,discord}` (Rust), `apps/{knowledge,training,sandbox}` (Python), `apps/inference`, `apps/web`, `deploy`. Every module scaffolded with a doc comment.~~
+3. ~~Monorepo layout: `apps/{engine,discord}` (Rust), `apps/{knowledge,training,sandbox}` (Python), `apps/web`, `deploy` (compose, Dockerfiles, RunPod inference config). Every module scaffolded with a doc comment.~~
 4. ~~`docs/ARCHITECTURE.md` with diagrams; decisions 0001–0008.~~
 5. ~~`just check` gate; CI per unit; CD images to GHCR; pre-commit hook; Compose dev + prod.~~
 

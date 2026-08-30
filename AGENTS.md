@@ -37,11 +37,10 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: agent/{harness,model,tools}, clients, routes. No DB connections.
 apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
 apps/knowledge/   Python — owns every store. knowledge-api (search, memory, conversations, sources) + knowledge-scraper. Migrations live here.
-apps/inference/   vLLM on RunPod — env files + start script
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
-deploy/           compose + one Dockerfile per image
+deploy/           compose, one Dockerfile per image, inference/ (vLLM on RunPod env files + start script)
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 

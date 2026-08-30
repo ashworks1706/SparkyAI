@@ -1,4 +1,4 @@
-# apps/inference
+# deploy/inference
 
 Model serving. Not our code — vLLM on RunPod — but a deployable we own the configuration for.
 

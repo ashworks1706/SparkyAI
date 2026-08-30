@@ -75,9 +75,8 @@ apps/
     migrations/     the schema
   training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
   sandbox/        Phase 7: Python + Playwright worker; HTTP task protocol; one context per user session
-  inference/      vLLM on RunPod: env files and start script
   web/            static frontend + admin UI (Vite + React)
-deploy/           compose + one Dockerfile per image
+deploy/           compose, one Dockerfile per image, inference/ (vLLM on RunPod: env files + start script)
 ```
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
