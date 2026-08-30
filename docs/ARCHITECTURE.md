@@ -2,9 +2,70 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
 
-One repository; `apps/` holds every deployable — `engine` and `discord` (Rust), `knowledge`, `training`, `sandbox` (Python), `inference` (vLLM config), `web` (static). `knowledge` owns every store; nothing else opens a database connection. Services call each other only at these edges: `discord → engine`, `engine → knowledge`, `engine → vLLM / MCP / sandbox`, `knowledge → vLLM embed/rerank`.
+This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are in [decisions/](decisions/).
 
-Order of work is in [ROADMAP.md](ROADMAP.md). This document describes the target shape.
+## Stack
+
+| Layer | Choice | Where |
+|---|---|---|
+| Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
+| Model client, tool schema, embeddings | Rig (`rig-core`); our loop drives its `CompletionModel`, never `rig::Agent` | `apps/engine/src/agent` |
+| MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
+| Knowledge service | Python 3.12 — FastAPI, psycopg, qdrant-client, redis, boto3 | `apps/knowledge` |
+| Scraper | httpx + BeautifulSoup; Playwright where JS is required | `apps/knowledge` (`knowledge-scraper`) |
+| Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
+| Web | Vite + React + TypeScript + shadcn | `apps/web` |
+| Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
+| Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
+| Chat model | Qwen3-14B on vLLM (OpenAI-compatible HTTP, hermes tool parser) | RunPod, `deploy/inference` |
+| Embeddings, reranker | Qwen3-Embedding-0.6B (1024-dim), Qwen3-Reranker-0.6B on vLLM | RunPod, `deploy/inference` |
+| Database | PostgreSQL 17 — source of truth | reached only via `apps/knowledge` |
+| Vector store | Qdrant (rebuildable; Piramid later) | reached only via `apps/knowledge` |
+| Cache, queue | Redis 7 | reached only via `apps/knowledge` |
+| Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | reached only via `apps/knowledge` |
+| Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs | every app |
+| Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
+| Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
+| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); RunPod pods for vLLM | `deploy/` |
+
+## Rules
+
+- Open models only, served by vLLM behind an OpenAI-compatible HTTP API.
+- Facts come from retrieval or live observation, never from model weights.
+- Public sites are ingested offline. The request path never fetches a web page.
+- Only `apps/knowledge` opens a database connection. Everything else reaches stores through its HTTP API.
+- Every request carries its own `RequestContext`. No global mutable state.
+- Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
+- Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing.
+- Model output is never written back as retrieval evidence.
+- Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
+- Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
+
+## Layout
+
+```
+apps/
+  engine/         Rust bin. The agent and its HTTP surface. No database connections.
+    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → vLLM, mock) · tools
+    src/clients/    HTTP client for knowledge, implementing the harness store traits
+    src/routes/     chat, health, admin
+    src/{config,telemetry,wiring}.rs
+  discord/        Rust bin. serenity bot; HTTP/SSE client of engine. Never links it.
+  knowledge/      Python. Owns every store. Two processes from one package:
+    knowledge-api      /search /memory /conversations /sources — called by engine
+    knowledge-scraper  fetch → snapshot → extract → chunk → embed → index, offline
+    src/knowledge/     api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
+    migrations/        the schema
+  training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
+  sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
+  web/            Vite + React frontend and admin UI
+deploy/           compose (dev + prod), one Dockerfile per image, inference/ (vLLM env files + RunPod start script)
+docs/             ROADMAP.md, this file, decisions/
+```
+
+Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
+
+Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → vLLM / MCP / sandbox`, `knowledge → vLLM embed/rerank`.
 
 ## System context
 
@@ -15,7 +76,7 @@ flowchart LR
 
     subgraph rust [apps/engine · apps/discord]
         BOT[discord]
-        APP[engine<br/>agent · knowledge · storage · routes]
+        APP[engine<br/>agent · clients · routes]
     end
     D --> BOT
     BOT -->|HTTP / SSE| APP
@@ -44,44 +105,9 @@ flowchart LR
     APP --> AX[Axiom / OTLP]
 ```
 
-Solid arrows exist or are in the current phase; dashed are later phases. Only `ING` touches `WEB`; only `apps/knowledge` touches the datastores.
+Solid arrows exist or are in the current phase; dashed are later phases. Only the scraper touches the web; only `apps/knowledge` touches the datastores.
 
-## Rules
-
-- Open models only, served by vLLM behind an OpenAI-compatible HTTP API.
-- Facts come from retrieval or live observation, never from model weights.
-- Public sites are ingested offline. The request path never fetches a web page.
-- Every request carries its own `RequestContext`. No global mutable state.
-- Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
-- Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing. We do not use `rig::Agent`.
-- Model output is never written back as retrieval evidence.
-- Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
-- Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
-
-## Layout
-
-```
-apps/
-  engine/         Rust bin. The agent and its HTTP surface. No database connections.
-    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → vLLM, mock) · tools
-    src/clients/    HTTP client for knowledge, implementing the harness store traits
-    src/routes/     chat, health, admin
-    src/{config,telemetry,wiring}.rs
-  discord/        Rust bin: serenity bot; HTTP/SSE client of engine. Never links it.
-  knowledge/      Python. Owns every store. Two processes from one package:
-    knowledge-api   /search /memory /conversations /sources — called by engine
-    knowledge-scraper  fetch → snapshot → extract → chunk → embed → index, offline
-    src/knowledge/  api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
-    migrations/     the schema
-  training/       Python: datasets, post-training, eval runners; evals/cases holds the shared eval data
-  sandbox/        Phase 7: Python + Playwright worker; HTTP task protocol; one context per user session
-  web/            static frontend + admin UI (Vite + React)
-deploy/           compose, one Dockerfile per image, inference/ (vLLM on RunPod: env files + start script)
-```
-
-Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
-
-## Modules inside `engine`
+## Inside `engine`
 
 ```mermaid
 flowchart BT
@@ -92,11 +118,11 @@ flowchart BT
     W[routes · wiring] --> M & T & C & H
 ```
 
-Dependency direction inside the crate: `routes`/`wiring` → everything; `agent::model`, `agent::tools`, `clients` → `agent::harness` only, never each other; `agent::harness` → nothing. This is a convention checked in review, not by the compiler. Between apps it *is* enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other. `[workspace.lints]` applies code rules to both. Every module is scaffolded with a doc comment stating its responsibility; fill in place.
+`agent::harness` imports nothing else in the crate. `agent::model`, `agent::tools`, and `clients` import only `agent::harness`, never each other. `routes` and `wiring` compose them. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
 
 ## Inside `knowledge`
 
-`index/` is the reason scraper and api share a package: the chunker and embedding model used to *write* must be the ones used to *read*. `store/` is the only place a connection is opened. `api/schemas.py` is the wire contract with `engine/src/agent/harness`.
+`store/` is the only place a connection is opened. `index/` is shared by `knowledge-scraper` and `knowledge-api` because the chunker and embedding model used to *write* must be the ones used to *read*. `api/schemas.py` and `migrations/` are the wire and schema contracts with `engine`.
 
 ## Types
 
@@ -187,7 +213,7 @@ pub trait Sandbox {   // Phase 7
 
 ## Request lifecycle
 
-1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. (Web and admin clients hit the same endpoint.)
+1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web and admin clients hit the same endpoint.
 2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
 3. Call `knowledge`: load conversation, recall memory, retrieve evidence if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
@@ -292,15 +318,11 @@ flowchart TD
 
 ## Knowledge
 
-Offline pipeline in `knowledge-scraper` (`apps/knowledge`): fetch → raw snapshot to object storage → extract → normalize → dedupe → chunk → embed → index. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
-
-Request path: engine → `POST /search` on `knowledge-api` → hybrid retrieval (dense + BM25) → rerank → `Evidence` with `fetched_at`. If nothing is found or the source is stale, the answer says so.
-
-Ingestion (`knowledge-scraper`, offline):
+Ingestion runs offline in `knowledge-scraper`. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
 ```mermaid
 flowchart LR
-    SRC[sources table] --> F[fetch<br/>reqwest / chromiumoxide]
+    SRC[sources table] --> F[fetch<br/>httpx / Playwright]
     F --> SNAP[(raw snapshot<br/>object storage)]
     F --> HASH{content hash<br/>changed?}
     HASH -->|no| SKIP[touch fetched_at]
@@ -311,7 +333,7 @@ flowchart LR
     CH --> PG[(Postgres<br/>source_versions)]
 ```
 
-Retrieval (request path, inside `knowledge-api`):
+Retrieval is `engine → POST /search` on `knowledge-api`. If nothing is found or the source is stale, the answer says so.
 
 ```mermaid
 flowchart LR
@@ -338,8 +360,6 @@ flowchart LR
 
 A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. Users can view and delete their memory (Phase 4). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
 
-Write path:
-
 ```mermaid
 flowchart TD
     T[completed turn] --> EXT[extract candidates]
@@ -363,13 +383,13 @@ flowchart TD
 | Data | Store |
 |---|---|
 | users, roles, conversations, messages, memories, source metadata and versions, jobs, confirmations | PostgreSQL (source of truth) |
-| chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | Qdrant (rebuildable; Piramid later) |
+| chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | Qdrant (rebuildable) |
 | rate limits, queue, short-lived cache | Redis |
 | raw snapshots, model artifacts | object storage |
 | browser session secrets | encrypted, separate namespace |
 | traces | JSONL locally; OpenTelemetry in deployment |
 
-Redis may carry the queue; durable job state lives in Postgres so a Redis restart loses nothing. All of these are reached only through `apps/knowledge`.
+Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/knowledge/migrations`.
 
 ## Background jobs
 
@@ -386,7 +406,7 @@ Discord handlers never block on long work. Ingestion, embedding, browser tasks, 
 | sources conflict | show both with dates |
 | confirmation denied or expired | do nothing |
 | write result unclear | do not retry; inspect final state |
-| Postgres unavailable | reject stateful requests rather than run without identity or policy |
+| knowledge-api unavailable | reject stateful requests rather than run without identity or policy |
 | trace sink unavailable | continue only with a bounded local fallback |
 
 ## Tracing
@@ -395,11 +415,11 @@ One trace per request covering every model call, retrieval, memory access, tool 
 
 ## Sandboxed browser (Phase 7)
 
-Separate worker (`apps/sandbox`, Python + Playwright, FastAPI task protocol), never inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
+Separate worker (`apps/sandbox`), never inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
 
 ## Deployment
 
-Images: `sparkyai-rust` (contains both `engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (contains `knowledge-api` and `knowledge-scraper`; entrypoint selects), and `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). Plus Postgres, Redis, Qdrant, object storage, and vLLM on RunPod. Docker Compose first. Browser workers are added in Phase 7 as separate containers. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
+Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; vLLM runs on RunPod from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary.
 
 ```mermaid
 flowchart TB
@@ -431,12 +451,12 @@ flowchart TB
     GH -.->|pull| BOT & APP & KN & ING
 ```
 
-## First vertical slice (Phase 1–3 target)
+## First vertical slice (Phases 1–3)
 
-Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation from `knowledge` → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval (with `knowledge-scraper` feeding it), memory, MCP, browser — in that order.
+Discord slash command → `discord` → `POST /chat` on `engine` → `UserEvent` → `RequestContext` → load conversation from `knowledge` → vLLM via Rig → one `ReadPublic` tool → `Policy` allows → typed output → final answer streamed back → conversation and JSONL trace stored. Then retrieval, memory, MCP, browser — in that order.
 
 ## Open decisions
 
-Exact Qwen model and quantization · embedding model · reranker · queue implementation · object-storage provider · browser engine and worker protocol · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · when Qdrant moves to Piramid · app server host.
+Quantization for Qwen3-14B · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · when Qdrant moves to Piramid · app server host.
 
 Record each as a short note under `docs/decisions/` when made.

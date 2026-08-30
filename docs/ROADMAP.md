@@ -22,25 +22,7 @@ The agent harness is a module of the engine, not a separate product.
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Engine / Discord | Rust — tokio, axum, serenity, serde, sqlx |
-| LLM client / tools / embeddings | Rig (`rig-core`); our loop runs on its `CompletionModel`, not its `Agent` |
-| MCP | `rmcp` (official SDK) |
-| Web | Vite + React + TypeScript + shadcn (`apps/web`); landing now, admin UI in Phase 4 |
-| Model serving | vLLM (OpenAI-compatible HTTP) |
-| Chat model | Qwen3-14B on vLLM (RunPod) |
-| Embeddings / reranker | Qwen3-Embedding-0.6B / Qwen3-Reranker-0.6B on vLLM |
-| Database | PostgreSQL |
-| Cache / queue | Redis |
-| Vector store | Qdrant (adapter); Piramid later |
-| Memory | In `apps/knowledge` on Postgres + Qdrant |
-| Knowledge | Python service (`apps/knowledge`): FastAPI; psycopg, qdrant-client, redis, boto3; scraper with httpx + BeautifulSoup, Playwright where JS is required |
-| Object storage | S3-compatible (MinIO locally) |
-| Post-training | Python: TRL + PEFT (+ Unsloth), W&B, HF Hub |
-| Evals | Inspect AI, BFCL, lm-eval |
-| Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs |
-| Deploy | Docker Compose; GHCR images via CD; RunPod GPU pods for vLLM |
+See the Stack table in [ARCHITECTURE.md](ARCHITECTURE.md#stack).
 
 ## Phases
 
