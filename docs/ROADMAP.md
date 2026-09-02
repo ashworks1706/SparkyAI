@@ -26,7 +26,7 @@ See the Stack table in [ARCHITECTURE.md](ARCHITECTURE.md#stack).
 
 ## Phases
 
-### 0 — Archive, clean, scaffold ✅ (done 2026-08-28)
+### 0 — Archive, clean, scaffold  (done 2026-08-28)
 1. ~~Tag `v1.0-original`, branch `archive/v1`, GitHub release with v1 screenshots.~~
 2. ~~Remove v1 from `main`.~~
 3. ~~Monorepo layout: `apps/{engine,discord}` (Rust), `apps/{knowledge,training,sandbox}` (Python), `apps/web`, `deploy` (compose, Dockerfiles, RunPod inference config). Every module scaffolded with a doc comment.~~
