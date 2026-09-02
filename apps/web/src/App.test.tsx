@@ -10,7 +10,9 @@ describe("website routes", () => {
   it("renders the new landing statement, logo, and essential navigation", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "SparkyAI" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("main")).getByRole("heading", { name: "SparkyAI" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "University Copilot" }),
     ).toBeInTheDocument();
@@ -35,7 +37,7 @@ describe("website routes", () => {
     );
     expect(screen.getByRole("region", { name: /project readme/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /sparkyai: a multi-agent university copilot/i }),
+      screen.getByRole("heading", { name: /sparkyai v1: a multi-agent university copilot/i }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: /your intelligent university copilot/i }),

@@ -59,8 +59,9 @@ const Home = () => (
             University Copilot
           </h2>
           <p className="mt-5 max-w-lg text-sm leading-6 text-stone-600 sm:text-base sm:leading-7">
-            A grounded AI companion for navigating courses, campus resources,
-            opportunities, and everyday university life.
+            An open-source agent that watches ASU for you — scholarships,
+            events, jobs, and deadlines that match you, with a dated source
+            for every answer.
           </p>
         </div>
 

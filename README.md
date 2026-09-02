@@ -2,28 +2,53 @@
   <img src="apps/web/public/brand/sparkyai-logo.png" alt="SparkyAI dragon logo" width="180">
 </p>
 
-> SparkyAI is being revived. Originally developed in 2024 as a Discord-native multi-agent university copilot, the project is now undergoing a ground-up open-source rebuild. The original implementation and contributor history are preserved in this repository while SparkyAI evolves toward a more modular, low-level platform for agent tooling, knowledge retrieval, service automation, and model research. 
+# SparkyAI
 
-# SparkyAI: A Multi-Agent University Copilot
+**SparkyAI watches Arizona State University for you.** An open-source, Discord-native agent for ASU students and club moderators: it tracks official ASU sources — scholarships, events, jobs, courses, clubs, campus services — answers with dated citations, surfaces opportunities and deadlines that match you, and helps you act on them, asking before anything is done on your behalf.
 
-SparkyAI is a Discord-native university copilot designed for Arizona State University (ASU) students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. The project combines retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses are not only fluent but also grounded in retrievable evidence and institutional context. The repository was made public after credential hardening and infrastructure cleanup from an older private development history.
+## Status
+
+SparkyAI is a ground-up rebuild (v2) in active development; it is not yet deployable for end users. `main` holds a Rust agent engine with a custom harness (policy, confirmations, tracing, replay), a Python knowledge service that owns all retrieval and ingestion, a Discord bot, and — later — an open post-training track. The first deployment target is the AI Society Discord server at ASU.
+
+Plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) · design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+The original 2024–2025 prototype served ASU students on Discord and is documented [below](#sparkyai-v1-a-multi-agent-university-copilot); its complete implementation is preserved on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1) and the [`v1.0-original`](https://github.com/ashworks1706/SparkyAI/releases/tag/v1.0-original) release.
+
+## Principles
+
+- Open models only. Hosted models are judges and teachers, never the foundation.
+- Facts live in retrieval, not weights. Every factual answer carries a source and a date.
+- The model proposes; the harness authorizes. Consequential actions require explicit confirmation.
+- Never scrape at query time. Ingestion is offline, versioned, and change-detected.
+- Every run is traced and replayable.
+
+## Development
+
+v2 (`main`) is a monorepo: `apps/` (engine, discord, knowledge, training, sandbox, web) and `deploy/`.
+
+```bash
+git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
+just doctor     # verify cargo, uv, node, docker, just, jq
+just bootstrap  # .env, git hooks, deps, datastores
+just check      # gate: fmt, lint, test for every unit
+just            # list all recipes
+```
+
+Production: `just prod-up` (see `deploy/README.md`). See `AGENTS.md` for the recipes and `docs/ARCHITECTURE.md` for the layout.
+
+---
+
+*Everything below this line documents the original 2024–2025 prototype, preserved on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1).*
+
+## SparkyAI v1: A Multi-Agent University Copilot
+
+The original SparkyAI was a Discord-native university copilot for ASU students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. It combined retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses were not only fluent but grounded in retrievable evidence and institutional context. The repository was made public after credential hardening and infrastructure cleanup from an older private development history.
 
 ![{2B61349D-750C-4418-A76E-15CB3AAB0B8B}](https://github.com/user-attachments/assets/642fd6d6-5232-4347-b1dc-3e78d3d0c758)
 
 ![{5B0799E0-D15C-4017-867A-F1DEB1FDA2DC}](https://github.com/user-attachments/assets/e19a175a-2c70-4af8-88d8-6303b9729cda)
 
 ![{2DDB8F4F-5F0E-4828-8FDD-847E67C40A65}](https://github.com/user-attachments/assets/7fbce508-e180-4f8f-9d7f-11feac5757e8)
-
-
-## Project generations
-
-**v2 — 2026–present.** Ground-up open-source rebuild in Rust on `main`: a model-independent agent harness, MCP tools, permission-aware retrieval, service automation, and an open post-training track. Plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) · design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-**Original prototype — 2024–2025.** The Discord-native multi-agent copilot described below. Complete implementation preserved on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1) and the [`v1.0-original`](https://github.com/ashworks1706/SparkyAI/releases/tag/v1.0-original) release.
-
----
-
-*Everything below this line documents the original prototype.*
 
 ## Problem
 
@@ -101,20 +126,6 @@ The repository includes a fine-tuning track for the superior decision layer usin
 SparkyAI is implemented primarily in Python and deploys on a containerized stack. Core model orchestration uses Gemini APIs with LangChain-adjacent retrieval patterns. NLP preprocessing and embedding workflows rely on Hugging Face ecosystem components and NLTK utilities. Vector retrieval is backed by Qdrant, while dynamic web extraction uses Selenium and BeautifulSoup. Runtime deployment is orchestrated with Docker and Docker Compose, and service-level persistence is provided by Firestore and auxiliary Google Sheets integration.
 
 ## Setup and Local Execution
-
-v2 (`main`) is a monorepo: `apps/` (engine, discord, knowledge, training, sandbox, inference, web).
-
-```bash
-git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
-just doctor     # verify cargo, uv, node, docker, just, jq
-just bootstrap  # .env, git hooks, deps, datastores
-just check      # gate: fmt, lint, test for every unit
-just            # list all recipes
-```
-
-Production: `just prod-up` (see `deploy/README.md`).
-
-See `AGENTS.md` for the recipes and `docs/ARCHITECTURE.md` for the layout.
 
 Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/blob/archive/v1/README.md).
 
