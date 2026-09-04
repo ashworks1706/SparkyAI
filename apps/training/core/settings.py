@@ -10,15 +10,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Training(BaseModel):
-    # Engine under test and the trace directory it writes (relative to this app).
     engine_url: str = "http://localhost:8080"
-    traces_dir: Path = Path("../../traces")
     phoenix_url: str = "http://localhost:6006"
-    data_dir: Path = Path("data")
+    state_dir: Path = Path("../../.sparky")
     cases_dir: Path = Path("evals/cases")
     baseline_path: Path = Path("evals/baseline.json")
-    # Wall-clock budget per eval turn.
     request_timeout_secs: float = 180.0
+
+    @property
+    def traces_dir(self) -> Path:
+        return self.state_dir / "traces"
+
+    @property
+    def data_dir(self) -> Path:
+        return self.state_dir / "training" / "data"
+
+    @property
+    def eval_report_path(self) -> Path:
+        return self.state_dir / "training" / "evals" / "last.json"
+
+    @property
+    def output_dir(self) -> Path:
+        return self.state_dir / "training" / "outputs"
 
 
 class Settings(BaseSettings):

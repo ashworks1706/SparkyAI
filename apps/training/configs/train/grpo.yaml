@@ -1,6 +1,6 @@
-base_model: outputs/dpo/merged
-output_dir: outputs/grpo
-dataset: data/processed/grpo_prompts.jsonl
+base_model: ../../.sparky/training/outputs/dpo/merged
+output_dir: ../../.sparky/training/outputs/grpo
+dataset: ../../.sparky/training/data/processed/grpo_prompts.jsonl
 rewards: [schema_valid, correct_tool, correct_args, citation_present, policy_respected]
 num_generations: 8
 max_completion_length: 1024

@@ -7,9 +7,13 @@ use serde_json::json;
 use crate::agent::model::rig_openai::{from_rig, to_rig};
 use crate::core::types::message::{Message, ToolCall};
 
+fn rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) {
+    to_rig(messages).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
 #[test]
 fn system_messages_become_the_preamble() {
-    let (preamble, history) = to_rig(&[
+    let (preamble, history) = rig(&[
         Message::system("rules"),
         Message::system("evidence"),
         Message::user("hi"),
@@ -26,7 +30,7 @@ fn tool_calls_and_results_round_trip_their_ids() {
         name: "echo".into(),
         arguments: json!({"a": 1}),
     };
-    let (_, history) = to_rig(&[
+    let (_, history) = rig(&[
         Message::assistant_tool_calls("", vec![call]),
         Message::tool_result("call_9", "echo", "ok"),
     ]);
@@ -52,4 +56,11 @@ fn response_content_splits_text_and_calls() {
     assert_eq!(calls[0].id, "c1");
     assert_eq!(calls[0].name, "echo");
     assert_eq!(calls[0].arguments, json!({"x": 2}));
+}
+
+#[test]
+fn a_tool_result_without_ids_is_rejected() {
+    let mut orphan = Message::tool_result("c", "echo", "ok");
+    orphan.tool_call_id = None;
+    assert!(to_rig(&[orphan]).is_err());
 }

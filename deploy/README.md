@@ -5,7 +5,6 @@
 ```bash
 just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, minio)
 just engine        # then in separate shells: just discord, just web
-# or run everything in containers:
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
@@ -38,4 +37,4 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 ## Observability
 
 - Traces: every app exports OpenTelemetry to Phoenix (`SPARKY_TELEMETRY__OTLP_ENDPOINT`, default `http://localhost:4317`; empty disables). UI at http://localhost:6006. Engine spans carry OpenInference attributes; a Discord conversation is one Phoenix session.
-- Logs: pretty in development, JSON to stdout otherwise; ship with the platform's log driver.
+- Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.

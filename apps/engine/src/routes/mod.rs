@@ -1,10 +1,9 @@
-//! Router assembly: /chat, /health, /admin.
+//! Router assembly: /chat and /health.
 
 use axum::Router;
 use axum::routing::{get, post};
 use tower_http::trace::TraceLayer;
 
-pub mod admin;
 pub mod chat;
 pub mod health;
 
@@ -20,6 +19,5 @@ pub fn router(chat_state: chat::ChatState, health_state: health::HealthState) ->
     Router::new()
         .merge(health)
         .merge(chat)
-        .nest("/admin", admin::router())
         .layer(TraceLayer::new_for_http())
 }

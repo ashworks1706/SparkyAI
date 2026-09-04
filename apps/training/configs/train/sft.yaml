@@ -1,7 +1,6 @@
-# SFT on real interactions. Runs on a 6 GB card with QLoRA; export is a GGUF llama-server loads.
 base_model: unsloth/Qwen3-4B
-dataset: data/processed/sft.jsonl
-output_dir: outputs/sft
+dataset: ../../.sparky/training/data/processed/sft.jsonl
+output_dir: ../../.sparky/training/outputs/sft
 max_seq_length: 4096
 load_in_4bit: true
 lora:

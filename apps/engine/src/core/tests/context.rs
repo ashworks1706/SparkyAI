@@ -12,17 +12,17 @@ fn contexts_are_distinct_per_request() {
 }
 
 #[test]
-fn expired_deadline_is_done() {
+fn expired_deadline_has_nothing_remaining() {
     let ctx = RequestContext::new("g", "u1", Duration::ZERO);
-    assert!(ctx.is_done());
+    assert!(ctx.remaining().is_zero());
 }
 
 #[test]
-fn cancel_is_done() {
+fn cancel_is_observable() {
     let ctx = RequestContext::new("g", "u1", Duration::from_mins(1));
-    assert!(!ctx.is_done());
+    assert!(!ctx.cancel.is_cancelled());
     ctx.cancel.cancel();
-    assert!(ctx.is_done());
+    assert!(ctx.cancel.is_cancelled());
 }
 
 #[test]

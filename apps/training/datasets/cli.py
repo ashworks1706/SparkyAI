@@ -35,7 +35,7 @@ def main() -> None:
 
 @app.command("export")
 def export_cmd(
-    out: Path = typer.Option(None, help="Defaults to data/raw/llm_spans.jsonl"),
+    out: Path = typer.Option(None, help="Defaults under .sparky/training/data/raw."),
 ) -> None:
     """Pull every complete `llm` span from Phoenix, redact it, and write raw JSONL."""
     out = out or settings().training.data_dir / "raw" / "llm_spans.jsonl"
@@ -46,8 +46,8 @@ def export_cmd(
 
 @app.command("verify")
 def verify_cmd(
-    src: Path = typer.Option(None, help="Defaults to data/raw/llm_spans.jsonl"),
-    out: Path = typer.Option(None, help="Defaults to data/processed/sft.jsonl"),
+    src: Path = typer.Option(None, help="Defaults under .sparky/training/data/raw."),
+    out: Path = typer.Option(None, help="Defaults under .sparky/training/data/processed."),
 ) -> None:
     """Drop malformed and duplicate examples; write the training set."""
     src = src or settings().training.data_dir / "raw" / "llm_spans.jsonl"

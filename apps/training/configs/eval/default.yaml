@@ -1,5 +1,0 @@
-# Engine evals. The runner posts to SPARKY_TRAINING__ENGINE_URL and reads traces from
-# SPARKY_TRAINING__TRACES_DIR. Suites and cases: evals/suites, evals/cases.
-suites: [tool_selection, tool_args, grounding, memory, permissions, clarification, refusal, latency]
-cases: evals/cases
-baseline: evals/baseline.json

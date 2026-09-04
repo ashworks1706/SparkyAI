@@ -4,8 +4,9 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
 use sqlx::postgres::PgPool;
+
+use crate::core::types::health::Readiness;
 
 /// What readiness checks.
 #[derive(Clone)]
@@ -14,15 +15,6 @@ pub struct HealthState {
     pub pool: PgPool,
     /// Chat model base URL, ending in `/v1`.
     pub model_base_url: String,
-}
-
-/// Readiness report.
-#[derive(Serialize)]
-pub struct Readiness {
-    /// Postgres answered `select 1`.
-    pub postgres: bool,
-    /// The model endpoint listed its models.
-    pub model: bool,
 }
 
 /// Process is up.

@@ -1,5 +1,3 @@
-"""Source: shuttles."""
-
 from scraper.core.types import Source
 
 SOURCE = Source(

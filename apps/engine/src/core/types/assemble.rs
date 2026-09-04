@@ -52,6 +52,4 @@ pub struct Assembled {
     pub estimated_tokens: usize,
     /// Evidence chunks that made it in.
     pub evidence_used: usize,
-    /// History turns that made it in.
-    pub history_used: usize,
 }

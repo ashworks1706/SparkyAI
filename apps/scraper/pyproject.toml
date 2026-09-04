@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff>=0.9", "pytest>=8", "pytest-asyncio>=0.25", "respx>=0.22"]
+dev = ["ruff>=0.9", "pytest>=8"]
 
 [project.scripts]
 scraper = "scraper.cli:app"
@@ -47,4 +47,3 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["core/tests"]
-asyncio_mode = "auto"

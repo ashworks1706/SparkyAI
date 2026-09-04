@@ -1,5 +1,3 @@
-"""Source: scholarships."""
-
 from scraper.core.types import Source
 
 SOURCE = Source(

@@ -20,7 +20,7 @@ impl Targets {
     /// Targets from settings.
     pub fn from_config(cfg: &Config) -> Self {
         Self {
-            engine: format!("{}/health", cfg.engine.base_url.trim_end_matches('/')),
+            engine: format!("{}/health/ready", cfg.engine.base_url.trim_end_matches('/')),
             model: format!("{}/models", cfg.model.base_url.trim_end_matches('/')),
             phoenix: cfg.cli.phoenix_url.clone(),
             every: Duration::from_secs(cfg.cli.health_interval_secs.max(1)),

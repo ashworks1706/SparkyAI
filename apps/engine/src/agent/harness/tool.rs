@@ -33,11 +33,6 @@ impl ToolSet {
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         self.tools.values().map(|t| t.definition()).collect()
     }
-
-    /// Whether any tools are registered.
-    pub fn is_empty(&self) -> bool {
-        self.tools.is_empty()
-    }
 }
 
 impl std::fmt::Debug for ToolSet {

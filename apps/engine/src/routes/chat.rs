@@ -8,6 +8,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
+use secrecy::{ExposeSecret, SecretString};
 use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -29,6 +30,8 @@ pub struct ChatState {
     pub request_budget: Duration,
     /// Tenant used when the client sends none (single-guild deployments).
     pub default_tenant: String,
+    /// Bearer token every caller must present.
+    pub service_token: SecretString,
 }
 
 fn error(status: StatusCode, ctx: &RequestContext, text: &str) -> Response {
@@ -63,6 +66,9 @@ pub async fn chat(
     headers: HeaderMap,
     Json(req): Json<ChatRequest>,
 ) -> Response {
+    if !authorized(&headers, &state.service_token) {
+        return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
+    }
     let span = tracing::info_span!("http.chat", "sparky.user_id" = %req.user_id);
     if let Some(parent) = headers
         .get("traceparent")
@@ -123,4 +129,12 @@ async fn chat_inner(state: ChatState, req: ChatRequest) -> Response {
             )
         }
     }
+}
+
+fn authorized(headers: &HeaderMap, token: &SecretString) -> bool {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .is_some_and(|presented| presented == token.expose_secret())
 }

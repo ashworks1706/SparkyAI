@@ -1,7 +1,6 @@
 # apps/cli — `sparky`
 
-The developer console. One terminal for everything in the repo: start and stop each unit, tail
-its output, run tasks, watch the engine's health, and talk to the agent.
+The developer console starts services, runs tasks, shows health, tails output, and chats with the engine.
 
 ```bash
 just cli          # from anywhere inside the repo
@@ -62,17 +61,10 @@ Commands: `:start engine`, `:stop chat`, `:restart discord`, `:ask <question>`,
 | tasks | doctor, setup, migrate, scraper run, check, data *, eval *, train sft | `just <recipe>`, exit code shown as ✓ / ✗ |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes the RunPod host uses; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
-Container state comes from `docker compose ps` every three seconds. The status bar probes the
-engine's `/health`, the chat server's `/models`, and Phoenix every five seconds. Chat posts to the
-engine's `/chat` as user `sparky-cli` and shows the request id so the trace is easy to find in
-Phoenix.
+Container state comes from `docker compose ps`. The status bar probes the engine, chat model, and Phoenix. Chat uses the engine's `/chat` endpoint as `sparky-cli`.
 
 ## Settings
 
-`SPARKY_ENGINE__BASE_URL` (default `http://localhost:8080`), `SPARKY_ENGINE__SERVICE_TOKEN`,
-`SPARKY_MODEL__BASE_URL` (`http://localhost:8000/v1`), `SPARKY_CLI__PHOENIX_URL`
-(`http://localhost:6006`), `SPARKY_CLI__LOG_LINES` (5000), `SPARKY_CLI__ROLES`,
-`SPARKY_CLI__HEALTH_INTERVAL_SECS` (5). The repo's `.env` is loaded if present.
+`SPARKY_ENGINE__BASE_URL`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, `SPARKY_CLI__ROLES`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `.env.example` and `src/core/config.rs`.
 
-Layout follows the repo convention: `core/{config,types,tests}` hold data and settings;
-`runner`, `logs`, `health`, `chat`, `app`, `ui`, `units` hold the objects that do the work.
+The console keeps a bounded in-memory view and appends full unit output to `.sparky/logs/`.

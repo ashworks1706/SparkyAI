@@ -1,7 +1,6 @@
-//! Trace sinks: JSONL on disk, in-memory, fan-out.
+//! JSONL trace sink: one file per request, one event per line.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -9,10 +8,6 @@ use uuid::Uuid;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::context::RequestContext;
 use crate::core::types::trace::{TraceEvent, TraceRecord};
-
-impl TraceSink for () {
-    fn emit(&self, _ctx: &RequestContext, _event: TraceEvent) {}
-}
 
 fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     TraceRecord {
@@ -41,15 +36,6 @@ impl JsonlSink {
     pub fn path_for(&self, request_id: Uuid) -> PathBuf {
         self.dir.join(format!("{request_id}.jsonl"))
     }
-
-    /// Reads every record of one request, in order.
-    pub fn read(&self, request_id: Uuid) -> std::io::Result<Vec<TraceRecord>> {
-        let text = std::fs::read_to_string(self.path_for(request_id))?;
-        text.lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| serde_json::from_str(l).map_err(std::io::Error::other))
-            .collect()
-    }
 }
 
 impl TraceSink for JsonlSink {
@@ -66,38 +52,6 @@ impl TraceSink for JsonlSink {
             .and_then(|mut f| writeln!(f, "{line}"));
         if let Err(e) = result {
             tracing::warn!(error = %e, path = %path.display(), "trace write failed");
-        }
-    }
-}
-
-/// Keeps every record in memory. For tests and for the admin trace viewer.
-#[derive(Debug, Default)]
-pub struct MemorySink {
-    records: Mutex<Vec<TraceRecord>>,
-}
-
-impl MemorySink {
-    /// Everything emitted so far.
-    pub fn records(&self) -> Vec<TraceRecord> {
-        self.records.lock().map(|r| r.clone()).unwrap_or_default()
-    }
-}
-
-impl TraceSink for MemorySink {
-    fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
-        if let Ok(mut records) = self.records.lock() {
-            records.push(record(ctx, event));
-        }
-    }
-}
-
-/// Fans one event out to several sinks.
-pub struct MultiSink(pub Vec<Arc<dyn TraceSink>>);
-
-impl TraceSink for MultiSink {
-    fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
-        for sink in &self.0 {
-            sink.emit(ctx, event.clone());
         }
     }
 }

@@ -2,6 +2,7 @@
 
 mod agent;
 mod assemble;
+mod config;
 mod context;
 mod mcp;
 mod policy;

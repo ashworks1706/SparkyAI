@@ -1,5 +1,3 @@
-"""Source: events."""
-
 from scraper.core.types import Source
 
 SOURCE = Source(

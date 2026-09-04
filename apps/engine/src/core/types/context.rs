@@ -2,7 +2,6 @@
 
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -20,8 +19,6 @@ pub struct RequestContext {
     pub roles: Vec<String>,
     /// Conversation this request continues.
     pub conversation_id: Uuid,
-    /// When the request entered the system.
-    pub started_at: DateTime<Utc>,
     /// Hard stop for the whole request.
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
@@ -37,7 +34,6 @@ impl RequestContext {
             user_id: user_id.into(),
             roles: Vec::new(),
             conversation_id: Uuid::new_v4(),
-            started_at: Utc::now(),
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
         }
@@ -63,10 +59,5 @@ impl RequestContext {
     /// Time left before the deadline; zero once passed.
     pub fn remaining(&self) -> Duration {
         self.deadline.saturating_duration_since(Instant::now())
-    }
-
-    /// True once cancelled or past the deadline.
-    pub fn is_done(&self) -> bool {
-        self.cancel.is_cancelled() || self.remaining().is_zero()
     }
 }

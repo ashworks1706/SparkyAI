@@ -9,14 +9,15 @@ use serde_json::{Value, json};
 use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
-use crate::agent::harness::trace::MemorySink;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::tool::Tool;
+use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::ToolCall;
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::trace::{TraceEvent, TraceRecord};
 
 /// Replays canned responses in order.
 pub struct Scripted(Mutex<Vec<Result<ModelResponse, ModelError>>>);
@@ -113,6 +114,31 @@ impl Tool for Slow {
     async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
         tokio::time::sleep(Duration::from_secs(5)).await;
         Ok(ToolOutput::text("late"))
+    }
+}
+
+/// Keeps every trace record so tests can inspect the loop.
+#[derive(Default)]
+pub struct MemorySink {
+    records: Mutex<Vec<TraceRecord>>,
+}
+
+impl MemorySink {
+    pub fn records(&self) -> Vec<TraceRecord> {
+        self.records.lock().map(|r| r.clone()).unwrap_or_default()
+    }
+}
+
+impl TraceSink for MemorySink {
+    fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
+        if let Ok(mut records) = self.records.lock() {
+            records.push(TraceRecord {
+                request_id: ctx.request_id,
+                conversation_id: ctx.conversation_id,
+                at: chrono::Utc::now(),
+                event,
+            });
+        }
     }
 }
 

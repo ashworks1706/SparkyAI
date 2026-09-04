@@ -27,7 +27,7 @@ fn action(risk: RiskClass) -> ProposedAction {
 async fn reads_are_allowed() {
     let p = RiskPolicy::new(Some("Moderator".into()));
     let d = p.authorize(&ctx(&[]), &action(RiskClass::ReadPublic)).await;
-    assert!(matches!(d, Ok(Decision::Allow)));
+    assert!(matches!(d, Decision::Allow));
 }
 
 #[tokio::test]
@@ -36,7 +36,7 @@ async fn writes_without_role_are_denied() {
     let d = p
         .authorize(&ctx(&[]), &action(RiskClass::ExternalWrite))
         .await;
-    assert!(matches!(d, Ok(Decision::Deny { .. })));
+    assert!(matches!(d, Decision::Deny { .. }));
 }
 
 #[tokio::test]
@@ -45,7 +45,7 @@ async fn writes_with_role_need_confirmation() {
     let d = p
         .authorize(&ctx(&["Moderator"]), &action(RiskClass::ExternalWrite))
         .await;
-    assert!(matches!(d, Ok(Decision::Confirm(_))));
+    assert!(matches!(d, Decision::Confirm(_)));
 }
 
 #[tokio::test]
@@ -54,7 +54,7 @@ async fn forbidden_is_denied_regardless_of_role() {
     let d = p
         .authorize(&ctx(&["Moderator"]), &action(RiskClass::Forbidden))
         .await;
-    assert!(matches!(d, Ok(Decision::Deny { .. })));
+    assert!(matches!(d, Decision::Deny { .. }));
 }
 
 #[test]

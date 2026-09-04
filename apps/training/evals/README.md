@@ -1,7 +1,8 @@
 # evals
 
-Shared evaluation data. No code here; runners are in `src/training/evals`.
+Source-controlled evaluation inputs.
 
-- `cases/` — JSONL per suite: input, expected tool / sources / behavior. Read by the Inspect runners and by the engine's trace replay.
+- `cases/` contains JSONL cases and expected behavior.
+- `baseline.json` stores accepted suite rates when one has been promoted.
 
-Suites: tool_selection, tool_args, grounding, memory, permissions, clarification, refusal, latency.
+Generated reports go to `.sparky/training/evals/` at the repository root.

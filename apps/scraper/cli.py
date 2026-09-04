@@ -49,7 +49,7 @@ def run(
             typer.echo(
                 f"{key}: {'indexed' if result.changed else 'unchanged'} ({result.chunks} chunks)"
             )
-        except Exception as e:  # noqa: BLE001 — one bad source must not stop the rest
+        except Exception as e:  # one bad source must not stop the rest; exit code says so
             failures += 1
             log.error("source failed", source=key, error=str(e))
             typer.echo(f"{key}: FAILED — {e}", err=True)
@@ -71,7 +71,7 @@ def schedule(poll_secs: int = typer.Option(300, help="How often to check what is
                 continue
             try:
                 pipeline.run_source(src)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:  # a failed run is retried on the next poll
                 log.error("scheduled run failed", source=key, error=str(e))
         time.sleep(poll_secs)
 

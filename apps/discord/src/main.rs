@@ -9,7 +9,11 @@ mod reply;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
+    if let Err(e) = dotenvy::dotenv()
+        && !e.not_found()
+    {
+        return Err(anyhow::anyhow!(".env: {e}"));
+    }
     let cfg = core::config::Config::load()?;
     let _guard = core::telemetry::init(&cfg.telemetry, &cfg.app.env, &cfg.app.log_level)?;
     tracing::info!(env = %cfg.app.env, engine = %cfg.engine.base_url, "discord starting");

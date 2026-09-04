@@ -141,7 +141,7 @@ pub async fn connect(
             description: t
                 .description
                 .as_deref()
-                .unwrap_or("MCP tool")
+                .unwrap_or(&name)
                 .chars()
                 .take(160)
                 .collect(),

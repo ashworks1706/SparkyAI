@@ -1,6 +1,6 @@
-base_model: outputs/sft/merged
-output_dir: outputs/dpo
-dataset: data/preference/dpo.jsonl
+base_model: ../../.sparky/training/outputs/sft/merged
+output_dir: ../../.sparky/training/outputs/dpo
+dataset: ../../.sparky/training/data/preference/dpo.jsonl
 max_length: 8192
 beta: 0.1
 lora:

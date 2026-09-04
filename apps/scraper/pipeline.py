@@ -10,7 +10,7 @@ import structlog
 from scraper import chunk, embed, extract, fetch
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.core.types import RunResult, Source
+from scraper.core.types import ChunkRow, RunResult, Source
 from scraper.store import object as objects
 from scraper.store import postgres
 
@@ -66,7 +66,7 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             max_chars=cfg.scraper.chunk_chars,
             overlap_chars=cfg.scraper.chunk_overlap_chars,
         )
-        # Prefix each chunk with the page title so the embedding carries the source context.
+        # The title prefix gives each embedding the page context a lone paragraph lacks.
         texts = [f"{title}\n{p}" for p in pieces]
         vectors = embed.embed_texts(texts)
 
@@ -86,10 +86,7 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             source=row,
             version_id=version_id,
             fetched_at=fetched_at,
-            chunks=[
-                postgres.ChunkRow(i, t, v)
-                for i, (t, v) in enumerate(zip(texts, vectors, strict=True))
-            ],
+            chunks=[ChunkRow(i, t, v) for i, (t, v) in enumerate(zip(texts, vectors, strict=True))],
         )
         conn.commit()
     log.info("indexed", source=source.key, chunks=written, hash=content_hash[:12])

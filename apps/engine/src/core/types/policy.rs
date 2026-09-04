@@ -1,4 +1,4 @@
-//! `ProposedAction`, `ConfirmationRequest`, `Decision`, `PolicyError`.
+//! `ProposedAction`, `ConfirmationRequest`, `Decision`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -43,12 +43,4 @@ pub enum Decision {
     },
     /// Stop and ask the user first.
     Confirm(ConfirmationRequest),
-}
-
-/// Policy evaluation failures.
-#[derive(Debug, thiserror::Error)]
-pub enum PolicyError {
-    /// The policy could not be evaluated; the action is not run.
-    #[error("policy unavailable: {0}")]
-    Unavailable(String),
 }

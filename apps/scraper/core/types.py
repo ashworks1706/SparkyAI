@@ -70,3 +70,7 @@ class FetchRejected(RuntimeError):
 
 class EmbedError(RuntimeError):
     """The embedding endpoint refused or returned the wrong shape."""
+
+
+class StoreError(RuntimeError):
+    """Postgres returned something other than what the statement promised."""

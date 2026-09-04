@@ -247,11 +247,7 @@ impl Agent {
                         .collect();
                     span.record(
                         "output.value",
-                        truncate(
-                            &serde_json::to_string(&listing).unwrap_or_default(),
-                            MAX_SPAN_VALUE,
-                        )
-                        .as_str(),
+                        truncate(&json(&listing), MAX_SPAN_VALUE).as_str(),
                     );
                     deps.trace.emit(
                         ctx,
@@ -451,13 +447,7 @@ impl Agent {
                 risk: tool.definition().risk,
                 arguments: call.arguments.clone(),
             };
-            let decision = deps
-                .policy
-                .authorize(run.ctx, &action)
-                .await
-                .unwrap_or_else(|error| Decision::Deny {
-                    reason: format!("policy unavailable: {error}"),
-                });
+            let decision = deps.policy.authorize(run.ctx, &action).await;
             deps.trace.emit(
                 run.ctx,
                 TraceEvent::PolicyDecision {
@@ -503,7 +493,7 @@ impl Agent {
             };
             let started = Instant::now();
             // Full prompt and full reply as JSON: this is what a training example is made of.
-            let input_json = serde_json::to_string(&request.messages).unwrap_or_default();
+            let input_json = json(&request.messages);
             let span = tracing::info_span!(
                 "llm",
                 "openinference.span.kind" = "LLM",
@@ -540,7 +530,7 @@ impl Agent {
                         "llm.token_count.completion",
                         i64::from(response.usage.completion_tokens),
                     );
-                    let shown = serde_json::to_string(&response.as_message()).unwrap_or_default();
+                    let shown = json(&response.as_message());
                     span.record("output.value", truncate(&shown, MAX_SPAN_VALUE).as_str());
                     deps.trace.emit(
                         ctx,
@@ -727,4 +717,11 @@ pub(crate) fn redact(value: &Value) -> Value {
         Value::Array(items) => Value::Array(items.iter().map(redact).collect()),
         other => other.clone(),
     }
+}
+
+/// JSON for a span attribute. A value that will not serialize is recorded as such rather than
+/// as an empty string.
+fn json<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string(value)
+        .unwrap_or_else(|e| format!("{{\"unserializable\":{:?}}}", e.to_string()))
 }

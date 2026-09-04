@@ -9,7 +9,6 @@ import Architecture from "@/components/sections/Architecture";
 import Contact from "@/components/sections/Contact";
 
 const Legacy = () => {
-  // Add smooth scroll behavior to anchor links
   useEffect(() => {
     const handleAnchorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -32,7 +31,6 @@ const Legacy = () => {
 
     document.addEventListener('click', handleAnchorClick);
     
-    // Handle initial URL with hash
     if (window.location.hash) {
       const targetElement = document.querySelector(window.location.hash);
       if (targetElement) {
@@ -50,7 +48,6 @@ const Legacy = () => {
     };
   }, []);
 
-  // Add reveal animations on scroll
   useEffect(() => {
     const observerOptions = {
       root: null,
@@ -69,7 +66,6 @@ const Legacy = () => {
 
     const observer = new IntersectionObserver(handleIntersect, observerOptions);
     
-    // Target elements with data-animate attribute
     const animateElements = document.querySelectorAll('.animate-on-scroll');
     animateElements.forEach((el) => {
       el.classList.remove('animate-fade-in');

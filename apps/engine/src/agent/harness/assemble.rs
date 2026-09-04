@@ -96,7 +96,6 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         kept.pop();
     }
     kept.reverse();
-    let history_used = kept.len();
     used += spent;
     messages.extend(kept.into_iter().cloned());
 
@@ -109,6 +108,5 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages,
         estimated_tokens: used,
         evidence_used,
-        history_used,
     }
 }

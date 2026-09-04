@@ -31,7 +31,6 @@ def test_chunks_respect_max_and_overlap() -> None:
     chunks = chunk_text("\n".join(paragraphs), max_chars=500, overlap_chars=100)
     assert len(chunks) > 1
     assert all(len(c) <= 500 for c in chunks)
-    # Overlap: the tail of one chunk appears at the head of the next.
     assert chunks[0][-50:].strip() in chunks[1]
 
 

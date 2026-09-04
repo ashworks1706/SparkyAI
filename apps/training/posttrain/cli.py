@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from training.core.types import SftError
 from training.posttrain import sft
 
 app = typer.Typer(no_args_is_help=True)
@@ -32,7 +33,8 @@ def sft_cmd(
         if dry_run:
             return
         gguf = sft.train(config)
-    except sft.SftError as e:
-        raise typer.Exit(str(e)) from e
+    except SftError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     rprint(f"[green]GGUF → {gguf}[/green]")
     rprint(f"serve it: SPARKY_CHAT_GGUF={gguf} just model")

@@ -1,6 +1,8 @@
-"""httpx fetch; Playwright fallback for JS-rendered pages."""
+"""Fetchers: Firecrawl (default), plain httpx, or headless Chromium for JS pages."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -53,6 +55,34 @@ def fetch_rendered(url: str) -> Fetched:
     return Fetched(url=final_url, status=200, body=html.encode("utf-8"), content_type="text/html")
 
 
+def parse_firecrawl(url: str, payload: dict[str, Any]) -> Fetched:
+    """Turns a `/v2/scrape` response into a page. Anything short of markdown plus a status
+    code is a fetch failure, not an empty page."""
+    if not payload.get("success"):
+        raise FetchError(f"firecrawl failed for {url}: {str(payload.get('error'))[:200]}")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise FetchError(f"firecrawl response for {url} has no data object")
+    meta = data.get("metadata")
+    if not isinstance(meta, dict) or "statusCode" not in meta:
+        raise FetchError(f"firecrawl response for {url} has no metadata.statusCode")
+    status = int(meta["statusCode"])
+    if status >= 400:
+        raise FetchRejected(f"{url} returned {status}")
+    markdown = data.get("markdown")
+    if not isinstance(markdown, str) or not markdown.strip():
+        raise FetchError(f"firecrawl returned no markdown for {url}")
+    final_url = meta.get("url") or meta.get("sourceURL") or url
+    return Fetched(
+        url=str(final_url),
+        status=status,
+        body=markdown.encode("utf-8"),
+        content_type="text/markdown",
+        title=meta.get("title"),
+        text=markdown,
+    )
+
+
 def fetch_firecrawl(url: str) -> Fetched:
     """Scrapes through self-hosted Firecrawl: JS rendered, boilerplate stripped, markdown out."""
     cfg = settings().firecrawl
@@ -77,25 +107,7 @@ def fetch_firecrawl(url: str) -> Fetched:
         raise FetchError(f"firecrawl returned {r.status_code}: {r.text[:200]}")
     if r.status_code >= 400:
         raise FetchRejected(f"firecrawl returned {r.status_code}: {r.text[:200]}")
-    payload = r.json()
-    if not payload.get("success"):
-        raise FetchError(f"firecrawl failed: {str(payload.get('error'))[:200]}")
-    data = payload.get("data") or {}
-    meta = data.get("metadata") or {}
-    markdown = data.get("markdown") or ""
-    status = int(meta.get("statusCode") or 200)
-    if status >= 400:
-        raise FetchRejected(f"{url} returned {status}")
-    if not markdown.strip():
-        raise FetchError(f"firecrawl returned no content for {url}")
-    return Fetched(
-        url=str(meta.get("url") or meta.get("sourceURL") or url),
-        status=status,
-        body=markdown.encode("utf-8"),
-        content_type="text/markdown",
-        title=meta.get("title"),
-        text=markdown,
-    )
+    return parse_firecrawl(url, r.json())
 
 
 def fetch(url: str, *, needs_js: bool = False) -> Fetched:

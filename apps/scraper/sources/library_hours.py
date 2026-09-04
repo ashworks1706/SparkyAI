@@ -1,5 +1,3 @@
-"""Source: library_hours."""
-
 from scraper.core.types import Source
 
 SOURCE = Source(

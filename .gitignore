@@ -1,4 +1,5 @@
 target/
+.sparky/
 **/*.rs.bk
 .env
 .env.*

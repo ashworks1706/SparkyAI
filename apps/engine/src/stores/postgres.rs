@@ -17,7 +17,7 @@ use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::retrieval::{Embedder, Retriever};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
-use crate::core::types::memory::{Memory, MemoryCandidate, MemoryKind, MemoryQuery};
+use crate::core::types::memory::{Memory, MemoryKind, MemoryQuery};
 use crate::core::types::message::Message;
 use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
 use crate::core::types::store::StoreError;
@@ -130,6 +130,13 @@ impl Retriever for PgRetriever {
         let Some(vector) = vectors.into_iter().next() else {
             return Err(RetrievalError::Embedding("no vector returned".into()));
         };
+        if vector.len() != self.embedder.dim() {
+            return Err(RetrievalError::Embedding(format!(
+                "embedding has {} dimensions; the index holds {}",
+                vector.len(),
+                self.embedder.dim()
+            )));
+        }
 
         let dense_sql = format!("{SELECT} order by c.embedding <=> $3::vector limit $4");
         let dense_rows = sqlx::query(&dense_sql)
@@ -253,9 +260,9 @@ impl ConversationStore for PgConversations {
         let mut out = Vec::with_capacity(rows.len());
         for row in rows.iter().rev() {
             let value: serde_json::Value = row.try_get("content").map_err(db)?;
-            if let Ok(m) = serde_json::from_value::<Message>(value) {
-                out.push(m);
-            }
+            let message = serde_json::from_value::<Message>(value)
+                .map_err(|e| StoreError::Database(format!("stored message unreadable: {e}")))?;
+            out.push(message);
         }
         Ok(out)
     }
@@ -344,68 +351,5 @@ impl MemoryStore for PgMemory {
             });
         }
         Ok(out)
-    }
-
-    async fn write(
-        &self,
-        ctx: &RequestContext,
-        m: &MemoryCandidate,
-    ) -> Result<Option<Uuid>, StoreError> {
-        if m.content.trim().is_empty() || m.expires_at <= Utc::now() {
-            return Ok(None);
-        }
-        let user = sqlx::query("select id from users where tenant_id = $1 and discord_id = $2")
-            .bind(&ctx.tenant_id)
-            .bind(&ctx.user_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db)?;
-        let Some(user) = user else {
-            return Err(StoreError::NotFound("user".into()));
-        };
-        let user_id: Uuid = user.try_get("id").map_err(db)?;
-        // Duplicate check on exact content within the same kind.
-        let dup = sqlx::query("select 1 from memories where tenant_id = $1 and user_id = $2 and kind = $3 and content = $4")
-            .bind(&ctx.tenant_id)
-            .bind(user_id)
-            .bind(m.kind.as_str())
-            .bind(&m.content)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(db)?;
-        if dup.is_some() {
-            return Ok(None);
-        }
-        let row = sqlx::query(
-            "insert into memories (tenant_id, user_id, kind, content, confidence, expires_at)
-             values ($1, $2, $3, $4, $5, $6) returning id",
-        )
-        .bind(&ctx.tenant_id)
-        .bind(user_id)
-        .bind(m.kind.as_str())
-        .bind(&m.content)
-        .bind(m.confidence)
-        .bind(m.expires_at)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(db)?;
-        row.try_get("id").map(Some).map_err(db)
-    }
-
-    async fn forget(&self, ctx: &RequestContext, id: Uuid) -> Result<(), StoreError> {
-        let result = sqlx::query(
-            "delete from memories m using users u
-             where m.id = $1 and m.user_id = u.id and m.tenant_id = $2 and u.discord_id = $3",
-        )
-        .bind(id)
-        .bind(&ctx.tenant_id)
-        .bind(&ctx.user_id)
-        .execute(&self.pool)
-        .await
-        .map_err(db)?;
-        if result.rows_affected() == 0 {
-            return Err(StoreError::NotFound(id.to_string()));
-        }
-        Ok(())
     }
 }

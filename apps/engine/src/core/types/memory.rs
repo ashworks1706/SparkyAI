@@ -1,4 +1,4 @@
-//! `MemoryKind`, `Memory`, `MemoryCandidate`, `MemoryQuery`.
+//! `MemoryKind`, `Memory`, `MemoryQuery`.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -56,19 +56,6 @@ pub struct Memory {
     pub created_at: DateTime<Utc>,
     /// When it stops being recalled.
     pub expires_at: Option<DateTime<Utc>>,
-}
-
-/// A memory the agent wants to write. The store applies the write policy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryCandidate {
-    /// Kind.
-    pub kind: MemoryKind,
-    /// The text.
-    pub content: String,
-    /// Confidence, 0–1.
-    pub confidence: f32,
-    /// Required expiry.
-    pub expires_at: DateTime<Utc>,
 }
 
 /// Recall parameters.

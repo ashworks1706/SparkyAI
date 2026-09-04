@@ -9,11 +9,7 @@ from pathlib import Path
 import httpx
 
 from training.core.settings import settings
-from training.core.types import EvalCase, TurnResult
-
-
-class RunnerError(RuntimeError):
-    pass
+from training.core.types import EvalCase, RunnerError, TurnResult
 
 
 def load_cases(cases_dir: Path | None = None) -> list[EvalCase]:
@@ -32,7 +28,7 @@ def read_trace(request_id: str, traces_dir: Path | None = None) -> list[dict]:
     path = (traces_dir or settings().training.traces_dir) / f"{request_id}.jsonl"
     if not path.exists():
         raise RunnerError(
-            f"trace {path} not found; run the engine from the repo root so traces/ is shared"
+            f"trace {path} not found; check that the engine and training state directories match"
         )
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
@@ -64,7 +60,7 @@ def ask(
         conversation_id=d["conversation_id"],
         status=d["status"],
         text=d["text"],
-        citations=d.get("citations") or [],
+        citations=d["citations"],
         steps=d["steps"],
         tokens=d["tokens"],
         latency_ms=latency_ms,

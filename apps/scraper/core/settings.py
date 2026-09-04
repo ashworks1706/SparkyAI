@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import BaseModel, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,8 +46,9 @@ class Telemetry(BaseModel):
 class Scraper(BaseModel):
     # Public ASU content is shared across every guild; the engine reads this tenant for all.
     tenant_id: str = "public"
-    # "firecrawl" renders JS and returns markdown; "http" is the plain httpx + bs4 path.
-    fetcher: str = "firecrawl"
+    # "firecrawl" renders JS and returns markdown; "http" is plain httpx + bs4 (Playwright when
+    # the source needs JS).
+    fetcher: Literal["firecrawl", "http"] = "firecrawl"
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
     chunk_chars: int = 1200
@@ -59,7 +61,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SPARKY_",
         env_nested_delimiter="__",
-        env_file=".env",
+        env_file="../../.env",
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -28,7 +28,11 @@ async fn main() -> anyhow::Result<()> {
             cwd.display()
         )
     })?;
-    let _ = dotenvy::from_path(root.join(".env"));
+    if let Err(e) = dotenvy::from_path(root.join(".env"))
+        && !e.not_found()
+    {
+        return Err(anyhow::anyhow!(".env: {e}"));
+    }
     let cfg = core::config::load()?;
     let targets = health::Targets::from_config(&cfg);
 

@@ -23,7 +23,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Vector store | pgvector, in the same PostgreSQL (rebuildable) | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | `apps/scraper` |
-| Observability | OpenTelemetry → Phoenix (traces with OpenInference attributes, from engine, bot, and scraper); JSON logs to stdout. Nothing else. | every app; `deploy/compose.yml` `phoenix` |
+| Observability | OpenTelemetry → Phoenix; JSON logs to stdout; local traces and console logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (dev builds locally, prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -35,7 +35,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 - Public sites are ingested offline through Firecrawl. The request path never fetches a page as retrieval evidence; browser tools act under `Policy` and never write to the index.
 - The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
-- Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
+- Every replaceable dependency is a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
 - The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `agent/model`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
@@ -49,7 +49,7 @@ apps/
     src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
     src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
-    src/routes/     chat, health, admin
+    src/routes/     chat, health
     src/{telemetry,wiring}.rs
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
   cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services, tails them, chats with engine over HTTP. core/{config,types,tests}.
@@ -59,6 +59,7 @@ apps/
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, this file, decisions/
+.sparky/          ignored local state: traces, logs, training data, reports, and outputs
 ```
 
 Each Python app directory is itself the importable package — `apps/scraper` is `scraper` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
@@ -83,10 +84,13 @@ flowchart LR
     D --> BOT
     BOT -->|HTTP / SSE| APP
 
+    DEV[Developer] -->|just cli| CLI["cli · sparky console"]
+    CLI -->|HTTP /chat| APP
+    CLI -->|just · docker compose| rust
+
     APP -->|OpenAI-compatible| OLL[llama-server · chat]
     APP -->|OpenAI-compatible| EMB[llama-server · embed]
     APP --> PG[(PostgreSQL + pgvector)]
-    APP --> RD[(Redis)]
     APP -->|MCP| MCP[Playwright MCP]
 
     ING[apps/scraper<br/>offline ingestion] --> FC[Firecrawl]
@@ -100,11 +104,31 @@ flowchart LR
     ING --> PX
 ```
 
-Solid arrows exist or are in the current phase; dashed are later phases. Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL.
+Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units and talks to the engine over the same HTTP surface any client uses.
 
 ## Inside `engine`
 
-`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other. `routes` and `wiring` compose them. Data types live in `core/types` and interfaces in `core/traits`; objects — a struct whose purpose is to carry state for its methods — live beside their `impl` with private fields. Tests live in `core/tests`. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
+```mermaid
+flowchart TD
+    ROUTES["routes · wiring<br/>compose everything, own main"]
+    HARNESS["agent::harness<br/>loop · policy · assemble · tools · trace"]
+    MODEL["agent::model<br/>rig_openai"]
+    TOOLS["agent::tools<br/>public_search · mcp"]
+    STORES["stores<br/>postgres"]
+    CORE["core<br/>config · types · traits · tests"]
+
+    ROUTES --> HARNESS
+    ROUTES --> MODEL
+    ROUTES --> TOOLS
+    ROUTES --> STORES
+    ROUTES --> CORE
+    HARNESS --> CORE
+    MODEL --> CORE
+    TOOLS --> CORE
+    STORES --> CORE
+```
+
+`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
 
 ## Inside `scraper`
 
@@ -113,33 +137,22 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only th
 ## Types
 
 ```rust
-pub struct UserEvent {
-    pub request_id: RequestId,
-    pub source: EventSource,        // Discord, Http
-    pub tenant_id: TenantId,        // the Discord guild; keeps data scoped
-    pub user_id: UserId,
-    pub channel_id: ChannelId,
-    pub content: MessageContent,
-    pub received_at: DateTime<Utc>,
-}
-
 pub struct RequestContext {
-    pub request_id: RequestId,
-    pub tenant_id: TenantId,
-    pub user: UserIdentity,
-    pub roles: Vec<Role>,
-    pub conversation_id: ConversationId,
+    pub request_id: Uuid,
+    pub tenant_id: String,
+    pub user_id: String,
+    pub roles: Vec<String>,
+    pub conversation_id: Uuid,
     pub deadline: Instant,
     pub cancel: CancellationToken,
-    pub trace: TraceContext,
 }
 
 pub struct Evidence {
-    pub source_id: SourceId,
-    pub document_id: DocumentId,
+    pub source_id: Uuid,
+    pub chunk_id: Uuid,
     pub title: String,
     pub content: String,
-    pub url: Option<Url>,
+    pub url: Option<String>,
     pub fetched_at: DateTime<Utc>,
     pub score: f32,
 }
@@ -154,7 +167,7 @@ All in `engine/src/core/traits`, implemented in `agent::harness`, `agent::model`
 ```rust
 #[async_trait]
 pub trait ModelProvider {
-    async fn generate(&self, ctx: &RequestContext, req: ModelRequest) -> Result<ModelStream, ModelError>;
+    async fn generate(&self, ctx: &RequestContext, req: ModelRequest) -> Result<ModelResponse, ModelError>;
 }
 
 #[async_trait]
@@ -165,50 +178,102 @@ pub trait Tool {
 
 #[async_trait]
 pub trait Retriever {
-    async fn retrieve(&self, ctx: &RequestContext, q: RetrievalQuery) -> Result<Vec<Evidence>, RetrievalError>;
+    async fn retrieve(&self, ctx: &RequestContext, q: &RetrievalQuery) -> Result<Vec<Evidence>, RetrievalError>;
 }
 
 #[async_trait]
 pub trait ConversationStore {
-    async fn load(&self, ctx: &RequestContext) -> Result<Vec<Message>, StoreError>;
-    async fn append(&self, ctx: &RequestContext, turn: Turn) -> Result<(), StoreError>;
+    async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError>;
+    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError>;
+    async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError>;
 }
 
 #[async_trait]
 pub trait MemoryStore {
-    async fn recall(&self, ctx: &RequestContext, q: MemoryQuery) -> Result<Vec<Memory>, MemoryError>;
-    async fn write(&self, ctx: &RequestContext, m: MemoryCandidate) -> Result<Option<MemoryId>, MemoryError>;
-    async fn forget(&self, ctx: &RequestContext, id: MemoryId) -> Result<(), MemoryError>;
+    async fn recall(&self, ctx: &RequestContext, q: &MemoryQuery) -> Result<Vec<Memory>, StoreError>;
+    // write and forget arrive with Phase 3, when the agent starts producing memories
+}
+
+#[async_trait]
+pub trait Embedder {
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, RetrievalError>;
+    fn dim(&self) -> usize;
 }
 
 #[async_trait]
 pub trait Policy {
-    async fn authorize(&self, ctx: &RequestContext, a: ProposedAction) -> Result<Decision, PolicyError>;
+    async fn authorize(&self, ctx: &RequestContext, action: &ProposedAction) -> Decision;
     // Decision: Allow | Deny(reason) | Confirm(ConfirmationRequest)
 }
 
 pub trait TraceSink {
     fn emit(&self, ctx: &RequestContext, e: TraceEvent);
 }
-
-#[async_trait]
-pub trait Sandbox {   // Phase 7
-    async fn run(&self, ctx: &RequestContext, t: BrowserTask) -> Result<BrowserResult, SandboxError>;
-}
 ```
 
 ## Request lifecycle
 
-1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web and admin clients hit the same endpoint.
-2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
+```mermaid
+sequenceDiagram
+    actor U as Student
+    participant B as discord
+    participant E as engine
+    participant PG as PostgreSQL
+    participant M as llama-server
+    participant PX as Phoenix
+
+    U->>B: /ask question
+    B->>E: POST /chat with roles and traceparent
+    E->>E: verify service token, build RequestContext
+    E->>PG: load conversation, recall memory
+    E->>M: embed the question
+    E->>PG: dense and lexical search, fuse
+    PG-->>E: Evidence
+    E->>E: assemble within the token budget
+    loop agent loop
+        E->>M: completion with tool schemas
+        M-->>E: text or tool calls
+        E->>E: authorize, then execute allowed calls
+    end
+    E->>PG: persist the turn
+    E-->>B: answer, citations, request_id
+    B-->>U: reply
+    E->>PX: spans
+    B->>PX: spans
+```
+
+1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web, admin, and the `sparky` console hit the same endpoint.
+2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`.
 3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.
-5. Call the model; validate structured output. One correction attempt on invalid output, then stop.
-6. For each proposed tool call: `Policy::authorize` → Allow / Deny / Confirm.
-7. Execute allowed calls with timeout and cancellation. Parallel when independent; in order when any tool in the step is stateful (`ToolDefinition::sequential`, set for browser tools). A call repeated with identical arguments is not run again: the model is told, and the next call offers no tools so it has to answer. A second all-repeat step ends the run as `Stalled`.
-8. Loop until final answer, error, cancel, deadline, or step limit.
-9. Persist turn, memory candidates that pass the write policy, and trace.
-10. Reply with citations.
+5. Run the agent loop below.
+6. Persist turn, memory candidates that pass the write policy, and trace.
+7. Reply with citations built from `Evidence`.
+
+## Agent loop
+
+```mermaid
+flowchart TD
+    ASM["assembled context"] --> CALL["call model"]
+    CALL --> ANS{"tool calls<br/>requested?"}
+    ANS -->|no| DONE(["Answered · text + citations"])
+    ANS -->|yes| REPEAT{"identical call<br/>already made?"}
+    REPEAT -->|yes| FORCE["tell the model it repeated<br/>next step offers no tools"]
+    FORCE --> AGAIN{"repeats again?"}
+    AGAIN -->|yes| STALLED(["Stalled"])
+    AGAIN -->|no| CALL
+    REPEAT -->|no| POL["Policy::authorize each call"]
+    POL --> DEC{"decision"}
+    DEC -->|Deny| FEED
+    DEC -->|Confirm| WAIT(["AwaitingConfirmation"])
+    DEC -->|Allow| EXEC["execute with timeout<br/>parallel unless a call is sequential"]
+    EXEC --> FEED["feed results back as messages"]
+    FEED --> LIMIT{"step limit, deadline,<br/>or cancel?"}
+    LIMIT -->|yes| STOP(["StepLimit · Deadline · Cancelled"])
+    LIMIT -->|no| CALL
+```
+
+The loop owns every stopping condition. Structured output gets one correction attempt. Independent calls run in parallel; a stateful tool makes the step sequential. Identical calls are not run twice.
 
 ## Tool risk classes
 
@@ -225,9 +290,37 @@ A confirmation is bound to one exact action payload, is single-use and short-liv
 
 ## Knowledge
 
-Ingestion runs offline in `apps/scraper`: fetch through Firecrawl (JS rendered, main content as markdown) → content hash (skip if unchanged) → raw snapshot to object storage → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Ingestion runs offline in `apps/scraper`. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
-Retrieval happens inside the engine: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → `Evidence`. No reranker: Rig has no provider for a local one, and fusion alone is enough until the Phase 2 eval set says otherwise. If nothing is found or the source is stale, the answer says so.
+```mermaid
+flowchart LR
+    SRC["source definition"] --> FETCH["Firecrawl<br/>JS rendered markdown"]
+    FETCH --> HASH{"content hash<br/>changed?"}
+    HASH -->|no| SKIP(["stop · nothing rewritten"])
+    HASH -->|yes| SNAP["raw snapshot to object storage"]
+    SNAP --> CHUNK["extract and chunk<br/>max chars plus overlap"]
+    CHUNK --> TITLE["prefix each chunk<br/>with the page title"]
+    TITLE --> EMB["embed the batch<br/>llama-server · 1024 dims"]
+    EMB --> WRITE["replace chunks<br/>new source_version"]
+    WRITE --> PG[("chunks · tsv generated by Postgres")]
+```
+
+Retrieval happens inside the engine, over the same rows, with no separate vector store to keep in sync.
+
+```mermaid
+flowchart TD
+    Q["question"] --> EMB["embed · 1024 dims"]
+    EMB --> DIM{"dimension matches<br/>the index?"}
+    DIM -->|no| ERR(["RetrievalError · never a wrong answer"])
+    DIM -->|yes| DENSE["dense · cosine distance<br/>HNSW · 20 candidates"]
+    DIM -->|yes| LEX["lexical · websearch_to_tsquery<br/>GIN · ts_rank_cd · 20 candidates"]
+    DENSE --> RRF["reciprocal rank fusion<br/>k = 60, ranks not scores"]
+    LEX --> RRF
+    RRF --> TOPK["take top_k"]
+    TOPK --> EV["Evidence<br/>title · url · fetched_at · score"]
+```
+
+Both queries filter by tenant and category. Reciprocal rank fusion combines dense and lexical results without comparing their incompatible raw scores. A reranker is deferred until evals justify it.
 
 ## Memory
 
@@ -248,12 +341,23 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 |---|---|
 | users, roles, conversations, messages, memories, source metadata and versions, jobs, confirmations | PostgreSQL (source of truth) |
 | chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | pgvector, same PostgreSQL (rebuildable) |
-| rate limits, queue, short-lived cache | Redis |
 | raw snapshots, model artifacts | object storage |
 | browser session secrets | encrypted, separate namespace |
-| traces | JSONL locally (replay source); OpenTelemetry to Phoenix from every app |
+| local traces, console logs, training outputs | `.sparky/` (ignored) |
 
-Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/scraper/migrations`.
+```mermaid
+erDiagram
+    users ||--o{ conversations : "opens"
+    conversations ||--o{ messages : "contains"
+    users ||--o{ memories : "owns"
+    messages ||--o| memories : "sources"
+    users ||--o{ confirmations : "approves"
+    sources ||--o{ source_versions : "versioned by"
+    sources ||--o{ chunks : "chunked into"
+    source_versions ||--o{ chunks : "produced"
+```
+
+Each `chunks` row contains a `vector(1024)` embedding and a generated `tsvector`. HNSW, GIN, and tenant/category/fetch-time indexes serve retrieval. Redis is provisioned but unused until multiple engine replicas require shared ephemeral state.
 
 ## Background jobs
 
@@ -277,10 +381,24 @@ Discord handlers never block on long work. Ingestion, embedding, browser tasks, 
 
 ## Tracing
 
-One trace per request covering every model call, retrieval, memory access, tool call, policy decision, confirmation, and error. Two forms of it:
+One trace per request covering every model call, retrieval, memory access, tool call, policy decision, confirmation, and error.
 
-- **JSONL** (`traces/<request_id>.jsonl`): the complete record and the replay source. Never sampled, never truncated.
-- **Phoenix spans**, stitched across processes: the bot's `discord.ask` carries a W3C `traceparent` into the engine, whose `http.chat` → `agent.run` → `retrieve` / `llm` / `tool` spans nest under it, so one Discord interaction is one trace and one conversation is one session. Only each crate's own spans are exported; dependency internals are filtered out. `llm` spans hold the full input message list and the full assistant reply as JSON (`input.value` / `output.value`, `application/json`), plus model name, token counts, and invocation parameters — a Phase 6 training example is one `llm` span. `retrieve` spans list the chunks returned; `tool` spans hold redacted arguments and the result. The scraper's `scrape.source` spans record what was indexed. Records ids, model/prompt/template versions, evidence and memory ids, validated tool args, timings, tokens, final status. Never passwords, cookies, auth codes, tokens, or raw sensitive form values. Any request can be replayed from its trace against a chosen model, prompt, tool set, and retrieval snapshot; that is the eval harness.
+```mermaid
+flowchart TD
+    A["discord.ask<br/>bot · session id = conversation"] --> B["http.chat<br/>engine · joined by traceparent"]
+    B --> C["agent.run · CHAIN"]
+    C --> D["retrieve<br/>chunks returned"]
+    C --> E["llm<br/>full prompt and reply as JSON"]
+    C --> F["tool<br/>redacted args and result"]
+    E -.->|one span is one training example| G["apps/training · data export"]
+```
+
+Two forms of it:
+
+- **JSONL** (`.sparky/traces/<request_id>.jsonl`): complete local replay records.
+- **Phoenix spans**: cross-process traces joined with W3C `traceparent`. Model spans contain the prompt, reply, model, usage, and invocation parameters used by training export. Retrieval, tool, policy, and scraper spans carry their structured results.
+
+Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
 
 ## Authenticated browser tasks (Phase 7)
 

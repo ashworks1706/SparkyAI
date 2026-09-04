@@ -37,9 +37,6 @@ describe("website routes", () => {
     );
     expect(screen.getByRole("region", { name: /project readme/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /sparkyai v1: a multi-agent university copilot/i }),
-    ).toBeInTheDocument();
-    expect(
       screen.queryByRole("heading", { name: /your intelligent university copilot/i }),
     ).not.toBeInTheDocument();
   });

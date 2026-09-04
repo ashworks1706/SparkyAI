@@ -11,7 +11,7 @@ from rich import print as rprint
 from rich.table import Table
 
 from training.core.settings import settings
-from training.core.types import CaseResult, EvalReport, SuiteReport
+from training.core.types import CaseResult, EvalReport, RunnerError, SuiteReport
 from training.evals import runner
 
 app = typer.Typer(no_args_is_help=True)
@@ -66,18 +66,20 @@ def main() -> None:
 @app.command("run")
 def run_cmd(
     suite: list[str] = typer.Option(None, "--suite", help="Suites to run; default all."),
-    out: Path = typer.Option(Path("evals/last.json"), help="Where to write the report."),
+    out: Path = typer.Option(None, help="Defaults under .sparky/training/evals."),
     engine_url: str = typer.Option(None, help="Defaults to SPARKY_TRAINING__ENGINE_URL."),
 ) -> None:
     """Run the golden cases against a live engine and score them."""
+    out = out or settings().training.eval_report_path
     wanted = set(suite or SUITES)
     cases = [c for c in runner.load_cases() if wanted & set(c.suites)]
     results: list[CaseResult] = []
     for case in cases:
         try:
             turns = runner.run_case(case, engine_url)
-        except runner.RunnerError as e:
-            raise typer.Exit(f"case {case.id}: {e}") from e
+        except RunnerError as e:
+            typer.echo(f"case {case.id}: {e}", err=True)
+            raise typer.Exit(1) from e
         for name in case.suites:
             if name not in wanted:
                 continue
@@ -88,14 +90,16 @@ def run_cmd(
                 )
             )
     report = _report(results, engine_url or settings().training.engine_url, len(cases))
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report.model_dump_json(indent=2))
     _print(report)
     rprint(f"report → {out}")
 
 
 @app.command("baseline")
-def baseline_cmd(src: Path = typer.Option(Path("evals/last.json"))) -> None:
+def baseline_cmd(src: Path = typer.Option(None)) -> None:
     """Promote the last report's suite rates to the committed baseline."""
+    src = src or settings().training.eval_report_path
     report = EvalReport.model_validate_json(src.read_text())
     baseline = {s.suite: {"passed": s.passed, "total": s.total} for s in report.suites}
     path = settings().training.baseline_path
@@ -105,19 +109,22 @@ def baseline_cmd(src: Path = typer.Option(Path("evals/last.json"))) -> None:
 
 @app.command("compare")
 def compare_cmd(
-    src: Path = typer.Option(Path("evals/last.json")),
+    src: Path = typer.Option(None),
     tolerance: float = typer.Option(0.0, help="Allowed drop in pass rate per suite."),
 ) -> None:
     """Fail when any suite's pass rate fell below the baseline."""
+    src = src or settings().training.eval_report_path
     path = settings().training.baseline_path
     if not path.exists():
-        raise typer.Exit(f"no baseline at {path}; run `eval run` then `eval baseline` first")
+        typer.echo(f"no baseline at {path}; run `eval run` then `eval baseline` first", err=True)
+        raise typer.Exit(1)
     baseline = json.loads(path.read_text())
     report = EvalReport.model_validate_json(src.read_text())
     regressions = []
     for s in report.suites:
         b = baseline.get(s.suite)
         if not b or not b["total"]:
+            rprint(f"  [yellow]{s.suite}[/yellow]: not in baseline, not compared")
             continue
         before = b["passed"] / b["total"]
         if s.rate + tolerance < before:

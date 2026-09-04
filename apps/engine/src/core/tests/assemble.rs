@@ -76,7 +76,7 @@ fn history_keeps_the_newest_turns() {
             ..Budget::default()
         },
     );
-    assert!(out.history_used < 50);
+    assert!(out.messages.len() < 52);
     let last_history = &out.messages[out.messages.len() - 2];
     assert!(last_history.content.starts_with("turn 49"));
 }

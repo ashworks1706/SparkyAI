@@ -9,7 +9,7 @@ use serde::Deserialize;
 pub struct Config {
     /// Process-level settings.
     pub app: App,
-    /// How clients reach the engine.
+    /// What clients must present to call the engine.
     pub engine: Engine,
     /// Discord bot settings.
     pub discord: Discord,
@@ -19,7 +19,7 @@ pub struct Config {
     pub postgres: Postgres,
     /// Embedding endpoint, used to embed queries at retrieval time.
     pub embedding: Embedding,
-    /// Sentry and `OpenTelemetry`.
+    /// `OpenTelemetry` export.
     #[serde(default)]
     pub telemetry: Telemetry,
     /// Loop limits and prompt budgets.
@@ -41,20 +41,16 @@ pub struct App {
     pub log_level: String,
 }
 
-/// How the Discord bot and other clients reach the engine.
+/// Client authentication.
 #[derive(Debug, Deserialize)]
 pub struct Engine {
-    /// Base URL of the engine process.
-    pub base_url: String,
-    /// Shared secret presented by internal clients.
+    /// Bearer token every `/chat` caller must present.
     pub service_token: SecretString,
 }
 
-/// Discord bot settings.
+/// The guild this engine serves and who may write in it.
 #[derive(Debug, Deserialize)]
 pub struct Discord {
-    /// Bot token.
-    pub token: SecretString,
     /// The one guild this deployment serves.
     pub guild_id: u64,
     /// Role name that grants moderator permissions.
@@ -152,7 +148,7 @@ impl Default for Agent {
             retrieval_top_k: 6,
             history_turns: 20,
             prompt_budget_tokens: 3_000,
-            trace_dir: "traces".into(),
+            trace_dir: ".sparky/traces".into(),
         }
     }
 }

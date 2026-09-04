@@ -50,7 +50,11 @@ impl RigChat {
 }
 
 /// Splits our flat message list into Rig's preamble plus chat history.
-pub(crate) fn to_rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) {
+/// Fails on a tool result that carries no call id or tool name: assembly produced a history the
+/// provider cannot represent.
+pub(crate) fn to_rig(
+    messages: &[Message],
+) -> Result<(Option<String>, Vec<RigMessage>), ModelError> {
     let mut preamble: Vec<&str> = Vec::new();
     let mut history = Vec::with_capacity(messages.len());
     for m in messages {
@@ -72,8 +76,13 @@ pub(crate) fn to_rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) 
                 history.push(RigMessage::Assistant { id: None, content });
             }
             Role::Tool => {
-                let call_id = m.tool_call_id.as_deref().unwrap_or_default();
-                let name = m.tool_name.as_deref().unwrap_or_default();
+                let (Some(call_id), Some(name)) =
+                    (m.tool_call_id.as_deref(), m.tool_name.as_deref())
+                else {
+                    return Err(ModelError::Malformed(
+                        "tool result without call id or tool name".into(),
+                    ));
+                };
                 history.push(RigMessage::User {
                     content: vec![UserContent::tool_result_from_wire(
                         call_id,
@@ -85,7 +94,7 @@ pub(crate) fn to_rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) 
         }
     }
     let preamble = (!preamble.is_empty()).then(|| preamble.join("\n\n"));
-    (preamble, history)
+    Ok((preamble, history))
 }
 
 fn tool_to_rig(t: &ToolDefinition) -> RigTool {
@@ -156,7 +165,7 @@ impl ModelProvider for RigChat {
         _ctx: &RequestContext,
         req: ModelRequest,
     ) -> Result<ModelResponse, ModelError> {
-        let (preamble, chat_history) = to_rig(&req.messages);
+        let (preamble, chat_history) = to_rig(&req.messages)?;
         let tools: Vec<RigTool> = req.tools.iter().map(tool_to_rig).collect();
         let request = CompletionRequest {
             model: None,

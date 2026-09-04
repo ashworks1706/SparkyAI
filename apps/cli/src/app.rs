@@ -14,7 +14,7 @@ use crate::core::types::{
     ChatRequest, ChatResponse, ChatTurn, Command, Event, Focus, Health, Kind, LogLine, Mode, Role,
     ServiceState, Status, Stream, Unit,
 };
-use crate::logs::LogBuffer;
+use crate::logs::{LogBuffer, LogWriter};
 use crate::runner::Runner;
 use crate::units;
 
@@ -59,6 +59,7 @@ pub struct App {
     cfg: Config,
     tx: UnboundedSender<Event>,
     runner: Runner,
+    log_writer: LogWriter,
     client: EngineClient,
     /// Units in sidebar order.
     pub units: Vec<UnitState>,
@@ -96,6 +97,12 @@ impl App {
     /// A console over the repo at `root`.
     pub fn new(cfg: Config, root: PathBuf, tx: UnboundedSender<Event>) -> anyhow::Result<Self> {
         let client = EngineClient::new(&cfg.engine.base_url, cfg.engine.service_token.clone())?;
+        let log_dir = if cfg.cli.log_dir.is_absolute() {
+            cfg.cli.log_dir.clone()
+        } else {
+            root.join(&cfg.cli.log_dir)
+        };
+        let log_writer = LogWriter::new(log_dir)?;
         let runner = Runner::new(root, tx.clone());
         let units = units::catalog()
             .into_iter()
@@ -106,6 +113,7 @@ impl App {
             cfg,
             tx,
             runner,
+            log_writer,
             client,
             units,
             selected: 0,
@@ -164,13 +172,17 @@ impl App {
             Event::Tick | Event::Resize => {}
             Event::Log { unit, line } => self.log(&unit, line),
             Event::Exited { unit, code } => self.exited(&unit, code),
-            Event::Services(states) => self.services(&states),
+            Event::Services(Ok(states)) => self.services(&states),
+            Event::Services(Err(e)) => self.notice = Some(e),
             Event::Health(h) => self.health = h,
             Event::ChatReply { latency_ms, result } => self.chat_reply(latency_ms, result),
         }
     }
 
     fn log(&mut self, unit: &str, line: LogLine) {
+        if let Err(e) = self.log_writer.append(unit, &line) {
+            self.notice = Some(format!("write log: {e}"));
+        }
         if let Some(u) = self.units.iter_mut().find(|u| u.unit.id == unit) {
             u.logs.push(line);
         }
@@ -178,31 +190,36 @@ impl App {
 
     fn exited(&mut self, unit: &str, code: Option<i32>) {
         self.runner.forget(unit);
-        let Some(u) = self.units.iter_mut().find(|u| u.unit.id == unit) else {
-            return;
-        };
-        match u.unit.kind {
-            Kind::Service { .. } => {
-                if let Some(c) = code.filter(|c| *c != 0) {
-                    u.status = Status::Failed(format!("compose exited {c}"));
+        let (note, restart_id) = {
+            let Some(u) = self.units.iter_mut().find(|u| u.unit.id == unit) else {
+                return;
+            };
+            let note = match u.unit.kind {
+                Kind::Service { .. } => {
+                    if let Some(c) = code.filter(|c| *c != 0) {
+                        u.status = Status::Failed(format!("compose exited {c}"));
+                    }
+                    None
                 }
-            }
-            Kind::Process | Kind::Task => {
-                let stopped = std::mem::take(&mut u.stopping);
-                u.status = match code {
-                    Some(c) if !stopped => Status::Exited(c),
-                    _ => Status::Stopped,
-                };
-                let note = match code {
-                    Some(c) if !stopped => format!("exited with {c}"),
-                    _ => "stopped".to_owned(),
-                };
-                u.logs.push(LogLine::now(Stream::Meta, note));
-            }
+                Kind::Process | Kind::Task => {
+                    let stopped = std::mem::take(&mut u.stopping);
+                    u.status = match code {
+                        Some(c) if !stopped => Status::Exited(c),
+                        _ => Status::Stopped,
+                    };
+                    Some(match code {
+                        Some(c) if !stopped => format!("exited with {c}"),
+                        _ => "stopped".to_owned(),
+                    })
+                }
+            };
+            let restart_id = std::mem::take(&mut u.restart_pending).then(|| u.unit.id.clone());
+            (note, restart_id)
+        };
+        if let Some(note) = note {
+            self.log(unit, LogLine::now(Stream::Meta, note));
         }
-        if u.restart_pending {
-            u.restart_pending = false;
-            let id = u.unit.id.clone();
+        if let Some(id) = restart_id {
             self.start_by_id(&id);
         }
     }

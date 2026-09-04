@@ -13,7 +13,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, SourceRow
+from scraper.core.types import ChunkRow, SourceRow, StoreError
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -77,7 +77,8 @@ def upsert_source(
         """,
         (key, url, category, fetch_every_hours),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise StoreError(f"upsert of source {key!r} returned no row")
     return SourceRow(id=row["id"], key=row["key"], url=row["url"], category=row["category"])
 
 
@@ -121,7 +122,8 @@ def insert_version(
             previous_id,
         ),
     ).fetchone()
-    assert row is not None
+    if row is None:
+        raise StoreError(f"insert of version for source {source_id} returned no row")
     return row["id"]
 
 

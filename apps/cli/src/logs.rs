@@ -1,8 +1,71 @@
 //! Bounded per-unit log buffer with search.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Write};
+use std::path::PathBuf;
 
-use crate::core::types::LogLine;
+use crate::core::types::{LogLine, Stream};
+
+/// Persists console output in one file per unit.
+#[derive(Debug)]
+pub struct LogWriter {
+    dir: PathBuf,
+    files: HashMap<String, BufWriter<File>>,
+}
+
+impl LogWriter {
+    /// Creates the log directory if it does not exist.
+    pub fn new(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
+        let dir = dir.into();
+        std::fs::create_dir_all(&dir)?;
+        Ok(Self {
+            dir,
+            files: HashMap::new(),
+        })
+    }
+
+    /// Appends and flushes one line to the unit's log file.
+    pub fn append(&mut self, unit: &str, line: &LogLine) -> std::io::Result<()> {
+        let name = log_name(unit);
+        if !self.files.contains_key(&name) {
+            let file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(self.dir.join(&name))?;
+            self.files.insert(name.clone(), BufWriter::new(file));
+        }
+        let Some(file) = self.files.get_mut(&name) else {
+            return Err(std::io::Error::other("log file was not opened"));
+        };
+        let stream = match line.stream {
+            Stream::Out => "out",
+            Stream::Err => "err",
+            Stream::Meta => "meta",
+        };
+        writeln!(
+            file,
+            "{} {stream} {}",
+            line.at.format("%Y-%m-%dT%H:%M:%S%:z"),
+            line.text
+        )?;
+        file.flush()
+    }
+}
+
+fn log_name(unit: &str) -> String {
+    let stem: String = unit
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("{}.log", stem.trim_matches('-'))
+}
 
 /// Keeps the newest `cap` lines of one unit.
 #[derive(Debug)]

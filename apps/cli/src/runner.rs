@@ -10,22 +10,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::core::types::{Event, Kind, LogLine, ServiceState, Stream, Unit};
+use crate::core::types::{Event, Kind, LogLine, RunnerError, ServiceState, Stream, Unit};
 
 const COMPOSE_FILE: &str = "deploy/compose.yml";
-
-/// Runner failures.
-#[derive(Debug, thiserror::Error)]
-pub enum RunnerError {
-    /// The child could not be spawned.
-    #[error("spawn `{cmd}`: {source}")]
-    Spawn {
-        /// Command line attempted.
-        cmd: String,
-        /// OS error.
-        source: std::io::Error,
-    },
-}
 
 /// Owns the children the console started.
 pub struct Runner {
@@ -136,17 +123,21 @@ impl Runner {
     }
 
     /// One `docker compose ps -a --format json` snapshot, keyed by service.
-    pub async fn service_states(root: &PathBuf) -> HashMap<String, ServiceState> {
+    pub async fn service_states(root: &PathBuf) -> Result<HashMap<String, ServiceState>, String> {
         let out = Command::new("docker")
             .args(["compose", "-f", COMPOSE_FILE])
             .args(all_profiles())
             .args(["ps", "-a", "--format", "json"])
             .current_dir(root)
             .output()
-            .await;
-        let Ok(out) = out else {
-            return HashMap::new();
-        };
+            .await
+            .map_err(|e| format!("docker compose ps: {e}"))?;
+        if !out.status.success() {
+            return Err(format!(
+                "docker compose ps: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
         parse_ps(&String::from_utf8_lossy(&out.stdout))
     }
 
@@ -183,8 +174,16 @@ impl Runner {
         let tx = self.tx.clone();
         let id = unit_id.to_owned();
         tokio::spawn(async move {
-            let status = child.wait().await;
-            let code = status.ok().and_then(|s| s.code());
+            let code = match child.wait().await {
+                Ok(status) => status.code(),
+                Err(e) => {
+                    let _ = tx.send(Event::Log {
+                        unit: id.clone(),
+                        line: LogLine::now(Stream::Meta, format!("wait failed: {e}")),
+                    });
+                    None
+                }
+            };
             let _ = tx.send(Event::Exited { unit: id, code });
         });
         Ok(())
@@ -287,9 +286,9 @@ pub fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// Parses `docker compose ps --format json`, which is a JSON array on older releases and one
-/// object per line on newer ones.
-pub fn parse_ps(raw: &str) -> HashMap<String, ServiceState> {
+/// Parses `docker compose ps --format json`: a JSON array on older releases, one object per
+/// line on newer ones. Anything else is an error, not an empty stack.
+pub fn parse_ps(raw: &str) -> Result<HashMap<String, ServiceState>, String> {
     #[derive(serde::Deserialize)]
     struct Row {
         #[serde(rename = "Service")]
@@ -301,14 +300,18 @@ pub fn parse_ps(raw: &str) -> HashMap<String, ServiceState> {
         #[serde(rename = "ExitCode", default)]
         exit_code: i32,
     }
-    let rows: Vec<Row> = match serde_json::from_str::<Vec<Row>>(raw) {
-        Ok(rows) => rows,
-        Err(_) => raw
-            .lines()
-            .filter_map(|l| serde_json::from_str::<Row>(l).ok())
-            .collect(),
+    let rows: Vec<Row> = if raw.trim().is_empty() {
+        Vec::new()
+    } else if let Ok(rows) = serde_json::from_str::<Vec<Row>>(raw) {
+        rows
+    } else {
+        raw.lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str::<Row>(l).map_err(|e| format!("compose ps row: {e}")))
+            .collect::<Result<_, _>>()?
     };
-    rows.into_iter()
+    Ok(rows
+        .into_iter()
         .map(|r| {
             (
                 r.service,
@@ -319,5 +322,5 @@ pub fn parse_ps(raw: &str) -> HashMap<String, ServiceState> {
                 },
             )
         })
-        .collect()
+        .collect())
 }

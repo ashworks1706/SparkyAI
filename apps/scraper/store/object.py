@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
 import boto3
 from botocore.client import Config
@@ -12,7 +13,7 @@ from scraper.core.settings import settings
 
 
 @lru_cache(maxsize=1)
-def client():
+def client() -> Any:
     s = settings().object_store
     return boto3.client(
         "s3",
@@ -25,14 +26,17 @@ def client():
 
 
 def ensure_bucket() -> None:
+    """Creates the bucket when it is missing. Any other error (credentials, network) propagates."""
     bucket = settings().object_store.bucket
     try:
         client().head_bucket(Bucket=bucket)
-    except ClientError:
+    except ClientError as e:
+        if e.response["Error"]["Code"] not in ("404", "NoSuchBucket"):
+            raise
         client().create_bucket(Bucket=bucket)
 
 
-def put_snapshot(key: str, body: bytes, content_type: str = "text/html") -> str:
+def put_snapshot(key: str, body: bytes, content_type: str) -> str:
     """Stores a raw page. Returns the object key."""
     ensure_bucket()
     client().put_object(

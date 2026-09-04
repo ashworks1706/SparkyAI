@@ -103,6 +103,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         conversations: Some(conversations),
         request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
         default_tenant: cfg.discord.guild_id.to_string(),
+        service_token: cfg.engine.service_token.clone(),
     };
     let health = HealthState {
         pool,

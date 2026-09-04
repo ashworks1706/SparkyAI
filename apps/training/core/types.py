@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Message(BaseModel):
@@ -37,7 +38,7 @@ class Expectation(BaseModel):
     source_key: str | None = None
     tool: str | None = None
     tool_args_contain: dict[str, str] = Field(default_factory=dict)
-    policy: str | None = None  # allow | deny | confirm
+    policy: Literal["allow", "deny", "confirm"] | None = None
     refuse: bool = False
     clarify: bool = False
     mentions: list[str] = Field(default_factory=list)
@@ -97,3 +98,70 @@ class EvalReport(BaseModel):
     cases: int
     results: list[CaseResult]
     suites: list[SuiteReport]
+
+
+class LoraConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    r: int
+    alpha: int
+    dropout: float
+    target_modules: list[str]
+
+
+class TrainConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    epochs: int
+    per_device_batch_size: int
+    gradient_accumulation: int
+    learning_rate: float
+    warmup_ratio: float
+    logging_steps: int
+    seed: int
+
+
+class ExportConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    gguf_quant: str
+
+
+class SftConfig(BaseModel):
+    """`configs/train/sft.yaml`. Every knob is explicit; an unknown or missing key fails."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_model: str
+    dataset: Path
+    output_dir: Path
+    max_seq_length: int
+    load_in_4bit: bool
+    lora: LoraConfig
+    train: TrainConfig
+    export: ExportConfig
+
+
+class SftPlan(BaseModel):
+    """What `train sft` would do, printed before it does it."""
+
+    base_model: str
+    dataset: Path
+    output_dir: Path
+    examples: int
+    with_tool_calls: int
+    max_seq_length: int
+    epochs: int
+    gguf_quant: str
+
+
+class ExportError(RuntimeError):
+    """Phoenix answered with something other than complete `llm` spans."""
+
+
+class RunnerError(RuntimeError):
+    """A case could not be run: no cases, engine unreachable, or no trace for the request."""
+
+
+class SftError(RuntimeError):
+    """SFT cannot start or did not produce a GGUF."""

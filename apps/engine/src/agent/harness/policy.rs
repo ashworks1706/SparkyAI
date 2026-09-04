@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::core::traits::policy::Policy;
 use crate::core::types::context::RequestContext;
-use crate::core::types::policy::{ConfirmationRequest, Decision, PolicyError, ProposedAction};
+use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
 use crate::core::types::tool::RiskClass;
 
 /// Stable hash of the canonical JSON of `arguments`. A changed payload needs a new confirmation.
@@ -34,12 +34,8 @@ impl RiskPolicy {
 
 #[async_trait]
 impl Policy for RiskPolicy {
-    async fn authorize(
-        &self,
-        ctx: &RequestContext,
-        action: &ProposedAction,
-    ) -> Result<Decision, PolicyError> {
-        Ok(match action.risk {
+    async fn authorize(&self, ctx: &RequestContext, action: &ProposedAction) -> Decision {
+        match action.risk {
             RiskClass::ReadPublic | RiskClass::PrepareWrite => Decision::Allow,
             RiskClass::ReadAuthenticated => Decision::Deny {
                 reason: "authenticated reads are not enabled".into(),
@@ -48,9 +44,9 @@ impl Policy for RiskPolicy {
                 if let Some(role) = &self.write_role
                     && !ctx.has_role(role)
                 {
-                    return Ok(Decision::Deny {
+                    return Decision::Deny {
                         reason: format!("`{}` requires the {role} role", action.tool),
-                    });
+                    };
                 }
                 Decision::Confirm(ConfirmationRequest {
                     token: Uuid::new_v4(),
@@ -71,6 +67,6 @@ impl Policy for RiskPolicy {
             RiskClass::Forbidden => Decision::Deny {
                 reason: format!("`{}` is forbidden", action.tool),
             },
-        })
+        }
     }
 }

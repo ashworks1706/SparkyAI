@@ -125,8 +125,11 @@ pub fn catalog() -> Vec<Unit> {
             "fetch, chunk, embed one source",
         ),
         task_static(&["check"], "fmt, lint, test every unit"),
-        task_static(&["data", "export"], "Phoenix llm spans → data/raw"),
-        task_static(&["data", "verify"], "→ data/processed/sft.jsonl"),
+        task_static(
+            &["data", "export"],
+            "Phoenix llm spans → .sparky/training/data",
+        ),
+        task_static(&["data", "verify"], "verify and deduplicate training data"),
         task_static(&["data", "stats"], "dataset summary"),
         task_static(&["eval", "run"], "golden cases against the engine"),
         task_static(&["eval", "baseline"], "promote the last report"),

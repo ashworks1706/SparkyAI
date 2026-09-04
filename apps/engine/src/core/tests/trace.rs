@@ -8,12 +8,14 @@ use crate::agent::harness::trace::JsonlSink;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::context::RequestContext;
 use crate::core::types::model::Usage;
-use crate::core::types::trace::{RunStatus, TraceEvent};
+use crate::core::types::trace::{RunStatus, TraceEvent, TraceRecord};
 
 #[test]
 fn jsonl_round_trips() {
     let dir = std::env::temp_dir().join(format!("sparky-trace-{}", Uuid::new_v4()));
-    let Some(sink) = JsonlSink::new(&dir).ok() else {
+    let created = JsonlSink::new(&dir);
+    assert!(created.is_ok(), "{created:?}");
+    let Ok(sink) = created else {
         return;
     };
     let ctx = RequestContext::new("g", "u", Duration::from_secs(1));
@@ -35,7 +37,11 @@ fn jsonl_round_trips() {
             duration_ms: 3,
         },
     );
-    let records = sink.read(ctx.request_id).unwrap_or_default();
+    let text = std::fs::read_to_string(sink.path_for(ctx.request_id)).unwrap_or_default();
+    let records: Vec<TraceRecord> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
     assert_eq!(records.len(), 2);
     assert!(matches!(
         records[1].event,

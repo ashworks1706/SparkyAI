@@ -64,7 +64,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
-- Every replaceable dependency sits behind a trait in `engine/src/agent/harness` with a mock impl for tests.
+- Every replaceable dependency sits behind a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
 - The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.

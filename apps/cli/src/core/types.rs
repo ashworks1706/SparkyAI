@@ -348,8 +348,8 @@ pub enum Event {
         /// Exit code, if the process was not killed by a signal.
         code: Option<i32>,
     },
-    /// Fresh compose service states, keyed by service name.
-    Services(HashMap<String, ServiceState>),
+    /// Fresh compose service states keyed by service name, or why `docker compose ps` failed.
+    Services(Result<HashMap<String, ServiceState>, String>),
     /// Fresh dependency probes.
     Health(Health),
     /// The engine answered (or failed to).
@@ -358,6 +358,19 @@ pub enum Event {
         latency_ms: u64,
         /// The reply or the failure text.
         result: Result<ChatResponse, String>,
+    },
+}
+
+/// Runner failures.
+#[derive(Debug, thiserror::Error)]
+pub enum RunnerError {
+    /// The child could not be spawned.
+    #[error("spawn `{cmd}`: {source}")]
+    Spawn {
+        /// Command line attempted.
+        cmd: String,
+        /// OS error.
+        source: std::io::Error,
     },
 }
 
