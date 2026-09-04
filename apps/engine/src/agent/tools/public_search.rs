@@ -7,9 +7,11 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::agent::harness::retrieval::{RetrievalQuery, Retriever};
-use crate::agent::harness::tool::{RiskClass, Tool, ToolDefinition, ToolError, ToolOutput};
+use crate::agent::harness::retrieval::Retriever;
+use crate::agent::harness::tool::Tool;
 use crate::core::types::context::RequestContext;
+use crate::core::types::retrieval::RetrievalQuery;
+use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Lets the model run a targeted search when the up-front retrieval was not enough.
 pub struct PublicSearch {

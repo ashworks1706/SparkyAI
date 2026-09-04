@@ -41,6 +41,9 @@ pub struct Message {
     /// For `Role::Tool`: the `ToolCall::id` this answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// For `Role::Tool`: the tool that produced it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
 }
 
 impl Message {
@@ -66,16 +69,22 @@ impl Message {
             content: content.into(),
             tool_calls,
             tool_call_id: None,
+            tool_name: None,
         }
     }
 
-    /// A tool result answering `call_id`.
-    pub fn tool_result(call_id: impl Into<String>, content: impl Into<String>) -> Self {
+    /// A tool result answering `call_id` from tool `name`.
+    pub fn tool_result(
+        call_id: impl Into<String>,
+        name: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         Self {
             role: Role::Tool,
             content: content.into(),
             tool_calls: Vec::new(),
             tool_call_id: Some(call_id.into()),
+            tool_name: Some(name.into()),
         }
     }
 
@@ -85,6 +94,7 @@ impl Message {
             content: content.into(),
             tool_calls: Vec::new(),
             tool_call_id: None,
+            tool_name: None,
         }
     }
 

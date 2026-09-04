@@ -1,59 +1,12 @@
-//! `Policy` trait, `ProposedAction`, `Decision` (Allow / Deny / Confirm), confirmation tokens.
+//! `Policy` trait, the default `RiskPolicy`, and payload hashing for confirmations.
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::agent::harness::tool::RiskClass;
 use crate::core::types::context::RequestContext;
-
-/// A tool call the model wants to make, before it runs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProposedAction {
-    /// Tool name.
-    pub tool: String,
-    /// Declared risk of that tool.
-    pub risk: RiskClass,
-    /// Exact arguments. A confirmation binds to these bytes.
-    pub arguments: Value,
-}
-
-/// What the user must approve.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConfirmationRequest {
-    /// Single-use token the client echoes back.
-    pub token: Uuid,
-    /// Tool name.
-    pub tool: String,
-    /// Hash of the exact arguments; a changed payload needs a new confirmation.
-    pub payload_hash: String,
-    /// Plain-language statement of what happens, where, with what data, and whether it reverses.
-    pub summary: String,
-}
-
-/// The policy verdict.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "decision", rename_all = "snake_case")]
-pub enum Decision {
-    /// Run it.
-    Allow,
-    /// Do not run it; the model is told why.
-    Deny {
-        /// Reason shown to the model and recorded in the trace.
-        reason: String,
-    },
-    /// Stop and ask the user first.
-    Confirm(ConfirmationRequest),
-}
-
-/// Policy evaluation failures.
-#[derive(Debug, thiserror::Error)]
-pub enum PolicyError {
-    /// The policy could not be evaluated; the action is not run.
-    #[error("policy unavailable: {0}")]
-    Unavailable(String),
-}
+use crate::core::types::policy::{ConfirmationRequest, Decision, PolicyError, ProposedAction};
+use crate::core::types::tool::RiskClass;
 
 /// Decides whether a proposed action runs.
 #[async_trait]
@@ -66,10 +19,10 @@ pub trait Policy: Send + Sync {
     ) -> Result<Decision, PolicyError>;
 }
 
-/// Hex SHA-256 of the canonical JSON of `arguments`.
+/// Stable hash of the canonical JSON of `arguments`. A changed payload needs a new confirmation.
 pub fn payload_hash(arguments: &Value) -> String {
     use std::hash::{Hash, Hasher};
-    // Canonical form: serde_json sorts map keys when the `preserve_order` feature is off.
+    // serde_json sorts map keys when `preserve_order` is off, so this is canonical.
     let canonical = arguments.to_string();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical.hash(&mut hasher);
@@ -130,73 +83,5 @@ impl Policy for RiskPolicy {
                 reason: format!("`{}` is forbidden", action.tool),
             },
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use serde_json::json;
-
-    use super::*;
-
-    fn ctx(roles: &[&str]) -> RequestContext {
-        RequestContext::new("g", "u", Duration::from_secs(5))
-            .with_roles(roles.iter().map(ToString::to_string).collect())
-    }
-
-    fn action(risk: RiskClass) -> ProposedAction {
-        ProposedAction {
-            tool: "t".into(),
-            risk,
-            arguments: json!({"a": 1}),
-        }
-    }
-
-    #[tokio::test]
-    async fn reads_are_allowed() {
-        let p = RiskPolicy::new(Some("Moderator".into()));
-        let d = p.authorize(&ctx(&[]), &action(RiskClass::ReadPublic)).await;
-        assert!(matches!(d, Ok(Decision::Allow)));
-    }
-
-    #[tokio::test]
-    async fn writes_without_role_are_denied() {
-        let p = RiskPolicy::new(Some("Moderator".into()));
-        let d = p
-            .authorize(&ctx(&[]), &action(RiskClass::ExternalWrite))
-            .await;
-        assert!(matches!(d, Ok(Decision::Deny { .. })));
-    }
-
-    #[tokio::test]
-    async fn writes_with_role_need_confirmation() {
-        let p = RiskPolicy::new(Some("Moderator".into()));
-        let d = p
-            .authorize(&ctx(&["Moderator"]), &action(RiskClass::ExternalWrite))
-            .await;
-        assert!(matches!(d, Ok(Decision::Confirm(_))));
-    }
-
-    #[tokio::test]
-    async fn forbidden_is_denied_regardless_of_role() {
-        let p = RiskPolicy::new(None);
-        let d = p
-            .authorize(&ctx(&["Moderator"]), &action(RiskClass::Forbidden))
-            .await;
-        assert!(matches!(d, Ok(Decision::Deny { .. })));
-    }
-
-    #[test]
-    fn payload_hash_changes_with_arguments() {
-        assert_ne!(
-            payload_hash(&json!({"a": 1})),
-            payload_hash(&json!({"a": 2}))
-        );
-        assert_eq!(
-            payload_hash(&json!({"a": 1})),
-            payload_hash(&json!({"a": 1}))
-        );
     }
 }

@@ -40,10 +40,8 @@ pub struct Engine {
 pub struct Discord {
     /// Bot token.
     pub token: SecretString,
-    /// The one guild this deployment serves.
+    /// The one guild this deployment serves. Role checks happen in the engine.
     pub guild_id: u64,
-    /// Role name that grants moderator permissions.
-    pub mod_role: String,
 }
 
 /// Error reporting.

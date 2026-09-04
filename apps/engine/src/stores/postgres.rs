@@ -12,16 +12,15 @@ use sqlx::Row;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
-use crate::agent::harness::conversation::{ConversationStore, StoreError};
-use crate::agent::harness::memory::{
-    Memory, MemoryCandidate, MemoryKind, MemoryQuery, MemoryStore,
-};
-use crate::agent::harness::retrieval::{
-    Embedder, Reranker, RetrievalError, RetrievalQuery, Retriever,
-};
+use crate::agent::harness::conversation::ConversationStore;
+use crate::agent::harness::memory::MemoryStore;
+use crate::agent::harness::retrieval::{Embedder, Reranker, Retriever};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
+use crate::core::types::memory::{Memory, MemoryCandidate, MemoryKind, MemoryQuery};
 use crate::core::types::message::Message;
+use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::types::store::StoreError;
 
 /// Opens the pool. Fails fast if the database is unreachable.
 pub async fn connect(url: &SecretString, max_connections: u32) -> Result<PgPool, StoreError> {
@@ -93,7 +92,7 @@ const SELECT: &str =
       and (cardinality($2::text[]) = 0 or c.category = any($2))";
 
 /// pgvector's text input form: `[0.1,0.2,...]`.
-fn vector_literal(v: &[f32]) -> String {
+pub(crate) fn vector_literal(v: &[f32]) -> String {
     let mut s = String::with_capacity(v.len() * 10 + 2);
     s.push('[');
     for (i, x) in v.iter().enumerate() {
@@ -107,7 +106,7 @@ fn vector_literal(v: &[f32]) -> String {
 }
 
 /// Reciprocal rank fusion: each ranked list contributes 1 / (k + rank).
-fn rrf(lists: &[Vec<Uuid>], k: f32) -> Vec<(Uuid, f32)> {
+pub(crate) fn rrf(lists: &[Vec<Uuid>], k: f32) -> Vec<(Uuid, f32)> {
     let mut scores: HashMap<Uuid, f32> = HashMap::new();
     for list in lists {
         for (rank, id) in list.iter().enumerate() {
@@ -428,24 +427,5 @@ impl MemoryStore for PgMemory {
             return Err(StoreError::NotFound(id.to_string()));
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn vector_literal_matches_pgvector_input() {
-        assert_eq!(vector_literal(&[0.5, -1.0, 2.25]), "[0.5,-1,2.25]");
-    }
-
-    #[test]
-    fn rrf_prefers_items_ranked_by_both_lists() {
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-        let c = Uuid::new_v4();
-        let fused = rrf(&[vec![a, b], vec![b, c]], 60.0);
-        assert_eq!(fused.first().map(|f| f.0), Some(b));
     }
 }

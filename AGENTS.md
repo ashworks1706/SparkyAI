@@ -33,7 +33,7 @@ A change is not done until `just check` passes.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,types}, agent/{harness,model,tools}, stores, routes.
+apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,tests}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
 apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here.
 apps/web/         static frontend + admin UI (Vite + React)
@@ -47,7 +47,7 @@ Processes talk only via: discord → engine, engine → PostgreSQL / llama-serve
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`): available for provider adapters as they are needed. Today model, embed, and rerank clients are direct OpenAI-compatible HTTP in `agent/model`. Never `rig::Agent` — the loop is ours.
+- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`agent/model/rig_openai.rs`). Rerank is direct HTTP because Rig has no provider for llama-server's `/v1/rerank`. Never `rig::Agent` — the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - Everything else in the harness module (loop, policy, context assembly, memory, tracing, replay) is written here.
 
@@ -57,7 +57,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Rules
 
-- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness` imports only `core`; `agent::model`, `agent::tools`, `stores` import `core` and `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness` imports only `core`; `agent::model`, `agent::tools`, `stores` import `core` and `agent::harness`, never each other; `routes`/`wiring` compose them. Every struct and enum that crosses a module lives in `core/types`; adapters keep only their private wire structs. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
@@ -77,7 +77,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Conventions
 
-- Tests live next to the code (`#[cfg(test)] mod tests`); integration tests in `apps/<name>/tests/`.
+- Engine tests live in `apps/engine/src/core/tests/`, one file per unit, shared doubles in `support.rs`. Other apps: `#[cfg(test)] mod tests` or `tests/`.
 - Public items have a one-line doc comment saying what, not how.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
 - The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.

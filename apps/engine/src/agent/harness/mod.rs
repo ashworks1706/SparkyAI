@@ -1,5 +1,5 @@
-//! Agent runtime: traits, loop, context assembly, tracing.
-//! Imports only `core`; nothing else in this crate.
+//! Agent runtime: the traits every adapter implements, the default policy, the trace sinks,
+//! context assembly, and the loop. Types live in `core::types`; this module imports only `core`.
 
 pub mod agent;
 pub mod assemble;

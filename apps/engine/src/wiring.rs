@@ -3,17 +3,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::agent::{Agent, AgentConfig, AgentDeps};
-use crate::agent::harness::assemble::Budget;
+use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{JsonlSink, TraceSink};
-use crate::agent::model::embed::HttpEmbedder;
-use crate::agent::model::openai_compat::OpenAiCompat;
 use crate::agent::model::rerank::HttpReranker;
+use crate::agent::model::rig_openai::{self as rig_openai, RigChat, RigEmbedder};
 use crate::agent::tools::discord_ops::PostAnnouncement;
 use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
+use crate::core::types::agent::AgentConfig;
+use crate::core::types::assemble::Budget;
 use crate::routes::chat::ChatState;
 use crate::stores::postgres::{self, PgConversations, PgMemory, PgRetriever};
 
@@ -25,21 +25,20 @@ question, say so plainly and suggest where the user might look. Be brief.";
 
 /// Serves until shutdown.
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
-    let model = Arc::new(OpenAiCompat::new(
-        &cfg.model.base_url,
-        cfg.model.api_key.clone(),
-        &cfg.model.name,
-    )?);
+    let chat_client = rig_openai::client(&cfg.model.base_url, &cfg.model.api_key)
+        .map_err(|e| anyhow::anyhow!("model client: {e}"))?;
+    let model = Arc::new(RigChat::new(chat_client, &cfg.model.name));
 
     let trace: Arc<dyn TraceSink> = Arc::new(JsonlSink::new(&cfg.agent.trace_dir)?);
 
-    let embedder: Arc<HttpEmbedder> = Arc::new(HttpEmbedder::new(
-        &cfg.embedding.base_url,
-        cfg.embedding.api_key.clone(),
+    let embed_client = rig_openai::client(&cfg.embedding.base_url, &cfg.embedding.api_key)
+        .map_err(|e| anyhow::anyhow!("embedding client: {e}"))?;
+    let embedder = Arc::new(RigEmbedder::new(
+        embed_client,
         &cfg.embedding.name,
         usize::try_from(cfg.embedding.dim)?,
-    )?);
-    let reranker: Arc<HttpReranker> = Arc::new(HttpReranker::new(
+    ));
+    let reranker = Arc::new(HttpReranker::new(
         &cfg.reranker.base_url,
         cfg.reranker.api_key.clone(),
         &cfg.reranker.name,
@@ -53,13 +52,9 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
             None
         }
     };
-    let retriever = pool.clone().map(|p| {
-        Arc::new(PgRetriever::new(
-            p,
-            embedder.clone(),
-            Some(reranker.clone()),
-        ))
-    });
+    let retriever = pool
+        .clone()
+        .map(|p| Arc::new(PgRetriever::new(p, embedder, Some(reranker))));
     let conversations = pool.clone().map(|p| Arc::new(PgConversations::new(p)));
     let memory = pool.map(|p| Arc::new(PgMemory::new(p)));
 

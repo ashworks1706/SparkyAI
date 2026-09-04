@@ -9,7 +9,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Layer | Choice | Where |
 |---|---|---|
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model, embed, rerank clients | Direct OpenAI-compatible HTTP (`reqwest` + `serde`); Rig stays a dependency for when its provider surface is needed, never `rig::Agent` | `apps/engine/src/agent/model` |
+| Model, embed clients | Rig (`rig-core`) OpenAI-compatible client → llama-server; never `rig::Agent` | `apps/engine/src/agent/model/rig_openai.rs` |
+| Rerank client | Direct HTTP to llama-server `/v1/rerank` (no Rig provider) | `apps/engine/src/agent/model/rerank.rs` |
 | MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
 | Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
 | Fetching | httpx + BeautifulSoup; Playwright where JS is required | `apps/scraper` |
@@ -46,8 +47,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 ```
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
-    src/core/       config · types (the owned domain structs). Imports nothing else.
-    src/agent/      harness (traits, loop, assembly, tracing) · model (OpenAI-compatible HTTP → llama-server: chat, embed, rerank) · tools
+    src/core/       config · telemetry · types (every shared struct and enum) · tests. Imports nothing else.
+    src/agent/      harness (traits, loop, assembly, sinks) · model (Rig → llama-server chat/embed; HTTP rerank) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
@@ -101,7 +102,7 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only th
 
 ## Inside `engine`
 
-`core` imports nothing else in the crate. `agent::harness` imports only `core`. `agent::model`, `agent::tools`, and `stores` import `core` and `agent::harness`, never each other. `routes` and `wiring` compose them. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
+`core` imports nothing else in the crate. `agent::harness` imports only `core`. `agent::model`, `agent::tools`, and `stores` import `core` and `agent::harness`, never each other. `routes` and `wiring` compose them. Every type that crosses a module boundary is defined in `core/types`; `harness` holds traits and logic, adapters hold private wire structs. Tests live in `core/tests`. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
 
 ## Inside `scraper`
 

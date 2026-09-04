@@ -5,64 +5,27 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::future::join_all;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::agent::harness::assemble::{self, Budget, Sections};
+use crate::agent::harness::assemble;
 use crate::agent::harness::conversation::ConversationStore;
-use crate::agent::harness::memory::{Memory, MemoryQuery, MemoryStore};
-use crate::agent::harness::model::{
-    FinishReason, ModelError, ModelProvider, ModelRequest, ModelResponse, Usage,
-};
-use crate::agent::harness::policy::{ConfirmationRequest, Decision, Policy, ProposedAction};
-use crate::agent::harness::retrieval::{RetrievalQuery, Retriever};
-use crate::agent::harness::tool::{ToolError, ToolSet};
-use crate::agent::harness::trace::{RunStatus, TraceEvent, TraceSink};
+use crate::agent::harness::memory::MemoryStore;
+use crate::agent::harness::model::ModelProvider;
+use crate::agent::harness::policy::Policy;
+use crate::agent::harness::retrieval::Retriever;
+use crate::agent::harness::tool::ToolSet;
+use crate::agent::harness::trace::TraceSink;
+use crate::core::types::agent::{AgentConfig, AgentError, Answer};
+use crate::core::types::assemble::Sections;
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
+use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::message::{Message, ToolCall};
-
-/// Knobs for the loop. All bounded; nothing runs forever.
-#[derive(Debug, Clone, Copy)]
-pub struct AgentConfig {
-    /// Maximum model calls per request.
-    pub max_steps: u32,
-    /// Retries on a retryable model error, per step.
-    pub max_model_retries: u32,
-    /// Per-tool-call timeout.
-    pub tool_timeout: Duration,
-    /// Completion budget per model call.
-    pub max_tokens: u32,
-    /// Sampling temperature.
-    pub temperature: f32,
-    /// Evidence chunks to retrieve per request.
-    pub retrieval_top_k: usize,
-    /// Prior turns to load.
-    pub history_turns: usize,
-    /// USD per million prompt tokens, for cost tracking. Zero for local models.
-    pub usd_per_m_prompt: f64,
-    /// USD per million completion tokens.
-    pub usd_per_m_completion: f64,
-    /// Prompt budgets.
-    pub budget: Budget,
-}
-
-impl Default for AgentConfig {
-    fn default() -> Self {
-        Self {
-            max_steps: 8,
-            max_model_retries: 2,
-            tool_timeout: Duration::from_secs(20),
-            max_tokens: 1024,
-            temperature: 0.3,
-            retrieval_top_k: 6,
-            history_turns: 20,
-            usd_per_m_prompt: 0.0,
-            usd_per_m_completion: 0.0,
-            budget: Budget::default(),
-        }
-    }
-}
+use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
+use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
+use crate::core::types::retrieval::RetrievalQuery;
+use crate::core::types::tool::ToolError;
+use crate::core::types::trace::{RunStatus, TraceEvent};
 
 /// The dependencies the loop drives. Every one is a trait with a test double.
 pub struct AgentDeps {
@@ -80,36 +43,6 @@ pub struct AgentDeps {
     pub conversations: Option<Arc<dyn ConversationStore>>,
     /// Cross-conversation memory, when configured.
     pub memory: Option<Arc<dyn MemoryStore>>,
-}
-
-/// How a run ended and what it produced.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Answer {
-    /// Final text. Empty when awaiting confirmation.
-    pub text: String,
-    /// Evidence the answer was grounded in, best first.
-    pub evidence: Vec<Evidence>,
-    /// Set when the loop stopped to ask the user.
-    pub confirmation: Option<ConfirmationRequest>,
-    /// How it ended.
-    pub status: RunStatus,
-    /// Model calls made.
-    pub steps: u32,
-    /// Tokens across every call.
-    pub usage: Usage,
-    /// Estimated cost in USD.
-    pub cost_usd: f64,
-}
-
-/// Loop failures. Everything recoverable has already been fed back to the model.
-#[derive(Debug, thiserror::Error)]
-pub enum AgentError {
-    /// The model failed after retries.
-    #[error(transparent)]
-    Model(#[from] ModelError),
-    /// A store the request needs was unavailable.
-    #[error("store: {0}")]
-    Store(String),
 }
 
 /// The loop. Cheap to clone; holds only `Arc`s.
@@ -346,7 +279,8 @@ impl Agent {
         let results = join_all(runnable.iter().map(|call| self.run_tool(ctx, step, call))).await;
         for (call, result) in runnable.iter().zip(results) {
             let content = result.unwrap_or_else(|error| format!("error: {error}"));
-            run.new_turns.push(Message::tool_result(&call.id, content));
+            run.new_turns
+                .push(Message::tool_result(&call.id, &call.name, content));
         }
         Ok(StepOutcome::Continue)
     }
@@ -364,6 +298,7 @@ impl Agent {
             let Some(tool) = deps.tools.get(&call.name) else {
                 run.new_turns.push(Message::tool_result(
                     &call.id,
+                    &call.name,
                     format!("error: no tool named `{}`", call.name),
                 ));
                 continue;
@@ -391,8 +326,11 @@ impl Agent {
             match decision {
                 Decision::Allow => runnable.push(call.clone()),
                 Decision::Deny { reason } => {
-                    run.new_turns
-                        .push(Message::tool_result(&call.id, format!("denied: {reason}")));
+                    run.new_turns.push(Message::tool_result(
+                        &call.id,
+                        &call.name,
+                        format!("denied: {reason}"),
+                    ));
                 }
                 Decision::Confirm(request) => return Err(request),
             }
@@ -550,7 +488,8 @@ fn ms(since: Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-fn truncate(text: &str, max: usize) -> String {
+/// Cuts `text` to at most `max` bytes on a char boundary, marking the cut.
+pub(crate) fn truncate(text: &str, max: usize) -> String {
     if text.len() <= max {
         text.to_owned()
     } else {
@@ -563,7 +502,7 @@ fn truncate(text: &str, max: usize) -> String {
 }
 
 /// Drops argument values whose key looks like a secret before they reach the trace.
-fn redact(value: &Value) -> Value {
+pub(crate) fn redact(value: &Value) -> Value {
     const SECRET_KEYS: [&str; 6] = [
         "password",
         "token",
@@ -591,349 +530,5 @@ fn redact(value: &Value) -> Value {
         ),
         Value::Array(items) => Value::Array(items.iter().map(redact).collect()),
         other => other.clone(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use async_trait::async_trait;
-    use serde_json::json;
-
-    use super::*;
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::{RiskClass, Tool, ToolDefinition, ToolOutput};
-    use crate::agent::harness::trace::MemorySink;
-
-    /// Replays canned responses in order. Lives in tests only.
-    struct Scripted(Mutex<Vec<Result<ModelResponse, ModelError>>>);
-
-    impl Scripted {
-        fn new(items: Vec<Result<ModelResponse, ModelError>>) -> Self {
-            let mut reversed = items;
-            reversed.reverse();
-            Self(Mutex::new(reversed))
-        }
-    }
-
-    #[async_trait]
-    impl ModelProvider for Scripted {
-        async fn generate(
-            &self,
-            _ctx: &RequestContext,
-            _req: ModelRequest,
-        ) -> Result<ModelResponse, ModelError> {
-            self.0
-                .lock()
-                .ok()
-                .and_then(|mut items| items.pop())
-                .unwrap_or_else(|| Err(ModelError::Malformed("script exhausted".into())))
-        }
-    }
-
-    fn text(content: &str) -> ModelResponse {
-        ModelResponse {
-            content: content.into(),
-            tool_calls: vec![],
-            finish_reason: FinishReason::Stop,
-            usage: Usage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-            },
-            model: "test".into(),
-        }
-    }
-
-    fn calls(items: Vec<(&str, &str, Value)>) -> ModelResponse {
-        ModelResponse {
-            content: String::new(),
-            tool_calls: items
-                .into_iter()
-                .map(|(id, name, arguments)| ToolCall {
-                    id: id.into(),
-                    name: name.into(),
-                    arguments,
-                })
-                .collect(),
-            finish_reason: FinishReason::ToolCalls,
-            usage: Usage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-            },
-            model: "test".into(),
-        }
-    }
-
-    struct Echo(RiskClass);
-
-    #[async_trait]
-    impl Tool for Echo {
-        fn definition(&self) -> ToolDefinition {
-            ToolDefinition {
-                name: "echo".into(),
-                description: "echoes".into(),
-                parameters: json!({"type": "object"}),
-                risk: self.0,
-            }
-        }
-        async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-            Ok(ToolOutput::text(args.to_string()))
-        }
-    }
-
-    struct Slow;
-
-    #[async_trait]
-    impl Tool for Slow {
-        fn definition(&self) -> ToolDefinition {
-            ToolDefinition {
-                name: "slow".into(),
-                description: "sleeps".into(),
-                parameters: json!({"type": "object"}),
-                risk: RiskClass::ReadPublic,
-            }
-        }
-        async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            Ok(ToolOutput::text("late"))
-        }
-    }
-
-    fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<MemorySink>) {
-        let sink = Arc::new(MemorySink::default());
-        let deps = AgentDeps {
-            model: Arc::new(model),
-            tools,
-            policy: Arc::new(RiskPolicy::new(Some("Moderator".into()))),
-            trace: sink.clone(),
-            retriever: None,
-            conversations: None,
-            memory: None,
-        };
-        (Agent::new(deps, cfg, "sys"), sink)
-    }
-
-    fn ctx() -> RequestContext {
-        RequestContext::new("g", "u", Duration::from_secs(5))
-    }
-
-    #[tokio::test]
-    async fn text_reply_is_the_answer() {
-        let (agent, sink) = agent(
-            Scripted::new(vec![Ok(text("2am"))]),
-            ToolSet::new(),
-            AgentConfig::default(),
-        );
-        let out = agent.run(&ctx(), "when?").await.ok();
-        let out = out.as_ref();
-        assert_eq!(out.map(|answer| answer.text.as_str()), Some("2am"));
-        assert_eq!(out.map(|answer| answer.steps), Some(1));
-        assert!(
-            sink.records()
-                .iter()
-                .any(|record| matches!(record.event, TraceEvent::Completed { .. }))
-        );
-    }
-
-    #[tokio::test]
-    async fn tool_result_is_fed_back_and_loop_continues() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
-        let (agent, sink) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![("c1", "echo", json!({"q": 1}))])),
-                Ok(text("done")),
-            ]),
-            tools,
-            AgentConfig::default(),
-        );
-        let out = agent.run(&ctx(), "go").await.ok();
-        assert_eq!(
-            out.as_ref().map(|answer| answer.text.as_str()),
-            Some("done")
-        );
-        assert_eq!(out.as_ref().map(|answer| answer.steps), Some(2));
-        assert!(sink.records().iter().any(
-            |record| matches!(&record.event, TraceEvent::ToolCall { tool, .. } if tool == "echo")
-        ));
-    }
-
-    #[tokio::test]
-    async fn parallel_calls_all_run() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
-        let (agent, sink) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![
-                    ("c1", "echo", json!(1)),
-                    ("c2", "echo", json!(2)),
-                    ("c3", "echo", json!(3)),
-                ])),
-                Ok(text("ok")),
-            ]),
-            tools,
-            AgentConfig::default(),
-        );
-        let _ = agent.run(&ctx(), "go").await;
-        let count = sink
-            .records()
-            .iter()
-            .filter(|record| matches!(record.event, TraceEvent::ToolCall { .. }))
-            .count();
-        assert_eq!(count, 3);
-    }
-
-    #[tokio::test]
-    async fn write_without_role_is_denied_not_run() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ExternalWrite)));
-        let (agent, sink) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![("c1", "echo", json!({}))])),
-                Ok(text("ok")),
-            ]),
-            tools,
-            AgentConfig::default(),
-        );
-        let _ = agent.run(&ctx(), "post it").await;
-        let records = sink.records();
-        assert!(records.iter().any(|record| matches!(
-            &record.event,
-            TraceEvent::PolicyDecision {
-                decision: Decision::Deny { .. },
-                ..
-            }
-        )));
-        assert!(
-            !records
-                .iter()
-                .any(|record| matches!(record.event, TraceEvent::ToolCall { .. }))
-        );
-    }
-
-    #[tokio::test]
-    async fn write_with_role_stops_for_confirmation() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ExternalWrite)));
-        let (agent, _) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![("c1", "echo", json!({}))])),
-                Ok(text("never")),
-            ]),
-            tools,
-            AgentConfig::default(),
-        );
-        let context = ctx().with_roles(vec!["Moderator".into()]);
-        let out = agent.run(&context, "post it").await.ok();
-        assert_eq!(
-            out.as_ref().map(|answer| answer.status.clone()),
-            Some(RunStatus::AwaitingConfirmation)
-        );
-        assert!(
-            out.as_ref()
-                .is_some_and(|answer| answer.confirmation.is_some())
-        );
-    }
-
-    #[tokio::test]
-    async fn step_limit_stops_the_loop() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
-        let script: Vec<_> = (0..10)
-            .map(|i| Ok(calls(vec![(&format!("c{i}"), "echo", json!(i))])))
-            .collect();
-        let (agent, _) = agent(
-            Scripted::new(script),
-            tools,
-            AgentConfig {
-                max_steps: 3,
-                ..AgentConfig::default()
-            },
-        );
-        let out = agent.run(&ctx(), "loop").await.ok();
-        assert_eq!(
-            out.as_ref().map(|answer| answer.status.clone()),
-            Some(RunStatus::StepLimit)
-        );
-        assert_eq!(out.as_ref().map(|answer| answer.steps), Some(3));
-    }
-
-    #[tokio::test]
-    async fn tool_timeout_becomes_an_error_result() {
-        let tools = ToolSet::new().with(Arc::new(Slow));
-        let (agent, sink) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![("c1", "slow", json!({}))])),
-                Ok(text("ok")),
-            ]),
-            tools,
-            AgentConfig {
-                tool_timeout: Duration::from_millis(50),
-                ..AgentConfig::default()
-            },
-        );
-        let _ = agent.run(&ctx(), "go").await;
-        assert!(sink.records().iter().any(|record| matches!(
-            &record.event,
-            TraceEvent::ToolCall { result: Err(message), .. } if message.contains("timed out")
-        )));
-    }
-
-    #[tokio::test]
-    async fn cancellation_ends_the_run() {
-        let (agent, _) = agent(
-            Scripted::new(vec![Ok(text("x"))]),
-            ToolSet::new(),
-            AgentConfig::default(),
-        );
-        let context = ctx();
-        context.cancel.cancel();
-        let out = agent.run(&context, "go").await.ok();
-        assert_eq!(out.map(|answer| answer.status), Some(RunStatus::Cancelled));
-    }
-
-    #[tokio::test]
-    async fn retryable_model_error_is_retried() {
-        let (agent, sink) = agent(
-            Scripted::new(vec![
-                Err(ModelError::Transport("boom".into())),
-                Ok(text("recovered")),
-            ]),
-            ToolSet::new(),
-            AgentConfig::default(),
-        );
-        let out = agent.run(&ctx(), "go").await.ok();
-        assert_eq!(out.map(|answer| answer.text), Some("recovered".into()));
-        assert!(
-            sink.records()
-                .iter()
-                .any(|record| matches!(record.event, TraceEvent::ModelError { retried: true, .. }))
-        );
-    }
-
-    #[tokio::test]
-    async fn usage_and_cost_accumulate() {
-        let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
-        let (agent, _) = agent(
-            Scripted::new(vec![
-                Ok(calls(vec![("c1", "echo", json!({}))])),
-                Ok(text("ok")),
-            ]),
-            tools,
-            AgentConfig {
-                usd_per_m_prompt: 1.0,
-                usd_per_m_completion: 2.0,
-                ..AgentConfig::default()
-            },
-        );
-        let out = agent.run(&ctx(), "go").await.ok();
-        let out = out.as_ref();
-        assert_eq!(out.map(|answer| answer.usage.prompt_tokens), Some(20));
-        assert_eq!(out.map(|answer| answer.usage.completion_tokens), Some(10));
-        assert!(out.is_some_and(|answer| (answer.cost_usd - 0.000_04).abs() < 1e-12));
-    }
-
-    #[test]
-    fn secrets_are_redacted_from_traces() {
-        let redacted = redact(&json!({"user": "a", "password": "b", "nested": {"api_key": "c"}}));
-        assert_eq!(redacted["user"], "a");
-        assert_eq!(redacted["password"], "[redacted]");
-        assert_eq!(redacted["nested"]["api_key"], "[redacted]");
     }
 }

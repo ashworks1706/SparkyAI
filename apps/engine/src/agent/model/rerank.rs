@@ -1,4 +1,4 @@
-//! `Reranker` over llama-server's `/v1/rerank`.
+//! `Reranker` over llama-server's `/v1/rerank`. Direct HTTP; Rig has no provider for it.
 
 use std::time::Duration;
 
@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
-use crate::agent::harness::retrieval::{Reranker, RetrievalError};
+use crate::agent::harness::retrieval::Reranker;
+use crate::core::types::retrieval::RetrievalError;
 
 /// Rerank client for one model.
 #[derive(Debug, Clone)]
