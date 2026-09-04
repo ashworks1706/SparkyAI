@@ -19,7 +19,7 @@ Done 2026-09-04: `just model && just infra && just engine`, then `POST /chat`. R
 - [ ] Build ingestion pipelines that keep sources fresh and deduplicated
 - [ ] Port v1 sources, simplest first: library hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports
 - [ ] Answer with citations and dates; add a reranker only if the eval set shows fusion alone falls short
-- [ ] Ship a fixed ASU eval set
+- [x] Ship a fixed ASU eval set (`apps/training/evals/cases`; grows with every failure)
 
 Exit: correct, dated sources on the eval set; reproducible traces.
 
@@ -38,7 +38,7 @@ Exit: AI Society uses it daily; failures inspectable from traces.
 - [ ] Personalized discovery and deadlines
 - [ ] Connect to external tools over MCP
 - [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
-- [ ] Eval suites: tool selection/args, grounding, memory, permissions, clarification, refusal, latency
+- [x] Eval suites: tool selection/args, grounding, memory, permissions, clarification, refusal, latency (`just eval run`)
 
 ## 5 — Public beta v0.5
 
@@ -49,8 +49,8 @@ Exit: AI Society uses it daily; failures inspectable from traces.
 Only after Phase 4 yields clean interaction data.
 
 - [ ] Baseline the untouched model on the eval suite
-- [ ] Build a training dataset from real interactions, PII removed; v1 `finetune/` is regenerated, not reused
-- [ ] Post-train in stages, each gated on evals
+- [x] Training dataset from real interactions (Phoenix `llm` spans, PII removed) — `just data export && just data verify`; v1 `finetune/` is regenerated, not reused
+- [ ] Post-train in stages, each gated on evals (`just train sft` + `just eval compare`; pipeline in place, no run yet)
 - [ ] Release: weights, quantized variants, config, dataset description, evals, limitations
 
 ## 7 — Sandboxed automation v0.6

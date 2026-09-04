@@ -1,10 +1,8 @@
-//! Chunked replies, citation footers, confirmation prompts.
+//! Chunked replies and citation footers.
 
 use std::fmt::Write;
 
-use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
-
-use crate::core::types::{ChatResponse, Confirmation};
+use crate::core::types::ChatResponse;
 
 /// Discord's hard limit on message content.
 pub const MAX_MESSAGE: usize = 2_000;
@@ -47,7 +45,14 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
         };
     }
     if let Some(c) = &resp.confirmation {
-        let _ = write!(body, "\n\n**Needs your confirmation:** {}", c.summary);
+        // The engine stopped before acting. Relaying an approval needs the Phase 3 confirm
+        // endpoint; until then the bot says so rather than showing buttons that do nothing.
+        let _ = write!(
+            body,
+            "\n\n**Not done — `{}` needs your approval:** {} Approving actions from Discord \
+             is not available yet.",
+            c.tool, c.summary
+        );
     }
     if !resp.citations.is_empty() {
         body.push_str("\n\n**Sources**\n");
@@ -56,16 +61,4 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
         }
     }
     chunk(&body, MAX_MESSAGE)
-}
-
-/// Confirm / cancel buttons bound to one confirmation token.
-pub fn confirmation_row(c: &Confirmation) -> Vec<CreateActionRow> {
-    vec![CreateActionRow::Buttons(vec![
-        CreateButton::new(format!("confirm:{}", c.token))
-            .style(ButtonStyle::Danger)
-            .label(format!("Confirm {}", c.tool)),
-        CreateButton::new(format!("cancel:{}", c.token))
-            .style(ButtonStyle::Secondary)
-            .label("Cancel"),
-    ])]
 }

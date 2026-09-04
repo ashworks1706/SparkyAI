@@ -92,7 +92,7 @@ scraper *ARGS:
 migrate:
     cd apps/scraper && uv run scraper migrate
 
-# Training CLIs: just train configs · just eval suites · just data stats
+# Training CLIs: just data export|verify|stats · just eval run|baseline|compare · just train sft [--dry-run]
 train *ARGS:
     cd apps/training && uv run train {{ARGS}}
 

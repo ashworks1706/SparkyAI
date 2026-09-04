@@ -8,7 +8,6 @@ use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::JsonlSink;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
-use crate::agent::tools::discord_ops::PostAnnouncement;
 use crate::agent::tools::mcp;
 use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
@@ -16,6 +15,7 @@ use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::assemble::Budget;
 use crate::routes::chat::ChatState;
+use crate::routes::health::HealthState;
 use crate::stores::postgres::{self, PgConversations, PgMemory, PgRetriever};
 
 /// Default system prompt. Versioned by content; changes show up in traces via the prompt hash.
@@ -44,44 +44,31 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         usize::try_from(cfg.embedding.dim)?,
     ));
 
-    // Stores are optional at boot so the harness can run against a model alone.
-    let pool = match postgres::connect(&cfg.postgres.url, cfg.postgres.max_connections).await {
-        Ok(pool) => Some(pool),
-        Err(e) => {
-            tracing::warn!(error = %e, "postgres unavailable; running without retrieval, history, or memory");
-            None
-        }
-    };
-    let retriever = pool
-        .clone()
-        .map(|p| Arc::new(PgRetriever::new(p, embedder)));
-    let conversations = pool.clone().map(|p| Arc::new(PgConversations::new(p)));
-    let memory = pool.map(|p| Arc::new(PgMemory::new(p)));
+    // Every configured dependency must be reachable at boot. Nothing degrades silently.
+    let pool = postgres::connect(&cfg.postgres.url, cfg.postgres.max_connections)
+        .await
+        .map_err(|e| anyhow::anyhow!("postgres: {e}"))?;
+    let retriever = Arc::new(PgRetriever::new(pool.clone(), embedder));
+    let conversations = Arc::new(PgConversations::new(pool.clone()));
+    let memory = Arc::new(PgMemory::new(pool.clone()));
 
-    let mut tools = ToolSet::new().with(Arc::new(PostAnnouncement));
+    let mut tools = ToolSet::new().with(Arc::new(PublicSearch::new(
+        retriever.clone(),
+        cfg.agent.retrieval_top_k,
+    )));
     if let Some(url) = cfg
         .mcp
         .playwright_url
         .as_deref()
         .filter(|u| !u.trim().is_empty())
     {
-        match mcp::connect(url, &cfg.mcp.playwright_tools, cfg.mcp.required_props_only).await {
-            Ok(remote) => {
-                tracing::info!(count = remote.len(), url, "playwright mcp tools registered");
-                for tool in remote {
-                    tools = tools.with(tool);
-                }
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, url, "playwright mcp unavailable; continuing without browser tools");
-            }
+        let remote = mcp::connect(url, &cfg.mcp.playwright_tools, cfg.mcp.required_props_only)
+            .await
+            .map_err(|e| anyhow::anyhow!("playwright mcp at {url}: {e}"))?;
+        tracing::info!(count = remote.len(), url, "playwright mcp tools registered");
+        for tool in remote {
+            tools = tools.with(tool);
         }
-    }
-    if let Some(r) = &retriever {
-        tools = tools.with(Arc::new(PublicSearch::new(
-            r.clone(),
-            cfg.agent.retrieval_top_k,
-        )));
     }
 
     let agent_cfg = AgentConfig {
@@ -105,21 +92,25 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         tools,
         policy: Arc::new(RiskPolicy::new(Some(cfg.discord.mod_role.clone()))),
         trace,
-        retriever: retriever.map(|r| r as _),
-        conversations: conversations.clone().map(|c| c as _),
-        memory: memory.map(|m| m as _),
+        retriever: Some(retriever),
+        conversations: Some(conversations.clone()),
+        memory: Some(memory),
     };
     let agent = Agent::new(deps, agent_cfg, SYSTEM_PROMPT);
 
     let state = ChatState {
         agent,
-        conversations: conversations.map(|c| c as _),
+        conversations: Some(conversations),
         request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
         default_tenant: cfg.discord.guild_id.to_string(),
+    };
+    let health = HealthState {
+        pool,
+        model_base_url: cfg.model.base_url.clone(),
     };
 
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
     tracing::info!(addr = %cfg.app.http_addr, "listening");
-    axum::serve(listener, crate::routes::router(state)).await?;
+    axum::serve(listener, crate::routes::router(state, health)).await?;
     Ok(())
 }

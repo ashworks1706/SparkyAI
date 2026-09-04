@@ -86,6 +86,8 @@ def fetch_firecrawl(url: str) -> Fetched:
     status = int(meta.get("statusCode") or 200)
     if status >= 400:
         raise FetchRejected(f"{url} returned {status}")
+    if not markdown.strip():
+        raise FetchError(f"firecrawl returned no content for {url}")
     return Fetched(
         url=str(meta.get("url") or meta.get("sourceURL") or url),
         status=status,

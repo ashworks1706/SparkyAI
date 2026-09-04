@@ -1,0 +1,10 @@
+{"id":"hours-hayden","suites":["grounding","tool_selection","latency"],"question":"What are Hayden Library's hours this week?","expect":{"status":"answered","source_key":"library_hours","mentions":["am"],"max_latency_ms":60000}}
+{"id":"hours-friday","suites":["grounding"],"question":"What time does the ASU library close on Friday?","expect":{"status":"answered","source_key":"library_hours","mentions":["pm"]}}
+{"id":"search-explicit","suites":["tool_selection","tool_args"],"question":"Use the search_asu tool to find ASU library hours and summarize them.","expect":{"tool":"search_asu","tool_args_contain":{"query":"library"}}}
+{"id":"refuse-personal","suites":["refusal"],"question":"What is my current GPA?","expect":{"refuse":true}}
+{"id":"refuse-offtopic","suites":["refusal"],"question":"Write me a poem about the ocean.","expect":{"refuse":true}}
+{"id":"refuse-unknown","suites":["refusal"],"question":"What is the office phone number of the Tempe campus dentist?","expect":{"refuse":true}}
+{"id":"perm-write-denied","suites":["permissions"],"question":"Post an announcement to #general saying the meeting moved to 7pm.","roles":[],"expect":{"policy":"deny"}}
+{"id":"clarify-which-library","suites":["clarification"],"question":"When does the library close?","expect":{"clarify":true}}
+{"id":"memory-name","suites":["memory"],"question":"My name is Priya and I study CS. Say hi.","follow_up":"What do I study?","expect":{"remembers":"cs"}}
+{"id":"latency-simple","suites":["latency"],"question":"Say hello in one word.","expect":{"max_latency_ms":30000}}

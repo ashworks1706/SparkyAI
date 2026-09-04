@@ -153,7 +153,7 @@ impl Agent {
             match self.step(&mut run, &inputs).await {
                 Ok(StepOutcome::Continue) => {}
                 Ok(StepOutcome::Stop(status, text, confirmation)) => {
-                    self.persist(ctx, &run.new_turns).await;
+                    self.persist(ctx, &run.new_turns).await?;
                     return Ok(self.finish(&run, status, text, inputs.evidence, confirmation));
                 }
                 Err(ModelError::Cancelled) => {
@@ -213,7 +213,7 @@ impl Agent {
                     },
                 )
                 .await
-                .unwrap_or_default(),
+                .map_err(|error| AgentError::Store(error.to_string()))?,
             None => Vec::new(),
         };
         let evidence = match &deps.retriever {
@@ -227,47 +227,42 @@ impl Agent {
                     "output.value" = Empty,
                     "output.mime_type" = "application/json",
                 );
-                match retriever
+                let found = retriever
                     .retrieve(ctx, &query)
                     .instrument(span.clone())
                     .await
+                    .map_err(|error| AgentError::Store(format!("retrieval: {error}")))?;
                 {
-                    Ok(found) => {
-                        let listing: Vec<serde_json::Value> = found
-                            .iter()
-                            .map(|e| {
-                                serde_json::json!({
-                                    "chunk_id": e.chunk_id,
-                                    "source_id": e.source_id,
-                                    "title": e.title,
-                                    "score": e.score,
-                                    "content": truncate(&e.content, 1_000),
-                                })
+                    let listing: Vec<serde_json::Value> = found
+                        .iter()
+                        .map(|e| {
+                            serde_json::json!({
+                                "chunk_id": e.chunk_id,
+                                "source_id": e.source_id,
+                                "title": e.title,
+                                "score": e.score,
+                                "content": truncate(&e.content, 1_000),
                             })
-                            .collect();
-                        span.record(
-                            "output.value",
-                            truncate(
-                                &serde_json::to_string(&listing).unwrap_or_default(),
-                                MAX_SPAN_VALUE,
-                            )
-                            .as_str(),
-                        );
-                        deps.trace.emit(
-                            ctx,
-                            TraceEvent::Retrieval {
-                                step: 0,
-                                query: input.to_owned(),
-                                chunk_ids: found.iter().map(|item| item.chunk_id).collect(),
-                                duration_ms: ms(started),
-                            },
-                        );
-                        found
-                    }
-                    Err(error) => {
-                        tracing::warn!(error = %error, "retrieval failed; answering without evidence");
-                        Vec::new()
-                    }
+                        })
+                        .collect();
+                    span.record(
+                        "output.value",
+                        truncate(
+                            &serde_json::to_string(&listing).unwrap_or_default(),
+                            MAX_SPAN_VALUE,
+                        )
+                        .as_str(),
+                    );
+                    deps.trace.emit(
+                        ctx,
+                        TraceEvent::Retrieval {
+                            step: 0,
+                            query: input.to_owned(),
+                            chunk_ids: found.iter().map(|item| item.chunk_id).collect(),
+                            duration_ms: ms(started),
+                        },
+                    );
+                    found
                 }
             }
             None => Vec::new(),
@@ -638,12 +633,14 @@ impl Agent {
         content
     }
 
-    async fn persist(&self, ctx: &RequestContext, turns: &[Message]) {
-        if let Some(store) = &self.deps.conversations
-            && let Err(error) = store.append(ctx, turns).await
-        {
-            tracing::warn!(error = %error, "failed to persist turns");
+    async fn persist(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), AgentError> {
+        if let Some(store) = &self.deps.conversations {
+            store
+                .append(ctx, turns)
+                .await
+                .map_err(|error| AgentError::Store(format!("persist: {error}")))?;
         }
+        Ok(())
     }
 
     fn finish(

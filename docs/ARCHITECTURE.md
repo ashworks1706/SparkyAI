@@ -16,8 +16,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Browser tools | Playwright MCP over Streamable HTTP, wrapped as `Tool`s with a name-derived `RiskClass` | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
 | Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
-| Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
-| Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
+| Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF export | `apps/training/posttrain` |
+| Evals | Golden cases against `/chat`, deterministic suites scored from the engine's JSONL trace, baseline gate | `apps/training/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
 | Embeddings | Qwen3-Embedding-0.6B (1024-dim) on `llama-server` | `deploy/inference` |
 | Database | PostgreSQL 17 — source of truth | `apps/engine` reads, `apps/scraper` writes |
@@ -55,7 +55,7 @@ apps/
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
     core/{settings,types,tests} · sources · store · migrations/ (the schema)
-  training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
+  training/       Python. datasets from Phoenix llm spans, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
   sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)

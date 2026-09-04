@@ -2,7 +2,7 @@
 
 use secrecy::ExposeSecret;
 use serenity::all::{
-    Client, CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
+    Client, CommandInteraction, Context, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
     GatewayIntents, GuildId, Interaction, Ready, ResolvedValue, UserId,
 };
@@ -49,19 +49,22 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
 }
 
 impl Handler {
-    /// Role names the member holds, resolved against the guild.
-    async fn role_names(&self, ctx: &Context, cmd: &CommandInteraction) -> Vec<String> {
+    /// Role names the member holds, resolved against the guild. A lookup failure is an
+    /// error, not an empty list: permissions must never silently drop.
+    async fn role_names(
+        &self,
+        ctx: &Context,
+        cmd: &CommandInteraction,
+    ) -> Result<Vec<String>, serenity::Error> {
         let Some(member) = &cmd.member else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
-        let Ok(roles) = self.guild_id.roles(&ctx.http).await else {
-            return Vec::new();
-        };
-        member
+        let roles = self.guild_id.roles(&ctx.http).await?;
+        Ok(member
             .roles
             .iter()
             .filter_map(|id| roles.get(id).map(|r| r.name.clone()))
-            .collect()
+            .collect())
     }
 
     async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
@@ -80,16 +83,28 @@ impl Handler {
             })
             .unwrap_or_default();
         if question.trim().is_empty() {
-            self.followup(ctx, cmd, "Ask me something.".into(), Vec::new())
-                .await;
+            self.followup(ctx, cmd, "Ask me something.".into()).await;
             return;
         }
+        let roles = match self.role_names(ctx, cmd).await {
+            Ok(roles) => roles,
+            Err(e) => {
+                tracing::error!(error = %e, user = %cmd.user.id, "role lookup failed");
+                self.followup(
+                    ctx,
+                    cmd,
+                    "I could not verify your roles, so I did not run that.".into(),
+                )
+                .await;
+                return;
+            }
+        };
         let conversation_id = self.conversations.lock().await.get(&cmd.user.id).copied();
         let req = ChatRequest {
             user_id: cmd.user.id.to_string(),
             tenant_id: cmd.guild_id.unwrap_or(self.guild_id).to_string(),
             channel_id: cmd.channel_id.to_string(),
-            roles: self.role_names(ctx, cmd).await,
+            roles,
             conversation_id,
             message: question,
         };
@@ -119,17 +134,8 @@ impl Handler {
                     .lock()
                     .await
                     .insert(cmd.user.id, resp.conversation_id);
-                let components = resp
-                    .confirmation
-                    .as_ref()
-                    .map(reply::confirmation_row)
-                    .unwrap_or_default();
-                let mut messages = reply::render(&resp).into_iter();
-                if let Some(first) = messages.next() {
-                    self.followup(ctx, cmd, first, components).await;
-                }
-                for more in messages {
-                    self.followup(ctx, cmd, more, Vec::new()).await;
+                for message in reply::render(&resp) {
+                    self.followup(ctx, cmd, message).await;
                 }
             }
             Err(e) => {
@@ -138,24 +144,14 @@ impl Handler {
                     ctx,
                     cmd,
                     "Sparky is unavailable right now. Please try again shortly.".into(),
-                    Vec::new(),
                 )
                 .await;
             }
         }
     }
 
-    async fn followup(
-        &self,
-        ctx: &Context,
-        cmd: &CommandInteraction,
-        content: String,
-        components: Vec<serenity::all::CreateActionRow>,
-    ) {
-        let mut builder = CreateInteractionResponseFollowup::new().content(content);
-        if !components.is_empty() {
-            builder = builder.components(components);
-        }
+    async fn followup(&self, ctx: &Context, cmd: &CommandInteraction, content: String) {
+        let builder = CreateInteractionResponseFollowup::new().content(content);
         if let Err(e) = cmd.create_followup(&ctx.http, builder).await {
             tracing::warn!(error = %e, "followup failed");
         }
@@ -173,30 +169,6 @@ impl Handler {
             tracing::warn!(error = %e, "reset response failed");
         }
     }
-
-    async fn component(&self, ctx: &Context, comp: &ComponentInteraction) {
-        let (action, token) = comp
-            .data
-            .custom_id
-            .split_once(':')
-            .unwrap_or((comp.data.custom_id.as_str(), ""));
-        let text = match action {
-            "confirm" => format!(
-                "Confirmed `{token}`. Executing confirmed actions arrives with the Phase 3 confirm endpoint."
-            ),
-            "cancel" => "Cancelled. Nothing was sent.".to_owned(),
-            _ => "Unknown action.".to_owned(),
-        };
-        let msg = CreateInteractionResponseMessage::new()
-            .content(text)
-            .ephemeral(true);
-        if let Err(e) = comp
-            .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
-            .await
-        {
-            tracing::warn!(error = %e, "component response failed");
-        }
-    }
 }
 
 #[async_trait]
@@ -210,14 +182,12 @@ impl EventHandler for Handler {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        match interaction {
-            Interaction::Command(cmd) => match cmd.data.name.as_str() {
+        if let Interaction::Command(cmd) = interaction {
+            match cmd.data.name.as_str() {
                 commands::ASK => self.ask(&ctx, &cmd).await,
                 commands::RESET => self.reset(&ctx, &cmd).await,
                 other => tracing::warn!(command = other, "unknown command"),
-            },
-            Interaction::Component(comp) => self.component(&ctx, &comp).await,
-            _ => {}
+            }
         }
     }
 }

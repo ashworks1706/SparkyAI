@@ -21,12 +21,11 @@ pub struct ChatRequest {
     pub message: String,
 }
 
-/// A pending confirmation the engine wants the user to approve.
+/// A pending confirmation the engine wants the user to approve. The token is not carried
+/// because the bot cannot relay approvals until the Phase 3 confirm endpoint exists.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Confirmation {
-    /// Single-use token.
-    pub token: Uuid,
-    /// Tool that would run.
+    /// Tool that would have run.
     pub tool: String,
     /// What would happen.
     pub summary: String,

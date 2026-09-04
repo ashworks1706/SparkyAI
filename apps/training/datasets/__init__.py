@@ -1,4 +1,1 @@
-"""Trajectory generation, verification, redaction.
-
-Output: JSONL in data/processed and data/preference.
-"""
+"""Datasets: export training examples from Phoenix `llm` spans, redact, verify."""

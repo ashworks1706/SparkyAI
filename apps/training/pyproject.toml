@@ -1,15 +1,15 @@
 [project]
 name = "training"
 version = "0.1.0"
-description = "Training: datasets, post-training, and evals for Sparky models"
+description = "Training: dataset export from traces, engine evals with a baseline gate, SFT with GGUF export"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.10",
-    "datasets>=3.0",
-    "openai>=1.60",
-    "huggingface-hub>=0.30",
+    "pydantic-settings>=2.7",
+    "httpx>=0.28",
     "typer>=0.15",
     "rich>=13",
+    "pyyaml>=6",
 ]
 
 [project.optional-dependencies]
@@ -19,13 +19,10 @@ train = [
     "peft>=0.15",
     "trl>=0.19",
     "accelerate>=1.0",
+    "datasets>=3.0",
     "bitsandbytes>=0.45; sys_platform == 'linux'",
     "unsloth>=2025.1; sys_platform == 'linux'",
-    "wandb>=0.19",
-]
-eval = [
-    "inspect-ai>=0.3",
-    "lm-eval>=0.4",
+    "tensorboard>=2.17",
 ]
 dev = ["ruff>=0.9", "pytest>=8"]
 
@@ -55,6 +52,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.pytest.ini_options]
 testpaths = ["core/tests"]
