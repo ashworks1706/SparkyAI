@@ -1,4 +1,5 @@
-//! Built-in tools. Each declares a `RiskClass`.
+//! Built-in tools and MCP-backed tools. Each declares a `RiskClass`.
 
 pub mod discord_ops;
+pub mod mcp;
 pub mod public_search;

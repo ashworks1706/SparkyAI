@@ -28,9 +28,20 @@ class Embedding(BaseModel):
     batch_size: int = 32
 
 
+class Firecrawl(BaseModel):
+    base_url: str = "http://localhost:3002"
+    api_key: SecretStr = SecretStr("")
+    timeout_ms: int = 60_000
+    # Many ASU pages fill in content after load; give them a moment before extracting.
+    wait_for_ms: int = 5_000
+    only_main_content: bool = True
+
+
 class Scraper(BaseModel):
     # Public ASU content is shared across every guild; the engine reads this tenant for all.
     tenant_id: str = "public"
+    # "firecrawl" renders JS and returns markdown; "http" is the plain httpx + bs4 path.
+    fetcher: str = "firecrawl"
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
     chunk_chars: int = 1200
@@ -51,6 +62,7 @@ class Settings(BaseSettings):
     postgres: Postgres = Postgres()
     object_store: ObjectStore = ObjectStore()
     embedding: Embedding = Embedding()
+    firecrawl: Firecrawl = Firecrawl()
     scraper: Scraper = Scraper()
 
 

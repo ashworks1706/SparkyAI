@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::agent::harness::agent::redact;
 use crate::agent::harness::tool::ToolSet;
-use crate::core::tests::support::{Echo, Scripted, Slow, agent, calls, ctx, text};
+use crate::core::tests::support::{Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
 use crate::core::types::policy::Decision;
@@ -231,4 +231,73 @@ fn secrets_are_redacted_from_traces() {
     assert_eq!(redacted["user"], "a");
     assert_eq!(redacted["password"], "[redacted]");
     assert_eq!(redacted["nested"]["api_key"], "[redacted]");
+}
+
+#[tokio::test]
+async fn a_repeated_call_forces_a_tool_free_answer() {
+    let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
+    let same = || Ok(calls(vec![("c", "echo", json!({"q": 1}))]));
+    // Step 1 calls, step 2 repeats, step 3 (no tools offered) answers.
+    let (agent, sink) = agent(
+        Scripted::new(vec![same(), same(), Ok(text("from the result"))]),
+        tools,
+        AgentConfig::default(),
+    );
+    let out = agent.run(&ctx(), "loop").await.ok();
+    assert_eq!(
+        out.as_ref().map(|answer| answer.text.as_str()),
+        Some("from the result")
+    );
+    assert_eq!(out.map(|answer| answer.status), Some(RunStatus::Answered));
+    let executed = sink
+        .records()
+        .iter()
+        .filter(|record| matches!(record.event, TraceEvent::ToolCall { .. }))
+        .count();
+    assert_eq!(executed, 1, "the repeat must not run again");
+}
+
+#[tokio::test]
+async fn repeating_even_without_tools_stalls() {
+    let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
+    let same = || Ok(calls(vec![("c", "echo", json!({"q": 1}))]));
+    // Step 3 gets no tools; a scripted model that still returns an empty answer stalls.
+    let mut empty = text("");
+    empty.finish_reason = crate::core::types::model::FinishReason::Stop;
+    let (agent, _) = agent(
+        Scripted::new(vec![same(), same(), Ok(empty)]),
+        tools,
+        AgentConfig::default(),
+    );
+    let out = agent.run(&ctx(), "loop").await.ok();
+    assert_eq!(out.map(|answer| answer.status), Some(RunStatus::Stalled));
+}
+
+#[tokio::test]
+async fn stateful_tools_run_in_order() {
+    let tools = ToolSet::new().with(Arc::new(Ordered(RiskClass::ReadPublic)));
+    let (agent, sink) = agent(
+        Scripted::new(vec![
+            Ok(calls(vec![
+                ("c1", "ordered", json!({"n": 1})),
+                ("c2", "ordered", json!({"n": 2})),
+                ("c3", "ordered", json!({"n": 3})),
+            ])),
+            Ok(text("ok")),
+        ]),
+        tools,
+        AgentConfig::default(),
+    );
+    let _ = agent.run(&ctx(), "go").await;
+    let order: Vec<String> = sink
+        .records()
+        .iter()
+        .filter_map(|record| match &record.event {
+            TraceEvent::ToolCall {
+                result: Ok(text), ..
+            } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(order, vec!["1", "2", "3"]);
 }

@@ -118,7 +118,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile sandbox down
+    docker compose -f deploy/compose.yml --profile model --profile sandbox --profile crawl --profile browser down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -139,12 +139,20 @@ infra *ARGS:
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed rerank
 
+# Firecrawl (self-hosted) for the scraper: API on :3002
+crawl *ARGS:
+    docker compose -f deploy/compose.yml --profile crawl up -d {{ARGS}} firecrawl
+
+# Playwright MCP browser tools for the engine: :8931 (loopback)
+browser *ARGS:
+    docker compose -f deploy/compose.yml --profile browser up -d {{ARGS}} playwright-mcp
+
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile sandbox ps -a
+    docker compose -f deploy/compose.yml --profile model --profile sandbox --profile crawl --profile browser ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile sandbox logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile sandbox --profile crawl --profile browser logs -f {{ARGS}}
 
 # Build both images locally
 images:

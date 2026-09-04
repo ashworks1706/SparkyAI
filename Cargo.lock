@@ -2590,6 +2590,7 @@ dependencies = [
  "pastey",
  "pin-project-lite",
  "process-wrap",
+ "reqwest 0.13.4",
  "rmcp-macros",
  "schemars",
  "serde",

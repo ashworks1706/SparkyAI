@@ -88,6 +88,7 @@ impl Tool for Echo {
             description: "echoes".into(),
             parameters: json!({"type": "object"}),
             risk: self.0,
+            sequential: false,
         }
     }
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
@@ -106,6 +107,7 @@ impl Tool for Slow {
             description: "sleeps".into(),
             parameters: json!({"type": "object"}),
             risk: RiskClass::ReadPublic,
+            sequential: false,
         }
     }
     async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
@@ -131,4 +133,26 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
 
 pub fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
+}
+
+/// Sequential tool: records the order it is called in by sleeping longer for smaller inputs,
+/// so parallel execution would reverse the observed order.
+pub struct Ordered(pub RiskClass);
+
+#[async_trait]
+impl Tool for Ordered {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: "ordered".into(),
+            description: "stateful".into(),
+            parameters: json!({"type": "object"}),
+            risk: self.0,
+            sequential: true,
+        }
+    }
+    async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
+        let n = args["n"].as_u64().unwrap_or(0);
+        tokio::time::sleep(Duration::from_millis(40 * (4 - n))).await;
+        Ok(ToolOutput::text(n.to_string()))
+    }
 }

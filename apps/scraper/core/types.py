@@ -20,12 +20,15 @@ class Source:
 
 @dataclass(frozen=True)
 class Fetched:
-    """One fetched page."""
+    """One fetched page. `text` is set when the fetcher already produced clean text (markdown
+    from Firecrawl); otherwise the pipeline extracts it from `body`."""
 
     url: str
     status: int
     body: bytes
     content_type: str
+    title: str | None = None
+    text: str | None = None
 
 
 @dataclass(frozen=True)

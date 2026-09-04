@@ -27,6 +27,9 @@ pub struct Config {
     /// Loop limits and prompt budgets.
     #[serde(default)]
     pub agent: Agent,
+    /// MCP servers exposed as tools.
+    #[serde(default)]
+    pub mcp: Mcp,
 }
 
 /// Process-level settings.
@@ -77,6 +80,43 @@ pub struct Model {
     /// USD per million completion tokens; zero for local serving.
     #[serde(default)]
     pub usd_per_m_completion: f64,
+    /// Let Qwen3-style models emit reasoning before answering. Off by default: reasoning is
+    /// dropped from the answer and burns the completion budget on small contexts.
+    #[serde(default)]
+    pub thinking: bool,
+}
+
+/// MCP servers exposed as tools. Empty URLs disable a server.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Mcp {
+    /// Playwright MCP Streamable-HTTP endpoint, e.g. `http://localhost:8931/mcp`.
+    pub playwright_url: Option<String>,
+    /// Remote tool names to expose; empty exposes every tool the server lists.
+    pub playwright_tools: Vec<String>,
+    /// Show the model only each tool's required properties. On by default for small models.
+    pub required_props_only: bool,
+}
+
+impl Default for Mcp {
+    fn default() -> Self {
+        Self {
+            playwright_url: None,
+            // Enough to browse and read; every schema costs context on every step.
+            playwright_tools: [
+                "browser_navigate",
+                "browser_navigate_back",
+                "browser_snapshot",
+                "browser_click",
+                "browser_type",
+                "browser_press_key",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            required_props_only: true,
+        }
+    }
 }
 
 /// Agent loop limits. Every field has a default so a bare `.env` still boots.

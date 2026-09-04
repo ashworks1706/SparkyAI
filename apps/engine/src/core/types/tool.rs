@@ -32,6 +32,10 @@ pub struct ToolDefinition {
     pub parameters: Value,
     /// Risk classification.
     pub risk: RiskClass,
+    /// Holds state between calls (a browser, a session). Calls to it never run in parallel
+    /// with other calls in the same step.
+    #[serde(default)]
+    pub sequential: bool,
 }
 
 /// What a tool returns.

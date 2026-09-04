@@ -184,7 +184,11 @@ impl Retriever for PgRetriever {
             .collect();
 
         if let Some(reranker) = &self.reranker {
-            let docs: Vec<String> = ordered.iter().map(|(c, _)| c.content.clone()).collect();
+            // Rerankers score a query + document pair in one window; keep each document short.
+            let docs: Vec<String> = ordered
+                .iter()
+                .map(|(c, _)| c.content.chars().take(1_500).collect())
+                .collect();
             match reranker.rerank(&query.text, &docs).await {
                 Ok(scores) if scores.len() == ordered.len() => {
                     for ((_, s), new) in ordered.iter_mut().zip(scores) {

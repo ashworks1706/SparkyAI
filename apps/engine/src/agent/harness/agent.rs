@@ -1,6 +1,7 @@
 //! The agent loop: model call → policy → tool execution → repeat until final answer, error,
 //! cancel, deadline, or step limit.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -71,6 +72,11 @@ struct Run<'a> {
     usage: Usage,
     /// Turns produced during this request, persisted at the end. First is the user input.
     new_turns: Vec<Message>,
+    /// Every (tool, arguments) already executed this request, to catch loops.
+    seen_calls: HashSet<String>,
+    /// Set after a step of nothing but repeats: the next model call gets no tools, so the
+    /// model has to answer from what it already has.
+    force_answer: bool,
 }
 
 /// What a step decided.
@@ -120,6 +126,8 @@ impl Agent {
             steps: 0,
             usage: Usage::default(),
             new_turns: vec![Message::user(input)],
+            seen_calls: HashSet::new(),
+            force_answer: false,
         };
         self.deps.trace.emit(
             ctx,
@@ -254,6 +262,16 @@ impl Agent {
         // current input, which assembly appends itself.
         let mut prompt_history = inputs.history.clone();
         prompt_history.extend(run.new_turns.iter().skip(1).cloned());
+        // Tool schemas ride along with every request, so they come out of the same budget.
+        let tool_tokens: usize = self
+            .deps
+            .tools
+            .definitions()
+            .iter()
+            .map(|d| (d.name.len() + d.description.len() + d.parameters.to_string().len()) / 4 + 8)
+            .sum();
+        let mut budget = self.cfg.budget;
+        budget.total = budget.total.saturating_sub(tool_tokens);
         let assembled = assemble::assemble(
             ctx,
             &Sections {
@@ -263,14 +281,14 @@ impl Agent {
                 history: &prompt_history,
                 input: run.input,
             },
-            self.cfg.budget,
+            budget,
         );
         self.deps.trace.emit(
             ctx,
             TraceEvent::ContextAssembled {
                 step: run.steps,
                 message_count: assembled.messages.len(),
-                estimated_tokens: assembled.estimated_tokens,
+                estimated_tokens: assembled.estimated_tokens + tool_tokens,
                 evidence_ids: inputs
                     .evidence
                     .iter()
@@ -280,19 +298,34 @@ impl Agent {
             },
         );
 
-        let response = self.call_model(ctx, run.steps, assembled.messages).await?;
+        let response = self
+            .call_model(ctx, run.steps, assembled.messages, run.force_answer)
+            .await?;
         run.usage.add(response.usage);
         run.new_turns.push(response.as_message());
 
         if response.tool_calls.is_empty() {
-            let text = if response.content.trim().is_empty()
-                && response.finish_reason == FinishReason::Length
-            {
-                "I ran out of room before finishing the answer.".to_owned()
-            } else {
-                response.content
-            };
-            return Ok(StepOutcome::Stop(RunStatus::Answered, text, None));
+            if response.content.trim().is_empty() {
+                let (status, text) = if run.force_answer {
+                    (
+                        RunStatus::Stalled,
+                        "I could not turn what I found into an answer. Try rephrasing.".to_owned(),
+                    )
+                } else if response.finish_reason == FinishReason::Length {
+                    (
+                        RunStatus::Answered,
+                        "I ran out of room before finishing the answer.".to_owned(),
+                    )
+                } else {
+                    (RunStatus::Answered, String::new())
+                };
+                return Ok(StepOutcome::Stop(status, text, None));
+            }
+            return Ok(StepOutcome::Stop(
+                RunStatus::Answered,
+                response.content,
+                None,
+            ));
         }
 
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
@@ -307,10 +340,68 @@ impl Agent {
             }
         };
 
-        // Independent calls run in parallel, each under its own timeout.
+        self.execute(run, runnable).await
+    }
+
+    /// Runs the calls policy allowed. Repeats are refused and reported; a step made only of
+    /// repeats stalls the run. Stateful tools force in-order execution.
+    async fn execute(
+        &self,
+        run: &mut Run<'_>,
+        runnable: Vec<ToolCall>,
+    ) -> Result<StepOutcome, ModelError> {
+        let ctx = run.ctx;
+        // A call the model already made with identical arguments is not run again; it is told
+        // so. A step made of nothing but repeats means the model is looping.
+        let mut fresh = Vec::with_capacity(runnable.len());
+        let mut repeats = 0usize;
+        for call in runnable {
+            let key = format!("{}:{}", call.name, call.arguments);
+            if run.seen_calls.insert(key) {
+                fresh.push(call);
+            } else {
+                repeats += 1;
+                run.new_turns.push(Message::tool_result(
+                    &call.id,
+                    &call.name,
+                    "already called with these exact arguments earlier in this conversation; \
+                     use that result or answer the user",
+                ));
+            }
+        }
+        if fresh.is_empty() && repeats > 0 {
+            if run.force_answer {
+                return Ok(StepOutcome::Stop(
+                    RunStatus::Stalled,
+                    "I kept repeating the same steps without getting further. Try rephrasing, or \
+                     ask for something more specific."
+                        .into(),
+                    None,
+                ));
+            }
+            run.force_answer = true;
+            return Ok(StepOutcome::Continue);
+        }
+
+        // Independent calls run in parallel, each under its own timeout. Anything stateful
+        // (a browser) forces the whole step to run in order.
         let step = run.steps;
-        let results = join_all(runnable.iter().map(|call| self.run_tool(ctx, step, call))).await;
-        for (call, result) in runnable.iter().zip(results) {
+        let stateful = fresh.iter().any(|call| {
+            self.deps
+                .tools
+                .get(&call.name)
+                .is_some_and(|t| t.definition().sequential)
+        });
+        let results: Vec<Result<String, ToolError>> = if stateful {
+            let mut out = Vec::with_capacity(fresh.len());
+            for call in &fresh {
+                out.push(self.run_tool(ctx, step, call).await);
+            }
+            out
+        } else {
+            join_all(fresh.iter().map(|call| self.run_tool(ctx, step, call))).await
+        };
+        for (call, result) in fresh.iter().zip(results) {
             let content = result.unwrap_or_else(|error| format!("error: {error}"));
             run.new_turns
                 .push(Message::tool_result(&call.id, &call.name, content));
@@ -376,13 +467,18 @@ impl Agent {
         ctx: &RequestContext,
         step: u32,
         messages: Vec<Message>,
+        answer_only: bool,
     ) -> Result<ModelResponse, ModelError> {
         let deps = &self.deps;
         let mut attempt = 0u32;
         loop {
             let request = ModelRequest {
                 messages: messages.clone(),
-                tools: deps.tools.definitions(),
+                tools: if answer_only {
+                    Vec::new()
+                } else {
+                    deps.tools.definitions()
+                },
                 max_tokens: self.cfg.max_tokens,
                 temperature: self.cfg.temperature,
             };

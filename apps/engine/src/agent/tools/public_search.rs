@@ -49,6 +49,7 @@ impl Tool for PublicSearch {
                 "required": ["query"]
             }),
             risk: RiskClass::ReadPublic,
+            sequential: false,
         }
     }
 

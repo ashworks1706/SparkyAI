@@ -10,6 +10,7 @@ services:
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_RERANKER__BASE_URL: http://rerank:8002/v1
       SPARKY_TELEMETRY__OTLP_ENDPOINT: http://phoenix:4317
+      SPARKY_MCP__PLAYWRIGHT_URL: http://playwright-mcp:8931/mcp
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -34,6 +35,7 @@ services:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
+      SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped
@@ -89,6 +91,10 @@ services:
       - last
       - --ctx-size
       - ${SPARKY_EMBED_CTX:-2048}
+      - --batch-size
+      - "1024"
+      - --ubatch-size
+      - "1024"
       - --n-gpu-layers
       - ${SPARKY_EMBED_NGL:-99}
     volumes: [modelcache:/root/.cache/llama.cpp]
@@ -112,7 +118,11 @@ services:
       - "8002"
       - --reranking
       - --ctx-size
-      - ${SPARKY_RERANK_CTX:-2048}
+      - ${SPARKY_RERANK_CTX:-1024}
+      - --batch-size
+      - "1024"
+      - --ubatch-size
+      - "512"
       - --n-gpu-layers
       - ${SPARKY_RERANK_NGL:-99}
     volumes: [modelcache:/root/.cache/llama.cpp]
@@ -131,6 +141,69 @@ services:
       PHOENIX_WORKING_DIR: /data
     volumes: [phoenixdata:/data]
     ports: ["6006:6006", "4317:4317"]
+    restart: unless-stopped
+
+  # Firecrawl, self-hosted: the scraper's fetch + extract. Not started by default: `just crawl`.
+  # No API key: USE_DB_AUTHENTICATION is off. Five containers, all internal except the API.
+  firecrawl:
+    image: ghcr.io/firecrawl/firecrawl:latest
+    profiles: [crawl]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3002
+      ENV: local
+      USE_DB_AUTHENTICATION: "false"
+      REDIS_URL: redis://firecrawl-redis:6379
+      REDIS_RATE_LIMIT_URL: redis://firecrawl-redis:6379
+      PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
+      NUQ_RABBITMQ_URL: amqp://firecrawl-rabbitmq:5672
+      POSTGRES_HOST: firecrawl-postgres
+      POSTGRES_PORT: 5432
+      # nuq-postgres initialises its schema in the default `postgres` database.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
+      POSTGRES_DB: postgres
+      NUM_WORKERS_PER_QUEUE: 4
+    ports: ["3002:3002"]
+    depends_on: [firecrawl-redis, firecrawl-rabbitmq, firecrawl-playwright, firecrawl-postgres]
+    restart: unless-stopped
+
+  firecrawl-playwright:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    profiles: [crawl]
+    environment:
+      PORT: 3000
+    restart: unless-stopped
+
+  firecrawl-redis:
+    image: redis:7-alpine
+    profiles: [crawl]
+    restart: unless-stopped
+
+  firecrawl-rabbitmq:
+    image: rabbitmq:3-management
+    profiles: [crawl]
+    restart: unless-stopped
+
+  firecrawl-postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    profiles: [crawl]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
+      POSTGRES_DB: postgres
+    volumes: [firecrawldata:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  # Playwright MCP: the browser as tools for the engine's own loop. Not started by default:
+  # `just browser`. Headless, isolated profile, loopback-only port.
+  playwright-mcp:
+    image: mcr.microsoft.com/playwright/mcp:latest
+    profiles: [browser]
+    # The image entrypoint is already `node /app/cli.js --headless --browser chromium`.
+    command: ["--isolated", "--port", "8931", "--host", "0.0.0.0", "--allowed-hosts", "localhost:8931,127.0.0.1:8931,playwright-mcp:8931"]
+    init: true
+    ports: ["127.0.0.1:8931:8931"]
     restart: unless-stopped
 
   postgres:
@@ -167,3 +240,4 @@ volumes:
   miniodata:
   modelcache:
   phoenixdata:
+  firecrawldata:

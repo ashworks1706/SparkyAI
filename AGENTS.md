@@ -20,7 +20,10 @@ just engine | discord # run a Rust app (needs .env, see .env.example)
 just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
-just infra            # postgres, redis, minio only
+just infra            # postgres, redis, minio, phoenix
+just model            # llama-server chat, embed, rerank
+just crawl            # self-hosted Firecrawl for the scraper
+just browser          # Playwright MCP browser tools for the engine
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
 just diagrams         # render ARCHITECTURE.md mermaid to verify syntax
@@ -43,7 +46,7 @@ deploy/           compose, one Dockerfile per image, inference/ (model serving c
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / MCP / sandbox, scraper → PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP / sandbox, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 

@@ -15,8 +15,8 @@ uv run scraper status
 
 | Module | Holds |
 |---|---|
-| `fetch.py` | httpx; Playwright where the page needs JS |
-| `extract.py` | HTML → text |
+| `fetch.py` | Firecrawl (`just crawl`) by default: JS rendered, main content as markdown. `SPARKY_SCRAPER__FETCHER=http` uses httpx + Playwright instead |
+| `extract.py` | HTML → text, for the `http` fetcher |
 | `chunk.py` | text → chunks |
 | `embed.py` | llama-server embed endpoint |
 | `pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index |
@@ -24,8 +24,8 @@ uv run scraper status
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |
 
-Sources marked `needs_js` render in headless Chromium; install it once with
-`uv run playwright install chromium`. The Docker image already has it.
+With the `http` fetcher, sources marked `needs_js` render in headless Chromium; install it once
+with `uv run playwright install chromium`. Firecrawl renders everything itself.
 
 Pipeline per source: fetch → content hash (skip if unchanged) → raw snapshot to object storage
 → extract → chunk → embed → write `chunks` and `source_versions`.

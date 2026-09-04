@@ -118,6 +118,8 @@ pub enum RunStatus {
     AwaitingConfirmation,
     /// Hit the step limit.
     StepLimit,
+    /// Kept repeating the same tool calls without answering.
+    Stalled,
     /// Hit the deadline.
     Deadline,
     /// Cancelled by the caller.

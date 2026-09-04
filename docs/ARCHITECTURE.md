@@ -11,9 +11,10 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
 | Model, embed clients | Rig (`rig-core`) OpenAI-compatible client → llama-server; never `rig::Agent` | `apps/engine/src/agent/model/rig_openai.rs` |
 | Rerank client | Direct HTTP to llama-server `/v1/rerank` (no Rig provider) | `apps/engine/src/agent/model/rerank.rs` |
-| MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
+| MCP | `rmcp` (official SDK); Playwright MCP is the first server | `apps/engine/src/agent/tools/mcp.rs` |
 | Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
-| Fetching | httpx + BeautifulSoup; Playwright where JS is required | `apps/scraper` |
+| Fetch + extract | Firecrawl, self-hosted (JS rendered, markdown out); plain httpx + BeautifulSoup as the `http` fetcher | `deploy/compose.yml` profile `crawl` |
+| Browser tools | Playwright MCP over Streamable HTTP, wrapped as `Tool`s with a name-derived `RiskClass` | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
 | Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
@@ -33,7 +34,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 
 - Open models only, served by `llama-server` behind an OpenAI-compatible HTTP API.
 - Facts come from retrieval or live observation, never from model weights.
-- Public sites are ingested offline. The request path never fetches a web page.
+- Public sites are ingested offline through Firecrawl. The request path never fetches a page as retrieval evidence; browser tools act under `Policy` and never write to the index.
 - The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
@@ -88,10 +89,11 @@ flowchart LR
     APP -->|OpenAI-compatible| EMB[llama-server · embed + rerank]
     APP --> PG[(PostgreSQL + pgvector)]
     APP --> RD[(Redis)]
-    APP -.->|Phase 4| MCP[MCP servers]
+    APP -->|MCP| MCP[Playwright MCP]
     APP -.->|Phase 7| BW[apps/sandbox]
 
-    ING[apps/scraper<br/>offline ingestion] --> WEB[Public ASU sites]
+    ING[apps/scraper<br/>offline ingestion] --> FC[Firecrawl]
+    FC --> WEB[Public ASU sites]
     ING --> PG
     ING --> S3[(Object storage)]
     ING --> EMB
@@ -202,10 +204,10 @@ pub trait Sandbox {   // Phase 7
 1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web and admin clients hit the same endpoint.
 2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
 3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
-4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
+4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.
 5. Call the model; validate structured output. One correction attempt on invalid output, then stop.
 6. For each proposed tool call: `Policy::authorize` → Allow / Deny / Confirm.
-7. Execute allowed calls with timeout and cancellation. Parallel when independent.
+7. Execute allowed calls with timeout and cancellation. Parallel when independent; in order when any tool in the step is stateful (`ToolDefinition::sequential`, set for browser tools). A call repeated with identical arguments is not run again: the model is told, and the next call offers no tools so it has to answer. A second all-repeat step ends the run as `Stalled`.
 8. Loop until final answer, error, cancel, deadline, or step limit.
 9. Persist turn, memory candidates that pass the write policy, and trace.
 10. Reply with citations.
@@ -225,7 +227,7 @@ A confirmation is bound to one exact action payload, is single-use and short-liv
 
 ## Knowledge
 
-Ingestion runs offline in `apps/scraper`: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Ingestion runs offline in `apps/scraper`: fetch through Firecrawl (JS rendered, main content as markdown) → content hash (skip if unchanged) → raw snapshot to object storage → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
 Retrieval happens inside the engine: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank (llama-server) → `Evidence`. If nothing is found or the source is stale, the answer says so.
 
@@ -265,6 +267,8 @@ Discord handlers never block on long work. Ingestion, embedding, browser tasks, 
 |---|---|
 | model unavailable | retry within deadline, then clear error |
 | invalid tool call from model | one correction, then stop |
+| model repeats an identical tool call | refuse the repeat, next step offers no tools; stop as `Stalled` if it repeats again |
+| prompt would exceed the context | tool schemas count against the budget; evidence and history are trimmed first |
 | tool timeout | cancel, trace, report |
 | retrieval empty | say so; do not guess |
 | sources conflict | show both with dates |

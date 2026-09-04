@@ -40,6 +40,7 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
     if body.is_empty() {
         body = match resp.status.as_str() {
             "step_limit" => "I could not finish within the allowed number of steps.".into(),
+            "stalled" => "I kept repeating myself without getting further; try rephrasing.".into(),
             "deadline" => "That took too long; please try again.".into(),
             "cancelled" => "Cancelled.".into(),
             _ => "I have no answer for that.".into(),

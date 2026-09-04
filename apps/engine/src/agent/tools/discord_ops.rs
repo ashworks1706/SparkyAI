@@ -29,6 +29,7 @@ impl Tool for PostAnnouncement {
                 "required": ["channel", "text"]
             }),
             risk: RiskClass::ExternalWrite,
+            sequential: false,
         }
     }
 

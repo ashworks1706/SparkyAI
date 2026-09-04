@@ -10,6 +10,7 @@ use crate::agent::harness::trace::JsonlSink;
 use crate::agent::model::rerank::HttpReranker;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::discord_ops::PostAnnouncement;
+use crate::agent::tools::mcp;
 use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
 use crate::core::traits::trace::TraceSink;
@@ -28,7 +29,11 @@ question, say so plainly and suggest where the user might look. Be brief.";
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let chat_client = rig_openai::client(&cfg.model.base_url, &cfg.model.api_key)
         .map_err(|e| anyhow::anyhow!("model client: {e}"))?;
-    let model = Arc::new(RigChat::new(chat_client, &cfg.model.name));
+    let model = Arc::new(RigChat::new(
+        chat_client,
+        &cfg.model.name,
+        cfg.model.thinking,
+    ));
 
     let trace: Arc<dyn TraceSink> = Arc::new(JsonlSink::new(&cfg.agent.trace_dir)?);
 
@@ -60,6 +65,24 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let memory = pool.map(|p| Arc::new(PgMemory::new(p)));
 
     let mut tools = ToolSet::new().with(Arc::new(PostAnnouncement));
+    if let Some(url) = cfg
+        .mcp
+        .playwright_url
+        .as_deref()
+        .filter(|u| !u.trim().is_empty())
+    {
+        match mcp::connect(url, &cfg.mcp.playwright_tools, cfg.mcp.required_props_only).await {
+            Ok(remote) => {
+                tracing::info!(count = remote.len(), url, "playwright mcp tools registered");
+                for tool in remote {
+                    tools = tools.with(tool);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, url, "playwright mcp unavailable; continuing without browser tools");
+            }
+        }
+    }
     if let Some(r) = &retriever {
         tools = tools.with(Arc::new(PublicSearch::new(
             r.clone(),

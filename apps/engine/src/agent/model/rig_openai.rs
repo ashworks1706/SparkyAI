@@ -34,15 +34,17 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
 pub struct RigChat {
     model: CompletionModel,
     name: String,
+    thinking: bool,
 }
 
 impl RigChat {
     /// Wraps `model_name` on `client`.
-    pub fn new(client: CompletionsClient, model_name: impl Into<String>) -> Self {
+    pub fn new(client: CompletionsClient, model_name: impl Into<String>, thinking: bool) -> Self {
         let name = model_name.into();
         Self {
             model: CompletionModel::new(client, name.clone()),
             name,
+            thinking,
         }
     }
 }
@@ -165,16 +167,23 @@ impl ModelProvider for RigChat {
             tools,
             temperature: Some(f64::from(req.temperature)),
             max_tokens: Some(u64::from(req.max_tokens)),
-            additional_params: None,
+            // llama-server honours chat_template_kwargs; this switches Qwen3 thinking off.
+            additional_params: Some(serde_json::json!({
+                "chat_template_kwargs": { "enable_thinking": self.thinking }
+            })),
             output_schema: None,
             record_telemetry_content: false,
         };
         let response = self.model.completion(request).await.map_err(map_error)?;
         let (content, tool_calls) = from_rig(response.choice);
-        let finish_reason = if tool_calls.is_empty() {
-            FinishReason::Stop
-        } else {
+        // Rig does not surface the provider's finish reason. An empty answer with no tool
+        // calls means the completion budget went to dropped reasoning or was cut off.
+        let finish_reason = if !tool_calls.is_empty() {
             FinishReason::ToolCalls
+        } else if content.trim().is_empty() {
+            FinishReason::Length
+        } else {
+            FinishReason::Stop
         };
         Ok(ModelResponse {
             content,

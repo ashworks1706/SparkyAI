@@ -47,12 +47,18 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 
     let mut evidence_used = 0;
+    let input_cost = estimate(s.input);
     if !s.evidence.is_empty() {
         let mut block = String::from(
             "Evidence from ASU sources. Answer only from this; cite sources by number. \
              If it does not answer the question, say so.\n",
         );
         let mut spent = estimate(&block);
+        // Evidence never eats the whole prompt: it is capped by its own budget and by what
+        // remains of the total after the sections above and the current input.
+        let evidence_budget = budget
+            .evidence
+            .min(budget.total.saturating_sub(used + input_cost));
         for (i, e) in s.evidence.iter().enumerate() {
             let entry = format!(
                 "\n[{}] {} (fetched {})\n{}\n",
@@ -62,7 +68,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
                 e.content.trim()
             );
             let cost = estimate(&entry);
-            if spent + cost > budget.evidence {
+            if spent + cost > evidence_budget {
                 break;
             }
             block.push_str(&entry);
@@ -73,7 +79,6 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages.push(Message::system(block));
     }
 
-    let input_cost = estimate(s.input);
     let remaining_total = budget.total.saturating_sub(used + input_cost);
     let history_budget = budget.history.min(remaining_total);
     let mut kept: Vec<&Message> = Vec::new();

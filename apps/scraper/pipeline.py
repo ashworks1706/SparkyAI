@@ -33,11 +33,16 @@ def run_source(source: Source, *, force: bool = False) -> RunResult:
             conn.commit()
             return RunResult(source.key, changed=False, chunks=0, content_hash=content_hash)
 
-        snapshot_key = f"{source.key}/{fetched_at:%Y%m%dT%H%M%SZ}-{content_hash[:12]}.html"
+        ext = "md" if fetched.content_type.startswith("text/markdown") else "html"
+        snapshot_key = f"{source.key}/{fetched_at:%Y%m%dT%H%M%SZ}-{content_hash[:12]}.{ext}"
         objects.put_snapshot(snapshot_key, fetched.body, fetched.content_type)
 
-        text = extract.extract_text(fetched.body)
-        title = extract.title_of(fetched.body) or source.key
+        if fetched.text is not None:
+            text = fetched.text
+            title = fetched.title or source.key
+        else:
+            text = extract.extract_text(fetched.body)
+            title = extract.title_of(fetched.body) or source.key
         pieces = chunk.chunk_text(
             text,
             max_chars=cfg.scraper.chunk_chars,

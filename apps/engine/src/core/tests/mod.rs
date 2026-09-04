@@ -3,6 +3,7 @@
 mod agent;
 mod assemble;
 mod context;
+mod mcp;
 mod policy;
 mod postgres;
 mod rig_mapping;
