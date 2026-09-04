@@ -34,8 +34,6 @@ knowledge = "knowledge.cli:app"
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
-# The package directory is the project root: `knowledge` maps to `.`, so its
-# subpackages are the directories beside this file. New subpackages go in `packages`.
 [tool.setuptools]
 package-dir = { "knowledge" = "." }
 packages = [

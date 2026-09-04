@@ -135,9 +135,13 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Only the datastores, for running the apps on the host
-infra:
-    docker compose -f deploy/compose.yml up -d postgres redis qdrant minio
+# Datastores + knowledge-api. Editing apps/knowledge needs `just infra --build`.
+infra *ARGS:
+    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis qdrant minio knowledge
+
+# Local vLLM on the host GPU. Override with SPARKY_LOCAL_MODEL.
+model *ARGS:
+    docker compose -f deploy/compose.yml --profile model up -d vllm {{ARGS}}
 
 logs *ARGS:
     docker compose -f deploy/compose.yml logs -f {{ARGS}}

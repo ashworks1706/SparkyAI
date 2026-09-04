@@ -1,0 +1,12 @@
+.git
+target/
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/*.egg-info/
+**/build/
+**/.pytest_cache/
+**/.ruff_cache/
+apps/web/dist/
+.env
