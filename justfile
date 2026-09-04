@@ -122,7 +122,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml down
+    docker compose -f deploy/compose.yml --profile model --profile sandbox down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -148,7 +148,7 @@ ps:
     docker compose -f deploy/compose.yml --profile model --profile sandbox ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile sandbox logs -f {{ARGS}}
 
 # Build both images locally
 images:
