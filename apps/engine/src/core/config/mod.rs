@@ -15,8 +15,12 @@ pub struct Config {
     pub discord: Discord,
     /// Chat model endpoint.
     pub model: Model,
-    /// The knowledge service: search, memory, conversations.
-    pub knowledge: Knowledge,
+    /// `PostgreSQL`, the source of truth and the retrieval index.
+    pub postgres: Postgres,
+    /// Embedding endpoint, used to embed queries at retrieval time.
+    pub embedding: Embedding,
+    /// Reranker endpoint, applied to fused retrieval candidates.
+    pub reranker: Reranker,
     /// Sentry and `OpenTelemetry`.
     pub telemetry: Telemetry,
 }
@@ -65,13 +69,37 @@ pub struct Model {
     pub max_tokens: u32,
 }
 
-/// The knowledge service.
+/// `PostgreSQL` connection.
 #[derive(Debug, Deserialize)]
-pub struct Knowledge {
-    /// Base URL of `knowledge-api`.
+pub struct Postgres {
+    /// `libpq` connection URL.
+    pub url: SecretString,
+    /// Maximum pooled connections.
+    pub max_connections: u32,
+}
+
+/// Embedding endpoint (OpenAI-compatible).
+#[derive(Debug, Deserialize)]
+pub struct Embedding {
+    /// Base URL, ending in `/v1`.
     pub base_url: String,
-    /// Shared secret presented on every request.
-    pub service_token: SecretString,
+    /// API key for the endpoint.
+    pub api_key: SecretString,
+    /// Model name as served.
+    pub name: String,
+    /// Vector dimension; must match the `chunks.embedding` column.
+    pub dim: u32,
+}
+
+/// Reranker endpoint (OpenAI-compatible `/v1/rerank`).
+#[derive(Debug, Deserialize)]
+pub struct Reranker {
+    /// Base URL, ending in `/v1`.
+    pub base_url: String,
+    /// API key for the endpoint.
+    pub api_key: SecretString,
+    /// Model name as served.
+    pub name: String,
 }
 
 /// Observability sinks. All optional.

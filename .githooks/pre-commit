@@ -5,7 +5,7 @@ cd "$(git rev-parse --show-toplevel)"
 changed=$(git diff --cached --name-only)
 run() { echo "pre-commit: just $1"; just "$1"; }
 grep -qE '^(apps/(engine|discord)/|Cargo\.(toml|lock)|scripts/)' <<<"$changed" && run check-rust || true
-grep -qE '^apps/knowledge/' <<<"$changed" && run check-knowledge || true
+grep -qE '^apps/scraper/' <<<"$changed" && run check-scraper || true
 grep -qE '^apps/training/'  <<<"$changed" && run check-training  || true
 grep -qE '^apps/sandbox/'   <<<"$changed" && run check-sandbox   || true
 grep -qE '^apps/web/'       <<<"$changed" && run check-web       || true

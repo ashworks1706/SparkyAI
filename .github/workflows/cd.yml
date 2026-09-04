@@ -34,10 +34,10 @@ jobs:
               - Cargo.toml
               - Cargo.lock
               - deploy/docker/rust.Dockerfile
-            knowledge:
+            scraper:
               - *shared
-              - apps/knowledge/**
-              - deploy/docker/knowledge.Dockerfile
+              - apps/scraper/**
+              - deploy/docker/scraper.Dockerfile
             sandbox:
               - *shared
               - apps/sandbox/**
@@ -46,12 +46,12 @@ jobs:
         env:
           ALL: ${{ github.event_name == 'workflow_dispatch' }}
           RUST: ${{ steps.filter.outputs.rust }}
-          KNOWLEDGE: ${{ steps.filter.outputs.knowledge }}
+          SCRAPER: ${{ steps.filter.outputs.scraper }}
           SANDBOX: ${{ steps.filter.outputs.sandbox }}
         run: |
           list=()
           { [ "$ALL" = true ] || [ "$RUST" = true ]; } && list+=(rust)
-          { [ "$ALL" = true ] || [ "$KNOWLEDGE" = true ]; } && list+=(knowledge)
+          { [ "$ALL" = true ] || [ "$SCRAPER" = true ]; } && list+=(scraper)
           { [ "$ALL" = true ] || [ "$SANDBOX" = true ]; } && list+=(sandbox)
           echo "list=$(printf '%s\n' "${list[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
 

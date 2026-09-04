@@ -1,16 +1,13 @@
 [project]
-name = "knowledge"
+name = "scraper"
 version = "0.1.0"
-description = "Knowledge: owns every store — search, index, memory, conversations, sources — and the scraper that feeds them"
+description = "Scraper: fetch ASU sources offline, chunk, embed, and write the retrieval index"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.34",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
     "httpx>=0.28",
     "psycopg[binary,pool]>=3.2",
-    "redis>=5.2",
     "boto3>=1.36",
     "openai>=1.60",
     "beautifulsoup4>=4.13",
@@ -25,24 +22,18 @@ dependencies = [
 dev = ["ruff>=0.9", "pytest>=8", "pytest-asyncio>=0.25", "respx>=0.22"]
 
 [project.scripts]
-knowledge-api = "knowledge.api.main:run"
-knowledge-scraper = "knowledge.scraper.cli:app"
-knowledge = "knowledge.cli:app"
+scraper = "scraper.cli:app"
 
 [build-system]
 requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = { "knowledge" = "." }
+package-dir = { "scraper" = "." }
 packages = [
-    "knowledge",
-    "knowledge.api",
-    "knowledge.index",
-    "knowledge.memory",
-    "knowledge.scraper",
-    "knowledge.scraper.sources",
-    "knowledge.store",
+    "scraper",
+    "scraper.sources",
+    "scraper.store",
 ]
 
 [tool.ruff]

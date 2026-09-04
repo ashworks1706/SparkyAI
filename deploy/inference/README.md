@@ -2,7 +2,7 @@
 
 Model serving. Not our code — `llama-server` from llama.cpp — but a deployable we own the
 configuration for. Every model speaks the OpenAI-compatible API, which is the only surface
-`apps/engine` and `apps/knowledge` know about.
+`apps/engine` and `apps/scraper` know about.
 
 `llama-server` serves one model per process, so each role is its own container.
 

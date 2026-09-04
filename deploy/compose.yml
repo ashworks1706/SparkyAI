@@ -5,24 +5,13 @@ services:
     env_file:
       - { path: ../.env, required: false }
     environment:
-      SPARKY_KNOWLEDGE__BASE_URL: http://knowledge:8081
-    ports: ["8080:8080"]
-    depends_on: [knowledge]
-    restart: unless-stopped
-
-  knowledge:
-    build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
-    entrypoint: ["knowledge-api"]
-    env_file:
-      - { path: ../.env, required: false }
-    environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
-      SPARKY_REDIS__URL: redis://redis:6379
-      SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
-    expose: ["8081"]
+      SPARKY_MODEL__BASE_URL: http://chat:8000/v1
+      SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
+      SPARKY_RERANKER__BASE_URL: http://rerank:8002/v1
+    ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_started }
     restart: unless-stopped
 
   discord:
@@ -36,15 +25,14 @@ services:
     restart: unless-stopped
 
   scraper:
-    build: { context: .., dockerfile: deploy/docker/knowledge.Dockerfile }
-    entrypoint: ["knowledge-scraper"]
+    build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
     command: ["schedule"]
     env_file:
       - { path: ../.env, required: false }
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
-      SPARKY_REDIS__URL: redis://redis:6379
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
+      SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped

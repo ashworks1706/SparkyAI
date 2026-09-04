@@ -1,5 +1,5 @@
 # SparkyAI monorepo tasks. `just` lists them; `just <recipe>`.
-# Units: engine, discord (Rust) · knowledge, training, sandbox (Python) · web (TypeScript) · infra (Compose)
+# Units: engine, discord (Rust) · scraper, training, sandbox (Python) · web (TypeScript) · infra (Compose)
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -23,25 +23,25 @@ hooks:
 
 # Everything a fresh clone needs: tools check, .env, hooks, deps, datastores
 bootstrap: env hooks setup infra
-    @echo "ready: run 'just engine' / 'just knowledge' / 'just discord' in separate shells, or 'just up' for everything in docker"
+    @echo "ready: run 'just engine' / 'just discord' in separate shells, or 'just up' for everything in docker"
 
 # ---------- everything ----------
 
 # Format, lint, and test every unit
-check: check-rust check-knowledge check-training check-sandbox check-web
+check: check-rust check-scraper check-training check-sandbox check-web
     @echo "all units ok"
 
 # Format every unit in place
 fmt:
     cargo fmt --all
-    cd apps/knowledge && uvx ruff format . && uvx ruff check --fix .
+    cd apps/scraper && uvx ruff format . && uvx ruff check --fix .
     cd apps/training && uvx ruff format . && uvx ruff check --fix .
     cd apps/sandbox  && uvx ruff format . && uvx ruff check --fix .
     cd apps/web      && npx eslint . --fix
 
 # Install every unit's dependencies
 setup:
-    cd apps/knowledge && uv sync --extra dev
+    cd apps/scraper && uv sync --extra dev
     cd apps/training && uv sync --extra dev
     cd apps/sandbox  && uv sync --extra dev
     cd apps/web      && npm ci
@@ -50,7 +50,7 @@ setup:
 # Remove build artifacts and virtualenvs
 clean:
     cargo clean
-    rm -rf apps/knowledge/.venv apps/training/.venv apps/sandbox/.venv apps/web/node_modules apps/web/dist
+    rm -rf apps/scraper/.venv apps/training/.venv apps/sandbox/.venv apps/web/node_modules apps/web/dist
 
 # ---------- rust: engine + discord ----------
 
@@ -69,10 +69,10 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# ---------- python: knowledge + training + sandbox ----------
+# ---------- python: scraper + training + sandbox ----------
 
-check-knowledge:
-    cd apps/knowledge && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
+check-scraper:
+    cd apps/scraper && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
@@ -84,17 +84,13 @@ check-sandbox:
 sandbox *ARGS:
     cd apps/sandbox && uv run sandbox {{ARGS}}
 
-# Knowledge API server (needs .env)
-knowledge *ARGS:
-    cd apps/knowledge && uv run knowledge-api {{ARGS}}
-
 # Scraper worker: just scraper run library_hours
 scraper *ARGS:
-    cd apps/knowledge && uv run knowledge-scraper {{ARGS}}
+    cd apps/scraper && uv run scraper {{ARGS}}
 
 # Apply migrations
 migrate:
-    cd apps/knowledge && uv run knowledge migrate
+    cd apps/scraper && uv run scraper migrate
 
 # Training CLIs: just train configs · just eval suites · just data stats
 train *ARGS:
@@ -117,7 +113,7 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, knowledge, scraper, postgres, redis, minio
+# Start engine, discord, scraper, postgres, redis, minio
 up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
@@ -135,9 +131,9 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores + knowledge-api. Editing apps/knowledge needs `just infra --build`.
+# Datastores only; run the engine on the host with `just engine`.
 infra *ARGS:
-    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio knowledge
+    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
 
 # llama-server for chat (:8000), embeddings (:8001), rerank (:8002). GGUFs download on first run.
 model *ARGS:
@@ -153,7 +149,7 @@ logs *ARGS:
 # Build both images locally
 images:
     docker build -f deploy/docker/rust.Dockerfile -t sparkyai-rust .
-    docker build -f deploy/docker/knowledge.Dockerfile -t sparkyai-knowledge .
+    docker build -f deploy/docker/scraper.Dockerfile -t sparkyai-scraper .
     docker build -f deploy/docker/sandbox.Dockerfile -t sparkyai-sandbox .
 
 # ---------- docs ----------

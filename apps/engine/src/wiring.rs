@@ -1,6 +1,6 @@
 //! Construct concrete adapters, hand them to the harness, build the router, serve.
 
-use crate::config::Config;
+use crate::core::config::Config;
 
 /// Serves until shutdown.
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {

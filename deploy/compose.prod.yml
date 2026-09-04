@@ -7,12 +7,9 @@ services:
   discord:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
-  knowledge:
-    build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-knowledge:${SPARKY_IMAGE_TAG:-main}
   scraper:
     build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-knowledge:${SPARKY_IMAGE_TAG:-main}
+    image: ghcr.io/ashworks1706/sparkyai-scraper:${SPARKY_IMAGE_TAG:-main}
   sandbox:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-sandbox:${SPARKY_IMAGE_TAG:-main}

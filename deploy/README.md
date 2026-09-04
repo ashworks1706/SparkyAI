@@ -4,12 +4,12 @@
 
 ```bash
 just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, minio)
-just engine        # then in separate shells: just knowledge, just discord, just web
+just engine        # then in separate shells: just discord, just web
 # or run everything in containers:
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
-Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17 (pgvector), Redis 7, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat, embed, and rerank.
+Starts engine, discord, scraper, Postgres 17 (pgvector), Redis 7, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat, embed, and rerank.
 
 ## Production
 

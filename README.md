@@ -8,7 +8,7 @@
 
 ## Status
 
-SparkyAI is a ground-up rebuild (v2) in active development; it is not yet deployable for end users. `main` holds a Rust agent engine with a custom harness (policy, confirmations, tracing, replay), a Python knowledge service that owns all retrieval and ingestion, a Discord bot, and — later — an open post-training track. The first deployment target is the AI Society Discord server at ASU.
+SparkyAI is a ground-up rebuild (v2) in active development; it is not yet deployable for end users. `main` holds a Rust agent engine with a custom harness (policy, confirmations, tracing, replay), a Python scraper that ingests public ASU sources, a Discord bot, and — later — an open post-training track. The first deployment target is the AI Society Discord server at ASU.
 
 Plan: [`docs/ROADMAP.md`](docs/ROADMAP.md) · design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
@@ -24,7 +24,7 @@ The original 2024–2025 prototype served ASU students on Discord and is documen
 
 ## Development
 
-v2 (`main`) is a monorepo: `apps/` (engine, discord, knowledge, training, sandbox, web) and `deploy/`.
+v2 (`main`) is a monorepo: `apps/` (engine, discord, scraper, training, sandbox, web) and `deploy/`.
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI

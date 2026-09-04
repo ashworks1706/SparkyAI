@@ -11,18 +11,18 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
 | Model client, tool schema, embeddings | Rig (`rig-core`); our loop drives its `CompletionModel`, never `rig::Agent` | `apps/engine/src/agent` |
 | MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
-| Knowledge service | Python 3.12 — FastAPI, psycopg, redis, boto3 | `apps/knowledge` |
-| Scraper | httpx + BeautifulSoup; Playwright where JS is required | `apps/knowledge` (`knowledge-scraper`) |
+| Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
+| Fetching | httpx + BeautifulSoup; Playwright where JS is required | `apps/scraper` |
 | Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
 | Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
 | Embeddings, reranker | Qwen3-Embedding-0.6B (1024-dim), Qwen3-Reranker-0.6B on `llama-server` | `deploy/inference` |
-| Database | PostgreSQL 17 — source of truth | reached only via `apps/knowledge` |
-| Vector store | pgvector, in the same PostgreSQL (rebuildable) | reached only via `apps/knowledge` |
-| Cache, queue | Redis 7 | reached only via `apps/knowledge` |
-| Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | reached only via `apps/knowledge` |
+| Database | PostgreSQL 17 — source of truth | `apps/engine` reads, `apps/scraper` writes |
+| Vector store | pgvector, in the same PostgreSQL (rebuildable) | same database |
+| Cache, queue | Redis 7 | `apps/engine` |
+| Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | `apps/scraper` |
 | Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs | every app |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
@@ -33,7 +33,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 - Open models only, served by `llama-server` behind an OpenAI-compatible HTTP API.
 - Facts come from retrieval or live observation, never from model weights.
 - Public sites are ingested offline. The request path never fetches a web page.
-- Only `apps/knowledge` opens a database connection. Everything else reaches stores through its HTTP API.
+- The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
 - Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing.
@@ -45,17 +45,15 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 
 ```
 apps/
-  engine/         Rust bin. The agent and its HTTP surface. No database connections.
-    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → llama-server, mock) · tools
-    src/clients/    HTTP client for knowledge, implementing the harness store traits
+  engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
+    src/core/       config · types (the owned domain structs). Imports nothing else.
+    src/agent/      harness (traits, loop, assembly, tracing) · model (Rig → llama-server, mock) · tools
+    src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
-    src/{config,telemetry,wiring}.rs
+    src/{telemetry,wiring}.rs
   discord/        Rust bin. serenity bot; HTTP/SSE client of engine. Never links it.
-  knowledge/      Python. Owns every store. Two processes from one package:
-    knowledge-api      /search /memory /conversations /sources — called by engine
-    knowledge-scraper  fetch → snapshot → extract → chunk → embed → index, offline
-    api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
-    migrations/        the schema
+  scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
+    sources · store · migrations/ (the schema)
   training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
   sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
   web/            Vite + React frontend and admin UI
@@ -63,11 +61,11 @@ deploy/           compose (dev + prod), one Dockerfile per image, inference/ (mo
 docs/             ROADMAP.md, this file, decisions/
 ```
 
-Each Python app directory is itself the importable package — `apps/knowledge` is `knowledge` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
+Each Python app directory is itself the importable package — `apps/scraper` is `scraper` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → llama-server / MCP / sandbox`, `knowledge → llama-server embed/rerank`.
+Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP / sandbox`, `scraper → PostgreSQL / llama-server embed`. The scraper never serves a request; it and the engine meet only in the database.
 
 ## System context
 
@@ -78,42 +76,36 @@ flowchart LR
 
     subgraph rust [apps/engine · apps/discord]
         BOT[discord]
-        APP[engine<br/>agent · clients · routes]
+        APP[engine<br/>core · agent · stores · routes]
     end
     D --> BOT
     BOT -->|HTTP / SSE| APP
 
-    APP -->|OpenAI-compatible| OLL[llama-server · Qwen3]
-    APP -->|HTTP| KN
+    APP -->|OpenAI-compatible| OLL[llama-server · chat]
+    APP -->|OpenAI-compatible| EMB[llama-server · embed + rerank]
+    APP --> PG[(PostgreSQL + pgvector)]
+    APP --> RD[(Redis)]
     APP -.->|Phase 4| MCP[MCP servers]
     APP -.->|Phase 7| BW[apps/sandbox]
 
-    subgraph knowledge [apps/knowledge — one image, two processes]
-        KN[knowledge-api<br/>search · memory · conversations · sources]
-        ING[knowledge-scraper]
-    end
-    KN --> PG[(PostgreSQL)]
-    KN --> RD[(Redis)]
-    KN --> S3[(Object storage)]
-    KN -->|OpenAI-compatible| EMB[llama-server · embed + rerank]
-    ING --> WEB[Public ASU sites]
+    ING[apps/scraper<br/>offline ingestion] --> WEB[Public ASU sites]
     ING --> PG
-    ING --> S3
+    ING --> S3[(Object storage)]
     ING --> EMB
 
     APP --> SEN[Sentry]
     APP --> AX[Axiom / OTLP]
 ```
 
-Solid arrows exist or are in the current phase; dashed are later phases. Only the scraper touches the web; only `apps/knowledge` touches the datastores.
+Solid arrows exist or are in the current phase; dashed are later phases. Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL.
 
 ## Inside `engine`
 
-`agent::harness` imports nothing else in the crate. `agent::model`, `agent::tools`, and `clients` import only `agent::harness`, never each other. `routes` and `wiring` compose them. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
+`core` imports nothing else in the crate. `agent::harness` imports only `core`. `agent::model`, `agent::tools`, and `stores` import `core` and `agent::harness`, never each other. `routes` and `wiring` compose them. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
 
-## Inside `knowledge`
+## Inside `scraper`
 
-`store/` is the only place a connection is opened. `index/` is shared by `knowledge-scraper` and `knowledge-api` because the chunker and embedding model used to *write* must be the ones used to *read*. `api/schemas.py` and `migrations/` are the wire and schema contracts with `engine`.
+`store/` is the only place it opens a connection. `migrations/` is the schema contract with `engine`: the scraper writes `chunks`, the engine reads them, and `embed.py` must use the model and dimension the engine queries with. Changing the embedding model means re-embedding every chunk.
 
 ## Types
 
@@ -206,7 +198,7 @@ pub trait Sandbox {   // Phase 7
 
 1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web and admin clients hit the same endpoint.
 2. `engine` normalizes it into `UserEvent`, resolves roles and permissions → `RequestContext`.
-3. Call `knowledge`: load conversation, recall memory, retrieve evidence if the query needs it.
+3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → current request → relevant turns → memory → evidence → tool definitions. Tool output and evidence are truncated before old history is.
 5. Call the model; validate structured output. One correction attempt on invalid output, then stop.
 6. For each proposed tool call: `Policy::authorize` → Allow / Deny / Confirm.
@@ -230,9 +222,9 @@ A confirmation is bound to one exact action payload, is single-use and short-liv
 
 ## Knowledge
 
-Ingestion runs offline in `knowledge-scraper`: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Ingestion runs offline in `apps/scraper`: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
-Retrieval is `engine → POST /search` on `knowledge-api`: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank → `Evidence`. If nothing is found or the source is stale, the answer says so.
+Retrieval happens inside the engine: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank (llama-server) → `Evidence`. If nothing is found or the source is stale, the answer says so.
 
 ## Memory
 
@@ -258,7 +250,7 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | browser session secrets | encrypted, separate namespace |
 | traces | JSONL locally; OpenTelemetry in deployment |
 
-Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/knowledge/migrations`.
+Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/scraper/migrations`.
 
 ## Background jobs
 
@@ -275,7 +267,7 @@ Discord handlers never block on long work. Ingestion, embedding, browser tasks, 
 | sources conflict | show both with dates |
 | confirmation denied or expired | do nothing |
 | write result unclear | do not retry; inspect final state |
-| knowledge-api unavailable | reject stateful requests rather than run without identity or policy |
+| Postgres unavailable | reject stateful requests rather than run without identity or policy |
 | trace sink unavailable | continue only with a bounded local fallback |
 
 ## Tracing
@@ -288,7 +280,7 @@ Separate worker (`apps/sandbox`), never inside the engine process. One isolated 
 
 ## Deployment
 
-Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
+Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-scraper`, `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
 
 ## Open decisions
 

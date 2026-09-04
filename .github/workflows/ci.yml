@@ -39,9 +39,9 @@ jobs:
             web:
               - *shared
               - apps/web/**
-            knowledge:
+            scraper:
               - *shared
-              - apps/knowledge/**
+              - apps/scraper/**
             training:
               - *shared
               - apps/training/**
@@ -50,12 +50,12 @@ jobs:
               - apps/sandbox/**
       - id: python
         env:
-          KNOWLEDGE: ${{ steps.filter.outputs.knowledge }}
+          SCRAPER: ${{ steps.filter.outputs.scraper }}
           TRAINING: ${{ steps.filter.outputs.training }}
           SANDBOX: ${{ steps.filter.outputs.sandbox }}
         run: |
           pkgs=()
-          [ "$KNOWLEDGE" = true ] && pkgs+=(knowledge)
+          [ "$SCRAPER" = true ] && pkgs+=(scraper)
           [ "$TRAINING" = true ] && pkgs+=(training)
           [ "$SANDBOX" = true ] && pkgs+=(sandbox)
           echo "pkgs=$(printf '%s\n' "${pkgs[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"

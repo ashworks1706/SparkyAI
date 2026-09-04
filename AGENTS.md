@@ -10,14 +10,13 @@ Rust rebuild of an ASU student copilot. Read `docs/ROADMAP.md` for what we're bu
 just doctor | env | hooks | bootstrap   # first run
 just check            # fmt-check, lint, test every unit — the gate; CI and the pre-commit hook run the same recipes, only for the units a change touches
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
-just check-knowledge  # ruff + pytest in apps/knowledge
+just check-scraper    # ruff + pytest in apps/scraper
 just check-training   # ruff + pytest in apps/training
 just check-sandbox    # ruff + pytest in apps/sandbox
 just check-web        # eslint + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
-just knowledge        # knowledge-api server
 just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
@@ -34,9 +33,9 @@ A change is not done until `just check` passes.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin — the agent + HTTP surface. Modules: agent/{harness,model,tools}, clients, routes. No DB connections.
+apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,types}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
-apps/knowledge/   Python — owns every store. knowledge-api (search, memory, conversations, sources) + knowledge-scraper. Migrations live here.
+apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
@@ -44,7 +43,7 @@ deploy/           compose, one Dockerfile per image, inference/ (model serving c
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine, engine → knowledge, engine → llama-server / MCP / sandbox, knowledge → llama-server embed/rerank. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / MCP / sandbox, scraper → PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -58,12 +57,12 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Rules
 
-- Inside `apps/engine`: `agent::harness` imports nothing else in the crate; `agent::model`, `agent::tools`, `clients` import only `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness` imports only `core`; `agent::model`, `agent::tools`, `stores` import `core` and `agent::harness`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/agent/harness` with a mock impl for tests.
-- The engine never opens a database connection; stores are reached through `apps/knowledge`. Fetching pages is `knowledge-scraper`.
+- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Errors: `thiserror` enums per crate, no `anyhow` in library crates, no `unwrap` outside tests.

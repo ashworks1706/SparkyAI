@@ -1,6 +1,6 @@
 //! Logging, Sentry, and OpenTelemetry export (Axiom via OTLP).
 
-use crate::config::Telemetry;
+use crate::core::config::Telemetry;
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig, WithTonicConfig};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
