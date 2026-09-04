@@ -14,7 +14,7 @@ doctor:
 
 # Create .env from the example (no-op if it exists)
 env:
-    @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env — fill in tokens and RunPod URLs"; }
+    @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env — fill in tokens and model URLs"; }
 
 # Install the pre-commit hook (runs the gate for touched units)
 hooks:
@@ -139,9 +139,16 @@ prod-logs *ARGS:
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis qdrant minio knowledge
 
-# Local vLLM on the host GPU. Override with SPARKY_LOCAL_MODEL.
-model *ARGS:
-    docker compose -f deploy/compose.yml --profile model up -d vllm {{ARGS}}
+# Ollama + the chat and embedding models. Override with SPARKY_CHAT_MODEL / SPARKY_EMBED_MODEL.
+model:
+    docker compose -f deploy/compose.yml --profile model up -d ollama
+    for i in $(seq 30); do docker compose -f deploy/compose.yml exec -T ollama ollama list >/dev/null 2>&1 && break || sleep 1; done
+    docker compose -f deploy/compose.yml exec -T ollama ollama pull ${SPARKY_CHAT_MODEL:-qwen3:4b}
+    docker compose -f deploy/compose.yml exec -T ollama ollama pull ${SPARKY_EMBED_MODEL:-qwen3-embedding:0.6b}
+
+# What's running, across every profile
+ps:
+    docker compose -f deploy/compose.yml --profile model --profile sandbox ps -a
 
 logs *ARGS:
     docker compose -f deploy/compose.yml logs -f {{ARGS}}

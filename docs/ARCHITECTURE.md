@@ -17,8 +17,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
 | Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
-| Chat model | Qwen3-14B on vLLM (OpenAI-compatible HTTP, hermes tool parser) | RunPod, `deploy/inference` |
-| Embeddings, reranker | Qwen3-Embedding-0.6B (1024-dim), Qwen3-Reranker-0.6B on vLLM | RunPod, `deploy/inference` |
+| Chat model | Qwen3 on Ollama (OpenAI-compatible HTTP) | `deploy/inference` |
+| Embeddings | Qwen3-Embedding-0.6B (1024-dim) on Ollama | `deploy/inference` |
 | Database | PostgreSQL 17 — source of truth | reached only via `apps/knowledge` |
 | Vector store | Qdrant (rebuildable; Piramid later) | reached only via `apps/knowledge` |
 | Cache, queue | Redis 7 | reached only via `apps/knowledge` |
@@ -26,11 +26,11 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs | every app |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
-| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); RunPod pods for vLLM | `deploy/` |
+| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); Ollama on a GPU host | `deploy/` |
 
 ## Rules
 
-- Open models only, served by vLLM behind an OpenAI-compatible HTTP API.
+- Open models only, served by Ollama behind an OpenAI-compatible HTTP API.
 - Facts come from retrieval or live observation, never from model weights.
 - Public sites are ingested offline. The request path never fetches a web page.
 - Only `apps/knowledge` opens a database connection. Everything else reaches stores through its HTTP API.
@@ -46,7 +46,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 ```
 apps/
   engine/         Rust bin. The agent and its HTTP surface. No database connections.
-    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → vLLM, mock) · tools
+    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → Ollama, mock) · tools
     src/clients/    HTTP client for knowledge, implementing the harness store traits
     src/routes/     chat, health, admin
     src/{config,telemetry,wiring}.rs
@@ -59,7 +59,7 @@ apps/
   training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
   sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
   web/            Vite + React frontend and admin UI
-deploy/           compose (dev + prod), one Dockerfile per image, inference/ (vLLM env files + RunPod start script)
+deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, this file, decisions/
 ```
 
@@ -67,7 +67,7 @@ Each Python app directory is itself the importable package — `apps/knowledge` 
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → vLLM / MCP / sandbox`, `knowledge → vLLM embed/rerank`.
+Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → Ollama / MCP / sandbox`, `knowledge → Ollama embed`.
 
 ## System context
 
@@ -83,7 +83,7 @@ flowchart LR
     D --> BOT
     BOT -->|HTTP / SSE| APP
 
-    APP -->|OpenAI-compatible| VLLM[vLLM · Qwen3-14B]
+    APP -->|OpenAI-compatible| OLL[Ollama · Qwen3]
     APP -->|HTTP| KN
     APP -.->|Phase 4| MCP[MCP servers]
     APP -.->|Phase 7| BW[apps/sandbox]
@@ -96,7 +96,7 @@ flowchart LR
     KN --> RD[(Redis)]
     KN --> QD[(Qdrant)]
     KN --> S3[(Object storage)]
-    KN -->|OpenAI-compatible| EMB[vLLM · embed + rerank]
+    KN -->|OpenAI-compatible| EMB[Ollama · embed]
     ING --> WEB[Public ASU sites]
     ING --> PG
     ING --> QD
@@ -290,10 +290,10 @@ Separate worker (`apps/sandbox`), never inside the engine process. One isolated 
 
 ## Deployment
 
-Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; vLLM runs on RunPod from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
+Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; Ollama runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
 
 ## Open decisions
 
-Quantization for Qwen3-14B · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · when Qdrant moves to Piramid · app server host.
+Reranker backend (llama.cpp `--reranking` vs in-process cross-encoder) · chat model size and quantization · Ollama concurrency under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · when Qdrant moves to Piramid · app server host.
 
 Record each as a short note under `docs/decisions/` when made.

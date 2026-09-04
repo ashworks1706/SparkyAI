@@ -52,7 +52,7 @@ pub struct Discord {
     pub mod_role: String,
 }
 
-/// Chat model served by vLLM (OpenAI-compatible).
+/// Chat model served by Ollama (OpenAI-compatible).
 #[derive(Debug, Deserialize)]
 pub struct Model {
     /// OpenAI-compatible base URL, ending in `/v1`.

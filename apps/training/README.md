@@ -21,4 +21,4 @@ uv run eval run tool_selection
 
 Order: SFT → DPO → GRPO. See `docs/ROADMAP.md` Phase 6 and `docs/decisions/0003-posttraining-stack.md`.
 
-BFCL is run from its own repo (`gorilla/berkeley-function-call-leaderboard`) against the vLLM endpoint; `eval bfcl` wraps that invocation.
+BFCL is run from its own repo (`gorilla/berkeley-function-call-leaderboard`) against the chat model endpoint; `eval bfcl` wraps that invocation.

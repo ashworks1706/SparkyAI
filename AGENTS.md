@@ -40,11 +40,11 @@ apps/knowledge/   Python — owns every store. knowledge-api (search, memory, co
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
-deploy/           compose, one Dockerfile per image, inference/ (vLLM on RunPod env files + start script)
+deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine, engine → knowledge, engine → vLLM / MCP / sandbox, knowledge → vLLM embed/rerank. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
+Processes talk only via: discord → engine, engine → knowledge, engine → Ollama / MCP / sandbox, knowledge → Ollama embed. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
 
 ## Dependencies we build on
 

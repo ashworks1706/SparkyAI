@@ -9,7 +9,7 @@ just engine        # then in separate shells: just knowledge, just discord, just
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
-Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17, Redis 7, Qdrant, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. vLLM is not run locally; point `SPARKY_MODEL__BASE_URL` at a RunPod pod.
+Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17, Redis 7, Qdrant, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The chat and embedding models are behind the `model` profile: `just model` starts Ollama and pulls them.
 
 ## Production
 
@@ -20,18 +20,14 @@ SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no ho
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. vLLM stays on RunPod.
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. Ollama runs on a GPU host; see `deploy/inference`.
 
-## RunPod
+## Models
 
-Two pods, both from the `vllm/vllm-openai` image with `deploy/inference/start.sh` as the start command:
-
-| Pod | Env file | GPU | Port |
-|---|---|---|---|
-| chat | `deploy/inference/vllm.env` | A100 80GB / H100 | 8000 |
-| embed + rerank | `deploy/inference/embedding.env` | L4 / A10 | 8001, 8002 |
-
-Set `SPARKY_MODEL__BASE_URL` etc. to `https://<pod-id>-<port>.proxy.runpod.net/v1`.
+One `ollama/ollama` server backs both chat and embeddings on `:11434/v1`. Locally `just model`
+runs it in Compose; in deployment run the same image on a GPU host. Set
+`SPARKY_MODEL__BASE_URL` and `SPARKY_EMBEDDING__BASE_URL` to `http://<host>:11434/v1`.
+Details and the open reranker question: `deploy/inference/README.md`.
 
 ## Web
 
