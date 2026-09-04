@@ -1,5 +1,0 @@
-# Domains a task may be permitted to reach. Each task names a subset; nothing outside this file is ever allowed.
-# Phase 7 decides the exact MyASU hosts. Placeholder entries only.
-asu:
-  - www.asu.edu
-  - lib.asu.edu

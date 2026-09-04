@@ -24,7 +24,7 @@ The original 2024–2025 prototype served ASU students on Discord and is documen
 
 ## Development
 
-v2 (`main`) is a monorepo: `apps/` (engine, discord, scraper, training, sandbox, web) and `deploy/`.
+v2 (`main`) is a monorepo: `apps/` (engine, discord, cli, scraper, training, web) and `deploy/`.
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI

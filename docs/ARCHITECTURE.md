@@ -1,6 +1,6 @@
 # Architecture
 
-SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add MCP tools and a sandboxed browser for authenticated tasks.
+SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add authenticated browser tasks through the same Playwright MCP server.
 
 This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are in [decisions/](decisions/).
 
@@ -14,7 +14,6 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
 | Fetch + extract | Firecrawl, self-hosted (JS rendered, markdown out); plain httpx + BeautifulSoup as the `http` fetcher | `deploy/compose.yml` profile `crawl` |
 | Browser tools | Playwright MCP over Streamable HTTP, wrapped as `Tool`s with a name-derived `RiskClass` | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
-| Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF export | `apps/training/posttrain` |
 | Evals | Golden cases against `/chat`, deterministic suites scored from the engine's JSONL trace, baseline gate | `apps/training/evals` |
@@ -53,10 +52,10 @@ apps/
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
+  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services, tails them, chats with engine over HTTP. core/{config,types,tests}.
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
     core/{settings,types,tests} · sources · store · migrations/ (the schema)
   training/       Python. datasets from Phoenix llm spans, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
-  sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, this file, decisions/
@@ -68,7 +67,7 @@ Every app has a `core/`: config or settings, telemetry, data types, interfaces, 
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP / sandbox`, `scraper → PostgreSQL / llama-server embed`. The scraper never serves a request; it and the engine meet only in the database.
+Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP`, `scraper → PostgreSQL / llama-server embed`. The scraper never serves a request; it and the engine meet only in the database.
 
 ## System context
 
@@ -89,7 +88,6 @@ flowchart LR
     APP --> PG[(PostgreSQL + pgvector)]
     APP --> RD[(Redis)]
     APP -->|MCP| MCP[Playwright MCP]
-    APP -.->|Phase 7| BW[apps/sandbox]
 
     ING[apps/scraper<br/>offline ingestion] --> FC[Firecrawl]
     FC --> WEB[Public ASU sites]
@@ -284,13 +282,13 @@ One trace per request covering every model call, retrieval, memory access, tool 
 - **JSONL** (`traces/<request_id>.jsonl`): the complete record and the replay source. Never sampled, never truncated.
 - **Phoenix spans**, stitched across processes: the bot's `discord.ask` carries a W3C `traceparent` into the engine, whose `http.chat` → `agent.run` → `retrieve` / `llm` / `tool` spans nest under it, so one Discord interaction is one trace and one conversation is one session. Only each crate's own spans are exported; dependency internals are filtered out. `llm` spans hold the full input message list and the full assistant reply as JSON (`input.value` / `output.value`, `application/json`), plus model name, token counts, and invocation parameters — a Phase 6 training example is one `llm` span. `retrieve` spans list the chunks returned; `tool` spans hold redacted arguments and the result. The scraper's `scrape.source` spans record what was indexed. Records ids, model/prompt/template versions, evidence and memory ids, validated tool args, timings, tokens, final status. Never passwords, cookies, auth codes, tokens, or raw sensitive form values. Any request can be replayed from its trace against a chosen model, prompt, tool set, and retrieval snapshot; that is the eval harness.
 
-## Sandboxed browser (Phase 7)
+## Authenticated browser tasks (Phase 7)
 
-Separate worker (`apps/sandbox`), never inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
+The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
 
 ## Deployment
 
-Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-scraper`, `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
+Two images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects) and `sparkyai-scraper`. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
 
 ## Open decisions
 

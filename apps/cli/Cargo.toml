@@ -1,0 +1,30 @@
+[package]
+name = "cli"
+description = "SparkyAI developer console: run, watch, and talk to every unit from one terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "sparky"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+futures.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+secrecy.workspace = true
+reqwest.workspace = true
+figment.workspace = true
+dotenvy.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+
+[lints]
+workspace = true

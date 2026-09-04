@@ -55,7 +55,7 @@ Only after Phase 4 yields clean interaction data.
 
 ## 7 — Sandboxed automation v0.6
 
-- [ ] Let the agent drive a browser inside a locked-down sandbox with limits, logging, and cleanup
+- [ ] Authenticated browser sessions through the Playwright MCP server: one isolated context per user, allowlisted domains, limits, logging, cleanup
 - [ ] Human confirmation for any authenticated or consequential submission
 
 ## 8 — v1.0

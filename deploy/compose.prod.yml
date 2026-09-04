@@ -10,9 +10,6 @@ services:
   scraper:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-scraper:${SPARKY_IMAGE_TAG:-main}
-  sandbox:
-    build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-sandbox:${SPARKY_IMAGE_TAG:-main}
   postgres:
     ports: !reset []
   redis:

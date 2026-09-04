@@ -6,7 +6,7 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
     fs: {
       // the landing page imports the repository README at build time
       allow: [path.resolve(__dirname, "../..")],

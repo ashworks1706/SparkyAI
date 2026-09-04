@@ -1,6 +1,6 @@
 //! MCP servers as tools. Each remote tool becomes a `Tool` with a `RiskClass` derived from its
 //! name, so `Policy` gates it like any built-in. Today this serves Playwright MCP; Phase 7 puts
-//! the browser behind the sandbox rules and tightens the risk mapping.
+//! the browser behind per-user contexts and tightens the risk mapping.
 
 use std::sync::Arc;
 

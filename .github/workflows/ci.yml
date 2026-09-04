@@ -33,6 +33,7 @@ jobs:
               - *shared
               - apps/engine/**
               - apps/discord/**
+              - apps/cli/**
               - Cargo.toml
               - Cargo.lock
               - scripts/check-deps.sh
@@ -45,19 +46,14 @@ jobs:
             training:
               - *shared
               - apps/training/**
-            sandbox:
-              - *shared
-              - apps/sandbox/**
       - id: python
         env:
           SCRAPER: ${{ steps.filter.outputs.scraper }}
           TRAINING: ${{ steps.filter.outputs.training }}
-          SANDBOX: ${{ steps.filter.outputs.sandbox }}
         run: |
           pkgs=()
           [ "$SCRAPER" = true ] && pkgs+=(scraper)
           [ "$TRAINING" = true ] && pkgs+=(training)
-          [ "$SANDBOX" = true ] && pkgs+=(sandbox)
           echo "pkgs=$(printf '%s\n' "${pkgs[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   rust:

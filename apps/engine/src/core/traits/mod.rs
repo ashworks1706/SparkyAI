@@ -6,6 +6,5 @@ pub mod memory;
 pub mod model;
 pub mod policy;
 pub mod retrieval;
-pub mod sandbox;
 pub mod tool;
 pub mod trace;

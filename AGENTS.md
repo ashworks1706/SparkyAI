@@ -12,11 +12,11 @@ just check            # fmt-check, lint, test every unit — the gate; CI and th
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-scraper    # ruff + pytest in apps/scraper
 just check-training   # ruff + pytest in apps/training
-just check-sandbox    # ruff + pytest in apps/sandbox
 just check-web        # eslint + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
+just cli              # developer console (TUI): every unit, its logs, tasks, and a chat with the agent
 just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
@@ -38,15 +38,15 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 ```
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}. Exports one span per interaction to Phoenix.
+apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose, tails their output, chats with engine over HTTP. Links nothing in-repo. core/{config,types,tests}.
 apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,telemetry,tests}. One span per source run to Phoenix.
 apps/web/         static frontend + admin UI (Vite + React)
-apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP / sandbox, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -60,7 +60,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Rules
 
-- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine`, `discord`, and `cli` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/engine", "apps/discord"]
+members = ["apps/engine", "apps/discord", "apps/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -40,6 +40,10 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 # config
 figment = { version = "0.10", features = ["env", "toml"] }
 dotenvy = "0.15"
+
+# terminal ui
+ratatui = { version = "0.29", features = ["unstable-rendered-line-info"] }
+crossterm = { version = "0.28", features = ["event-stream"] }
 
 # observability
 tracing = "0.1"

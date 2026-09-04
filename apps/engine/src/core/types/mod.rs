@@ -12,7 +12,6 @@ pub mod message;
 pub mod model;
 pub mod policy;
 pub mod retrieval;
-pub mod sandbox;
 pub mod store;
 pub mod tool;
 pub mod trace;
