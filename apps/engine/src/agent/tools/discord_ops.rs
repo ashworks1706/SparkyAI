@@ -5,12 +5,10 @@
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
-use crate::agent::harness::tool::Tool;
+use crate::core::traits::tool::Tool;
+use crate::core::types::adapters::PostAnnouncement;
 use crate::core::types::context::RequestContext;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-
-/// Posts an announcement to a channel.
-pub struct PostAnnouncement;
 
 #[async_trait]
 impl Tool for PostAnnouncement {

@@ -1,19 +1,14 @@
-//! `TraceSink` trait and its sinks: JSONL on disk, in-memory, fan-out.
+//! Trace sink behaviour: JSONL on disk, in-memory, fan-out.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use uuid::Uuid;
 
+use crate::core::traits::trace::TraceSink;
 use crate::core::types::context::RequestContext;
+use crate::core::types::harness::{JsonlSink, MemorySink, MultiSink};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
-
-/// Where trace events go. Must not block the loop.
-pub trait TraceSink: Send + Sync {
-    /// Records one event.
-    fn emit(&self, ctx: &RequestContext, event: TraceEvent);
-}
 
 impl TraceSink for () {
     fn emit(&self, _ctx: &RequestContext, _event: TraceEvent) {}
@@ -26,12 +21,6 @@ fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
         at: Utc::now(),
         event,
     }
-}
-
-/// Appends one JSON line per event to `<dir>/<request_id>.jsonl`.
-#[derive(Debug)]
-pub struct JsonlSink {
-    dir: PathBuf,
 }
 
 impl JsonlSink {
@@ -75,12 +64,6 @@ impl TraceSink for JsonlSink {
     }
 }
 
-/// Keeps every record in memory. For tests and for the admin trace viewer.
-#[derive(Debug, Default)]
-pub struct MemorySink {
-    records: Mutex<Vec<TraceRecord>>,
-}
-
 impl MemorySink {
     /// Everything emitted so far.
     pub fn records(&self) -> Vec<TraceRecord> {
@@ -95,9 +78,6 @@ impl TraceSink for MemorySink {
         }
     }
 }
-
-/// Fans one event out to several sinks.
-pub struct MultiSink(pub Vec<Arc<dyn TraceSink>>);
 
 impl TraceSink for MultiSink {
     fn emit(&self, ctx: &RequestContext, event: TraceEvent) {

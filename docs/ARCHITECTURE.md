@@ -47,8 +47,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 ```
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
-    src/core/       config · telemetry · types (every shared struct and enum) · tests. Imports nothing else.
-    src/agent/      harness (traits, loop, assembly, sinks) · model (Rig → llama-server chat/embed; HTTP rerank) · tools
+    src/core/       config · telemetry · types (every struct and enum) · traits (every interface) · tests. Imports nothing else.
+    src/agent/      harness (loop, assembly, policy, sinks — impls only) · model (Rig → llama-server chat/embed; HTTP rerank) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
@@ -64,7 +64,7 @@ docs/             ROADMAP.md, this file, decisions/
 
 Each Python app directory is itself the importable package — `apps/scraper` is `scraper` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
 
-Every app has a `core/`: config or settings, telemetry, shared types, and tests. Domain modules import from it; it imports nothing from them.
+Every app has a `core/`: config or settings, telemetry, every type and trait, and tests. Domain modules import from it and hold only behaviour; it imports nothing from them.
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
@@ -104,7 +104,7 @@ Solid arrows exist or are in the current phase; dashed are later phases. Only th
 
 ## Inside `engine`
 
-`core` imports nothing else in the crate. `agent::harness` imports only `core`. `agent::model`, `agent::tools`, and `stores` import `core` and `agent::harness`, never each other. `routes` and `wiring` compose them. Every type that crosses a module boundary is defined in `core/types`; `harness` holds traits and logic, adapters hold private wire structs. Tests live in `core/tests`. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
+`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other. `routes` and `wiring` compose them. Every struct and enum is defined in `core/types` and every trait in `core/traits`; the other modules contain only `impl` blocks and functions. Tests live in `core/tests`. This is a convention checked in review. Between apps it is enforced: `scripts/check-deps.sh` fails if `discord` and `engine` ever depend on each other, and `[workspace.lints]` applies the same code rules to both.
 
 ## Inside `scraper`
 
@@ -149,7 +149,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `engine/src/agent/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters.
+All in `engine/src/core/traits`, implemented in `agent::harness`, `agent::model`, `agent::tools`, and `stores`. Inputs and outputs are owned Sparky types from `core/types`.
 
 ```rust
 #[async_trait]

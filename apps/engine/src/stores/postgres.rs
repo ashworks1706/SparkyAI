@@ -6,15 +6,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use secrecy::{ExposeSecret, SecretString};
 use sqlx::Row;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use uuid::Uuid;
 
-use crate::agent::harness::conversation::ConversationStore;
-use crate::agent::harness::memory::MemoryStore;
-use crate::agent::harness::retrieval::{Embedder, Reranker, Retriever};
+use crate::core::traits::conversation::ConversationStore;
+use crate::core::traits::memory::MemoryStore;
+use crate::core::traits::retrieval::{Embedder, Reranker, Retriever};
+use crate::core::types::adapters::{Candidate, PgConversations, PgMemory, PgRetriever};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryCandidate, MemoryKind, MemoryQuery};
@@ -38,15 +39,6 @@ fn db(e: sqlx::Error) -> StoreError {
     StoreError::Database(e.to_string())
 }
 
-/// Hybrid retrieval over the `chunks` table.
-pub struct PgRetriever {
-    pool: PgPool,
-    embedder: Arc<dyn Embedder>,
-    reranker: Option<Arc<dyn Reranker>>,
-    /// Candidates pulled from each of dense and lexical before fusion.
-    candidates: i64,
-}
-
 impl PgRetriever {
     /// Builds a retriever. Without a reranker, fused order is final.
     pub fn new(
@@ -61,16 +53,6 @@ impl PgRetriever {
             candidates: 20,
         }
     }
-}
-
-#[derive(Clone)]
-struct Candidate {
-    chunk_id: Uuid,
-    source_id: Uuid,
-    title: String,
-    url: Option<String>,
-    content: String,
-    fetched_at: DateTime<Utc>,
 }
 
 fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Error> {
@@ -213,11 +195,6 @@ impl Retriever for PgRetriever {
     }
 }
 
-/// Conversations and messages tables.
-pub struct PgConversations {
-    pool: PgPool,
-}
-
 impl PgConversations {
     /// Wraps a pool.
     pub fn new(pool: PgPool) -> Self {
@@ -311,11 +288,6 @@ fn role_str(m: &Message) -> &'static str {
         crate::core::types::message::Role::Assistant => "assistant",
         crate::core::types::message::Role::Tool => "tool",
     }
-}
-
-/// Memories table. Every query is scoped by tenant and user; the interface cannot cross users.
-pub struct PgMemory {
-    pool: PgPool,
 }
 
 impl PgMemory {

@@ -4,8 +4,9 @@ use std::time::Duration;
 
 use uuid::Uuid;
 
-use crate::agent::harness::trace::{JsonlSink, TraceSink};
+use crate::core::traits::trace::TraceSink;
 use crate::core::types::context::RequestContext;
+use crate::core::types::harness::JsonlSink;
 use crate::core::types::model::Usage;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 

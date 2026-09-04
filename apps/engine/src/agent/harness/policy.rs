@@ -1,23 +1,14 @@
-//! `Policy` trait, the default `RiskPolicy`, and payload hashing for confirmations.
+//! The default `RiskPolicy` and payload hashing for confirmations.
 
 use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::traits::policy::Policy;
 use crate::core::types::context::RequestContext;
+use crate::core::types::harness::RiskPolicy;
 use crate::core::types::policy::{ConfirmationRequest, Decision, PolicyError, ProposedAction};
 use crate::core::types::tool::RiskClass;
-
-/// Decides whether a proposed action runs.
-#[async_trait]
-pub trait Policy: Send + Sync {
-    /// Evaluates one action for one request.
-    async fn authorize(
-        &self,
-        ctx: &RequestContext,
-        action: &ProposedAction,
-    ) -> Result<Decision, PolicyError>;
-}
 
 /// Stable hash of the canonical JSON of `arguments`. A changed payload needs a new confirmation.
 pub fn payload_hash(arguments: &Value) -> String {
@@ -27,13 +18,6 @@ pub fn payload_hash(arguments: &Value) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
-}
-
-/// The default policy: risk class alone decides. Roles gate writes.
-#[derive(Debug, Clone)]
-pub struct RiskPolicy {
-    /// Role required for `ExternalWrite` and `Destructive`.
-    pub write_role: Option<String>,
 }
 
 impl RiskPolicy {

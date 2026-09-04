@@ -55,3 +55,15 @@ class RunResult:
     changed: bool
     chunks: int
     content_hash: str
+
+
+class FetchError(RuntimeError):
+    """Transient fetch failure; retried."""
+
+
+class FetchRejected(RuntimeError):
+    """4xx from the origin; not retried."""
+
+
+class EmbedError(RuntimeError):
+    """The embedding endpoint refused or returned the wrong shape."""

@@ -6,15 +6,7 @@ import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from scraper.core.settings import settings
-from scraper.core.types import Fetched
-
-
-class FetchError(RuntimeError):
-    """Transient failure; retried."""
-
-
-class FetchRejected(RuntimeError):
-    """4xx from the origin; not retried."""
+from scraper.core.types import Fetched, FetchError, FetchRejected
 
 
 @retry(

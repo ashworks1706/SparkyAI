@@ -22,8 +22,10 @@ pub struct Config {
     /// Reranker endpoint, applied to fused retrieval candidates.
     pub reranker: Reranker,
     /// Sentry and `OpenTelemetry`.
+    #[serde(default)]
     pub telemetry: Telemetry,
     /// Loop limits and prompt budgets.
+    #[serde(default)]
     pub agent: Agent,
 }
 
@@ -123,7 +125,12 @@ pub struct Postgres {
     /// `libpq` connection URL.
     pub url: SecretString,
     /// Maximum pooled connections.
+    #[serde(default = "default_max_connections")]
     pub max_connections: u32,
+}
+
+fn default_max_connections() -> u32 {
+    8
 }
 
 /// Embedding endpoint (OpenAI-compatible).

@@ -9,7 +9,7 @@ pub mod chat;
 pub mod health;
 
 /// Full application router.
-pub fn router(chat_state: chat::ChatState) -> Router {
+pub fn router(chat_state: crate::core::types::adapters::ChatState) -> Router {
     Router::new()
         .route("/health/live", get(health::live))
         .route("/health/ready", get(health::ready))

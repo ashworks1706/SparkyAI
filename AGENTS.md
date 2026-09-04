@@ -33,7 +33,7 @@ A change is not done until `just check` passes.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,tests}, agent/{harness,model,tools}, stores, routes.
+apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}.
 apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,tests}.
 apps/web/         static frontend + admin UI (Vite + React)
@@ -57,7 +57,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Rules
 
-- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness` imports only `core`; `agent::model`, `agent::tools`, `stores` import `core` and `agent::harness`, never each other; `routes`/`wiring` compose them. Every struct and enum that crosses a module lives in `core/types`; adapters keep only their private wire structs. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other; `routes`/`wiring` compose them. Types live in `core/types`, traits in `core/traits`; everything else is `impl` blocks and functions. Convention, checked in review. Between apps: `engine` and `discord` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
@@ -77,7 +77,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Conventions
 
-- Every app has a `core/` (`src/core/` in Rust) holding what the rest of the app builds on and nothing that does work: config/settings, telemetry, shared types and schemas, and `tests`. Rust: `core/{config,telemetry,types,tests}`; Python: `core/{settings.py,types.py,tests/}`. Domain code imports from `core`; `core` imports nothing from the app.
+- Every app has a `core/` (`src/core/` in Rust) holding what the rest of the app builds on and nothing that does work: config/settings, telemetry, every struct/enum/class, every trait, and `tests`. Rust: `core/{config,telemetry,types,traits,tests}`; Python: `core/{settings.py,types.py,tests/}`. No `struct`, `enum`, `trait`, or `class` is defined outside `core`; the other modules hold only `impl` blocks and functions. Domain code imports from `core`; `core` imports nothing from the app.
 - Public items have a one-line doc comment saying what, not how.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
 - The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.

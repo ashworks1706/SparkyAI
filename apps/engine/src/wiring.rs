@@ -3,19 +3,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::agent::{Agent, AgentDeps};
-use crate::agent::harness::policy::RiskPolicy;
-use crate::agent::harness::tool::ToolSet;
-use crate::agent::harness::trace::{JsonlSink, TraceSink};
-use crate::agent::model::rerank::HttpReranker;
-use crate::agent::model::rig_openai::{self as rig_openai, RigChat, RigEmbedder};
-use crate::agent::tools::discord_ops::PostAnnouncement;
-use crate::agent::tools::public_search::PublicSearch;
+use crate::agent::model::rig_openai;
 use crate::core::config::Config;
+use crate::core::traits::trace::TraceSink;
+use crate::core::types::adapters::{
+    ChatState, HttpReranker, PgConversations, PgMemory, PgRetriever, PostAnnouncement,
+    PublicSearch, RigChat, RigEmbedder,
+};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::assemble::Budget;
-use crate::routes::chat::ChatState;
-use crate::stores::postgres::{self, PgConversations, PgMemory, PgRetriever};
+use crate::core::types::harness::{Agent, AgentDeps, JsonlSink, RiskPolicy, ToolSet};
+use crate::stores::postgres;
 
 /// Default system prompt. Versioned by content; changes show up in traces via the prompt hash.
 const SYSTEM_PROMPT: &str = "You are Sparky, the ASU AI Society's assistant on Discord. \

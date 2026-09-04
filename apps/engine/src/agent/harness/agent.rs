@@ -10,76 +10,18 @@ use tracing::Instrument;
 use tracing::field::Empty;
 
 use crate::agent::harness::assemble;
-use crate::agent::harness::conversation::ConversationStore;
-use crate::agent::harness::memory::MemoryStore;
-use crate::agent::harness::model::ModelProvider;
-use crate::agent::harness::policy::Policy;
-use crate::agent::harness::retrieval::Retriever;
-use crate::agent::harness::tool::ToolSet;
-use crate::agent::harness::trace::TraceSink;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
 use crate::core::types::assemble::Sections;
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
-use crate::core::types::memory::{Memory, MemoryQuery};
+use crate::core::types::harness::{Agent, AgentDeps, Inputs, Run, StepOutcome};
+use crate::core::types::memory::MemoryQuery;
 use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
 use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::ToolError;
 use crate::core::types::trace::{RunStatus, TraceEvent};
-
-/// The dependencies the loop drives. Every one is a trait with a test double.
-pub struct AgentDeps {
-    /// The chat model.
-    pub model: Arc<dyn ModelProvider>,
-    /// Tools the model may call.
-    pub tools: ToolSet,
-    /// Gates every tool call.
-    pub policy: Arc<dyn Policy>,
-    /// Receives every event.
-    pub trace: Arc<dyn TraceSink>,
-    /// Evidence, when configured.
-    pub retriever: Option<Arc<dyn Retriever>>,
-    /// Conversation history, when configured.
-    pub conversations: Option<Arc<dyn ConversationStore>>,
-    /// Cross-conversation memory, when configured.
-    pub memory: Option<Arc<dyn MemoryStore>>,
-}
-
-/// The loop. Cheap to clone; holds only `Arc`s.
-#[derive(Clone)]
-pub struct Agent {
-    deps: Arc<AgentDeps>,
-    cfg: AgentConfig,
-    system_prompt: Arc<str>,
-}
-
-/// What one request loaded before its first model call.
-struct Inputs {
-    history: Vec<Message>,
-    memory: Vec<Memory>,
-    evidence: Vec<Evidence>,
-}
-
-/// Mutable state carried across steps.
-struct Run<'a> {
-    ctx: &'a RequestContext,
-    input: &'a str,
-    started: Instant,
-    steps: u32,
-    usage: Usage,
-    /// Turns produced during this request, persisted at the end. First is the user input.
-    new_turns: Vec<Message>,
-}
-
-/// What a step decided.
-enum StepOutcome {
-    /// Keep looping.
-    Continue,
-    /// Stop with this status and text.
-    Stop(RunStatus, String, Option<ConfirmationRequest>),
-}
 
 impl Agent {
     /// Builds an agent over its dependencies.

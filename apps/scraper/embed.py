@@ -7,10 +7,7 @@ from collections.abc import Sequence
 import httpx
 
 from scraper.core.settings import settings
-
-
-class EmbedError(RuntimeError):
-    pass
+from scraper.core.types import EmbedError
 
 
 def embed_texts(texts: Sequence[str]) -> list[list[float]]:

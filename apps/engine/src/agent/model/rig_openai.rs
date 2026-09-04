@@ -12,8 +12,9 @@ use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericE
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::agent::harness::model::ModelProvider;
-use crate::agent::harness::retrieval::Embedder;
+use crate::core::traits::model::ModelProvider;
+use crate::core::traits::retrieval::Embedder;
+use crate::core::types::adapters::{RigChat, RigEmbedder};
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, Role, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
@@ -27,13 +28,6 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
         .base_url(base_url.trim_end_matches('/'))
         .build()
         .map_err(|e| e.to_string())
-}
-
-/// `ModelProvider` over Rig's chat-completions model.
-#[derive(Clone)]
-pub struct RigChat {
-    model: CompletionModel,
-    name: String,
 }
 
 impl RigChat {
@@ -187,13 +181,6 @@ impl ModelProvider for RigChat {
             model: self.name.clone(),
         })
     }
-}
-
-/// `Embedder` over Rig's OpenAI-compatible embeddings model.
-#[derive(Clone)]
-pub struct RigEmbedder {
-    model: GenericEmbeddingModel<::rig_core::providers::openai::OpenAICompletionsExt>,
-    dim: usize,
 }
 
 impl RigEmbedder {

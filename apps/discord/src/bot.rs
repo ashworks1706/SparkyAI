@@ -1,54 +1,39 @@
 //! serenity client setup and event handler.
 
-use std::collections::HashMap;
-
+use secrecy::ExposeSecret;
 use serenity::all::{
     Client, CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
-    GatewayIntents, GuildId, Interaction, Ready, ResolvedValue, UserId,
+    GatewayIntents, GuildId, Interaction, Ready, ResolvedValue,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::commands;
 use crate::core::config::Config;
-use crate::core::types::ChatRequest;
-use crate::engine_client::EngineClient;
+use crate::core::types::{ChatRequest, EngineClient, Handler};
 use crate::reply;
-
-/// Per-process bot state.
-struct Handler {
-    engine: EngineClient,
-    guild_id: GuildId,
-    /// Conversation each user is continuing. Lost on restart; `/reset` clears it.
-    conversations: Mutex<HashMap<UserId, Uuid>>,
-}
 
 /// Connects to Discord and runs until shutdown.
 pub async fn run(cfg: Config) -> anyhow::Result<()> {
+    if cfg.discord.guild_id == 0 {
+        anyhow::bail!("SPARKY_DISCORD__GUILD_ID is unset; set it to the guild the bot serves");
+    }
+    if cfg.discord.token.expose_secret().trim().is_empty() {
+        anyhow::bail!("SPARKY_DISCORD__TOKEN is unset; create a bot at discord.com/developers");
+    }
     let engine = EngineClient::new(&cfg.engine.base_url, cfg.engine.service_token.clone())?;
     let handler = Handler {
         engine,
         guild_id: GuildId::new(cfg.discord.guild_id),
-        conversations: Mutex::new(HashMap::new()),
+        conversations: Mutex::new(std::collections::HashMap::new()),
     };
     let intents = GatewayIntents::non_privileged();
-    let mut client = Client::builder(cfg.discord.token.expose(), intents)
+    let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
         .event_handler(handler)
         .await?;
     client.start().await?;
     Ok(())
-}
-
-trait Expose {
-    fn expose(&self) -> &str;
-}
-
-impl Expose for secrecy::SecretString {
-    fn expose(&self) -> &str {
-        secrecy::ExposeSecret::expose_secret(self)
-    }
 }
 
 impl Handler {

@@ -1,12 +1,14 @@
-//! Owned domain types. Every struct and enum the engine passes between modules lives here;
-//! provider and wire formats stay private inside the adapters that speak them.
+//! Every struct and enum in the engine. Behaviour lives in the modules that use them;
+//! nothing outside `core` defines a type.
 
+pub mod adapters;
 pub mod agent;
 pub mod assemble;
 pub mod chat;
 pub mod context;
 pub mod event;
 pub mod evidence;
+pub mod harness;
 pub mod memory;
 pub mod message;
 pub mod model;
