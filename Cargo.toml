@@ -12,6 +12,7 @@ repository = "https://github.com/ashworks1706/SparkyAI"
 # core
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -35,7 +36,6 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "rus
 
 # storage
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "macros", "migrate"] }
-pgvector = { version = "0.4", features = ["sqlx"] }
 
 # config
 figment = { version = "0.10", features = ["env", "toml"] }

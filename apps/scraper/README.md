@@ -24,6 +24,9 @@ uv run scraper status
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |
 
+Sources marked `needs_js` render in headless Chromium; install it once with
+`uv run playwright install chromium`. The Docker image already has it.
+
 Pipeline per source: fetch → content hash (skip if unchanged) → raw snapshot to object storage
 → extract → chunk → embed → write `chunks` and `source_versions`.
 

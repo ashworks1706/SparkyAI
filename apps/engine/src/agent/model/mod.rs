@@ -1,4 +1,6 @@
-//! `harness::model::ModelProvider` implementations (Rig `CompletionModel` → llama-server; mock).
+//! `harness::model::ModelProvider`, `Embedder`, and `Reranker` implementations over
+//! OpenAI-compatible HTTP endpoints (llama-server).
 
-pub mod mock;
+pub mod embed;
 pub mod openai_compat;
+pub mod rerank;

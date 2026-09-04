@@ -23,6 +23,8 @@ pub struct Config {
     pub reranker: Reranker,
     /// Sentry and `OpenTelemetry`.
     pub telemetry: Telemetry,
+    /// Loop limits and prompt budgets.
+    pub agent: Agent,
 }
 
 /// Process-level settings.
@@ -67,6 +69,52 @@ pub struct Model {
     pub name: String,
     /// Default completion budget.
     pub max_tokens: u32,
+    /// USD per million prompt tokens; zero for local serving.
+    #[serde(default)]
+    pub usd_per_m_prompt: f64,
+    /// USD per million completion tokens; zero for local serving.
+    #[serde(default)]
+    pub usd_per_m_completion: f64,
+}
+
+/// Agent loop limits. Every field has a default so a bare `.env` still boots.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Agent {
+    /// Model calls per request.
+    pub max_steps: u32,
+    /// Retries per model call on transport or 5xx errors.
+    pub max_model_retries: u32,
+    /// Wall-clock budget per request.
+    pub request_timeout_secs: u64,
+    /// Budget per tool call.
+    pub tool_timeout_secs: u64,
+    /// Sampling temperature.
+    pub temperature: f32,
+    /// Evidence chunks retrieved per request.
+    pub retrieval_top_k: usize,
+    /// Prior turns loaded into the prompt.
+    pub history_turns: usize,
+    /// Whole-prompt token budget.
+    pub prompt_budget_tokens: usize,
+    /// Directory for JSONL traces.
+    pub trace_dir: String,
+}
+
+impl Default for Agent {
+    fn default() -> Self {
+        Self {
+            max_steps: 8,
+            max_model_retries: 2,
+            request_timeout_secs: 90,
+            tool_timeout_secs: 20,
+            temperature: 0.3,
+            retrieval_top_k: 6,
+            history_turns: 20,
+            prompt_budget_tokens: 3_000,
+            trace_dir: "traces".into(),
+        }
+    }
 }
 
 /// `PostgreSQL` connection.

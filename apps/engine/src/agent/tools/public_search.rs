@@ -1,1 +1,97 @@
 //! `ReadPublic`: search indexed ASU sources through `Retriever`.
+
+use std::fmt::Write;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+use crate::agent::harness::retrieval::{RetrievalQuery, Retriever};
+use crate::agent::harness::tool::{RiskClass, Tool, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::context::RequestContext;
+
+/// Lets the model run a targeted search when the up-front retrieval was not enough.
+pub struct PublicSearch {
+    retriever: Arc<dyn Retriever>,
+    top_k: usize,
+}
+
+impl PublicSearch {
+    /// Searches with `retriever`, returning at most `top_k` chunks.
+    pub fn new(retriever: Arc<dyn Retriever>, top_k: usize) -> Self {
+        Self { retriever, top_k }
+    }
+}
+
+#[derive(Deserialize)]
+struct Args {
+    query: String,
+    #[serde(default)]
+    categories: Vec<String>,
+}
+
+#[async_trait]
+impl Tool for PublicSearch {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: "search_asu".into(),
+            description:
+                "Search indexed public ASU sources (library hours, events, clubs, courses, \
+                          scholarships, news, shuttles, jobs, sports). Use when you need facts you \
+                          do not already have evidence for."
+                    .into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "What to look for." },
+                    "categories": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Optional source categories to restrict to."
+                    }
+                },
+                "required": ["query"]
+            }),
+            risk: RiskClass::ReadPublic,
+        }
+    }
+
+    async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
+        let args: Args =
+            serde_json::from_value(args).map_err(|e| ToolError::InvalidArguments(e.to_string()))?;
+        if args.query.trim().is_empty() {
+            return Err(ToolError::InvalidArguments("query is empty".into()));
+        }
+        let q = RetrievalQuery {
+            text: args.query,
+            categories: args.categories,
+            top_k: self.top_k,
+        };
+        let evidence = self
+            .retriever
+            .retrieve(ctx, &q)
+            .await
+            .map_err(|e| ToolError::Failed(e.to_string()))?;
+        if evidence.is_empty() {
+            return Ok(ToolOutput::text(
+                "No indexed source matched. Say you could not find it.",
+            ));
+        }
+        let mut text = String::new();
+        for (i, e) in evidence.iter().enumerate() {
+            let _ = writeln!(
+                text,
+                "[{}] {} (fetched {})\n{}\n",
+                i + 1,
+                e.title,
+                e.fetched_at.format("%Y-%m-%d"),
+                e.content.trim()
+            );
+        }
+        Ok(ToolOutput {
+            content: text,
+            data: serde_json::to_value(&evidence).ok(),
+        })
+    }
+}

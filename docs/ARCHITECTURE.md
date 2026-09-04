@@ -9,7 +9,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Layer | Choice | Where |
 |---|---|---|
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model client, tool schema, embeddings | Rig (`rig-core`); our loop drives its `CompletionModel`, never `rig::Agent` | `apps/engine/src/agent` |
+| Model, embed, rerank clients | Direct OpenAI-compatible HTTP (`reqwest` + `serde`); Rig stays a dependency for when its provider surface is needed, never `rig::Agent` | `apps/engine/src/agent/model` |
 | MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
 | Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
 | Fetching | httpx + BeautifulSoup; Playwright where JS is required | `apps/scraper` |
@@ -36,7 +36,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 - The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `engine/src/agent/harness` with a mock for tests.
-- Rig supplies model clients, tool schema, embeddings, and vector-store adapters. The harness owns the loop, policy, context, memory, and tracing.
+- The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `agent/model`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
 - Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
@@ -47,7 +47,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config · types (the owned domain structs). Imports nothing else.
-    src/agent/      harness (traits, loop, assembly, tracing) · model (Rig → llama-server, mock) · tools
+    src/agent/      harness (traits, loop, assembly, tracing) · model (OpenAI-compatible HTTP → llama-server: chat, embed, rerank) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
@@ -146,7 +146,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `engine/src/agent/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters. `ModelProvider` and `Tool` are thin wrappers over Rig's `CompletionModel` and `Tool`, adding `RequestContext` and `RiskClass`.
+All in `engine/src/agent/harness`. Inputs and outputs are owned Sparky types; provider JSON stays inside adapters.
 
 ```rust
 #[async_trait]

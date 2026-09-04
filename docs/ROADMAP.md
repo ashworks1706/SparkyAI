@@ -4,13 +4,14 @@ Ground-up rebuild. v1 is preserved on `archive/v1` and the `v1.0-original` relea
 
 ## 1 — Harness module v0.1
 
-- [ ] Run a full agent conversation against a local model, with a mock for tests
-- [ ] Let tools plug in with risk levels and per-request context
-- [ ] Make the agent loop robust: step limits, timeouts, retries, cancellation, parallel tool calls
-- [ ] Record every run as a trace that can be replayed
-- [ ] Track token usage and cost
+- [x] Run a full agent conversation against a local model, with a mock for tests
+- [x] Let tools plug in with risk levels and per-request context
+- [x] Make the agent loop robust: step limits, timeouts, retries, cancellation, parallel tool calls
+- [x] Record every run as a trace that can be replayed
+- [x] Track token usage and cost
 
 Exit: clone → one command → local agent, one tool, one conversation, trace file, passing tests.
+Done 2026-09-04: `just model && just infra && just engine`, then `POST /chat`. Replay of a trace against a chosen model is Phase 2 work alongside the eval set.
 
 ## 2 — Retrieval v0.2
 

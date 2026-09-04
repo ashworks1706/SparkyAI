@@ -47,7 +47,7 @@ Processes talk only via: discord → engine, engine → PostgreSQL / llama-serve
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`): model clients, `Tool` schema, embeddings, vector stores. Never `rig::Agent` — the loop is ours.
+- **Rig** (`rig-core`): available for provider adapters as they are needed. Today model, embed, and rerank clients are direct OpenAI-compatible HTTP in `agent/model`. Never `rig::Agent` — the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - Everything else in the harness module (loop, policy, context assembly, memory, tracing, replay) is written here.
 

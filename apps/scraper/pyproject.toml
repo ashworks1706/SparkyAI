@@ -9,7 +9,6 @@ dependencies = [
     "httpx>=0.28",
     "psycopg[binary,pool]>=3.2",
     "boto3>=1.36",
-    "openai>=1.60",
     "beautifulsoup4>=4.13",
     "lxml>=5",
     "playwright>=1.50",
