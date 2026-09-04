@@ -9,6 +9,7 @@ import structlog
 import typer
 
 from scraper import pipeline
+from scraper.core import telemetry
 from scraper.sources import SOURCES
 from scraper.store import postgres
 
@@ -19,6 +20,7 @@ log = structlog.get_logger()
 @app.callback()
 def main() -> None:
     """Scraper: keep the retrieval index fresh."""
+    telemetry.init()
     structlog.configure(
         processors=[structlog.processors.TimeStamper(fmt="iso"), structlog.dev.ConsoleRenderer()]
     )

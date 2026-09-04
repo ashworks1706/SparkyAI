@@ -8,7 +8,6 @@ services:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
-      SPARKY_RERANKER__BASE_URL: http://rerank:8002/v1
       SPARKY_TELEMETRY__OTLP_ENDPOINT: http://phoenix:4317
       SPARKY_MCP__PLAYWRIGHT_URL: http://playwright-mcp:8931/mcp
     ports: ["8080:8080"]
@@ -23,6 +22,7 @@ services:
       - { path: ../.env, required: false }
     environment:
       SPARKY_ENGINE__BASE_URL: http://engine:8080
+      SPARKY_TELEMETRY__OTLP_ENDPOINT: http://phoenix:4317
     depends_on: [engine]
     restart: unless-stopped
 
@@ -36,6 +36,7 @@ services:
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
+      SPARKY_TELEMETRY__OTLP_ENDPOINT: http://phoenix:4317
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped
@@ -99,34 +100,6 @@ services:
       - ${SPARKY_EMBED_NGL:-99}
     volumes: [modelcache:/root/.cache/llama.cpp]
     ports: ["8001:8001"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - { driver: nvidia, count: 1, capabilities: [gpu] }
-    restart: unless-stopped
-
-  rerank:
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    profiles: [model]
-    command:
-      - -hf
-      - ${SPARKY_RERANK_GGUF:-mradermacher/Qwen3-Reranker-0.6B-GGUF:Q4_K_M}
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8002"
-      - --reranking
-      - --ctx-size
-      - ${SPARKY_RERANK_CTX:-1024}
-      - --batch-size
-      - "1024"
-      - --ubatch-size
-      - "512"
-      - --n-gpu-layers
-      - ${SPARKY_RERANK_NGL:-99}
-    volumes: [modelcache:/root/.cache/llama.cpp]
-    ports: ["8002:8002"]
     deploy:
       resources:
         reservations:

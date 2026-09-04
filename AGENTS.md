@@ -21,7 +21,7 @@ just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio, phoenix
-just model            # llama-server chat, embed, rerank
+just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
 just browser          # Playwright MCP browser tools for the engine
 just up | down | logs # full compose stack (dev, builds locally)
@@ -37,8 +37,8 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 
 ```
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes.
-apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}.
-apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,tests}.
+apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}. Exports one span per interaction to Phoenix.
+apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,telemetry,tests}. One span per source run to Phoenix.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
@@ -50,7 +50,7 @@ Processes talk only via: discord → engine, engine → PostgreSQL / llama-serve
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`agent/model/rig_openai.rs`). Rerank is direct HTTP because Rig has no provider for llama-server's `/v1/rerank`. Never `rig::Agent` — the loop is ours.
+- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`agent/model/rig_openai.rs`), and the only inference path. Never `rig::Agent` — the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - Everything else in the harness module (loop, policy, context assembly, memory, tracing, replay) is written here.
 

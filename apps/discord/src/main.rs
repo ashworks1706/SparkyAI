@@ -11,7 +11,7 @@ mod reply;
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let cfg = core::config::Config::load()?;
-    let _guard = core::telemetry::init(&cfg.telemetry, &cfg.app.env, &cfg.app.log_level);
+    let _guard = core::telemetry::init(&cfg.telemetry, &cfg.app.env, &cfg.app.log_level)?;
     tracing::info!(env = %cfg.app.env, engine = %cfg.engine.base_url, "discord starting");
     bot::run(cfg).await
 }

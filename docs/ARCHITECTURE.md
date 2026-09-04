@@ -9,8 +9,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Layer | Choice | Where |
 |---|---|---|
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model, embed clients | Rig (`rig-core`) OpenAI-compatible client → llama-server; never `rig::Agent` | `apps/engine/src/agent/model/rig_openai.rs` |
-| Rerank client | Direct HTTP to llama-server `/v1/rerank` (no Rig provider) | `apps/engine/src/agent/model/rerank.rs` |
+| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client → llama-server; never `rig::Agent`. The only inference path. | `apps/engine/src/agent/model/rig_openai.rs` |
 | MCP | `rmcp` (official SDK); Playwright MCP is the first server | `apps/engine/src/agent/tools/mcp.rs` |
 | Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
 | Fetch + extract | Firecrawl, self-hosted (JS rendered, markdown out); plain httpx + BeautifulSoup as the `http` fetcher | `deploy/compose.yml` profile `crawl` |
@@ -20,12 +19,12 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
 | Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
-| Embeddings, reranker | Qwen3-Embedding-0.6B (1024-dim), Qwen3-Reranker-0.6B on `llama-server` | `deploy/inference` |
+| Embeddings | Qwen3-Embedding-0.6B (1024-dim) on `llama-server` | `deploy/inference` |
 | Database | PostgreSQL 17 — source of truth | `apps/engine` reads, `apps/scraper` writes |
 | Vector store | pgvector, in the same PostgreSQL (rebuildable) | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | `apps/scraper` |
-| Observability | Sentry (errors), OpenTelemetry → Phoenix locally / any OTLP collector deployed (traces, OpenInference attributes), JSON logs | every app; `deploy/compose.yml` `phoenix` |
+| Observability | OpenTelemetry → Phoenix (traces with OpenInference attributes, from engine, bot, and scraper); JSON logs to stdout. Nothing else. | every app; `deploy/compose.yml` `phoenix` |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (dev builds locally, prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -49,7 +48,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
-    src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat/embed; HTTP rerank) · tools
+    src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
@@ -86,7 +85,7 @@ flowchart LR
     BOT -->|HTTP / SSE| APP
 
     APP -->|OpenAI-compatible| OLL[llama-server · chat]
-    APP -->|OpenAI-compatible| EMB[llama-server · embed + rerank]
+    APP -->|OpenAI-compatible| EMB[llama-server · embed]
     APP --> PG[(PostgreSQL + pgvector)]
     APP --> RD[(Redis)]
     APP -->|MCP| MCP[Playwright MCP]
@@ -98,8 +97,9 @@ flowchart LR
     ING --> S3[(Object storage)]
     ING --> EMB
 
-    APP --> SEN[Sentry]
-    APP --> AX[Axiom / OTLP]
+    APP --> PX[Phoenix]
+    BOT --> PX
+    ING --> PX
 ```
 
 Solid arrows exist or are in the current phase; dashed are later phases. Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL.
@@ -229,7 +229,7 @@ A confirmation is bound to one exact action payload, is single-use and short-liv
 
 Ingestion runs offline in `apps/scraper`: fetch through Firecrawl (JS rendered, main content as markdown) → content hash (skip if unchanged) → raw snapshot to object storage → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
-Retrieval happens inside the engine: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank (llama-server) → `Evidence`. If nothing is found or the source is stale, the answer says so.
+Retrieval happens inside the engine: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → `Evidence`. No reranker: Rig has no provider for a local one, and fusion alone is enough until the Phase 2 eval set says otherwise. If nothing is found or the source is stale, the answer says so.
 
 ## Memory
 
@@ -253,7 +253,7 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | rate limits, queue, short-lived cache | Redis |
 | raw snapshots, model artifacts | object storage |
 | browser session secrets | encrypted, separate namespace |
-| traces | JSONL locally (replay source); OpenTelemetry to Phoenix locally, any OTLP collector deployed |
+| traces | JSONL locally (replay source); OpenTelemetry to Phoenix from every app |
 
 Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/scraper/migrations`.
 
@@ -291,6 +291,6 @@ Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `spa
 
 ## Open decisions
 
-Chat model size and quantization · parallel slots per llama-server under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
+Chat model size and quantization · whether a reranker earns its place once the eval set exists · parallel slots per llama-server under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
 
 Record each as a short note under `docs/decisions/` when made.

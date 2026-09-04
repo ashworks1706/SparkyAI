@@ -7,7 +7,7 @@ pub struct RetrievalQuery {
     pub text: String,
     /// Restrict to these source categories; empty means all.
     pub categories: Vec<String>,
-    /// How many chunks to return after reranking.
+    /// How many chunks to return after fusion.
     pub top_k: usize,
 }
 
@@ -31,7 +31,4 @@ pub enum RetrievalError {
     /// The query could not be embedded.
     #[error("embedding: {0}")]
     Embedding(String),
-    /// Reranking failed; callers may fall back to fused order.
-    #[error("rerank: {0}")]
-    Rerank(String),
 }

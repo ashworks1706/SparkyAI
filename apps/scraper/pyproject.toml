@@ -15,6 +15,8 @@ dependencies = [
     "structlog>=25",
     "tenacity>=9",
     "typer>=0.15",
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27",
 ]
 
 [project.optional-dependencies]

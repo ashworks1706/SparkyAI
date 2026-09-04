@@ -1,16 +1,15 @@
-//! Logging, Sentry, and OpenTelemetry export over OTLP/gRPC — Phoenix locally, any OTLP
-//! collector (Axiom with its headers) in deployment. Spans carry `OpenInference` attributes.
+//! Logging and `OpenTelemetry` export over OTLP/gRPC to Phoenix (or any OTLP collector).
+//! Spans carry `OpenInference` attributes. An empty endpoint disables export.
 
-use crate::core::config::Telemetry;
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig, WithTonicConfig};
+use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
-use secrecy::ExposeSecret;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Keeps Sentry and the OTLP exporter alive; flushes on drop.
+use crate::core::config::Telemetry;
+
+/// Keeps the OTLP exporter alive; flushes on drop.
 pub struct Guard {
-    _sentry: Option<sentry::ClientInitGuard>,
     otel: Option<SdkTracerProvider>,
 }
 
@@ -22,36 +21,23 @@ impl Drop for Guard {
     }
 }
 
-/// Installs the global `tracing` subscriber with fmt, Sentry, and optional OTLP layers.
-pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard> {
-    let sentry = cfg.sentry_dsn.as_ref().map(|dsn| {
-        let mut opts = sentry::ClientOptions::default();
-        opts.release = sentry::release_name!();
-        opts.environment = Some(env.to_owned().into());
-        sentry::init((dsn.expose_secret(), opts))
-    });
-
+/// Installs the global `tracing` subscriber with fmt and optional OTLP layers.
+pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let otel = match cfg
         .otlp_endpoint
         .as_deref()
         .filter(|e| !e.trim().is_empty())
     {
         Some(endpoint) => {
-            let mut builder = SpanExporter::builder().with_tonic().with_endpoint(endpoint);
-            if let (Some(token), Some(dataset)) = (&cfg.axiom_token, &cfg.axiom_dataset) {
-                let mut meta = tonic::metadata::MetadataMap::new();
-                meta.insert(
-                    "authorization",
-                    format!("Bearer {}", token.expose_secret()).parse()?,
-                );
-                meta.insert("x-axiom-dataset", dataset.parse()?);
-                builder = builder.with_metadata(meta);
-            }
+            let exporter = SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(endpoint)
+                .build()?;
             let provider = SdkTracerProvider::builder()
-                .with_batch_exporter(builder.build()?)
+                .with_batch_exporter(exporter)
                 .with_resource(
                     Resource::builder()
-                        .with_service_name("sparkyai")
+                        .with_service_name(service.to_owned())
                         .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
                         .build(),
                 )
@@ -70,17 +56,13 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
     };
     let otel_layer = otel
         .as_ref()
-        .map(|p| tracing_opentelemetry::layer().with_tracer(p.tracer("sparkyai")));
+        .map(|p| tracing_opentelemetry::layer().with_tracer(p.tracer(service.to_owned())));
 
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt)
-        .with(sentry_tracing::layer())
         .with(otel_layer)
         .init();
 
-    Ok(Guard {
-        _sentry: sentry,
-        otel,
-    })
+    Ok(Guard { otel })
 }

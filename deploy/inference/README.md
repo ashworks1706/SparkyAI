@@ -10,32 +10,24 @@ configuration for. Every model speaks the OpenAI-compatible API, which is the on
 |---|---|---|---|
 | chat | `Qwen/Qwen3-4B-GGUF:Q4_K_M` | 8000 | `--jinja` for tool calls, `--ctx-size 4096` |
 | embeddings | `Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0` | 8001 | `--embeddings --pooling last`, batch 1024 |
-| rerank | `mradermacher/Qwen3-Reranker-0.6B-GGUF:Q4_K_M` | 8002 | `--reranking`, ctx 1024, batch 1024 |
 
-Override any of them with `SPARKY_CHAT_GGUF`, `SPARKY_EMBED_GGUF`, `SPARKY_RERANK_GGUF`.
+Override either with `SPARKY_CHAT_GGUF` or `SPARKY_EMBED_GGUF`.
 
 ## Local
 
 ```bash
-just model     # starts all three; GGUFs download on first run into the modelcache volume
+just model     # starts both; GGUFs download on first run into the modelcache volume
 ```
 
-Endpoints: `http://localhost:8000/v1` (chat), `:8001/v1` (embeddings), `:8002/v1/rerank`.
-From inside compose the hosts are `chat`, `embed`, and `rerank`.
+Endpoints: `http://localhost:8000/v1` (chat) and `:8001/v1` (embeddings). From inside compose
+the hosts are `chat` and `embed`.
 
-On a 6 GB card all three fit with about 400 MB to spare: embed and rerank together take
-~2.2 GB, chat takes ~3.1 GB (2.5 GB of weights plus a 576 MB KV cache at 4096 context).
-The KV cache is what runs you out of VRAM first, so raise `SPARKY_CHAT_CTX` only if there is
-headroom; lower `--n-gpu-layers` to spill layers to CPU on a smaller GPU.
-
-llama-server rejects an input longer than its batch size, so the engine caps each reranked
-document at 1,500 characters and the servers run with batch 1024.
-
-Rerank scores are uncalibrated — Qwen3-Reranker emits yes/no logits, so values are tiny
-(1e-08 range) and only the ordering is meaningful. Rank by them; do not threshold on them.
+On a 6 GB card both fit with room to spare: embed takes ~0.9 GB, chat ~3.1 GB (2.5 GB of
+weights plus a 576 MB KV cache at 4096 context). The KV cache is what runs you out of VRAM
+first, so raise `SPARKY_CHAT_CTX` only with headroom; lower `--n-gpu-layers` to spill to CPU.
 
 ## Deployed
 
-Same three services on a GPU host with a larger chat GGUF. `--ctx-size` and the number of
+Same two services on a GPU host with a larger chat GGUF. `--ctx-size` and the number of
 parallel slots (`-np`) set the KV cache, which is what actually consumes VRAM under load;
 size the GPU for `ctx-size x slots`, not for the weights alone.

@@ -135,9 +135,9 @@ prod-logs *ARGS:
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio phoenix
 
-# llama-server for chat (:8000), embeddings (:8001), rerank (:8002). GGUFs download on first run.
+# llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
 model *ARGS:
-    docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed rerank
+    docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
 
 # Firecrawl (self-hosted) for the scraper: API on :3002
 crawl *ARGS:

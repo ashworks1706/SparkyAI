@@ -24,8 +24,10 @@ figment.workspace = true
 dotenvy.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-sentry.workspace = true
-sentry-tracing.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
 
 [lints]
 workspace = true

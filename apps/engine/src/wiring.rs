@@ -7,7 +7,6 @@ use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::JsonlSink;
-use crate::agent::model::rerank::HttpReranker;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::discord_ops::PostAnnouncement;
 use crate::agent::tools::mcp;
@@ -44,11 +43,6 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         &cfg.embedding.name,
         usize::try_from(cfg.embedding.dim)?,
     ));
-    let reranker = Arc::new(HttpReranker::new(
-        &cfg.reranker.base_url,
-        cfg.reranker.api_key.clone(),
-        &cfg.reranker.name,
-    )?);
 
     // Stores are optional at boot so the harness can run against a model alone.
     let pool = match postgres::connect(&cfg.postgres.url, cfg.postgres.max_connections).await {
@@ -60,7 +54,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     };
     let retriever = pool
         .clone()
-        .map(|p| Arc::new(PgRetriever::new(p, embedder, Some(reranker))));
+        .map(|p| Arc::new(PgRetriever::new(p, embedder)));
     let conversations = pool.clone().map(|p| Arc::new(PgConversations::new(p)));
     let memory = pool.map(|p| Arc::new(PgMemory::new(p)));
 

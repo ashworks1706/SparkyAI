@@ -37,6 +37,11 @@ class Firecrawl(BaseModel):
     only_main_content: bool = True
 
 
+class Telemetry(BaseModel):
+    # Phoenix locally; empty disables export.
+    otlp_endpoint: str = "http://localhost:4317"
+
+
 class Scraper(BaseModel):
     # Public ASU content is shared across every guild; the engine reads this tenant for all.
     tenant_id: str = "public"
@@ -63,6 +68,7 @@ class Settings(BaseSettings):
     object_store: ObjectStore = ObjectStore()
     embedding: Embedding = Embedding()
     firecrawl: Firecrawl = Firecrawl()
+    telemetry: Telemetry = Telemetry()
     scraper: Scraper = Scraper()
 
 

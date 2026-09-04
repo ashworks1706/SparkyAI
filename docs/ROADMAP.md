@@ -18,7 +18,7 @@ Done 2026-09-04: `just model && just infra && just engine`, then `POST /chat`. R
 - [ ] Stand up search over ASU content with access controls
 - [ ] Build ingestion pipelines that keep sources fresh and deduplicated
 - [ ] Port v1 sources, simplest first: library hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports
-- [ ] Answer with citations and dates; rerank for quality
+- [ ] Answer with citations and dates; add a reranker only if the eval set shows fusion alone falls short
 - [ ] Ship a fixed ASU eval set
 
 Exit: correct, dated sources on the eval set; reproducible traces.

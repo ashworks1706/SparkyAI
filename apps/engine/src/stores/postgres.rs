@@ -1,4 +1,4 @@
-//! `PostgreSQL` adapter: `Retriever` (pgvector dense + FTS lexical, fused and reranked),
+//! `PostgreSQL` adapter: `Retriever` (pgvector dense + FTS lexical, fused with RRF),
 //! `ConversationStore`, and `MemoryStore` over one connection pool.
 
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::memory::MemoryStore;
-use crate::core::traits::retrieval::{Embedder, Reranker, Retriever};
+use crate::core::traits::retrieval::{Embedder, Retriever};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryCandidate, MemoryKind, MemoryQuery};
@@ -42,22 +42,16 @@ fn db(e: sqlx::Error) -> StoreError {
 pub struct PgRetriever {
     pool: PgPool,
     embedder: Arc<dyn Embedder>,
-    reranker: Option<Arc<dyn Reranker>>,
     /// Candidates pulled from each of dense and lexical before fusion.
     candidates: i64,
 }
 
 impl PgRetriever {
-    /// Builds a retriever. Without a reranker, fused order is final.
-    pub fn new(
-        pool: PgPool,
-        embedder: Arc<dyn Embedder>,
-        reranker: Option<Arc<dyn Reranker>>,
-    ) -> Self {
+    /// Builds a retriever. Fused order is final.
+    pub fn new(pool: PgPool, embedder: Arc<dyn Embedder>) -> Self {
         Self {
             pool,
             embedder,
-            reranker,
             candidates: 20,
         }
     }
@@ -178,28 +172,10 @@ impl Retriever for PgRetriever {
         }
 
         let fused = rrf(&[dense_ids, lexical_ids], 60.0);
-        let mut ordered: Vec<(Candidate, f32)> = fused
+        let ordered: Vec<(Candidate, f32)> = fused
             .into_iter()
             .filter_map(|(id, score)| by_id.remove(&id).map(|c| (c, score)))
             .collect();
-
-        if let Some(reranker) = &self.reranker {
-            // Rerankers score a query + document pair in one window; keep each document short.
-            let docs: Vec<String> = ordered
-                .iter()
-                .map(|(c, _)| c.content.chars().take(1_500).collect())
-                .collect();
-            match reranker.rerank(&query.text, &docs).await {
-                Ok(scores) if scores.len() == ordered.len() => {
-                    for ((_, s), new) in ordered.iter_mut().zip(scores) {
-                        *s = new;
-                    }
-                    ordered.sort_by(|a, b| b.1.total_cmp(&a.1));
-                }
-                Ok(_) => tracing::warn!("reranker returned a different count; keeping fused order"),
-                Err(e) => tracing::warn!(error = %e, "rerank failed; keeping fused order"),
-            }
-        }
 
         Ok(ordered
             .into_iter()

@@ -38,9 +38,6 @@ tracing-opentelemetry.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 opentelemetry-otlp.workspace = true
-sentry.workspace = true
-sentry-tracing.workspace = true
-tonic.workspace = true
 
 [lints]
 workspace = true

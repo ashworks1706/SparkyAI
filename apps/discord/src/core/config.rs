@@ -13,7 +13,8 @@ pub struct Config {
     pub engine: Engine,
     /// Discord credentials and guild.
     pub discord: Discord,
-    /// Error reporting.
+    /// Trace export.
+    #[serde(default)]
     pub telemetry: Telemetry,
 }
 
@@ -44,11 +45,20 @@ pub struct Discord {
     pub guild_id: u64,
 }
 
-/// Error reporting.
+/// Trace export. Defaults to the local Phoenix collector; an empty endpoint disables it.
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Telemetry {
-    /// Sentry DSN; unset disables Sentry.
-    pub sentry_dsn: Option<SecretString>,
+    /// OTLP/gRPC endpoint.
+    pub otlp_endpoint: Option<String>,
+}
+
+impl Default for Telemetry {
+    fn default() -> Self {
+        Self {
+            otlp_endpoint: Some("http://localhost:4317".into()),
+        }
+    }
 }
 
 impl Config {

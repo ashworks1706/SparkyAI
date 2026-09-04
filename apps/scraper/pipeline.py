@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import structlog
 
 from scraper import chunk, embed, extract, fetch
+from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import RunResult, Source
 from scraper.store import object as objects
@@ -18,6 +19,23 @@ log = structlog.get_logger()
 
 def run_source(source: Source, *, force: bool = False) -> RunResult:
     """Ingests one source. Skips everything after the fetch when the page hash is unchanged."""
+    with telemetry.tracer().start_as_current_span(
+        "scrape.source",
+        attributes={
+            "openinference.span.kind": "CHAIN",
+            "input.value": source.url,
+            "sparky.source": source.key,
+        },
+    ) as span:
+        result = _run_source(source, force=force)
+        span.set_attribute(
+            "output.value",
+            f"{'indexed' if result.changed else 'unchanged'}: {result.chunks} chunks",
+        )
+        return result
+
+
+def _run_source(source: Source, *, force: bool) -> RunResult:
     cfg = settings()
     fetched = fetch.fetch(source.url, needs_js=source.needs_js)
     content_hash = hashlib.sha256(fetched.body).hexdigest()

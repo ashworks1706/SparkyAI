@@ -19,7 +19,7 @@ pub struct Evidence {
     pub url: Option<String>,
     /// When the page was fetched.
     pub fetched_at: DateTime<Utc>,
-    /// Final relevance score after fusion and reranking. Ordering only; not calibrated.
+    /// Fused relevance score. Ordering only; not calibrated.
     pub score: f32,
 }
 

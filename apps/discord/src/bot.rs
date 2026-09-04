@@ -8,6 +8,8 @@ use serenity::all::{
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
+use tracing::Instrument;
+use tracing::field::Empty;
 use uuid::Uuid;
 
 use crate::commands;
@@ -91,8 +93,22 @@ impl Handler {
             conversation_id,
             message: question,
         };
-        match self.engine.chat(&req).await {
+        let span = tracing::info_span!(
+            "discord.ask",
+            "openinference.span.kind" = "CHAIN",
+            "user.id" = %cmd.user.id,
+            "session.id" = Empty,
+            "input.value" = %req.message,
+            "output.value" = Empty,
+        );
+        let outcome = self.engine.chat(&req).instrument(span.clone()).await;
+        match outcome {
             Ok(resp) => {
+                span.record("session.id", resp.conversation_id.to_string().as_str());
+                span.record(
+                    "output.value",
+                    resp.text.chars().take(2_000).collect::<String>().as_str(),
+                );
                 tracing::info!(
                     request_id = %resp.request_id,
                     status = %resp.status,

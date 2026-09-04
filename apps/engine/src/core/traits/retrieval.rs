@@ -1,4 +1,4 @@
-//! `Retriever`, `Embedder`, `Reranker` traits.
+//! `Retriever` and `Embedder` traits.
 
 use async_trait::async_trait;
 
@@ -24,11 +24,4 @@ pub trait Embedder: Send + Sync {
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, RetrievalError>;
     /// Vector dimension.
     fn dim(&self) -> usize;
-}
-
-/// Scores documents against a query.
-#[async_trait]
-pub trait Reranker: Send + Sync {
-    /// Returns one score per document, same order. Ordering only; not calibrated.
-    async fn rerank(&self, query: &str, documents: &[String]) -> Result<Vec<f32>, RetrievalError>;
 }

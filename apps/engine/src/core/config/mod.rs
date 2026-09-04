@@ -19,8 +19,6 @@ pub struct Config {
     pub postgres: Postgres,
     /// Embedding endpoint, used to embed queries at retrieval time.
     pub embedding: Embedding,
-    /// Reranker endpoint, applied to fused retrieval candidates.
-    pub reranker: Reranker,
     /// Sentry and `OpenTelemetry`.
     #[serde(default)]
     pub telemetry: Telemetry,
@@ -186,38 +184,18 @@ pub struct Embedding {
     pub dim: u32,
 }
 
-/// Reranker endpoint (OpenAI-compatible `/v1/rerank`).
-#[derive(Debug, Deserialize)]
-pub struct Reranker {
-    /// Base URL, ending in `/v1`.
-    pub base_url: String,
-    /// API key for the endpoint.
-    pub api_key: SecretString,
-    /// Model name as served.
-    pub name: String,
-}
-
-/// Observability sinks. Defaults to the local Phoenix collector; empty endpoint disables export.
+/// Trace export. Defaults to the local Phoenix collector; an empty endpoint disables it.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {
-    /// Sentry DSN; unset disables Sentry.
-    pub sentry_dsn: Option<SecretString>,
     /// OTLP/gRPC endpoint. Phoenix locally; unset or empty disables trace export.
     pub otlp_endpoint: Option<String>,
-    /// Axiom API token, sent as a bearer header.
-    pub axiom_token: Option<SecretString>,
-    /// Axiom dataset, sent as `x-axiom-dataset`.
-    pub axiom_dataset: Option<String>,
 }
 
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
-            sentry_dsn: None,
             otlp_endpoint: Some("http://localhost:4317".into()),
-            axiom_token: None,
-            axiom_dataset: None,
         }
     }
 }
