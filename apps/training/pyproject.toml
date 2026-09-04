@@ -35,11 +35,20 @@ train = "training.posttrain.cli:app"
 eval = "training.evals.cli:app"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/training"]
+# The package directory is the project root: `training` maps to `.`, so its
+# subpackages are the directories beside this file. New subpackages go in `packages`.
+[tool.setuptools]
+package-dir = { "training" = "." }
+packages = [
+    "training",
+    "training.datasets",
+    "training.evals",
+    "training.evals.suites",
+    "training.posttrain",
+]
 
 [tool.ruff]
 line-length = 100
