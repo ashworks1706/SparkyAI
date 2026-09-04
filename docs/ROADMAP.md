@@ -6,6 +6,7 @@
 - [ ] Build ingestion pipelines that keep sources fresh and deduplicated
 - [ ] Port v1 sources, simplest first: library hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports
 - [ ] introduce distributed inference, search and embedding storage, true parallelism
+- [ ] setup inference dashboard and analytics, telemetry
 - [ ] Answer with citations and dates; add a reranker only if the eval set shows fusion alone falls short
 - [x] Ship a fixed ASU eval set (`apps/training/evals/cases`; grows with every failure)
 
