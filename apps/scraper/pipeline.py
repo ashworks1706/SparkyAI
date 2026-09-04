@@ -3,26 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
 
 from scraper import chunk, embed, extract, fetch
-from scraper.settings import settings
-from scraper.sources import Source
+from scraper.core.settings import settings
+from scraper.core.types import RunResult, Source
 from scraper.store import object as objects
 from scraper.store import postgres
 
 log = structlog.get_logger()
-
-
-@dataclass(frozen=True)
-class RunResult:
-    source: str
-    changed: bool
-    chunks: int
-    content_hash: str
 
 
 def run_source(source: Source, *, force: bool = False) -> RunResult:

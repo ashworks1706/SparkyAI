@@ -34,8 +34,8 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 
 ```
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,tests}, agent/{harness,model,tools}, stores, routes.
-apps/discord/     Rust bin — serenity bot; HTTP/SSE client of engine. Never links engine.
-apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here.
+apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}.
+apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,tests}.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/sandbox/     Python + Playwright browser worker (Phase 7); HTTP task protocol called by engine
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
@@ -77,7 +77,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 
 ## Conventions
 
-- Engine tests live in `apps/engine/src/core/tests/`, one file per unit, shared doubles in `support.rs`. Other apps: `#[cfg(test)] mod tests` or `tests/`.
+- Every app has a `core/` (`src/core/` in Rust) holding what the rest of the app builds on and nothing that does work: config/settings, telemetry, shared types and schemas, and `tests`. Rust: `core/{config,telemetry,types,tests}`; Python: `core/{settings.py,types.py,tests/}`. Domain code imports from `core`; `core` imports nothing from the app.
 - Public items have a one-line doc comment saying what, not how.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
 - The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.

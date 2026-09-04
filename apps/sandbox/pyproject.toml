@@ -29,6 +29,7 @@ build-backend = "setuptools.build_meta"
 package-dir = { "sandbox" = "." }
 packages = [
     "sandbox",
+    "sandbox.core",
     "sandbox.actions",
     "sandbox.policy",
 ]
@@ -41,5 +42,5 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["core/tests"]
 asyncio_mode = "auto"

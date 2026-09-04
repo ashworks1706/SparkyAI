@@ -5,16 +5,7 @@ A source is a row in `sources`, never a folder. Port order per docs/ROADMAP.md P
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class Source:
-    key: str
-    url: str
-    category: str
-    fetch_every_hours: int = 24
-    needs_js: bool = False
+from scraper.core.types import Source
 
 
 def _load() -> dict[str, Source]:

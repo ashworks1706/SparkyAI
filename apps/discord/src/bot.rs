@@ -12,8 +12,9 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::commands;
-use crate::config::Config;
-use crate::engine_client::{ChatRequest, EngineClient};
+use crate::core::config::Config;
+use crate::core::types::ChatRequest;
+use crate::engine_client::EngineClient;
 use crate::reply;
 
 /// Per-process bot state.

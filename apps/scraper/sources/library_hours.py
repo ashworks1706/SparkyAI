@@ -1,6 +1,6 @@
 """Source: library_hours."""
 
-from scraper.sources import Source
+from scraper.core.types import Source
 
 SOURCE = Source(
     key="library_hours",

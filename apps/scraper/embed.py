@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 import httpx
 
-from scraper.settings import settings
+from scraper.core.settings import settings
 
 
 class EmbedError(RuntimeError):

@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from scraper.settings import settings
-
-
-@dataclass(frozen=True)
-class Fetched:
-    url: str
-    status: int
-    body: bytes
-    content_type: str
+from scraper.core.settings import settings
+from scraper.core.types import Fetched
 
 
 class FetchError(RuntimeError):

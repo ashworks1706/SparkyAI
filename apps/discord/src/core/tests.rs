@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::engine_client::ChatResponse;
+use crate::core::types::ChatResponse;
 use crate::reply::{MAX_MESSAGE, chunk, render};
 
 fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {

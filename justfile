@@ -113,7 +113,7 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, scraper, postgres, redis, minio
+# Start engine, discord, scraper, phoenix, postgres, redis, minio
 up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
@@ -131,9 +131,9 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores only; run the engine on the host with `just engine`.
+# Datastores + Phoenix trace UI (http://localhost:6006); run the engine on the host with `just engine`.
 infra *ARGS:
-    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
+    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio phoenix
 
 # llama-server for chat (:8000), embeddings (:8001), rerank (:8002). GGUFs download on first run.
 model *ARGS:

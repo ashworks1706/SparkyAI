@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 
 use futures::future::join_all;
 use serde_json::Value;
+use tracing::Instrument;
+use tracing::field::Empty;
 
 use crate::agent::harness::assemble;
 use crate::agent::harness::conversation::ConversationStore;
@@ -89,8 +91,28 @@ impl Agent {
         }
     }
 
-    /// Runs one user message to completion.
+    /// Runs one user message to completion. One `CHAIN` span per request, with the
+    /// conversation as the session so a Discord thread reads as one session in Phoenix.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
+        let span = tracing::info_span!(
+            "agent.run",
+            "openinference.span.kind" = "CHAIN",
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
+            "sparky.request_id" = %ctx.request_id,
+            "input.value" = %input,
+            "output.value" = Empty,
+            "sparky.status" = Empty,
+        );
+        let result = self.run_inner(ctx, input).instrument(span.clone()).await;
+        if let Ok(answer) = &result {
+            span.record("output.value", truncate(&answer.text, 4_000).as_str());
+            span.record("sparky.status", format!("{:?}", answer.status).as_str());
+        }
+        result
+    }
+
+    async fn run_inner(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
         let mut run = Run {
             ctx,
             input,
@@ -186,8 +208,19 @@ impl Agent {
             Some(retriever) => {
                 let started = Instant::now();
                 let query = RetrievalQuery::new(input, self.cfg.retrieval_top_k);
-                match retriever.retrieve(ctx, &query).await {
+                let span = tracing::info_span!(
+                    "retrieve",
+                    "openinference.span.kind" = "RETRIEVER",
+                    "input.value" = %input,
+                    "output.value" = Empty,
+                );
+                match retriever
+                    .retrieve(ctx, &query)
+                    .instrument(span.clone())
+                    .await
+                {
                     Ok(found) => {
+                        span.record("output.value", format!("{} chunks", found.len()).as_str());
                         deps.trace.emit(
                             ctx,
                             TraceEvent::Retrieval {
@@ -354,14 +387,49 @@ impl Agent {
                 temperature: self.cfg.temperature,
             };
             let started = Instant::now();
+            let last_input = request
+                .messages
+                .last()
+                .map(|m| truncate(&m.content, 4_000))
+                .unwrap_or_default();
+            let span = tracing::info_span!(
+                "llm",
+                "openinference.span.kind" = "LLM",
+                "llm.model_name" = Empty,
+                "llm.token_count.prompt" = Empty,
+                "llm.token_count.completion" = Empty,
+                "llm.invocation_parameters" = %format!(
+                    "{{\"max_tokens\":{},\"temperature\":{}}}",
+                    request.max_tokens, request.temperature
+                ),
+                "input.value" = %last_input,
+                "output.value" = Empty,
+                "sparky.step" = step,
+                "sparky.attempt" = attempt,
+            );
             let result = tokio::select! {
                 () = ctx.cancel.cancelled() => Err(ModelError::Cancelled),
-                outcome = tokio::time::timeout(ctx.remaining(), deps.model.generate(ctx, request)) => {
+                outcome = tokio::time::timeout(ctx.remaining(), deps.model.generate(ctx, request).instrument(span.clone())) => {
                     outcome.unwrap_or(Err(ModelError::Timeout))
                 }
             };
             match result {
                 Ok(response) => {
+                    span.record("llm.model_name", response.model.as_str());
+                    span.record(
+                        "llm.token_count.prompt",
+                        i64::from(response.usage.prompt_tokens),
+                    );
+                    span.record(
+                        "llm.token_count.completion",
+                        i64::from(response.usage.completion_tokens),
+                    );
+                    let shown = if response.tool_calls.is_empty() {
+                        truncate(&response.content, 4_000)
+                    } else {
+                        serde_json::to_string(&response.tool_calls).unwrap_or_default()
+                    };
+                    span.record("output.value", shown.as_str());
                     deps.trace.emit(
                         ctx,
                         TraceEvent::ModelCall {
@@ -409,9 +477,17 @@ impl Agent {
         };
         let started = Instant::now();
         let limit = self.cfg.tool_timeout.min(ctx.remaining());
+        let span = tracing::info_span!(
+            "tool",
+            "openinference.span.kind" = "TOOL",
+            "tool.name" = %call.name,
+            "input.value" = %redact(&call.arguments),
+            "output.value" = Empty,
+            "sparky.step" = step,
+        );
         let result = tokio::select! {
             () = ctx.cancel.cancelled() => Err(ToolError::Cancelled),
-            outcome = tokio::time::timeout(limit, tool.call(ctx, call.arguments.clone())) => {
+            outcome = tokio::time::timeout(limit, tool.call(ctx, call.arguments.clone()).instrument(span.clone())) => {
                 outcome.unwrap_or(Err(ToolError::Timeout))
             }
         };
@@ -436,6 +512,10 @@ impl Agent {
                 duration_ms: ms(started),
             },
         );
+        match &content {
+            Ok(text) => span.record("output.value", truncate(text, 4_000).as_str()),
+            Err(error) => span.record("output.value", format!("error: {error}").as_str()),
+        };
         content
     }
 

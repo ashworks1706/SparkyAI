@@ -24,7 +24,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Vector store | pgvector, in the same PostgreSQL (rebuildable) | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | `apps/scraper` |
-| Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs | every app |
+| Observability | Sentry (errors), OpenTelemetry → Phoenix locally / any OTLP collector deployed (traces, OpenInference attributes), JSON logs | every app; `deploy/compose.yml` `phoenix` |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (dev builds locally, prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -52,9 +52,9 @@ apps/
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat, health, admin
     src/{telemetry,wiring}.rs
-  discord/        Rust bin. serenity bot; HTTP/SSE client of engine. Never links it.
+  discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
-    sources · store · migrations/ (the schema)
+    core/{settings,types,tests} · sources · store · migrations/ (the schema)
   training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
   sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
   web/            Vite + React frontend and admin UI
@@ -63,6 +63,8 @@ docs/             ROADMAP.md, this file, decisions/
 ```
 
 Each Python app directory is itself the importable package — `apps/scraper` is `scraper` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
+
+Every app has a `core/`: config or settings, telemetry, shared types, and tests. Domain modules import from it; it imports nothing from them.
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
@@ -249,7 +251,7 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | rate limits, queue, short-lived cache | Redis |
 | raw snapshots, model artifacts | object storage |
 | browser session secrets | encrypted, separate namespace |
-| traces | JSONL locally; OpenTelemetry in deployment |
+| traces | JSONL locally (replay source); OpenTelemetry to Phoenix locally, any OTLP collector deployed |
 
 Durable job state lives in Postgres, so a Redis restart loses nothing. Schema is `apps/scraper/migrations`.
 

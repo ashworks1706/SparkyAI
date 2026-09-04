@@ -31,6 +31,7 @@ build-backend = "setuptools.build_meta"
 package-dir = { "scraper" = "." }
 packages = [
     "scraper",
+    "scraper.core",
     "scraper.sources",
     "scraper.store",
 ]
@@ -43,5 +44,5 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["core/tests"]
 asyncio_mode = "auto"

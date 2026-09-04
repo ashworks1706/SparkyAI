@@ -8,7 +8,7 @@ import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
-from scraper.settings import settings
+from scraper.core.settings import settings
 
 
 @lru_cache(maxsize=1)

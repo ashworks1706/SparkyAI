@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
 
-use crate::engine_client::{ChatResponse, Confirmation};
+use crate::core::types::{ChatResponse, Confirmation};
 
 /// Discord's hard limit on message content.
 pub const MAX_MESSAGE: usize = 2_000;

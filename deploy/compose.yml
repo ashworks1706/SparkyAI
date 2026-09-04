@@ -9,6 +9,7 @@ services:
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_RERANKER__BASE_URL: http://rerank:8002/v1
+      SPARKY_TELEMETRY__OTLP_ENDPOINT: http://phoenix:4317
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -123,6 +124,15 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
     restart: unless-stopped
 
+  # Trace UI (Arize Phoenix). OTLP gRPC on 4317, UI on 6006. The engine exports here by default.
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    volumes: [phoenixdata:/data]
+    ports: ["6006:6006", "4317:4317"]
+    restart: unless-stopped
+
   postgres:
     image: pgvector/pgvector:pg17
     environment:
@@ -156,3 +166,4 @@ volumes:
   redisdata:
   miniodata:
   modelcache:
+  phoenixdata:

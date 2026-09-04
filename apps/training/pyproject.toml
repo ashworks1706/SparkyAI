@@ -42,6 +42,7 @@ build-backend = "setuptools.build_meta"
 package-dir = { "training" = "." }
 packages = [
     "training",
+    "training.core",
     "training.datasets",
     "training.evals",
     "training.evals.suites",
@@ -56,4 +57,4 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["core/tests"]

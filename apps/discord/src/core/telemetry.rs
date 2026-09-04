@@ -1,6 +1,6 @@
 //! Logging and Sentry for the bot. Traces are the API's job.
 
-use crate::config::Telemetry;
+use crate::core::config::Telemetry;
 use secrecy::ExposeSecret;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 

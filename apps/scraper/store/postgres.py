@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -13,7 +12,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from scraper.settings import settings
+from scraper.core.settings import settings
+from scraper.core.types import ChunkRow, SourceRow
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -61,14 +61,6 @@ def migrate(conn: psycopg.Connection) -> list[str]:
         done.append(path.name)
     conn.commit()
     return done
-
-
-@dataclass(frozen=True)
-class SourceRow:
-    id: uuid.UUID
-    key: str
-    url: str
-    category: str
 
 
 def upsert_source(
@@ -131,13 +123,6 @@ def insert_version(
     ).fetchone()
     assert row is not None
     return row["id"]
-
-
-@dataclass(frozen=True)
-class ChunkRow:
-    ordinal: int
-    content: str
-    embedding: Sequence[float]
 
 
 def replace_chunks(

@@ -1,4 +1,5 @@
-//! Logging, Sentry, and OpenTelemetry export (Axiom via OTLP).
+//! Logging, Sentry, and OpenTelemetry export over OTLP/gRPC — Phoenix locally, any OTLP
+//! collector (Axiom with its headers) in deployment. Spans carry `OpenInference` attributes.
 
 use crate::core::config::Telemetry;
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
@@ -30,7 +31,11 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
         sentry::init((dsn.expose_secret(), opts))
     });
 
-    let otel = match &cfg.otlp_endpoint {
+    let otel = match cfg
+        .otlp_endpoint
+        .as_deref()
+        .filter(|e| !e.trim().is_empty())
+    {
         Some(endpoint) => {
             let mut builder = SpanExporter::builder().with_tonic().with_endpoint(endpoint);
             if let (Some(token), Some(dataset)) = (&cfg.axiom_token, &cfg.axiom_dataset) {

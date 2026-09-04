@@ -1,0 +1,1 @@
+"""Shared foundations: types, tests."""

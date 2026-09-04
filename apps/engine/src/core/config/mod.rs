@@ -150,17 +150,29 @@ pub struct Reranker {
     pub name: String,
 }
 
-/// Observability sinks. All optional.
+/// Observability sinks. Defaults to the local Phoenix collector; empty endpoint disables export.
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Telemetry {
     /// Sentry DSN; unset disables Sentry.
     pub sentry_dsn: Option<SecretString>,
-    /// OTLP/gRPC endpoint; unset disables trace export.
+    /// OTLP/gRPC endpoint. Phoenix locally; unset or empty disables trace export.
     pub otlp_endpoint: Option<String>,
     /// Axiom API token, sent as a bearer header.
     pub axiom_token: Option<SecretString>,
     /// Axiom dataset, sent as `x-axiom-dataset`.
     pub axiom_dataset: Option<String>,
+}
+
+impl Default for Telemetry {
+    fn default() -> Self {
+        Self {
+            sentry_dsn: None,
+            otlp_endpoint: Some("http://localhost:4317".into()),
+            axiom_token: None,
+            axiom_dataset: None,
+        }
+    }
 }
 
 impl Config {
