@@ -5,8 +5,11 @@ use std::time::Duration;
 
 use axum::Json;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::agent::harness::agent::Agent;
 use crate::core::traits::conversation::ConversationStore;
@@ -39,8 +42,40 @@ fn error(status: StatusCode, ctx: &RequestContext, text: &str) -> Response {
         .into_response()
 }
 
-/// Handles one chat turn.
-pub async fn chat(State(state): State<ChatState>, Json(req): Json<ChatRequest>) -> Response {
+/// Parses a W3C `traceparent` header into a remote parent context.
+pub fn parse_traceparent(value: &str) -> Option<opentelemetry::Context> {
+    let mut parts = value.trim().split('-');
+    let (_version, trace_id, span_id, flags) =
+        (parts.next()?, parts.next()?, parts.next()?, parts.next()?);
+    let trace_id = TraceId::from_hex(trace_id).ok()?;
+    let span_id = SpanId::from_hex(span_id).ok()?;
+    let flags = TraceFlags::new(u8::from_str_radix(flags, 16).ok()?);
+    let remote = SpanContext::new(trace_id, span_id, flags, true, TraceState::default());
+    remote
+        .is_valid()
+        .then(|| opentelemetry::Context::new().with_remote_span_context(remote))
+}
+
+/// Handles one chat turn. Runs under an `http.chat` span parented to the caller's
+/// `traceparent`, so the bot's interaction and the engine's loop share one trace.
+pub async fn chat(
+    State(state): State<ChatState>,
+    headers: HeaderMap,
+    Json(req): Json<ChatRequest>,
+) -> Response {
+    let span = tracing::info_span!("http.chat", "sparky.user_id" = %req.user_id);
+    if let Some(parent) = headers
+        .get("traceparent")
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_traceparent)
+        && let Err(e) = span.set_parent(parent)
+    {
+        tracing::debug!(error = %e, "traceparent ignored");
+    }
+    chat_inner(state, req).instrument(span).await
+}
+
+async fn chat_inner(state: ChatState, req: ChatRequest) -> Response {
     if req.message.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "message is empty").into_response();
     }

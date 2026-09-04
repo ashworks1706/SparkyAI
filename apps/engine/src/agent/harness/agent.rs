@@ -30,6 +30,9 @@ use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::ToolError;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
+/// Longest value recorded on a span. Phoenix keeps whole values; the JSONL trace has the rest.
+const MAX_SPAN_VALUE: usize = 32_000;
+
 /// The dependencies the loop drives. Every one is a trait with a test double.
 pub struct AgentDeps {
     /// The chat model.
@@ -106,6 +109,7 @@ impl Agent {
             "session.id" = %ctx.conversation_id,
             "user.id" = %ctx.user_id,
             "sparky.request_id" = %ctx.request_id,
+            "sparky.tenant_id" = %ctx.tenant_id,
             "input.value" = %input,
             "output.value" = Empty,
             "sparky.status" = Empty,
@@ -221,6 +225,7 @@ impl Agent {
                     "openinference.span.kind" = "RETRIEVER",
                     "input.value" = %input,
                     "output.value" = Empty,
+                    "output.mime_type" = "application/json",
                 );
                 match retriever
                     .retrieve(ctx, &query)
@@ -228,7 +233,26 @@ impl Agent {
                     .await
                 {
                     Ok(found) => {
-                        span.record("output.value", format!("{} chunks", found.len()).as_str());
+                        let listing: Vec<serde_json::Value> = found
+                            .iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "chunk_id": e.chunk_id,
+                                    "source_id": e.source_id,
+                                    "title": e.title,
+                                    "score": e.score,
+                                    "content": truncate(&e.content, 1_000),
+                                })
+                            })
+                            .collect();
+                        span.record(
+                            "output.value",
+                            truncate(
+                                &serde_json::to_string(&listing).unwrap_or_default(),
+                                MAX_SPAN_VALUE,
+                            )
+                            .as_str(),
+                        );
                         deps.trace.emit(
                             ctx,
                             TraceEvent::Retrieval {
@@ -483,11 +507,8 @@ impl Agent {
                 temperature: self.cfg.temperature,
             };
             let started = Instant::now();
-            let last_input = request
-                .messages
-                .last()
-                .map(|m| truncate(&m.content, 4_000))
-                .unwrap_or_default();
+            // Full prompt and full reply as JSON: this is what a training example is made of.
+            let input_json = serde_json::to_string(&request.messages).unwrap_or_default();
             let span = tracing::info_span!(
                 "llm",
                 "openinference.span.kind" = "LLM",
@@ -495,11 +516,15 @@ impl Agent {
                 "llm.token_count.prompt" = Empty,
                 "llm.token_count.completion" = Empty,
                 "llm.invocation_parameters" = %format!(
-                    "{{\"max_tokens\":{},\"temperature\":{}}}",
-                    request.max_tokens, request.temperature
+                    "{{\"max_tokens\":{},\"temperature\":{},\"tools\":{}}}",
+                    request.max_tokens,
+                    request.temperature,
+                    request.tools.len()
                 ),
-                "input.value" = %last_input,
+                "input.value" = %truncate(&input_json, MAX_SPAN_VALUE),
+                "input.mime_type" = "application/json",
                 "output.value" = Empty,
+                "output.mime_type" = "application/json",
                 "sparky.step" = step,
                 "sparky.attempt" = attempt,
             );
@@ -520,12 +545,8 @@ impl Agent {
                         "llm.token_count.completion",
                         i64::from(response.usage.completion_tokens),
                     );
-                    let shown = if response.tool_calls.is_empty() {
-                        truncate(&response.content, 4_000)
-                    } else {
-                        serde_json::to_string(&response.tool_calls).unwrap_or_default()
-                    };
-                    span.record("output.value", shown.as_str());
+                    let shown = serde_json::to_string(&response.as_message()).unwrap_or_default();
+                    span.record("output.value", truncate(&shown, MAX_SPAN_VALUE).as_str());
                     deps.trace.emit(
                         ctx,
                         TraceEvent::ModelCall {
@@ -577,7 +598,9 @@ impl Agent {
             "tool",
             "openinference.span.kind" = "TOOL",
             "tool.name" = %call.name,
+            "tool.call_id" = %call.id,
             "input.value" = %redact(&call.arguments),
+            "input.mime_type" = "application/json",
             "output.value" = Empty,
             "sparky.step" = step,
         );

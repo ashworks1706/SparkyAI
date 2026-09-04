@@ -4,6 +4,7 @@
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::core::config::Telemetry;
@@ -53,9 +54,14 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
     } else {
         tracing_subscriber::fmt::layer().json().boxed()
     };
-    let otel_layer = otel
-        .as_ref()
-        .map(|p| tracing_opentelemetry::layer().with_tracer(p.tracer("discord")));
+    // Export only this crate's spans. Dependencies (serenity's gateway, Rig, tower-http)
+    // instrument themselves too, and that noise would bury the request tree in Phoenix.
+    let own_spans = filter_fn(|meta| meta.target().starts_with("discord"));
+    let otel_layer = otel.as_ref().map(|p| {
+        tracing_opentelemetry::layer()
+            .with_tracer(p.tracer("discord"))
+            .with_filter(own_spans)
+    });
     tracing_subscriber::registry()
         .with(filter)
         .with(fmt)

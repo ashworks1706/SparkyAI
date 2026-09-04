@@ -48,3 +48,10 @@ fn empty_answer_explains_the_status() {
     let out = render(&response("", vec![], "deadline"));
     assert!(out[0].contains("too long"));
 }
+
+#[test]
+fn no_traceparent_without_an_active_span() {
+    use crate::engine_client::current_traceparent;
+
+    assert!(current_traceparent().is_none());
+}

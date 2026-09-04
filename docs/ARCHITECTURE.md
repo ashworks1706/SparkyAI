@@ -279,7 +279,10 @@ Discord handlers never block on long work. Ingestion, embedding, browser tasks, 
 
 ## Tracing
 
-One trace per request covering every model call, retrieval, memory access, tool call, policy decision, confirmation, and error. Records ids, model/prompt/template versions, evidence and memory ids, validated tool args, timings, tokens, final status. Never passwords, cookies, auth codes, tokens, or raw sensitive form values. Any request can be replayed from its trace against a chosen model, prompt, tool set, and retrieval snapshot; that is the eval harness.
+One trace per request covering every model call, retrieval, memory access, tool call, policy decision, confirmation, and error. Two forms of it:
+
+- **JSONL** (`traces/<request_id>.jsonl`): the complete record and the replay source. Never sampled, never truncated.
+- **Phoenix spans**, stitched across processes: the bot's `discord.ask` carries a W3C `traceparent` into the engine, whose `http.chat` → `agent.run` → `retrieve` / `llm` / `tool` spans nest under it, so one Discord interaction is one trace and one conversation is one session. Only each crate's own spans are exported; dependency internals are filtered out. `llm` spans hold the full input message list and the full assistant reply as JSON (`input.value` / `output.value`, `application/json`), plus model name, token counts, and invocation parameters — a Phase 6 training example is one `llm` span. `retrieve` spans list the chunks returned; `tool` spans hold redacted arguments and the result. The scraper's `scrape.source` spans record what was indexed. Records ids, model/prompt/template versions, evidence and memory ids, validated tool args, timings, tokens, final status. Never passwords, cookies, auth codes, tokens, or raw sensitive form values. Any request can be replayed from its trace against a chosen model, prompt, tool set, and retrieval snapshot; that is the eval harness.
 
 ## Sandboxed browser (Phase 7)
 

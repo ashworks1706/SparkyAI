@@ -43,3 +43,20 @@ fn jsonl_round_trips() {
     ));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn traceparent_parses_into_a_remote_parent() {
+    use opentelemetry::trace::TraceContextExt;
+
+    use crate::routes::chat::parse_traceparent;
+
+    let cx = parse_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    let sc = cx.as_ref().map(|c| c.span().span_context().clone());
+    assert!(sc.as_ref().is_some_and(|s| s.is_remote() && s.is_sampled()));
+    assert_eq!(
+        sc.map(|s| s.trace_id().to_string()),
+        Some("4bf92f3577b34da6a3ce929d0e0e4736".into())
+    );
+    assert!(parse_traceparent("garbage").is_none());
+    assert!(parse_traceparent("00-00000000000000000000000000000000-0000000000000000-01").is_none());
+}

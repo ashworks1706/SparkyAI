@@ -70,6 +70,12 @@ services:
       - --jinja
     volumes: [modelcache:/root/.cache/llama.cpp]
     ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
     deploy:
       resources:
         reservations:
@@ -100,6 +106,12 @@ services:
       - ${SPARKY_EMBED_NGL:-99}
     volumes: [modelcache:/root/.cache/llama.cpp]
     ports: ["8001:8001"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
     deploy:
       resources:
         reservations:
