@@ -8,25 +8,25 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 
 | Layer | Choice | Where |
 |---|---|---|
-| Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client → llama-server; never `rig::Agent`. The only inference path. | `apps/engine/src/agent/model/rig_openai.rs` |
-| MCP | `rmcp` (official SDK); Playwright MCP is the first server | `apps/engine/src/agent/tools/mcp.rs` |
-| Scraper | Python 3.12 — psycopg, boto3, httpx | `apps/scraper` |
-| Fetch + extract | Firecrawl, self-hosted (JS rendered, markdown out); plain httpx + BeautifulSoup as the `http` fetcher | `deploy/compose.yml` profile `crawl` |
-| Browser tools | Playwright MCP over Streamable HTTP, wrapped as `Tool`s with a name-derived `RiskClass` | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
+| Engine, Discord bot | tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
+| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client. | `apps/engine/src/agent/model/rig_openai.rs` |
+| MCP | `rmcp` (official SDK); Playwright MCP | `apps/engine/src/agent/tools/mcp.rs` |
+| Scraper | psycopg, boto3, httpx | `apps/scraper` |
+| Fetch + extract | Firecrawl, self-hosted; httpx + BeautifulSoup | `deploy/compose.yml` profile `crawl` |
+| Browser tools | Playwright MCP over Streamable HTTP | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
-| Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF export | `apps/training/posttrain` |
-| Evals | Golden cases against `/chat`, deterministic suites scored from the engine's JSONL trace, baseline gate | `apps/training/evals` |
+| Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF | `apps/training/posttrain` |
+| Evals | Golden cases against `/chat`, deterministic baseline gate | `apps/training/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
 | Embeddings | Qwen3-Embedding-0.6B (1024-dim) on `llama-server` | `deploy/inference` |
-| Database | PostgreSQL 17 — source of truth | `apps/engine` reads, `apps/scraper` writes |
-| Vector store | pgvector, in the same PostgreSQL (rebuildable) | same database |
+| Database | PostgreSQL 17 | `apps/engine` reads, `apps/scraper` writes |
+| Vector store | pgvector | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
-| Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | `apps/scraper` |
-| Observability | OpenTelemetry → Phoenix; JSON logs to stdout; local traces and console logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
-| Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
-| Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
-| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
+| Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
+| Observability | OpenTelemetry → Phoenix; logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
+| Config | `SPARKY_<SECTION>__<KEY>` env vars | `config.rs`, `settings.py`, `.env.example` |
+| Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
+| Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
 
 ## Rules
 
