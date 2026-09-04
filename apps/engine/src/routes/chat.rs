@@ -1,15 +1,32 @@
 //! `POST /chat`: one user message in, one answer with citations out.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use crate::core::types::adapters::ChatState;
+use crate::agent::harness::agent::Agent;
+use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::AgentError;
 use crate::core::types::chat::{ChatRequest, ChatResponse, ErrorBody};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
+
+/// What the chat route needs.
+#[derive(Clone)]
+pub struct ChatState {
+    /// The agent.
+    pub agent: Agent,
+    /// To create the conversation row before the run.
+    pub conversations: Option<Arc<dyn ConversationStore>>,
+    /// Per-request wall-clock budget.
+    pub request_budget: Duration,
+    /// Tenant used when the client sends none (single-guild deployments).
+    pub default_tenant: String,
+}
 
 fn error(status: StatusCode, ctx: &RequestContext, text: &str) -> Response {
     (

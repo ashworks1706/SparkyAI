@@ -8,10 +8,16 @@ use serde_json::{Value, json};
 
 use crate::core::traits::retrieval::Retriever;
 use crate::core::traits::tool::Tool;
-use crate::core::types::adapters::{PublicSearch, SearchArgs};
 use crate::core::types::context::RequestContext;
 use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::wire::SearchArgs;
+
+/// Lets the model run a targeted search when the up-front retrieval was not enough.
+pub struct PublicSearch {
+    retriever: Arc<dyn Retriever>,
+    top_k: usize,
+}
 
 impl PublicSearch {
     /// Searches with `retriever`, returning at most `top_k` chunks.

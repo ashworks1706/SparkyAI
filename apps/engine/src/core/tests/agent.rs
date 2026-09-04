@@ -6,9 +6,9 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::agent::harness::agent::redact;
+use crate::agent::harness::tool::ToolSet;
 use crate::core::tests::support::{Echo, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::harness::ToolSet;
 use crate::core::types::model::ModelError;
 use crate::core::types::policy::Decision;
 use crate::core::types::tool::RiskClass;

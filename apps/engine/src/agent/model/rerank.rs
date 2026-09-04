@@ -6,8 +6,17 @@ use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::core::traits::retrieval::Reranker;
-use crate::core::types::adapters::{HttpReranker, RerankWireRequest, RerankWireResponse};
 use crate::core::types::retrieval::RetrievalError;
+use crate::core::types::wire::{RerankRequest, RerankResponse};
+
+/// Rerank client for one model.
+#[derive(Debug, Clone)]
+pub struct HttpReranker {
+    http: reqwest::Client,
+    base_url: String,
+    api_key: SecretString,
+    model: String,
+}
 
 impl HttpReranker {
     /// Builds a client. `base_url` ends in `/v1`.
@@ -39,7 +48,7 @@ impl Reranker for HttpReranker {
         let mut request =
             self.http
                 .post(format!("{}/rerank", self.base_url))
-                .json(&RerankWireRequest {
+                .json(&RerankRequest {
                     model: &self.model,
                     query,
                     documents,
@@ -62,7 +71,7 @@ impl Reranker for HttpReranker {
                 text.chars().take(300).collect::<String>()
             )));
         }
-        let wire: RerankWireResponse =
+        let wire: RerankResponse =
             serde_json::from_str(&text).map_err(|e| RetrievalError::Rerank(e.to_string()))?;
         let mut scores = vec![f32::MIN; documents.len()];
         for r in wire.results {

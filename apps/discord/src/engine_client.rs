@@ -4,7 +4,15 @@ use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::core::types::{ChatRequest, ChatResponse, EngineClient, EngineError};
+use crate::core::types::{ChatRequest, ChatResponse, EngineError};
+
+/// HTTP client bound to one engine.
+#[derive(Debug, Clone)]
+pub struct EngineClient {
+    http: reqwest::Client,
+    base_url: String,
+    token: SecretString,
+}
 
 impl EngineClient {
     /// Builds a client for `base_url`.

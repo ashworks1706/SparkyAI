@@ -1,12 +1,6 @@
-//! Every struct in the bot: the `/chat` wire mirror, the engine client, and the event handler.
-//! Behaviour lives in `engine_client` and `bot`.
+//! Wire types mirrored from the engine's `/chat` contract, plus the client error.
 
-use std::collections::HashMap;
-
-use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
-use serenity::all::{GuildId, UserId};
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 /// What the bot sends. Mirrors `engine::core::types::chat::ChatRequest`.
@@ -71,20 +65,4 @@ pub enum EngineError {
         /// Body, truncated.
         body: String,
     },
-}
-
-/// HTTP client bound to one engine.
-#[derive(Debug, Clone)]
-pub struct EngineClient {
-    pub(crate) http: reqwest::Client,
-    pub(crate) base_url: String,
-    pub(crate) token: SecretString,
-}
-
-/// Per-process bot state and the serenity event handler.
-pub struct Handler {
-    pub(crate) engine: EngineClient,
-    pub(crate) guild_id: GuildId,
-    /// Conversation each user is continuing. Lost on restart; `/reset` clears it.
-    pub(crate) conversations: Mutex<HashMap<UserId, Uuid>>,
 }

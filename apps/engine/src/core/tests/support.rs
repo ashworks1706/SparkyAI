@@ -6,11 +6,14 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::agent::harness::agent::{Agent, AgentDeps};
+use crate::agent::harness::policy::RiskPolicy;
+use crate::agent::harness::tool::ToolSet;
+use crate::agent::harness::trace::MemorySink;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::tool::Tool;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::context::RequestContext;
-use crate::core::types::harness::{Agent, AgentDeps, MemorySink, RiskPolicy, ToolSet};
 use crate::core::types::message::ToolCall;
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};

@@ -1,10 +1,16 @@
-//! `ToolSet` registry behaviour.
+//! `ToolSet`: the tools available to one agent, keyed by name.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::core::traits::tool::Tool;
-use crate::core::types::harness::ToolSet;
 use crate::core::types::tool::ToolDefinition;
+
+/// The tools available to one agent, keyed by name.
+#[derive(Default, Clone)]
+pub struct ToolSet {
+    tools: BTreeMap<String, Arc<dyn Tool>>,
+}
 
 impl ToolSet {
     /// An empty set.

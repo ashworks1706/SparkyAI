@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use crate::core::traits::policy::Policy;
 use crate::core::types::context::RequestContext;
-use crate::core::types::harness::RiskPolicy;
 use crate::core::types::policy::{ConfirmationRequest, Decision, PolicyError, ProposedAction};
 use crate::core::types::tool::RiskClass;
 
@@ -18,6 +17,12 @@ pub fn payload_hash(arguments: &Value) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+/// The default policy: risk class alone decides. Roles gate writes.
+#[derive(Debug, Clone)]
+pub struct RiskPolicy {
+    write_role: Option<String>,
 }
 
 impl RiskPolicy {

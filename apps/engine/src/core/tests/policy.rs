@@ -4,10 +4,9 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::policy::payload_hash;
+use crate::agent::harness::policy::{RiskPolicy, payload_hash};
 use crate::core::traits::policy::Policy;
 use crate::core::types::context::RequestContext;
-use crate::core::types::harness::RiskPolicy;
 use crate::core::types::policy::{Decision, ProposedAction};
 use crate::core::types::tool::RiskClass;
 

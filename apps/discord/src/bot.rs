@@ -4,15 +4,25 @@ use secrecy::ExposeSecret;
 use serenity::all::{
     Client, CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
-    GatewayIntents, GuildId, Interaction, Ready, ResolvedValue,
+    GatewayIntents, GuildId, Interaction, Ready, ResolvedValue, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use crate::commands;
 use crate::core::config::Config;
-use crate::core::types::{ChatRequest, EngineClient, Handler};
+use crate::core::types::ChatRequest;
+use crate::engine_client::EngineClient;
 use crate::reply;
+
+/// Per-process bot state and the serenity event handler.
+struct Handler {
+    engine: EngineClient,
+    guild_id: GuildId,
+    /// Conversation each user is continuing. Lost on restart; `/reset` clears it.
+    conversations: Mutex<std::collections::HashMap<UserId, Uuid>>,
+}
 
 /// Connects to Discord and runs until shutdown.
 pub async fn run(cfg: Config) -> anyhow::Result<()> {
