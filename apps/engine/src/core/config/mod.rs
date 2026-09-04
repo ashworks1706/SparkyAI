@@ -48,13 +48,11 @@ pub struct Engine {
     pub service_token: SecretString,
 }
 
-/// The guild this engine serves and who may write in it.
+/// The guild this engine serves.
 #[derive(Debug, Deserialize)]
 pub struct Discord {
     /// The one guild this deployment serves.
     pub guild_id: u64,
-    /// Role name that grants moderator permissions.
-    pub mod_role: String,
 }
 
 /// Chat model served by `llama-server` (OpenAI-compatible).

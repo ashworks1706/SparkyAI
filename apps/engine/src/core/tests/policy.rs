@@ -25,14 +25,14 @@ fn action(risk: RiskClass) -> ProposedAction {
 
 #[tokio::test]
 async fn reads_are_allowed() {
-    let p = RiskPolicy::new(Some("Moderator".into()));
+    let p = RiskPolicy::new();
     let d = p.authorize(&ctx(&[]), &action(RiskClass::ReadPublic)).await;
     assert!(matches!(d, Decision::Allow));
 }
 
 #[tokio::test]
 async fn writes_without_role_are_denied() {
-    let p = RiskPolicy::new(Some("Moderator".into()));
+    let p = RiskPolicy::new();
     let d = p
         .authorize(&ctx(&[]), &action(RiskClass::ExternalWrite))
         .await;
@@ -41,18 +41,18 @@ async fn writes_without_role_are_denied() {
 
 #[tokio::test]
 async fn writes_with_role_need_confirmation() {
-    let p = RiskPolicy::new(Some("Moderator".into()));
+    let p = RiskPolicy::new();
     let d = p
-        .authorize(&ctx(&["Moderator"]), &action(RiskClass::ExternalWrite))
+        .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))
         .await;
     assert!(matches!(d, Decision::Confirm(_)));
 }
 
 #[tokio::test]
 async fn forbidden_is_denied_regardless_of_role() {
-    let p = RiskPolicy::new(None);
+    let p = RiskPolicy::new();
     let d = p
-        .authorize(&ctx(&["Moderator"]), &action(RiskClass::Forbidden))
+        .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::Forbidden))
         .await;
     assert!(matches!(d, Decision::Deny { .. }));
 }

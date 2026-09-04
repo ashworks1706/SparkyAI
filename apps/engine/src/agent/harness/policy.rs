@@ -19,16 +19,14 @@ pub fn payload_hash(arguments: &Value) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-/// The default policy: risk class alone decides. Roles gate writes.
-#[derive(Debug, Clone)]
-pub struct RiskPolicy {
-    write_role: Option<String>,
-}
+/// The default risk policy.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RiskPolicy;
 
 impl RiskPolicy {
-    /// Writes need `write_role`; reads and drafts are open.
-    pub fn new(write_role: Option<String>) -> Self {
-        Self { write_role }
+    /// Creates the policy.
+    pub const fn new() -> Self {
+        Self
     }
 }
 
@@ -41,11 +39,12 @@ impl Policy for RiskPolicy {
                 reason: "authenticated reads are not enabled".into(),
             },
             RiskClass::ExternalWrite | RiskClass::Destructive => {
-                if let Some(role) = &self.write_role
-                    && !ctx.has_role(role)
-                {
+                if !ctx.has_role("MANAGE_GUILD") {
                     return Decision::Deny {
-                        reason: format!("`{}` requires the {role} role", action.tool),
+                        reason: format!(
+                            "`{}` requires Discord's Manage Server permission",
+                            action.tool
+                        ),
                     };
                 }
                 Decision::Confirm(ConfirmationRequest {

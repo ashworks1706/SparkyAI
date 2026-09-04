@@ -4,7 +4,7 @@ use secrecy::ExposeSecret;
 use serenity::all::{
     Client, CommandInteraction, Context, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
-    GatewayIntents, GuildId, Interaction, Ready, ResolvedValue, UserId,
+    GatewayIntents, GuildId, Interaction, Permissions, Ready, ResolvedValue, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -60,11 +60,15 @@ impl Handler {
             return Ok(Vec::new());
         };
         let roles = self.guild_id.roles(&ctx.http).await?;
-        Ok(member
+        let mut names: Vec<String> = member
             .roles
             .iter()
             .filter_map(|id| roles.get(id).map(|r| r.name.clone()))
-            .collect())
+            .collect();
+        if member.permissions.is_some_and(can_write) {
+            names.push("MANAGE_GUILD".into());
+        }
+        Ok(names)
     }
 
     async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
@@ -169,6 +173,10 @@ impl Handler {
             tracing::warn!(error = %e, "reset response failed");
         }
     }
+}
+
+pub(crate) fn can_write(permissions: Permissions) -> bool {
+    permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
 }
 
 #[async_trait]

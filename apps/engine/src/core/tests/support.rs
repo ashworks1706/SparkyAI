@@ -148,7 +148,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
     let deps = AgentDeps {
         model: Arc::new(model),
         tools,
-        policy: Arc::new(RiskPolicy::new(Some("Moderator".into()))),
+        policy: Arc::new(RiskPolicy::new()),
         trace: sink.clone(),
         retriever: None,
         conversations: None,

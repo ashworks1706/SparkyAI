@@ -27,8 +27,8 @@ fn cancel_is_observable() {
 
 #[test]
 fn roles_are_checked_by_name() {
-    let ctx =
-        RequestContext::new("g", "u1", Duration::from_secs(1)).with_roles(vec!["Moderator".into()]);
-    assert!(ctx.has_role("Moderator"));
+    let ctx = RequestContext::new("g", "u1", Duration::from_secs(1))
+        .with_roles(vec!["MANAGE_GUILD".into()]);
+    assert!(ctx.has_role("MANAGE_GUILD"));
     assert!(!ctx.has_role("Admin"));
 }

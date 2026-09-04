@@ -116,7 +116,7 @@ async fn write_with_role_stops_for_confirmation() {
         tools,
         AgentConfig::default(),
     );
-    let context = ctx().with_roles(vec!["Moderator".into()]);
+    let context = ctx().with_roles(vec!["MANAGE_GUILD".into()]);
     let out = agent.run(&context, "post it").await.ok();
     assert_eq!(
         out.as_ref().map(|answer| answer.status.clone()),

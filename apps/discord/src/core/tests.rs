@@ -2,8 +2,10 @@
 
 use uuid::Uuid;
 
+use crate::bot::can_write;
 use crate::core::types::ChatResponse;
 use crate::reply::{MAX_MESSAGE, chunk, render};
+use serenity::all::Permissions;
 
 fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
     ChatResponse {
@@ -54,4 +56,11 @@ fn no_traceparent_without_an_active_span() {
     use crate::engine_client::current_traceparent;
 
     assert!(current_traceparent().is_none());
+}
+
+#[test]
+fn discord_management_permissions_grant_write_access() {
+    assert!(can_write(Permissions::MANAGE_GUILD));
+    assert!(can_write(Permissions::ADMINISTRATOR));
+    assert!(!can_write(Permissions::MANAGE_MESSAGES));
 }

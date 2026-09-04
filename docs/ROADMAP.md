@@ -5,10 +5,9 @@
 - [ ] Stand up search over ASU content with access controls
 - [ ] Build ingestion pipelines that keep sources fresh and deduplicated
 - [ ] Port v1 sources, simplest first: library hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports
+- [ ] introduce distributed inference, search and embedding storage, true parallelism
 - [ ] Answer with citations and dates; add a reranker only if the eval set shows fusion alone falls short
 - [x] Ship a fixed ASU eval set (`apps/training/evals/cases`; grows with every failure)
-
-Exit: correct, dated sources on the eval set; reproducible traces.
 
 ## 3 — Discord v0.3
 
@@ -16,8 +15,6 @@ Exit: correct, dated sources on the eval set; reproducible traces.
 - [ ] Persist conversations; enforce Discord identity and role checks
 - [ ] Add moderator ops with confirmation before any write: tickets, announcements, polls, escalation
 - [ ] First deployment
-
-Exit: AI Society uses it daily; failures inspectable from traces.
 
 ## 4 — Memory, MCP, admin v0.4
 

@@ -242,7 +242,7 @@ sequenceDiagram
     B->>PX: spans
 ```
 
-1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity and roles. Web, admin, and the `sparky` console hit the same endpoint.
+1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity, roles, and native permissions. Web, admin, and the `sparky` console hit the same endpoint.
 2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`.
 3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.
@@ -282,8 +282,8 @@ The loop owns every stopping condition. Structured output gets one correction at
 | `ReadPublic` | search indexed pages, library hours | run |
 | `ReadAuthenticated` | read a page in the user's own browser session | run after session authorization |
 | `PrepareWrite` | draft an announcement, fill a form without submitting | run |
-| `ExternalWrite` | post, create ticket, book, submit | confirm immediately before |
-| `Destructive` | delete, cancel | confirm immediately before |
+| `ExternalWrite` | post, create ticket, book, submit | require Manage Server, then confirm immediately before |
+| `Destructive` | delete, cancel | require Manage Server, then confirm immediately before |
 | `Forbidden` | another user's session, bypassing policy | deny |
 
 A confirmation is bound to one exact action payload, is single-use and short-lived, states what happens / where / with what data / whether reversible, and is recorded in the trace. If the payload changes, confirm again. External writes are never auto-retried without an idempotency key.

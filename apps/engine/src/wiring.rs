@@ -90,7 +90,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let deps = AgentDeps {
         model,
         tools,
-        policy: Arc::new(RiskPolicy::new(Some(cfg.discord.mod_role.clone()))),
+        policy: Arc::new(RiskPolicy::new()),
         trace,
         retriever: Some(retriever),
         conversations: Some(conversations.clone()),
