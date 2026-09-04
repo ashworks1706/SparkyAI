@@ -54,7 +54,7 @@ apps/
   knowledge/      Python. Owns every store. Two processes from one package:
     knowledge-api      /search /memory /conversations /sources — called by engine
     knowledge-scraper  fetch → snapshot → extract → chunk → embed → index, offline
-    src/knowledge/     api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
+    api · index (embed, rerank, dense, lexical, hybrid) · memory · store · scraper
     migrations/        the schema
   training/       Python. datasets, post-training, eval runners; evals/cases holds the shared eval data
   sandbox/        Python + Playwright worker (Phase 7); HTTP task protocol; one context per user session
@@ -62,6 +62,8 @@ apps/
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (vLLM env files + RunPod start script)
 docs/             ROADMAP.md, this file, decisions/
 ```
+
+Each Python app directory is itself the importable package — `apps/knowledge` is `knowledge` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 

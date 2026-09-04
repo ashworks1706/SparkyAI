@@ -15,7 +15,7 @@ uv run eval run tool_selection
 |---|---|
 | Post-training | TRL + PEFT; Unsloth on single GPU; accelerate, bitsandbytes |
 | Data | HF `datasets`, JSONL trajectories; `openai` client for teacher generation |
-| Evals | Inspect AI (our suites in `src/training/evals`, cases in `evals/cases`), BFCL (tool calling), lm-eval (regression) |
+| Evals | Inspect AI (our suites in `evals/suites`, cases in `evals/cases`), BFCL (tool calling), lm-eval (regression) |
 | Tracking | Weights & Biases |
 | Releases | Hugging Face Hub |
 

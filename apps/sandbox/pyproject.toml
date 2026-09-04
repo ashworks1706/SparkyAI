@@ -22,11 +22,18 @@ dev = ["ruff>=0.9", "pytest>=8", "pytest-asyncio>=0.25", "respx>=0.22"]
 sandbox = "sandbox.cli:app"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/sandbox"]
+# The package directory is the project root: `sandbox` maps to `.`, so its
+# subpackages are the directories beside this file. New subpackages go in `packages`.
+[tool.setuptools]
+package-dir = { "sandbox" = "." }
+packages = [
+    "sandbox",
+    "sandbox.actions",
+    "sandbox.policy",
+]
 
 [tool.ruff]
 line-length = 100
