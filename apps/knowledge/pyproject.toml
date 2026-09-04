@@ -10,7 +10,6 @@ dependencies = [
     "pydantic-settings>=2.7",
     "httpx>=0.28",
     "psycopg[binary,pool]>=3.2",
-    "qdrant-client>=1.13",
     "redis>=5.2",
     "boto3>=1.36",
     "openai>=1.60",

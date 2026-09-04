@@ -1,1 +1,1 @@
-"""Reranker client. Backend undecided: llama.cpp --reranking, or in-process cross-encoder."""
+"""Reranker client (llama-server /v1/rerank)."""

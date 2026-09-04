@@ -20,7 +20,5 @@ services:
     ports: !reset []
   redis:
     ports: !reset []
-  qdrant:
-    ports: !reset []
   minio:
     ports: !reset []

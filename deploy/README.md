@@ -3,13 +3,13 @@
 ## Local
 
 ```bash
-just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, qdrant, minio)
+just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, minio)
 just engine        # then in separate shells: just knowledge, just discord, just web
 # or run everything in containers:
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
-Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17, Redis 7, Qdrant, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The chat and embedding models are behind the `model` profile: `just model` starts Ollama and pulls them.
+Starts engine, discord, knowledge (api), scraper (same image as knowledge), Postgres 17 (pgvector), Redis 7, MinIO. The Phase 7 sandbox is behind a compose profile: `just up --profile sandbox`. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat, embed, and rerank.
 
 ## Production
 
@@ -20,14 +20,14 @@ SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no ho
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. Ollama runs on a GPU host; see `deploy/inference`.
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
 
 ## Models
 
-One `ollama/ollama` server backs both chat and embeddings on `:11434/v1`. Locally `just model`
-runs it in Compose; in deployment run the same image on a GPU host. Set
-`SPARKY_MODEL__BASE_URL` and `SPARKY_EMBEDDING__BASE_URL` to `http://<host>:11434/v1`.
-Details and the open reranker question: `deploy/inference/README.md`.
+Three `llama-server` containers, one per model: chat `:8000`, embeddings `:8001`, rerank
+`:8002`. Locally `just model` starts them; in deployment run the same image on a GPU host.
+Set `SPARKY_MODEL__BASE_URL`, `SPARKY_EMBEDDING__BASE_URL`, and `SPARKY_RERANKER__BASE_URL`
+accordingly. Details: `deploy/inference/README.md`.
 
 ## Web
 

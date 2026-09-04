@@ -18,13 +18,11 @@ services:
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
-      SPARKY_QDRANT__URL: http://qdrant:6334
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
     expose: ["8081"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
-      qdrant: { condition: service_started }
     restart: unless-stopped
 
   discord:
@@ -46,11 +44,9 @@ services:
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
-      SPARKY_QDRANT__URL: http://qdrant:6334
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
     depends_on:
       postgres: { condition: service_healthy }
-      qdrant: { condition: service_started }
     restart: unless-stopped
 
   # Phase 7. Not started by default: `just up --profile sandbox`.
@@ -64,14 +60,74 @@ services:
     expose: ["8090"]
     restart: unless-stopped
 
-  # Chat and embeddings. Not started by default: `just model`. Uses the GPU when present.
-  ollama:
-    image: ollama/ollama:latest
+  # Model serving. Not started by default: `just model`. One llama-server per model.
+  chat:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
     profiles: [model]
-    volumes: [ollamadata:/root/.ollama]
-    ports: ["11434:11434"]
-    environment:
-      OLLAMA_KEEP_ALIVE: ${SPARKY_OLLAMA_KEEP_ALIVE:-5m}
+    command:
+      - -hf
+      - ${SPARKY_CHAT_GGUF:-Qwen/Qwen3-4B-GGUF:Q4_K_M}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --ctx-size
+      - ${SPARKY_CHAT_CTX:-4096}
+      - --n-gpu-layers
+      - ${SPARKY_CHAT_NGL:-99}
+      - --jinja
+    volumes: [modelcache:/root/.cache/llama.cpp]
+    ports: ["8000:8000"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: 1, capabilities: [gpu] }
+    restart: unless-stopped
+
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    profiles: [model]
+    command:
+      - -hf
+      - ${SPARKY_EMBED_GGUF:-Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --embeddings
+      - --pooling
+      - last
+      - --ctx-size
+      - ${SPARKY_EMBED_CTX:-2048}
+      - --n-gpu-layers
+      - ${SPARKY_EMBED_NGL:-99}
+    volumes: [modelcache:/root/.cache/llama.cpp]
+    ports: ["8001:8001"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: 1, capabilities: [gpu] }
+    restart: unless-stopped
+
+  rerank:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    profiles: [model]
+    command:
+      - -hf
+      - ${SPARKY_RERANK_GGUF:-mradermacher/Qwen3-Reranker-0.6B-GGUF:Q4_K_M}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8002"
+      - --reranking
+      - --ctx-size
+      - ${SPARKY_RERANK_CTX:-2048}
+      - --n-gpu-layers
+      - ${SPARKY_RERANK_NGL:-99}
+    volumes: [modelcache:/root/.cache/llama.cpp]
+    ports: ["8002:8002"]
     deploy:
       resources:
         reservations:
@@ -80,7 +136,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: sparky
       POSTGRES_PASSWORD: sparky
@@ -98,11 +154,6 @@ services:
     volumes: [redisdata:/data]
     ports: ["6379:6379"]
 
-  qdrant:
-    image: qdrant/qdrant:v1.15.0
-    volumes: [qdrantdata:/qdrant/storage]
-    ports: ["6333:6333", "6334:6334"]
-
   minio:
     image: minio/minio
     command: ["server", "/data", "--console-address", ":9001"]
@@ -115,6 +166,5 @@ services:
 volumes:
   pgdata:
   redisdata:
-  qdrantdata:
   miniodata:
-  ollamadata:
+  modelcache:

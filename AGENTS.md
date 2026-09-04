@@ -21,7 +21,7 @@ just knowledge        # knowledge-api server
 just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
-just infra            # postgres, redis, qdrant, minio only
+just infra            # postgres, redis, minio only
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
 just diagrams         # render ARCHITECTURE.md mermaid to verify syntax
@@ -44,7 +44,7 @@ deploy/           compose, one Dockerfile per image, inference/ (model serving c
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
 ```
 
-Processes talk only via: discord → engine, engine → knowledge, engine → Ollama / MCP / sandbox, knowledge → Ollama embed. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
+Processes talk only via: discord → engine, engine → knowledge, engine → llama-server / MCP / sandbox, knowledge → llama-server embed/rerank. Only `apps/knowledge` opens a database connection. `apps/knowledge/migrations` and `api/schemas.py` are the contracts.
 
 ## Dependencies we build on
 

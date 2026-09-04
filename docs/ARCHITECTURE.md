@@ -11,26 +11,26 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Engine, Discord bot | Rust 2024 — tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
 | Model client, tool schema, embeddings | Rig (`rig-core`); our loop drives its `CompletionModel`, never `rig::Agent` | `apps/engine/src/agent` |
 | MCP | `rmcp` (official SDK) | `apps/engine` (Phase 4) |
-| Knowledge service | Python 3.12 — FastAPI, psycopg, qdrant-client, redis, boto3 | `apps/knowledge` |
+| Knowledge service | Python 3.12 — FastAPI, psycopg, redis, boto3 | `apps/knowledge` |
 | Scraper | httpx + BeautifulSoup; Playwright where JS is required | `apps/knowledge` (`knowledge-scraper`) |
 | Sandboxed browser | Python + Playwright, FastAPI task protocol | `apps/sandbox` (Phase 7) |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | TRL + PEFT (+ Unsloth), W&B, HF Hub | `apps/training` |
 | Evals | Inspect AI, BFCL, lm-eval | `apps/training/evals` |
-| Chat model | Qwen3 on Ollama (OpenAI-compatible HTTP) | `deploy/inference` |
-| Embeddings | Qwen3-Embedding-0.6B (1024-dim) on Ollama | `deploy/inference` |
+| Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
+| Embeddings, reranker | Qwen3-Embedding-0.6B (1024-dim), Qwen3-Reranker-0.6B on `llama-server` | `deploy/inference` |
 | Database | PostgreSQL 17 — source of truth | reached only via `apps/knowledge` |
-| Vector store | Qdrant (rebuildable; Piramid later) | reached only via `apps/knowledge` |
+| Vector store | pgvector, in the same PostgreSQL (rebuildable) | reached only via `apps/knowledge` |
 | Cache, queue | Redis 7 | reached only via `apps/knowledge` |
 | Object storage | S3-compatible (MinIO locally) — snapshots, artifacts | reached only via `apps/knowledge` |
 | Observability | Sentry (errors), OpenTelemetry → Axiom (traces), JSON logs | every app |
 | Config | `SPARKY_<SECTION>__<KEY>` env vars; secrets never logged | `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; the same ones run in the pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
-| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); Ollama on a GPU host | `deploy/` |
+| Deploy | Docker Compose (dev builds locally, prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
 
 ## Rules
 
-- Open models only, served by Ollama behind an OpenAI-compatible HTTP API.
+- Open models only, served by `llama-server` behind an OpenAI-compatible HTTP API.
 - Facts come from retrieval or live observation, never from model weights.
 - Public sites are ingested offline. The request path never fetches a web page.
 - Only `apps/knowledge` opens a database connection. Everything else reaches stores through its HTTP API.
@@ -46,7 +46,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 ```
 apps/
   engine/         Rust bin. The agent and its HTTP surface. No database connections.
-    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → Ollama, mock) · tools
+    src/agent/      harness (types, traits, loop, context, tracing) · model (Rig → llama-server, mock) · tools
     src/clients/    HTTP client for knowledge, implementing the harness store traits
     src/routes/     chat, health, admin
     src/{config,telemetry,wiring}.rs
@@ -67,7 +67,7 @@ Each Python app directory is itself the importable package — `apps/knowledge` 
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → Ollama / MCP / sandbox`, `knowledge → Ollama embed`.
+Services talk only at these edges: `discord → engine`, `engine → knowledge`, `engine → llama-server / MCP / sandbox`, `knowledge → llama-server embed/rerank`.
 
 ## System context
 
@@ -83,7 +83,7 @@ flowchart LR
     D --> BOT
     BOT -->|HTTP / SSE| APP
 
-    APP -->|OpenAI-compatible| OLL[Ollama · Qwen3]
+    APP -->|OpenAI-compatible| OLL[llama-server · Qwen3]
     APP -->|HTTP| KN
     APP -.->|Phase 4| MCP[MCP servers]
     APP -.->|Phase 7| BW[apps/sandbox]
@@ -94,12 +94,10 @@ flowchart LR
     end
     KN --> PG[(PostgreSQL)]
     KN --> RD[(Redis)]
-    KN --> QD[(Qdrant)]
     KN --> S3[(Object storage)]
-    KN -->|OpenAI-compatible| EMB[Ollama · embed]
+    KN -->|OpenAI-compatible| EMB[llama-server · embed + rerank]
     ING --> WEB[Public ASU sites]
     ING --> PG
-    ING --> QD
     ING --> S3
     ING --> EMB
 
@@ -232,9 +230,9 @@ A confirmation is bound to one exact action payload, is single-use and short-liv
 
 ## Knowledge
 
-Ingestion runs offline in `knowledge-scraper`: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed → index (Qdrant chunks + Postgres `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
+Ingestion runs offline in `knowledge-scraper`: fetch → content hash (skip if unchanged) → raw snapshot to object storage → extract → chunk → embed → index (Postgres `chunks` + `source_versions`). Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
 
-Retrieval is `engine → POST /search` on `knowledge-api`: dense top-k (Qdrant, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank → `Evidence`. If nothing is found or the source is stale, the answer says so.
+Retrieval is `engine → POST /search` on `knowledge-api`: dense top-k (pgvector, filtered by tenant and category) + BM25 top-k (Postgres FTS) → RRF fusion → rerank → `Evidence`. If nothing is found or the source is stale, the answer says so.
 
 ## Memory
 
@@ -254,7 +252,7 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | Data | Store |
 |---|---|
 | users, roles, conversations, messages, memories, source metadata and versions, jobs, confirmations | PostgreSQL (source of truth) |
-| chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | Qdrant (rebuildable) |
+| chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | pgvector, same PostgreSQL (rebuildable) |
 | rate limits, queue, short-lived cache | Redis |
 | raw snapshots, model artifacts | object storage |
 | browser session secrets | encrypted, separate namespace |
@@ -290,10 +288,10 @@ Separate worker (`apps/sandbox`), never inside the engine process. One isolated 
 
 ## Deployment
 
-Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; Ollama runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
+Three images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects), `sparkyai-knowledge` (`knowledge-api` and `knowledge-scraper`; entrypoint selects), `sparkyai-sandbox` (Phase 7, compose profile `sandbox`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
 
 ## Open decisions
 
-Reranker backend (llama.cpp `--reranking` vs in-process cross-encoder) · chat model size and quantization · Ollama concurrency under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · when Qdrant moves to Piramid · app server host.
+Chat model size and quantization · parallel slots per llama-server under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
 
 Record each as a short note under `docs/decisions/` when made.

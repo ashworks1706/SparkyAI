@@ -117,7 +117,7 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, knowledge, scraper, postgres, redis, qdrant, minio
+# Start engine, discord, knowledge, scraper, postgres, redis, minio
 up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
@@ -137,14 +137,11 @@ prod-logs *ARGS:
 
 # Datastores + knowledge-api. Editing apps/knowledge needs `just infra --build`.
 infra *ARGS:
-    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis qdrant minio knowledge
+    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio knowledge
 
-# Ollama + the chat and embedding models. Override with SPARKY_CHAT_MODEL / SPARKY_EMBED_MODEL.
-model:
-    docker compose -f deploy/compose.yml --profile model up -d ollama
-    for i in $(seq 30); do docker compose -f deploy/compose.yml exec -T ollama ollama list >/dev/null 2>&1 && break || sleep 1; done
-    docker compose -f deploy/compose.yml exec -T ollama ollama pull ${SPARKY_CHAT_MODEL:-qwen3:4b}
-    docker compose -f deploy/compose.yml exec -T ollama ollama pull ${SPARKY_EMBED_MODEL:-qwen3-embedding:0.6b}
+# llama-server for chat (:8000), embeddings (:8001), rerank (:8002). GGUFs download on first run.
+model *ARGS:
+    docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed rerank
 
 # What's running, across every profile
 ps:

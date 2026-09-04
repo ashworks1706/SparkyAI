@@ -1,4 +1,6 @@
--- Source of truth. Vector indexes in Qdrant are rebuildable from here + object storage.
+-- Source of truth. Vector indexes (pgvector) are rebuildable from the text here + object storage.
+
+create extension if not exists vector;
 
 create table users (
     id            uuid primary key default gen_random_uuid(),
@@ -63,6 +65,25 @@ create table source_versions (
     previous_id      uuid references source_versions(id)
 );
 create index on source_versions (source_id, fetched_at desc);
+
+-- Retrieval index: dense (pgvector) and lexical (FTS) over the same rows.
+-- Dimension matches Qwen3-Embedding-0.6B; changing the embedding model means a rebuild.
+create table chunks (
+    id               uuid primary key default gen_random_uuid(),
+    tenant_id        text not null,
+    source_id        uuid not null references sources(id) on delete cascade,
+    version_id       uuid not null references source_versions(id) on delete cascade,
+    category         text not null,
+    ordinal          int not null,
+    content          text not null,
+    embedding        vector(1024) not null,
+    fetched_at       timestamptz not null,
+    tsv              tsvector generated always as (to_tsvector('english', content)) stored,
+    unique (version_id, ordinal)
+);
+create index on chunks using hnsw (embedding vector_cosine_ops) with (m = 16, ef_construction = 64);
+create index on chunks using gin (tsv);
+create index on chunks (tenant_id, category, fetched_at desc);
 
 create table jobs (
     id            uuid primary key default gen_random_uuid(),

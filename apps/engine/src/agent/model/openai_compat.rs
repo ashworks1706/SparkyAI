@@ -1,1 +1,1 @@
-//! OpenAI-compatible chat completions client (Ollama). Streaming, tool calls, structured output.
+//! OpenAI-compatible chat completions client (llama-server). Streaming, tool calls, structured output.
