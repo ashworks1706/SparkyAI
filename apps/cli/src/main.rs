@@ -2,7 +2,6 @@
 //! engine and its dependencies, and chats with the agent, from one modal terminal UI.
 
 mod app;
-mod chat;
 mod core;
 mod health;
 mod logs;
@@ -37,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let targets = health::Targets::from_config(&cfg);
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
-    let mut app = App::new(cfg, root.clone(), tx.clone())?;
+    let mut app = App::new(cfg, root.clone(), &tx)?;
 
     tokio::spawn(health::poll(targets, tx.clone()));
     tokio::spawn(services_task(root, tx.clone()));

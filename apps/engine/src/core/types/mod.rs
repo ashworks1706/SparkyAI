@@ -10,6 +10,7 @@ pub mod health;
 pub mod memory;
 pub mod message;
 pub mod model;
+pub mod openai;
 pub mod policy;
 pub mod retrieval;
 pub mod store;

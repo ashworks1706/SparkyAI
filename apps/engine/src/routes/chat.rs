@@ -141,7 +141,7 @@ async fn chat_inner(state: ChatState, req: ChatRequest) -> Response {
     }
 }
 
-fn authorized(headers: &HeaderMap, token: &SecretString) -> bool {
+pub(crate) fn authorized(headers: &HeaderMap, token: &SecretString) -> bool {
     headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())

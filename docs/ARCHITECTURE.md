@@ -52,7 +52,7 @@ apps/
     src/routes/     chat, health
     src/{telemetry,wiring}.rs
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
-  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services, tails them, chats with engine over HTTP. core/{config,types,tests}.
+  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them. core/{config,types,tests}.
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
     core/{settings,types,tests} · sources · store · migrations/ (the schema)
   training/       Python. datasets from Phoenix llm spans, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
@@ -85,8 +85,8 @@ flowchart LR
     BOT -->|HTTP / SSE| APP
 
     DEV[Developer] -->|just cli| CLI["cli · sparky console"]
-    CLI -->|HTTP /chat| APP
     CLI -->|just · docker compose| rust
+    DEV -->|OpenAI-compatible client| APP
 
     APP -->|OpenAI-compatible| OLL[llama-server · chat]
     APP -->|OpenAI-compatible| EMB[llama-server · embed]
@@ -104,7 +104,7 @@ flowchart LR
     ING --> PX
 ```
 
-Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units and talks to the engine over the same HTTP surface any client uses.
+Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; both run the same loop.
 
 ## Inside `engine`
 

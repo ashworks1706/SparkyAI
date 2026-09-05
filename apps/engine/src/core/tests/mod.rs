@@ -6,6 +6,7 @@ mod config;
 mod context;
 mod limit;
 mod mcp;
+mod openai;
 mod policy;
 mod postgres;
 mod rig_mapping;

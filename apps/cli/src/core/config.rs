@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use figment::Figment;
 use figment::providers::Env;
-use secrecy::SecretString;
 use serde::Deserialize;
 
 /// Console settings.
@@ -26,15 +25,12 @@ pub struct Config {
 pub struct Engine {
     /// Base URL of the engine.
     pub base_url: String,
-    /// Bearer token sent on `/chat`, if the engine expects one.
-    pub service_token: Option<SecretString>,
 }
 
 impl Default for Engine {
     fn default() -> Self {
         Self {
             base_url: "http://localhost:8080".into(),
-            service_token: None,
         }
     }
 }
@@ -65,8 +61,6 @@ pub struct Cli {
     pub log_lines: usize,
     /// Directory for persistent unit logs.
     pub log_dir: PathBuf,
-    /// Roles asserted on chat requests until `:roles` changes them.
-    pub roles: Vec<String>,
     /// Seconds between health probes.
     pub health_interval_secs: u64,
 }
@@ -77,7 +71,6 @@ impl Default for Cli {
             phoenix_url: "http://localhost:6006".into(),
             log_lines: 5000,
             log_dir: PathBuf::from(".sparky/logs"),
-            roles: Vec::new(),
             health_interval_secs: 5,
         }
     }

@@ -3,8 +3,6 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Sidebar section a unit belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -177,8 +175,6 @@ pub enum Mode {
     Command,
     /// Typing a `/` search over the selected unit's logs.
     Search,
-    /// Typing a chat message to the agent.
-    Chat,
 }
 
 /// Which pane keys act on in normal mode.
@@ -188,8 +184,6 @@ pub enum Focus {
     Units,
     /// The log pane.
     Logs,
-    /// The chat transcript.
-    Chat,
 }
 
 /// One row of `docker compose ps`.
@@ -251,92 +245,6 @@ impl Default for Health {
     }
 }
 
-/// What the console sends to `/chat`. Mirrors the engine's `ChatRequest`.
-#[derive(Debug, Serialize)]
-pub struct ChatRequest {
-    /// Caller id.
-    pub user_id: String,
-    /// Channel label.
-    pub channel_id: String,
-    /// Roles to assert.
-    pub roles: Vec<String>,
-    /// Continue this conversation, if any.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub conversation_id: Option<Uuid>,
-    /// The question.
-    pub message: String,
-}
-
-/// A pending confirmation the engine wants approved.
-#[derive(Debug, Clone, Deserialize)]
-pub struct Confirmation {
-    /// Tool that would run.
-    pub tool: String,
-    /// What would happen.
-    pub summary: String,
-}
-
-/// What `/chat` returns. Mirrors the engine's `ChatResponse`.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ChatResponse {
-    /// Trace id.
-    pub request_id: Uuid,
-    /// Conversation to continue with.
-    pub conversation_id: Uuid,
-    /// The answer.
-    pub text: String,
-    /// Citation lines.
-    #[serde(default)]
-    pub citations: Vec<String>,
-    /// Set when the engine stopped to ask.
-    #[serde(default)]
-    pub confirmation: Option<Confirmation>,
-    /// How the run ended.
-    pub status: String,
-    /// Loop steps taken.
-    #[serde(default)]
-    pub steps: u32,
-    /// Tokens used.
-    #[serde(default)]
-    pub tokens: u64,
-    /// Tools the agent ran, in order.
-    #[serde(default)]
-    pub tools: Vec<ToolRun>,
-}
-
-/// One tool the agent ran.
-#[derive(Debug, Clone, Deserialize)]
-pub struct ToolRun {
-    /// Tool name.
-    pub tool: String,
-    /// Whether it returned a result.
-    pub ok: bool,
-}
-
-/// One entry in the chat transcript.
-#[derive(Debug, Clone)]
-pub struct ChatTurn {
-    /// Who said it.
-    pub role: Role,
-    /// Body.
-    pub text: String,
-    /// Citations, for agent turns.
-    pub citations: Vec<String>,
-    /// Status line under an agent turn: request id, status, steps, tokens, latency.
-    pub meta: Option<String>,
-}
-
-/// Speaker in the transcript.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Role {
-    /// The developer at the keyboard.
-    User,
-    /// The engine.
-    Agent,
-    /// The console itself (errors, notes).
-    System,
-}
-
 /// Everything that can wake the UI loop.
 #[derive(Debug)]
 pub enum Event {
@@ -364,13 +272,6 @@ pub enum Event {
     Services(Result<HashMap<String, ServiceState>, String>),
     /// Fresh dependency probes.
     Health(Health),
-    /// The engine answered (or failed to).
-    ChatReply {
-        /// Round-trip time.
-        latency_ms: u64,
-        /// The reply or the failure text.
-        result: Result<ChatResponse, String>,
-    },
 }
 
 /// Runner failures.
@@ -397,12 +298,6 @@ pub enum Command {
     Stop(String),
     /// Stop then start a unit by id.
     Restart(String),
-    /// Send a chat message.
-    Ask(String),
-    /// Set the roles asserted on chat requests.
-    Roles(Vec<String>),
-    /// Start a new conversation.
-    Reset,
     /// Run an arbitrary just recipe as an ad-hoc task.
     Just(Vec<String>),
     /// Show the key map.

@@ -6,13 +6,10 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc::UnboundedSender;
-use uuid::Uuid;
 
-use crate::chat::EngineClient;
 use crate::core::config::Config;
 use crate::core::types::{
-    ChatRequest, ChatResponse, ChatTurn, Command, Event, Focus, Health, Kind, LogLine, Mode, Role,
-    ServiceState, Status, Stream, Unit,
+    Command, Event, Focus, Health, Kind, LogLine, Mode, ServiceState, Status, Stream, Unit,
 };
 use crate::logs::{LogBuffer, LogWriter};
 use crate::runner::Runner;
@@ -38,29 +35,11 @@ pub struct UnitState {
     stopping: bool,
 }
 
-/// The chat pane.
-pub struct ChatState {
-    /// Transcript, oldest first.
-    pub turns: Vec<ChatTurn>,
-    /// Draft message.
-    pub input: String,
-    /// Conversation being continued.
-    pub conversation_id: Option<Uuid>,
-    /// Roles asserted on each request.
-    pub roles: Vec<String>,
-    /// A request is in flight.
-    pub pending: bool,
-    /// Lines scrolled up from the bottom.
-    pub scroll: usize,
-}
-
 /// All console state.
 pub struct App {
     cfg: Config,
-    tx: UnboundedSender<Event>,
     runner: Runner,
     log_writer: LogWriter,
-    client: EngineClient,
     /// Units in sidebar order.
     pub units: Vec<UnitState>,
     /// Index into `units`.
@@ -79,10 +58,6 @@ pub struct App {
     pub health: Health,
     /// Help overlay is open.
     pub help: bool,
-    /// Chat pane is open.
-    pub show_chat: bool,
-    /// The chat pane.
-    pub chat: ChatState,
     /// One-line notice in the status bar.
     pub notice: Option<String>,
     /// Rows the log pane had at the last draw; drives paging.
@@ -95,8 +70,7 @@ pub struct App {
 
 impl App {
     /// A console over the repo at `root`.
-    pub fn new(cfg: Config, root: PathBuf, tx: UnboundedSender<Event>) -> anyhow::Result<Self> {
-        let client = EngineClient::new(&cfg.engine.base_url, cfg.engine.service_token.clone())?;
+    pub fn new(cfg: Config, root: PathBuf, tx: &UnboundedSender<Event>) -> anyhow::Result<Self> {
         let log_dir = if cfg.cli.log_dir.is_absolute() {
             cfg.cli.log_dir.clone()
         } else {
@@ -108,13 +82,10 @@ impl App {
             .into_iter()
             .map(|u| UnitState::new(u, cfg.cli.log_lines))
             .collect();
-        let roles = cfg.cli.roles.clone();
         Ok(Self {
             cfg,
-            tx,
             runner,
             log_writer,
-            client,
             units,
             selected: 0,
             mode: Mode::Normal,
@@ -124,15 +95,6 @@ impl App {
             search_hit: None,
             health: Health::default(),
             help: false,
-            show_chat: false,
-            chat: ChatState {
-                turns: Vec::new(),
-                input: String::new(),
-                conversation_id: None,
-                roles,
-                pending: false,
-                scroll: 0,
-            },
             notice: None,
             log_rows: 20,
             should_quit: false,
@@ -140,7 +102,7 @@ impl App {
         })
     }
 
-    /// Phoenix UI location, for the status bar and chat meta lines.
+    /// Phoenix UI location, for the status bar.
     pub fn phoenix_url(&self) -> &str {
         &self.cfg.cli.phoenix_url
     }
@@ -175,7 +137,6 @@ impl App {
             Event::Services(Ok(states)) => self.services(&states),
             Event::Services(Err(e)) => self.notice = Some(e),
             Event::Health(h) => self.health = h,
-            Event::ChatReply { latency_ms, result } => self.chat_reply(latency_ms, result),
         }
     }
 
@@ -237,48 +198,6 @@ impl App {
         }
     }
 
-    fn chat_reply(&mut self, latency_ms: u64, result: Result<ChatResponse, String>) {
-        self.chat.pending = false;
-        match result {
-            Ok(r) => {
-                self.chat.conversation_id = Some(r.conversation_id);
-                let meta = format!(
-                    "{} · {} steps · {} tokens · {latency_ms} ms · trace {} · {}/projects",
-                    r.status, r.steps, r.tokens, r.request_id, self.cfg.cli.phoenix_url
-                );
-                if let Some(line) = crate::chat::tools_line(&r.tools) {
-                    self.chat.turns.push(ChatTurn {
-                        role: Role::System,
-                        text: line,
-                        citations: Vec::new(),
-                        meta: None,
-                    });
-                }
-                self.chat.turns.push(ChatTurn {
-                    role: Role::Agent,
-                    text: r.text,
-                    citations: r.citations,
-                    meta: Some(meta),
-                });
-                if let Some(c) = r.confirmation {
-                    self.chat.turns.push(ChatTurn {
-                        role: Role::System,
-                        text: format!("needs approval for `{}`: {}", c.tool, c.summary),
-                        citations: Vec::new(),
-                        meta: None,
-                    });
-                }
-            }
-            Err(e) => self.chat.turns.push(ChatTurn {
-                role: Role::System,
-                text: e,
-                citations: Vec::new(),
-                meta: None,
-            }),
-        }
-        self.chat.scroll = 0;
-    }
-
     fn key(&mut self, key: KeyEvent) {
         self.notice = None;
         if self.help {
@@ -289,7 +208,6 @@ impl App {
             Mode::Normal => self.key_normal(key),
             Mode::Command => self.key_line(key, true),
             Mode::Search => self.key_line(key, false),
-            Mode::Chat => self.key_chat(key),
         }
     }
 
@@ -313,13 +231,6 @@ impl App {
             KeyCode::Char('h') | KeyCode::Left => self.focus = Focus::Units,
             KeyCode::Char('l') | KeyCode::Right => self.focus = Focus::Logs,
             KeyCode::Tab => self.cycle_focus(),
-            KeyCode::Char('c') => self.toggle_chat(),
-            KeyCode::Char('i') => {
-                self.show_chat = true;
-                self.focus = Focus::Chat;
-                self.mode = Mode::Chat;
-            }
-            KeyCode::Char('R') => self.run(Command::Reset),
             KeyCode::Char('C') => self.run(Command::Clear),
             KeyCode::Char('o') => self.open_url(),
             KeyCode::Char(':') => {
@@ -362,28 +273,6 @@ impl App {
         }
     }
 
-    fn key_chat(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
-            KeyCode::Enter => {
-                let text = std::mem::take(&mut self.chat.input);
-                if !text.trim().is_empty() {
-                    self.ask(text);
-                }
-            }
-            KeyCode::Backspace => {
-                self.chat.input.pop();
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.chat.input.clear();
-            }
-            KeyCode::Up => self.chat.scroll = self.chat.scroll.saturating_add(1),
-            KeyCode::Down => self.chat.scroll = self.chat.scroll.saturating_sub(1),
-            KeyCode::Char(c) => self.chat.input.push(c),
-            _ => {}
-        }
-    }
-
     fn down(&mut self, n: usize) {
         match self.focus {
             Focus::Units => {
@@ -397,7 +286,6 @@ impl App {
                 u.scroll = (u.scroll + n).min(max_top);
                 u.follow = u.scroll >= max_top;
             }
-            Focus::Chat => self.chat.scroll = self.chat.scroll.saturating_sub(n),
         }
     }
 
@@ -416,7 +304,6 @@ impl App {
                 u.scroll = u.scroll.saturating_sub(n);
                 u.follow = false;
             }
-            Focus::Chat => self.chat.scroll = self.chat.scroll.saturating_add(n),
         }
     }
 
@@ -431,7 +318,6 @@ impl App {
                 u.scroll = 0;
                 u.follow = false;
             }
-            Focus::Chat => self.chat.scroll = usize::MAX / 2,
         }
     }
 
@@ -442,23 +328,14 @@ impl App {
                 self.on_select();
             }
             Focus::Logs => self.current_mut().follow = true,
-            Focus::Chat => self.chat.scroll = 0,
         }
     }
 
     fn cycle_focus(&mut self) {
-        self.focus = match (self.focus, self.show_chat) {
-            (Focus::Units, _) => Focus::Logs,
-            (Focus::Logs, true) => Focus::Chat,
-            (Focus::Logs, false) | (Focus::Chat, _) => Focus::Units,
+        self.focus = match self.focus {
+            Focus::Units => Focus::Logs,
+            Focus::Logs => Focus::Units,
         };
-    }
-
-    fn toggle_chat(&mut self) {
-        self.show_chat = !self.show_chat;
-        if !self.show_chat && self.focus == Focus::Chat {
-            self.focus = Focus::Units;
-        }
     }
 
     /// Follows a running service's container logs when it is selected.
@@ -612,19 +489,6 @@ impl App {
                     self.notice = Some(format!("no unit {id:?}"));
                 }
             }
-            Command::Ask(q) => {
-                self.show_chat = true;
-                self.ask(q);
-            }
-            Command::Roles(roles) => {
-                self.notice = Some(format!("roles: {}", roles.join(", ")));
-                self.chat.roles = roles;
-            }
-            Command::Reset => {
-                self.chat.conversation_id = None;
-                self.chat.turns.clear();
-                self.notice = Some("new conversation".into());
-            }
             Command::Just(args) => self.run_adhoc(&args),
             Command::Help => self.help = true,
             Command::Clear => self.current_mut().logs.clear(),
@@ -650,31 +514,6 @@ impl App {
         self.selected = i;
         self.focus = Focus::Logs;
         self.start_by_id(&unit.id);
-    }
-
-    fn ask(&mut self, message: String) {
-        if self.chat.pending {
-            self.notice = Some("waiting on the previous reply".into());
-            return;
-        }
-        self.chat.turns.push(ChatTurn {
-            role: Role::User,
-            text: message.clone(),
-            citations: Vec::new(),
-            meta: None,
-        });
-        self.chat.pending = true;
-        self.chat.scroll = 0;
-        self.client.send(
-            ChatRequest {
-                user_id: "sparky-cli".into(),
-                channel_id: "cli".into(),
-                roles: self.chat.roles.clone(),
-                conversation_id: self.chat.conversation_id,
-                message,
-            },
-            self.tx.clone(),
-        );
     }
 }
 
@@ -706,14 +545,6 @@ pub fn parse_command(text: &str) -> Command {
         "start" | "up" if !arg.is_empty() => Command::Start(arg),
         "stop" | "down" if !arg.is_empty() => Command::Stop(arg),
         "restart" if !arg.is_empty() => Command::Restart(arg),
-        "ask" if !arg.is_empty() => Command::Ask(arg),
-        "roles" => Command::Roles(
-            arg.split([',', ' '])
-                .filter(|r| !r.is_empty())
-                .map(str::to_owned)
-                .collect(),
-        ),
-        "reset" | "new" => Command::Reset,
         "just" => Command::Just(rest),
         "help" | "h" => Command::Help,
         "clear" => Command::Clear,

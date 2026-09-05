@@ -1,15 +1,13 @@
-//! Draws the console: status bar, unit list, log pane, chat pane, command line, help.
+//! Draws the console: status bar, unit list, log pane, command line, help.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap,
-};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph};
 
 use crate::app::{App, UnitState};
-use crate::core::types::{Focus, Group, Mode, Probe, Role, Status, Stream};
+use crate::core::types::{Focus, Group, Mode, Probe, Status, Stream};
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
@@ -27,14 +25,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     status_bar(frame, app, bar);
     sidebar(frame, app, side);
-    if app.show_chat {
-        let [logs_area, chat_area] =
-            Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(right);
-        logs(frame, app, logs_area);
-        chat(frame, app, chat_area);
-    } else {
-        logs(frame, app, right);
-    }
+    logs(frame, app, right);
     bottom_line(frame, app, bottom);
     if app.help {
         help(frame, frame.area());
@@ -56,7 +47,6 @@ fn status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Mode::Normal => " NORMAL ",
         Mode::Command => " COMMAND ",
         Mode::Search => " SEARCH ",
-        Mode::Chat => " CHAT ",
     };
     let mut spans = vec![
         Span::styled(
@@ -212,80 +202,6 @@ fn logs(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_widget(body.block(block), area);
 }
 
-fn chat(frame: &mut Frame, app: &App, area: Rect) {
-    let focused = app.focus == Focus::Chat || app.mode == Mode::Chat;
-    let [transcript_area, input_area] =
-        Layout::vertical([Constraint::Min(2), Constraint::Length(3)]).areas(area);
-
-    let mut lines: Vec<Line> = Vec::new();
-    for t in &app.chat.turns {
-        let (label, style) = match t.role {
-            Role::User => ("you", Style::default().fg(Color::Green).bold()),
-            Role::Agent => ("sparky", Style::default().fg(ACCENT).bold()),
-            Role::System => ("console", Style::default().fg(Color::Red).bold()),
-        };
-        lines.push(Line::from(Span::styled(label, style)));
-        for l in t.text.lines() {
-            lines.push(Line::from(format!("  {l}")));
-        }
-        for c in &t.citations {
-            lines.push(Line::from(Span::styled(
-                format!("  ↳ {c}"),
-                Style::default().fg(DIM),
-            )));
-        }
-        if let Some(m) = &t.meta {
-            lines.push(Line::from(Span::styled(
-                format!("  {m}"),
-                Style::default().fg(DIM).italic(),
-            )));
-        }
-        lines.push(Line::default());
-    }
-    if app.chat.pending {
-        lines.push(Line::from(Span::styled(
-            "sparky is thinking…",
-            Style::default().fg(Color::Yellow),
-        )));
-    }
-    let title = format!(
-        " chat · {} · roles [{}] ",
-        app.chat
-            .conversation_id
-            .map_or_else(|| "new conversation".to_owned(), |c| c.to_string()),
-        app.chat.roles.join(", ")
-    );
-    let inner_width = transcript_area.width.saturating_sub(2);
-    let inner_rows = usize::from(transcript_area.height.saturating_sub(2));
-    let para = Paragraph::new(lines).wrap(Wrap { trim: false });
-    let total = para.line_count(inner_width);
-    let bottom_offset = total.saturating_sub(inner_rows);
-    let offset = bottom_offset.saturating_sub(app.chat.scroll);
-    frame.render_widget(
-        para.block(pane(&title, focused))
-            .scroll((u16::try_from(offset).unwrap_or(u16::MAX), 0)),
-        transcript_area,
-    );
-
-    let typing = app.mode == Mode::Chat;
-    let prompt = if typing {
-        Line::from(vec![
-            Span::styled("> ", Style::default().fg(Color::Green)),
-            Span::raw(app.chat.input.clone()),
-            Span::styled("█", Style::default().fg(Color::Green)),
-        ])
-    } else {
-        Line::from(Span::styled(
-            "press i to type · enter sends · esc leaves",
-            Style::default().fg(DIM),
-        ))
-    };
-    frame.render_widget(
-        Paragraph::new(prompt).block(pane(" ask ", typing)),
-        input_area,
-    );
-}
-
 fn bottom_line(frame: &mut Frame, app: &App, area: Rect) {
     let line = match app.mode {
         Mode::Command => Line::from(vec![
@@ -298,10 +214,6 @@ fn bottom_line(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(app.input.clone()),
             Span::styled("█", Style::default().fg(Color::Yellow)),
         ]),
-        Mode::Chat => Line::from(Span::styled(
-            " typing to sparky · esc to leave",
-            Style::default().fg(DIM),
-        )),
         Mode::Normal => {
             let mut spans: Vec<Span> = Vec::new();
             for (k, w) in [
@@ -310,7 +222,6 @@ fn bottom_line(frame: &mut Frame, app: &App, area: Rect) {
                 ("r", "restart"),
                 ("l/h", "logs/units"),
                 ("/", "search"),
-                ("i", "chat"),
                 (":", "command"),
                 ("o", "open url"),
                 ("?", "help"),
@@ -341,25 +252,19 @@ fn hint(key: &str, what: &str) -> [Span<'static>; 2] {
 
 fn help(frame: &mut Frame, area: Rect) {
     let text = [
-        ("j / k, ↑ / ↓", "move selection, scroll logs or chat"),
+        ("j / k, ↑ / ↓", "move selection, scroll logs"),
         ("gg / G", "top / bottom (G on logs resumes following)"),
         ("ctrl-d / ctrl-u", "half page in logs"),
         ("enter / s", "start or stop the selected unit"),
         ("x / r", "stop / restart the selected unit"),
-        ("h / l, tab", "focus units / logs / chat"),
+        ("h / l, tab", "focus units / logs"),
         ("/ then n / N", "search the selected unit's logs"),
-        ("c / i", "toggle the chat pane / start typing to the agent"),
-        ("R / C", "new conversation / clear the selected logs"),
+        ("C", "clear the selected unit's logs"),
         ("o", "open the unit's URL in a browser"),
         (
             ":start x  :stop x  :restart x",
             "by unit id, e.g. :start engine",
         ),
-        (
-            ":ask <question>",
-            "one chat turn without opening insert mode",
-        ),
-        (":roles mod,admin", "roles asserted on chat requests"),
         (
             ":<recipe> [args]",
             "run any just recipe as a task, e.g. :eval run",

@@ -16,7 +16,7 @@ just check-web        # eslint + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
-just cli              # developer console (TUI): every unit, its logs, tasks, and a chat with the agent
+just cli              # developer console (TUI): every unit, its logs, and tasks
 just scraper ...      # e.g. just scraper run library_hours
 just migrate
 just train | eval | data ...
@@ -40,7 +40,7 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 ```
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}. Exports one span per interaction to Phoenix.
-apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose, tails their output, chats with engine over HTTP. Links nothing in-repo. core/{config,types,tests}.
+apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. core/{config,types,tests}.
 apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,telemetry,tests}. One span per source run to Phoenix.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)

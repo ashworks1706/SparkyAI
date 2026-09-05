@@ -19,15 +19,6 @@ fn commands_parse_into_actions() {
         parse_command("restart discord"),
         Command::Restart("discord".into())
     );
-    assert_eq!(
-        parse_command("ask when does hayden close"),
-        Command::Ask("when does hayden close".into())
-    );
-    assert_eq!(
-        parse_command("roles mod, admin"),
-        Command::Roles(vec!["mod".into(), "admin".into()])
-    );
-    assert_eq!(parse_command("reset"), Command::Reset);
     assert_eq!(parse_command("help"), Command::Help);
 }
 
@@ -155,25 +146,4 @@ fn repo_root_is_found_from_a_nested_directory() {
     let root = repo_root(here).unwrap_or_default();
     assert!(root.join("justfile").is_file());
     assert!(repo_root(std::path::Path::new("/")).is_none());
-}
-
-#[test]
-fn the_transcript_names_the_tools_a_turn_ran() {
-    use crate::chat::tools_line;
-    use crate::core::types::ToolRun;
-
-    assert_eq!(tools_line(&[]), None);
-    assert_eq!(
-        tools_line(&[
-            ToolRun {
-                tool: "public_search".into(),
-                ok: true
-            },
-            ToolRun {
-                tool: "browser_click".into(),
-                ok: false
-            },
-        ]),
-        Some("ran public_search → browser_click (failed)".to_owned())
-    );
 }
