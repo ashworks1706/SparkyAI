@@ -60,15 +60,11 @@ impl Handler {
             return Ok(Vec::new());
         };
         let roles = self.guild_id.roles(&ctx.http).await?;
-        let mut names: Vec<String> = member
+        let names = member
             .roles
             .iter()
-            .filter_map(|id| roles.get(id).map(|r| r.name.clone()))
-            .collect();
-        if member.permissions.is_some_and(can_write) {
-            names.push("MANAGE_GUILD".into());
-        }
-        Ok(names)
+            .filter_map(|id| roles.get(id).map(|r| r.name.clone()));
+        Ok(authorized_roles(names, member.permissions))
     }
 
     async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
@@ -175,8 +171,28 @@ impl Handler {
     }
 }
 
+/// The marker the engine's policy reads to allow write-side tools.
+pub(crate) const WRITE_CAPABILITY: &str = "MANAGE_GUILD";
+
+/// Whether a member's own Discord permissions let them ask for write-side tools.
 pub(crate) fn can_write(permissions: Permissions) -> bool {
     permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
+}
+
+/// Guild role names plus the write marker when the member's own Discord permissions grant it.
+/// A guild role named like the marker is dropped: only the permission bits confer write access.
+pub(crate) fn authorized_roles(
+    names: impl IntoIterator<Item = String>,
+    permissions: Option<Permissions>,
+) -> Vec<String> {
+    let mut roles: Vec<String> = names
+        .into_iter()
+        .filter(|n| n != WRITE_CAPABILITY)
+        .collect();
+    if permissions.is_some_and(can_write) {
+        roles.push(WRITE_CAPABILITY.to_owned());
+    }
+    roles
 }
 
 #[async_trait]

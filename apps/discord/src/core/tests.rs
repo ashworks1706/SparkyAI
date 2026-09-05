@@ -64,3 +64,22 @@ fn discord_management_permissions_grant_write_access() {
     assert!(can_write(Permissions::ADMINISTRATOR));
     assert!(!can_write(Permissions::MANAGE_MESSAGES));
 }
+
+#[test]
+fn a_guild_role_cannot_impersonate_the_write_capability() {
+    use crate::bot::{WRITE_CAPABILITY, authorized_roles};
+
+    let named = vec!["students".to_owned(), WRITE_CAPABILITY.to_owned()];
+    assert_eq!(
+        authorized_roles(named.clone(), Some(Permissions::MANAGE_MESSAGES)),
+        vec!["students".to_owned()]
+    );
+    assert_eq!(
+        authorized_roles(named, Some(Permissions::MANAGE_GUILD)),
+        vec!["students".to_owned(), WRITE_CAPABILITY.to_owned()]
+    );
+    assert_eq!(
+        authorized_roles(vec!["students".to_owned()], None),
+        vec!["students".to_owned()]
+    );
+}

@@ -47,7 +47,7 @@ Modal, like vim. `?` shows this in the console.
 | `q` | quit; host processes are stopped, containers stay up |
 
 Commands: `:start engine`, `:stop chat`, `:restart discord`, `:ask <question>`,
-`:roles mod,admin`, `:reset`, `:clear`, `:help`, `:q`. Anything else is passed to `just`, so
+`:roles MANAGE_GUILD`, `:reset`, `:clear`, `:help`, `:q`. Anything else is passed to `just`, so
 `:eval run` or `:scraper run events` runs as a task and shows up under **tasks**.
 
 ## What it drives
