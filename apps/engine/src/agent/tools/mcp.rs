@@ -118,6 +118,26 @@ pub fn risk_for(name: &str) -> RiskClass {
     RiskClass::ExternalWrite
 }
 
+/// Replaces a snapshot the server saved to its own filesystem with the way to read the page.
+///
+/// `browser_navigate` answers with `### Snapshot` followed by a link to a file inside the MCP
+/// container. The engine cannot open it, and the heading reads as though the page came back, so
+/// the model carries on without ever seeing it.
+pub fn usable_output(text: String) -> String {
+    const SAVED: &str = "[Snapshot](.playwright-mcp/";
+    if !text.contains(SAVED) {
+        return text;
+    }
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|line| !line.contains(SAVED) && line.trim() != "### Snapshot")
+        .collect();
+    format!(
+        "{}\nThe page content was not returned. Call browser_snapshot to read it.",
+        kept.join("\n").trim_end()
+    )
+}
+
 /// Connects to a Streamable-HTTP MCP server and wraps its tools. `allow` limits which remote
 /// tools are exposed; empty means all. The connection lives as long as the process.
 pub async fn connect(
@@ -207,6 +227,7 @@ impl Tool for McpTool {
                 text
             }));
         }
+        let mut text = usable_output(text);
         if text.chars().count() > MAX_OUTPUT_CHARS {
             let cut: String = text.chars().take(MAX_OUTPUT_CHARS).collect();
             text = format!("{cut}\n…[truncated]");

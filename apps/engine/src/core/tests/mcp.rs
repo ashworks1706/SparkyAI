@@ -127,3 +127,31 @@ async fn mcp_server_lists_the_tools_the_engine_asks_for() {
         .unwrap_or_default();
     assert!(!output.is_empty(), "browser_navigate returned nothing");
 }
+
+#[test]
+fn a_snapshot_saved_to_a_file_tells_the_model_how_to_read_the_page() {
+    use crate::agent::tools::mcp::usable_output;
+
+    // browser_navigate writes the page to a file inside the MCP container and returns a path
+    // the engine cannot open. Left alone it reads as "### Snapshot" and the model moves on
+    // believing it has the page.
+    let navigate = "### Page\n- Page URL: https://example.com/\n### Snapshot\n\
+                    - [Snapshot](.playwright-mcp/page-2026-09-05T04-07-54-110Z.yml)";
+    let out = usable_output(navigate.to_owned());
+    assert!(
+        out.contains("https://example.com/"),
+        "keeps what it did tell us"
+    );
+    assert!(
+        !out.contains(".playwright-mcp/"),
+        "the path is unusable here: {out}"
+    );
+    assert!(
+        out.contains("browser_snapshot"),
+        "says how to read the page: {out}"
+    );
+
+    // An inline snapshot is the page itself and passes through untouched.
+    let inline = "### Page\n### Snapshot\n```yaml\n- heading \"Example Domain\"\n```";
+    assert_eq!(usable_output(inline.to_owned()), inline);
+}
