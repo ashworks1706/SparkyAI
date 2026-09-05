@@ -12,13 +12,14 @@ use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::mcp;
 use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
+use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::assemble::Budget;
 use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
-use crate::stores::postgres::{self, PgConversations, PgMemory, PgRetriever};
+use crate::stores::postgres::{self, PgConfirmations, PgConversations, PgMemory, PgRetriever};
 
 /// Default system prompt. Versioned by content; changes show up in traces via the prompt hash.
 const SYSTEM_PROMPT: &str = "You are Sparky, the ASU AI Society's assistant on Discord. \
@@ -63,6 +64,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let retriever = Arc::new(PgRetriever::new(pool.clone(), embedder));
     let conversations = Arc::new(PgConversations::new(pool.clone()));
     let memory = Arc::new(PgMemory::new(pool.clone()));
+    let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
     let mut tools = ToolSet::new().with(Arc::new(PublicSearch::new(
         retriever.clone(),
@@ -87,6 +89,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         max_steps: cfg.agent.max_steps,
         max_model_retries: cfg.agent.max_model_retries,
         tool_timeout: Duration::from_secs(cfg.agent.tool_timeout_secs),
+        confirmation_ttl: Duration::from_secs(cfg.agent.confirmation_ttl_secs),
         max_tokens: cfg.model.max_tokens,
         temperature: cfg.agent.temperature,
         retrieval_top_k: cfg.agent.retrieval_top_k,
@@ -107,10 +110,12 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         retriever: Some(retriever),
         conversations: Some(conversations.clone()),
         memory: Some(memory),
+        confirmations: Some(confirmations.clone()),
     };
     let agent = Agent::new(deps, agent_cfg, SYSTEM_PROMPT);
 
     let state = ChatState {
+        confirmations: Some(confirmations),
         agent,
         conversations: Some(conversations),
         request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),

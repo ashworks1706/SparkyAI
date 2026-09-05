@@ -9,7 +9,9 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::core::types::{ChatRequest, ChatResponse, EngineError, ErrorFrame, Progress, Update};
+use crate::core::types::{
+    ChatRequest, ChatResponse, ConfirmRequest, EngineError, ErrorFrame, Progress, Update,
+};
 use crate::sse::drain_frames;
 
 /// HTTP client bound to one engine.
@@ -33,6 +35,30 @@ impl EngineClient {
             base_url: base_url.trim_end_matches('/').to_owned(),
             token,
         })
+    }
+
+    /// Answers a held action. The engine runs it and carries on, or drops it.
+    pub async fn confirm(&self, req: &ConfirmRequest) -> Result<ChatResponse, EngineError> {
+        let response = self
+            .http
+            .post(format!("{}/confirm", self.base_url))
+            .bearer_auth(self.token.expose_secret())
+            .json(req)
+            .send()
+            .await
+            .map_err(|e| EngineError::Transport(e.to_string()))?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| EngineError::Transport(e.to_string()))?;
+        if !status.is_success() {
+            return Err(EngineError::Status {
+                status: status.as_u16(),
+                body: body.chars().take(300).collect(),
+            });
+        }
+        serde_json::from_str(&body).map_err(|e| EngineError::Transport(format!("bad body: {e}")))
     }
 
     /// Runs one chat turn, reporting progress on `tx` until the answer or a failure arrives.

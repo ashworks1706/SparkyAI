@@ -69,3 +69,19 @@ pub struct ErrorBody {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
 }
+
+/// `POST /confirm`: answer an action the engine is holding.
+#[derive(Debug, Deserialize)]
+pub struct ConfirmRequest {
+    /// The token from the `ConfirmationRequest`.
+    pub token: Uuid,
+    /// Whether to run it.
+    pub approve: bool,
+    /// Who is answering. Only the caller who was asked may answer.
+    pub user_id: String,
+    /// Guild or other scope; the engine's default when absent.
+    #[serde(default)]
+    pub tenant_id: Option<String>,
+    /// The conversation the held action belongs to.
+    pub conversation_id: Uuid,
+}

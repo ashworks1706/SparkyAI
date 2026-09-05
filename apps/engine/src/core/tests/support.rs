@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
+use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::tool::Tool;
@@ -17,6 +18,7 @@ use crate::core::types::agent::AgentConfig;
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
+use crate::core::types::policy::PendingAction;
 use crate::core::types::store::StoreError;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
@@ -161,6 +163,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         retriever: None,
         conversations: None,
         memory: None,
+        confirmations: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
 }
@@ -195,6 +198,52 @@ impl ConversationStore for Recording {
     }
 }
 
+/// Holds one action, the way the database does: single use, and only for who was asked.
+#[derive(Default)]
+pub struct Held {
+    held: Mutex<Option<(uuid::Uuid, String, PendingAction)>>,
+}
+
+impl Held {
+    pub fn holds(&self) -> bool {
+        self.held.lock().is_ok_and(|h| h.is_some())
+    }
+}
+
+#[async_trait]
+impl ConfirmationStore for Held {
+    async fn hold(
+        &self,
+        ctx: &RequestContext,
+        token: uuid::Uuid,
+        pending: &PendingAction,
+        _payload_hash: &str,
+        _ttl: Duration,
+    ) -> Result<(), StoreError> {
+        if let Ok(mut slot) = self.held.lock() {
+            *slot = Some((token, ctx.user_id.clone(), pending.clone()));
+        }
+        Ok(())
+    }
+
+    async fn claim(
+        &self,
+        ctx: &RequestContext,
+        token: uuid::Uuid,
+        _approved: bool,
+    ) -> Result<Option<PendingAction>, StoreError> {
+        let Ok(mut slot) = self.held.lock() else {
+            return Ok(None);
+        };
+        match slot.as_ref() {
+            Some((held, asked, _)) if *held == token && *asked == ctx.user_id => {
+                Ok(slot.take().map(|(_, _, pending)| pending))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
 pub fn agent_with_store(
     model: Scripted,
     tools: ToolSet,
@@ -209,8 +258,29 @@ pub fn agent_with_store(
         retriever: None,
         conversations: Some(conversations),
         memory: None,
+        confirmations: None,
     };
     Agent::new(deps, cfg, "sys")
+}
+
+/// An agent that holds actions and keeps its turns, for the approval path.
+pub fn agent_holding(
+    model: Scripted,
+    tools: ToolSet,
+    conversations: Arc<dyn ConversationStore>,
+    confirmations: Arc<dyn ConfirmationStore>,
+) -> Agent {
+    let deps = AgentDeps {
+        model: Arc::new(model),
+        tools,
+        policy: Arc::new(RiskPolicy::new()),
+        trace: Arc::new(MemorySink::default()),
+        retriever: None,
+        conversations: Some(conversations),
+        memory: None,
+        confirmations: Some(confirmations),
+    };
+    Agent::new(deps, AgentConfig::default(), "sys")
 }
 
 pub fn ctx() -> RequestContext {

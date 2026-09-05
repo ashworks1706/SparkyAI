@@ -167,3 +167,46 @@ fn a_frame_without_an_event_name_still_carries_its_data() {
         vec![(String::new(), "{\"a\":1}".to_owned())]
     );
 }
+
+#[test]
+fn a_component_id_survives_the_round_trip_and_rejects_anything_else() {
+    use uuid::Uuid;
+
+    use crate::components::{Action, CustomId};
+
+    let token = Uuid::new_v4();
+    let convo = Uuid::new_v4();
+    let id = CustomId::new(Action::Approve, token, convo);
+    let wire = id.to_string();
+
+    assert!(wire.starts_with("sparky:"), "{wire}");
+    assert!(wire.len() <= 100, "Discord caps custom_id at 100 bytes");
+    assert_eq!(CustomId::parse(&wire), Some(id));
+
+    // Anything the bot did not mint is not ours to act on.
+    assert_eq!(CustomId::parse("approve"), None);
+    assert_eq!(CustomId::parse("other:approve:x:y"), None);
+    assert_eq!(CustomId::parse("sparky:approve:not-a-uuid:x"), None);
+    assert_eq!(CustomId::parse("sparky:launch:x:y"), None, "unknown action");
+}
+
+#[test]
+fn a_confirmation_offers_the_two_answers_and_a_plain_answer_offers_none() {
+    use uuid::Uuid;
+
+    use crate::components::rows_for;
+    use crate::core::types::Confirmation;
+
+    let resp = response("", vec![], "awaiting_confirmation");
+    assert!(rows_for(&resp).is_empty(), "no confirmation, no buttons");
+
+    let mut asked = response("", vec![], "awaiting_confirmation");
+    asked.confirmation = Some(Confirmation {
+        token: Uuid::new_v4(),
+        tool: "browser_click".into(),
+        summary: "Run browser_click.".into(),
+    });
+    let rows = rows_for(&asked);
+    assert_eq!(rows.len(), 1, "one row of answers");
+    assert_eq!(rows[0].len(), 2, "approve and deny");
+}

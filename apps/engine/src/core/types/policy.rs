@@ -30,6 +30,18 @@ pub struct ConfirmationRequest {
     pub summary: String,
 }
 
+/// A confirmation the engine is holding, with everything needed to run it once approved.
+///
+/// The caller never sends the arguments back: they are read from here, so an approval cannot
+/// change what it approves.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingAction {
+    /// Provider call id the tool result must answer, so the loop can carry on from it.
+    pub call_id: String,
+    /// What runs on approval.
+    pub action: ProposedAction,
+}
+
 /// The policy verdict.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "decision", rename_all = "snake_case")]

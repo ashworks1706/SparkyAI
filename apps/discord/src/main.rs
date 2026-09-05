@@ -3,6 +3,7 @@
 
 mod bot;
 mod commands;
+mod components;
 mod core;
 mod engine_client;
 mod reply;

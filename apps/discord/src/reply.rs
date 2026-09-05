@@ -58,12 +58,10 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
         };
     }
     if let Some(c) = &resp.confirmation {
-        // The engine stopped before acting. Relaying an approval needs the Phase 3 confirm
-        // endpoint; until then the bot says so rather than showing buttons that do nothing.
+        // The buttons under this message carry the token; only whoever asked can press them.
         let _ = write!(
             body,
-            "\n\n**Not done — `{}` needs your approval:** {} Approving actions from Discord \
-             is not available yet.",
+            "\n\n**Not done — `{}` needs your approval:** {}",
             c.tool, c.summary
         );
     }

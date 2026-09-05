@@ -104,3 +104,36 @@ fn history_never_starts_with_a_tool_result() {
     let first_history = out.messages.iter().skip(1).find(|m| m.role != Role::System);
     assert!(first_history.is_none_or(|m| m.role != Role::Tool));
 }
+
+#[test]
+fn a_resumed_run_appends_no_input_of_its_own() {
+    // Resuming after an approval has no new user turn: the question and the tool call it
+    // produced are already in history, and the tool result is the next thing to say.
+    let history = vec![
+        Message::user("ban that spammer"),
+        Message::assistant("working on it"),
+    ];
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "sys",
+            memory: &[],
+            evidence: &[],
+            history: &history,
+            input: "",
+        },
+        Budget::default(),
+    );
+
+    assert_eq!(
+        out.messages.last().map(|m| m.role),
+        Some(Role::Assistant),
+        "the last message is the history's own, not an empty user turn"
+    );
+    assert!(
+        out.messages
+            .iter()
+            .all(|m| !(m.role == Role::User && m.content.is_empty())),
+        "no empty user turn is added"
+    );
+}

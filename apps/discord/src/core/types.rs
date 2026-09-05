@@ -25,6 +25,8 @@ pub struct ChatRequest {
 /// because the bot cannot relay approvals until the Phase 3 confirm endpoint exists.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Confirmation {
+    /// Single-use token the buttons echo back so the engine can find the held action.
+    pub token: Uuid,
     /// Tool that would have run.
     pub tool: String,
     /// What would happen.
@@ -107,4 +109,19 @@ pub enum Update {
     Answer(Box<ChatResponse>),
     /// The turn failed.
     Failed(EngineError),
+}
+
+/// `POST /confirm`: answer an action the engine is holding.
+#[derive(Debug, Serialize)]
+pub struct ConfirmRequest {
+    /// The token from the confirmation.
+    pub token: Uuid,
+    /// Whether to run it.
+    pub approve: bool,
+    /// Who is answering. The engine only accepts the caller who was asked.
+    pub user_id: String,
+    /// Guild scope.
+    pub tenant_id: String,
+    /// The conversation the held action belongs to.
+    pub conversation_id: Uuid,
 }

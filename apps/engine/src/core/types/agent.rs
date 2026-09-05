@@ -20,6 +20,8 @@ pub struct AgentConfig {
     pub max_model_retries: u32,
     /// Per-tool-call timeout.
     pub tool_timeout: Duration,
+    /// How long a held action waits for its caller's approval.
+    pub confirmation_ttl: Duration,
     /// Completion budget per model call.
     pub max_tokens: u32,
     /// Sampling temperature.
@@ -42,6 +44,7 @@ impl Default for AgentConfig {
             max_steps: 8,
             max_model_retries: 2,
             tool_timeout: Duration::from_secs(20),
+            confirmation_ttl: Duration::from_mins(10),
             max_tokens: 1024,
             temperature: 0.3,
             retrieval_top_k: 6,

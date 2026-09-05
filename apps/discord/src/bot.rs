@@ -4,9 +4,10 @@ use secrecy::ExposeSecret;
 use std::time::{Duration, Instant};
 
 use serenity::all::{
-    Client, CommandInteraction, Context, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
-    GatewayIntents, GuildId, Interaction, Message, Permissions, Ready, ResolvedValue, UserId,
+    Client, CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EditInteractionResponse,
+    EventHandler, GatewayIntents, GuildId, Interaction, Message, Permissions, Ready, ResolvedValue,
+    UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -15,8 +16,9 @@ use tracing::field::Empty;
 use uuid::Uuid;
 
 use crate::commands;
+use crate::components;
 use crate::core::config::Config;
-use crate::core::types::{ChatRequest, ChatResponse, EngineError, Update};
+use crate::core::types::{ChatRequest, ChatResponse, ConfirmRequest, EngineError, Update};
 use crate::engine_client::EngineClient;
 use crate::reply;
 
@@ -162,13 +164,29 @@ impl Handler {
                     .lock()
                     .await
                     .insert(cmd.user.id, resp.conversation_id);
-                for message in reply::render(&resp) {
-                    self.followup(ctx, cmd, message).await;
-                }
+                self.answer(ctx, cmd, &resp).await;
             }
             Err(e) => {
                 tracing::error!(error = %e, user = %cmd.user.id, "engine call failed");
                 self.followup(ctx, cmd, reply::failure(&e)).await;
+            }
+        }
+    }
+
+    /// Sends the answer, with the buttons it asks for on the message that asks.
+    async fn answer(&self, ctx: &Context, cmd: &CommandInteraction, resp: &ChatResponse) {
+        let rows = components::rows_for(resp);
+        let messages = reply::render(resp);
+        let last = messages.len().saturating_sub(1);
+        for (i, message) in messages.into_iter().enumerate() {
+            let builder = CreateInteractionResponseFollowup::new().content(message);
+            let builder = if i == last && !rows.is_empty() {
+                builder.components(components::to_action_rows(&rows))
+            } else {
+                builder
+            };
+            if let Err(e) = cmd.create_followup(&ctx.http, builder).await {
+                tracing::warn!(error = %e, "followup failed");
             }
         }
     }
@@ -277,6 +295,55 @@ pub(crate) fn authorized_roles(
     roles
 }
 
+impl Handler {
+    /// Answers a pressed button. The engine decides whether this caller may: it only accepts
+    /// the one it asked, so a bystander pressing Approve changes nothing.
+    async fn pressed(&self, ctx: &Context, press: &ComponentInteraction) {
+        let Some(id) = components::CustomId::parse(&press.data.custom_id) else {
+            tracing::debug!(custom_id = %press.data.custom_id, "component is not ours");
+            return;
+        };
+        if let Err(e) = press.defer(&ctx.http).await {
+            tracing::warn!(error = %e, "defer failed");
+            return;
+        }
+        let Some(guild_id) = press.guild_id else {
+            return;
+        };
+        let approve = id.action == components::Action::Approve;
+        let req = ConfirmRequest {
+            token: id.token,
+            approve,
+            user_id: press.user.id.to_string(),
+            tenant_id: guild_id.to_string(),
+            conversation_id: id.conversation,
+        };
+        let span = tracing::info_span!(
+            "discord.confirm",
+            "openinference.span.kind" = "CHAIN",
+            "user.id" = %press.user.id,
+            "sparky.approved" = approve,
+        );
+        let outcome = self.engine.confirm(&req).instrument(span).await;
+        let body = match outcome {
+            Ok(resp) => reply::render(&resp).join("\n"),
+            Err(e) => {
+                tracing::error!(error = %e, user = %press.user.id, "confirm failed");
+                reply::failure(&e)
+            }
+        };
+        // The buttons are spent either way; clearing them stops a second press.
+        let edit = EditInteractionResponse::new().components(Vec::new());
+        if let Err(e) = press.edit_response(&ctx.http, edit).await {
+            tracing::warn!(error = %e, "could not clear the buttons");
+        }
+        let followup = CreateInteractionResponseFollowup::new().content(body);
+        if let Err(e) = press.create_followup(&ctx.http, followup).await {
+            tracing::warn!(error = %e, "confirm followup failed");
+        }
+    }
+}
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
@@ -288,6 +355,10 @@ impl EventHandler for Handler {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::Component(press) = &interaction {
+            self.pressed(&ctx, press).await;
+            return;
+        }
         if let Interaction::Command(cmd) = interaction {
             match cmd.data.name.as_str() {
                 commands::ASK => self.ask(&ctx, &cmd).await,

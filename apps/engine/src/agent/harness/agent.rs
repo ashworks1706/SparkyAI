@@ -13,6 +13,7 @@ use tracing::field::Empty;
 
 use crate::agent::harness::assemble;
 use crate::agent::harness::tool::ToolSet;
+use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::model::ModelProvider;
@@ -26,7 +27,7 @@ use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
-use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
+use crate::core::types::policy::{ConfirmationRequest, Decision, PendingAction, ProposedAction};
 use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
@@ -50,6 +51,16 @@ pub struct AgentDeps {
     pub conversations: Option<Arc<dyn ConversationStore>>,
     /// Cross-conversation memory, when configured.
     pub memory: Option<Arc<dyn MemoryStore>>,
+    /// Where actions wait for their caller's approval, when configured.
+    pub confirmations: Option<Arc<dyn ConfirmationStore>>,
+}
+
+/// Why `authorize_all` stopped.
+enum HeldError {
+    /// The caller must approve before anything runs.
+    Confirm(ConfirmationRequest),
+    /// The action could not be held, so approving it later would be impossible.
+    Store(String),
 }
 
 /// The loop. Cheap to clone; holds only `Arc`s.
@@ -83,6 +94,9 @@ struct Run<'a> {
     /// Set after a step of nothing but repeats: the next model call gets no tools, so the
     /// model has to answer from what it already has.
     force_answer: bool,
+    /// Leading `new_turns` entries assembly appends itself, so the prompt must not repeat them.
+    /// One for a fresh request, none when resuming after an approval.
+    appended_by_assembly: usize,
 }
 
 /// What a step decided.
@@ -125,6 +139,73 @@ impl Agent {
         result
     }
 
+    /// Runs an action the caller approved and carries on to an answer.
+    ///
+    /// The question and the tool call it produced are already in history, so nothing new is
+    /// said here: the tool result is the next turn, and the loop continues from it.
+    pub async fn resume(
+        &self,
+        ctx: &RequestContext,
+        pending: PendingAction,
+    ) -> Result<Answer, AgentError> {
+        let span = tracing::info_span!(
+            "agent.resume",
+            "openinference.span.kind" = "CHAIN",
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
+            "sparky.request_id" = %ctx.request_id,
+            "input.value" = %pending.action.tool,
+            "output.value" = Empty,
+        );
+        let result = self
+            .resume_inner(ctx, pending)
+            .instrument(span.clone())
+            .await;
+        if let Ok(answer) = &result {
+            span.record("output.value", truncate(&answer.text, 4_000).as_str());
+        }
+        result
+    }
+
+    async fn resume_inner(
+        &self,
+        ctx: &RequestContext,
+        pending: PendingAction,
+    ) -> Result<Answer, AgentError> {
+        let mut run = Run {
+            ctx,
+            input: "",
+            started: Instant::now(),
+            steps: 0,
+            usage: Usage::default(),
+            new_turns: Vec::new(),
+            seen_calls: HashSet::new(),
+            tool_runs: Vec::new(),
+            force_answer: false,
+            appended_by_assembly: 0,
+        };
+        let call = ToolCall {
+            id: pending.call_id,
+            name: pending.action.tool,
+            arguments: pending.action.arguments,
+        };
+        let result = self.run_tool(ctx, 0, &call).await;
+        run.tool_runs.push(ToolRun {
+            tool: call.name.clone(),
+            ok: result.is_ok(),
+        });
+        let content = result.unwrap_or_else(|error| format!("error: {error}"));
+        run.new_turns
+            .push(Message::tool_result(&call.id, &call.name, content));
+
+        let inputs = Inputs {
+            history: self.history(ctx).await?,
+            memory: Vec::new(),
+            evidence: Vec::new(),
+        };
+        self.loop_until_done(&mut run, &inputs).await
+    }
+
     async fn run_inner(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
         let mut run = Run {
             ctx,
@@ -136,6 +217,7 @@ impl Agent {
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
             force_answer: false,
+            appended_by_assembly: 1,
         };
         self.deps.trace.emit(
             ctx,
@@ -147,29 +229,37 @@ impl Agent {
         );
 
         let inputs = self.load(ctx, input).await?;
+        self.loop_until_done(&mut run, &inputs).await
+    }
 
+    /// Steps until the loop stops, then keeps the turns and builds the answer.
+    async fn loop_until_done(
+        &self,
+        run: &mut Run<'_>,
+        inputs: &Inputs,
+    ) -> Result<Answer, AgentError> {
         loop {
-            if let Some(stop) = self.check_limits(&run) {
+            if let Some(stop) = self.check_limits(run) {
                 return self
-                    .conclude(&run, stop, String::new(), inputs.evidence, None)
+                    .conclude(run, stop, String::new(), inputs.evidence.clone(), None)
                     .await;
             }
             run.steps += 1;
 
-            match self.step(&mut run, &inputs).await {
+            match self.step(run, inputs).await {
                 Ok(StepOutcome::Continue) => {}
                 Ok(StepOutcome::Stop(status, text, confirmation)) => {
                     return self
-                        .conclude(&run, status, text, inputs.evidence, confirmation)
+                        .conclude(run, status, text, inputs.evidence.clone(), confirmation)
                         .await;
                 }
                 Err(ModelError::Cancelled) => {
                     return self
                         .conclude(
-                            &run,
+                            run,
                             RunStatus::Cancelled,
                             String::new(),
-                            inputs.evidence,
+                            inputs.evidence.clone(),
                             None,
                         )
                         .await;
@@ -177,10 +267,10 @@ impl Agent {
                 Err(ModelError::Timeout) => {
                     return self
                         .conclude(
-                            &run,
+                            run,
                             RunStatus::Deadline,
                             String::new(),
-                            inputs.evidence,
+                            inputs.evidence.clone(),
                             None,
                         )
                         .await;
@@ -188,7 +278,13 @@ impl Agent {
                 Err(error) => {
                     // The turns are still kept: a failed request is part of the conversation.
                     let _ = self
-                        .conclude(&run, RunStatus::Error, String::new(), inputs.evidence, None)
+                        .conclude(
+                            run,
+                            RunStatus::Error,
+                            String::new(),
+                            inputs.evidence.clone(),
+                            None,
+                        )
                         .await;
                     return Err(error.into());
                 }
@@ -208,15 +304,19 @@ impl Agent {
         }
     }
 
-    async fn load(&self, ctx: &RequestContext, input: &str) -> Result<Inputs, AgentError> {
-        let deps = &self.deps;
-        let history = match &deps.conversations {
+    async fn history(&self, ctx: &RequestContext) -> Result<Vec<Message>, AgentError> {
+        match &self.deps.conversations {
             Some(store) => store
                 .load(ctx, self.cfg.history_turns)
                 .await
-                .map_err(|error| AgentError::Store(error.to_string()))?,
-            None => Vec::new(),
-        };
+                .map_err(|error| AgentError::Store(error.to_string())),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    async fn load(&self, ctx: &RequestContext, input: &str) -> Result<Inputs, AgentError> {
+        let deps = &self.deps;
+        let history = self.history(ctx).await?;
         let memory = match &deps.memory {
             Some(store) => store
                 .recall(
@@ -290,7 +390,7 @@ impl Agent {
         // Prompt history is prior turns plus this request's own turns so far, minus the
         // current input, which assembly appends itself.
         let mut prompt_history = inputs.history.clone();
-        prompt_history.extend(run.new_turns.iter().skip(1).cloned());
+        prompt_history.extend(run.new_turns.iter().skip(run.appended_by_assembly).cloned());
         // Tool schemas ride along with every request, so they come out of the same budget.
         let tool_tokens: usize = self
             .deps
@@ -362,7 +462,13 @@ impl Agent {
 
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
             Ok(calls) => calls,
-            Err(request) => {
+            Err(HeldError::Store(error)) => {
+                // An action nobody can approve later must not be offered for approval.
+                return Err(ModelError::Transport(format!(
+                    "could not hold the action for approval: {error}"
+                )));
+            }
+            Err(HeldError::Confirm(request)) => {
                 let text = format!("Before I do that, please confirm: {}", request.summary);
                 return Ok(StepOutcome::Stop(
                     RunStatus::AwaitingConfirmation,
@@ -451,7 +557,7 @@ impl Agent {
         &self,
         run: &mut Run<'_>,
         calls: &[ToolCall],
-    ) -> Result<Vec<ToolCall>, ConfirmationRequest> {
+    ) -> Result<Vec<ToolCall>, HeldError> {
         let deps = &self.deps;
         let mut runnable = Vec::new();
         for call in calls {
@@ -486,7 +592,25 @@ impl Agent {
                         format!("denied: {reason}"),
                     ));
                 }
-                Decision::Confirm(request) => return Err(request),
+                Decision::Confirm(request) => {
+                    let pending = PendingAction {
+                        call_id: call.id.clone(),
+                        action,
+                    };
+                    if let Some(store) = &deps.confirmations {
+                        store
+                            .hold(
+                                run.ctx,
+                                request.token,
+                                &pending,
+                                &request.payload_hash,
+                                self.cfg.confirmation_ttl,
+                            )
+                            .await
+                            .map_err(|error| HeldError::Store(error.to_string()))?;
+                    }
+                    return Err(HeldError::Confirm(request));
+                }
             }
         }
         Ok(runnable)

@@ -22,9 +22,10 @@ use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::agent::harness::agent::Agent;
+use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::AgentError;
-use crate::core::types::chat::{ChatRequest, ChatResponse, ErrorBody};
+use crate::core::types::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::model::ModelError;
@@ -38,6 +39,8 @@ pub struct ChatState {
     pub agent: Agent,
     /// To create the conversation row before the run.
     pub conversations: Option<Arc<dyn ConversationStore>>,
+    /// Where actions wait for approval.
+    pub confirmations: Option<Arc<dyn ConfirmationStore>>,
     /// Per-request wall-clock budget.
     pub request_budget: Duration,
     /// Tenant used when the client sends none (single-guild deployments).
@@ -212,6 +215,95 @@ async fn run_turn(
                 id,
                 "a store is unavailable",
             ))
+        }
+    }
+}
+
+/// Answers a held action. Approving runs it and lets the agent finish; denying drops it.
+///
+/// A token is single use and belongs to the caller who was asked, both enforced by the store.
+pub async fn confirm(
+    State(state): State<ChatState>,
+    headers: HeaderMap,
+    Json(req): Json<ConfirmRequest>,
+) -> Response {
+    if !authorized(&headers, &state.service_token) {
+        return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
+    }
+    let Some(store) = &state.confirmations else {
+        return (
+            StatusCode::NOT_IMPLEMENTED,
+            "this engine holds no confirmations",
+        )
+            .into_response();
+    };
+    let tenant = req
+        .tenant_id
+        .unwrap_or_else(|| state.default_tenant.clone());
+    let ctx = RequestContext::new(tenant, req.user_id, state.request_budget)
+        .with_conversation(req.conversation_id);
+
+    let claimed = match store.claim(&ctx, req.token, req.approve).await {
+        Ok(claimed) => claimed,
+        Err(e) => {
+            tracing::error!(error = %e, "confirmation store failed");
+            return Failure::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ctx.request_id,
+                "a store is unavailable",
+            )
+            .into_response();
+        }
+    };
+    let Some(pending) = claimed else {
+        // Expired, already answered, or someone else's. All three read the same to the caller.
+        return Failure::new(
+            StatusCode::CONFLICT,
+            ctx.request_id,
+            "that approval is no longer open",
+        )
+        .into_response();
+    };
+    if !req.approve {
+        return Json(json!({
+            "request_id": ctx.request_id,
+            "conversation_id": ctx.conversation_id,
+            "status": "denied",
+            "text": "Fine, I will not do that.",
+        }))
+        .into_response();
+    }
+    match state.agent.resume(&ctx, pending).await {
+        Ok(answer) => Json(ChatResponse {
+            request_id: ctx.request_id,
+            conversation_id: ctx.conversation_id,
+            citations: answer.evidence.iter().map(Evidence::citation).collect(),
+            text: answer.text,
+            confirmation: answer.confirmation,
+            status: answer.status,
+            steps: answer.steps,
+            tools: answer.tool_runs,
+            tokens: answer.usage.total(),
+            cost_usd: answer.cost_usd,
+        })
+        .into_response(),
+        Err(AgentError::Model(e)) => {
+            tracing::error!(error = %e, "model failed after approval");
+            Failure::new(
+                StatusCode::BAD_GATEWAY,
+                ctx.request_id,
+                "the model is unavailable",
+            )
+            .into_response()
+        }
+        Err(AgentError::Store(e)) => {
+            tracing::error!(error = %e, "store failed after approval");
+            Failure::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ctx.request_id,
+                "a store is unavailable",
+            )
+            .into_response()
         }
     }
 }

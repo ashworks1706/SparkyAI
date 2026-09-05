@@ -3,6 +3,7 @@
 mod agent;
 mod assemble;
 mod config;
+mod confirm;
 mod context;
 mod limit;
 mod mcp;
