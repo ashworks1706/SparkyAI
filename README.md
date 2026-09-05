@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="docs/ARCHITECTURE.md">Architecture</a> •
-  <a href="docs/SETUP.md">Setup</a> •
+  <a href="deploy/README.md">Setup</a> •
   <a href="docs/ROADMAP.md">Roadmap</a>
 </p>
 

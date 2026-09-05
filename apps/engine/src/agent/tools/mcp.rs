@@ -79,6 +79,7 @@ pub struct McpTool {
 /// Risk by name. Reads and inspection run; interactions are drafts; anything that submits or
 /// is unrecognised must be confirmed.
 pub fn risk_for(name: &str) -> RiskClass {
+    /// Look at the page without changing it.
     const READS: [&str; 10] = [
         "navigate",
         "snapshot",
@@ -88,29 +89,32 @@ pub fn risk_for(name: &str) -> RiskClass {
         "wait_for",
         "console",
         "network_requests",
-        "evaluate",
         "resize",
+        "install",
     ];
-    const DRAFTS: [&str; 9] = [
+    /// Change what the page holds without committing it. Reversible by navigating away.
+    const DRAFTS: [&str; 5] = ["type", "fill_form", "select_option", "hover", "drag"];
+    /// Can commit the page or run code in it. Playwright MCP ships no tool with "submit" in
+    /// its name — a form is submitted by clicking a button or pressing Enter — so these are
+    /// listed by name rather than inferred.
+    const COMMITS: [&str; 6] = [
+        "submit",
         "click",
-        "type",
-        "fill_form",
-        "select_option",
         "press_key",
-        "hover",
-        "drag",
+        "evaluate",
         "file_upload",
         "handle_dialog",
     ];
-    if name.contains("submit") {
+    if COMMITS.iter().any(|k| name.contains(k)) {
         return RiskClass::ExternalWrite;
-    }
-    if READS.iter().any(|k| name.contains(k)) {
-        return RiskClass::ReadPublic;
     }
     if DRAFTS.iter().any(|k| name.contains(k)) {
         return RiskClass::PrepareWrite;
     }
+    if READS.iter().any(|k| name.contains(k)) {
+        return RiskClass::ReadPublic;
+    }
+    // An unrecognised tool is treated as consequential until someone classifies it.
     RiskClass::ExternalWrite
 }
 

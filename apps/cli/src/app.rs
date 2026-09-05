@@ -137,6 +137,10 @@ impl App {
             Event::Services(Ok(states)) => self.services(&states),
             Event::Services(Err(e)) => self.notice = Some(e),
             Event::Health(h) => self.health = h,
+            Event::InputLost(why) => {
+                self.notice = Some(format!("terminal input ended ({why}); quitting"));
+                self.should_quit = true;
+            }
         }
     }
 

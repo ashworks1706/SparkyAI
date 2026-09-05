@@ -1,5 +1,5 @@
-//! `sparky`: the developer console. Runs every unit in the repo, streams its logs, probes the
-//! engine and its dependencies, and chats with the agent, from one modal terminal UI.
+//! `sparky`: the developer console. Runs every unit in the repo, streams its logs, and probes
+//! the engine and its dependencies, from one modal terminal UI.
 
 mod app;
 mod core;
@@ -87,11 +87,14 @@ async fn ticker(tx: mpsc::UnboundedSender<Event>) {
 
 async fn keys(tx: mpsc::UnboundedSender<Event>) {
     let mut stream = EventStream::new();
-    while let Some(Ok(event)) = stream.next().await {
+    while let Some(event) = stream.next().await {
         let mapped = match event {
-            TermEvent::Key(k) if k.kind == KeyEventKind::Press => Event::Key(k),
-            TermEvent::Resize(_, _) => Event::Resize,
-            _ => continue,
+            Ok(TermEvent::Key(k)) if k.kind == KeyEventKind::Press => Event::Key(k),
+            Ok(TermEvent::Resize(_, _)) => Event::Resize,
+            Ok(_) => continue,
+            // Losing the keyboard leaves a console that redraws but cannot be quit, so say so
+            // and shut down rather than sitting there.
+            Err(e) => Event::InputLost(e.to_string()),
         };
         if tx.send(mapped).is_err() {
             return;

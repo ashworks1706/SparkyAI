@@ -72,5 +72,9 @@ class EmbedError(RuntimeError):
     """The embedding endpoint refused or returned the wrong shape."""
 
 
+class PipelineError(RuntimeError):
+    """A source run cannot produce a trustworthy index."""
+
+
 class StoreError(RuntimeError):
     """Postgres returned something other than what the statement promised."""

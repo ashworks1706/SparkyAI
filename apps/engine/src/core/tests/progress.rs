@@ -19,7 +19,7 @@ use crate::core::types::wire::Progress;
 fn events_the_caller_should_see_carry_their_own_wording() {
     let started = TraceEvent::ToolStarted {
         step: 1,
-        tool: "public_search".into(),
+        tool: "search_asu".into(),
     };
     assert_eq!(
         started.progress().as_deref(),
@@ -109,7 +109,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
         &listening,
         TraceEvent::ToolStarted {
             step: 1,
-            tool: "public_search".into(),
+            tool: "search_asu".into(),
         },
     );
     fanout.emit(

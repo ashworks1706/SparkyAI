@@ -15,7 +15,16 @@ from scraper.sources import (
     sports,
 )
 
-SOURCES: dict[str, Source] = {
-    m.SOURCE.key: m.SOURCE
-    for m in (library_hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports)
-}
+_MODULES = (
+    library_hours,
+    events,
+    clubs,
+    courses,
+    scholarships,
+    news,
+    shuttles,
+    jobs,
+    sports,
+)
+
+SOURCES: dict[str, Source] = {m.SOURCE.key: m.SOURCE for m in _MODULES}

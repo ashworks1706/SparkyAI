@@ -28,20 +28,17 @@ fn one_chat_keeps_one_conversation_and_two_chats_do_not_share() {
     let first = "what are hayden hours";
     // The client resends the whole history each turn; the id must not move with it.
     assert_eq!(
-        conversation_for(Some("ash"), first),
-        conversation_for(Some("ash"), first)
+        conversation_for("ash", first),
+        conversation_for("ash", first)
     );
     assert_ne!(
-        conversation_for(Some("ash"), first),
-        conversation_for(Some("ash"), "when is the career fair")
+        conversation_for("ash", first),
+        conversation_for("ash", "when is the career fair")
     );
     assert_ne!(
-        conversation_for(Some("ash"), first),
-        conversation_for(Some("sam"), first)
-    );
-    assert_ne!(
-        conversation_for(None, first),
-        conversation_for(Some("ash"), first)
+        conversation_for("ash", first),
+        conversation_for("sam", first),
+        "two callers opening with the same question stay apart"
     );
 }
 

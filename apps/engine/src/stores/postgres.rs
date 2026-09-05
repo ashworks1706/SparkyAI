@@ -339,7 +339,10 @@ impl MemoryStore for PgMemory {
         for row in &rows {
             let kind: String = row.try_get("kind").map_err(db)?;
             let Some(kind) = MemoryKind::parse(&kind) else {
-                continue;
+                return Err(StoreError::Database(format!(
+                    "memories.kind {kind:?} is not a kind this build knows; schema and code \
+                     disagree"
+                )));
             };
             out.push(Memory {
                 id: row.try_get("id").map_err(db)?,

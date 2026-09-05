@@ -16,3 +16,6 @@ services:
     ports: !reset []
   minio:
     ports: !reset []
+  # Phoenix holds full prompts and replies and has no authentication. Reach it over a tunnel.
+  phoenix:
+    ports: !reset []

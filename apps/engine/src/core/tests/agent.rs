@@ -355,3 +355,38 @@ fn backoff_grows_and_spreads_retries_across_requests() {
         Duration::from_millis(5)
     );
 }
+
+#[tokio::test]
+async fn a_run_that_hits_the_step_limit_still_answers_and_keeps_its_turns() {
+    use crate::core::tests::support::{Recording, agent_with_store};
+
+    let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
+    let script: Vec<_> = (0..10)
+        .map(|i| Ok(calls(vec![(&format!("c{i}"), "echo", json!(i))])))
+        .collect();
+    let store = Arc::new(Recording::default());
+    let agent = agent_with_store(
+        Scripted::new(script),
+        tools,
+        AgentConfig {
+            max_steps: 2,
+            ..AgentConfig::default()
+        },
+        store.clone(),
+    );
+
+    let out = agent.run(&ctx(), "loop").await.ok();
+
+    assert_eq!(
+        out.as_ref().map(|a| a.status.clone()),
+        Some(RunStatus::StepLimit)
+    );
+    assert!(
+        out.is_some_and(|a| !a.text.trim().is_empty()),
+        "every terminal status says something"
+    );
+    assert!(
+        !store.appended().is_empty(),
+        "the turns are kept even though the loop gave up"
+    );
+}

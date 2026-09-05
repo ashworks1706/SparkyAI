@@ -185,12 +185,13 @@ impl ModelProvider for RigChat {
         };
         let response = self.model.completion(request).await.map_err(map_error)?;
         let (content, tool_calls) = from_rig(response.choice);
-        // Rig does not surface the provider's finish reason. An empty answer with no tool
-        // calls means the completion budget went to dropped reasoning or was cut off.
+        // Rig does not surface the provider's finish reason. Tool calls and text are the two
+        // cases it can be read off the response; an empty completion is not guessed at, since
+        // it can be a length cut, a refusal, or reasoning the adapter dropped.
         let finish_reason = if !tool_calls.is_empty() {
             FinishReason::ToolCalls
         } else if content.trim().is_empty() {
-            FinishReason::Length
+            FinishReason::Unknown
         } else {
             FinishReason::Stop
         };

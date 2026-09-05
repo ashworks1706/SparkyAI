@@ -1,5 +1,5 @@
 # Scrapes llama-server's Prometheus endpoint (enabled by --metrics on chat and embed).
-# Targets outside the running profiles show as down; that is the truth, not an error.
+# Targets outside the running profiles show as down.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s

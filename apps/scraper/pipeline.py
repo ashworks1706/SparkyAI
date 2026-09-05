@@ -10,7 +10,7 @@ import structlog
 from scraper import chunk, embed, extract, fetch
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, RunResult, Source
+from scraper.core.types import ChunkRow, PipelineError, RunResult, Source
 from scraper.store import object as objects
 from scraper.store import postgres
 
@@ -66,6 +66,13 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             max_chars=cfg.scraper.chunk_chars,
             overlap_chars=cfg.scraper.chunk_overlap_chars,
         )
+        if not pieces:
+            # replace_chunks deletes before it inserts, so writing nothing here would drop the
+            # source's whole index and report success.
+            raise PipelineError(
+                f"{source.key}: extraction produced no text from {len(fetched.body)} bytes; "
+                "refusing to replace the index with nothing"
+            )
         # The title prefix gives each embedding the page context a lone paragraph lacks.
         texts = [f"{title}\n{p}" for p in pieces]
         vectors = embed.embed_texts(texts)
@@ -76,7 +83,7 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             content_hash=content_hash,
             snapshot_key=snapshot_key,
             parser_version=cfg.scraper.parser_version,
-            chunker_version=cfg.scraper.chunker_version,
+            chunker_version=cfg.scraper.chunker_version(),
             embedding_model=cfg.embedding.name,
             previous_id=previous["id"] if previous else None,
         )

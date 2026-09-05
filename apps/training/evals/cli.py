@@ -84,6 +84,10 @@ def run_cmd(
             if name not in wanted:
                 continue
             score = _suite(name).score(case, turns)
+            if score is None:
+                # The case carries no expectation for this suite; counting it as a pass would
+                # inflate the rate the baseline gate compares against.
+                continue
             results.append(
                 CaseResult(
                     case_id=case.id, suite=name, score=score, request_id=turns[-1].request_id
@@ -121,14 +125,20 @@ def compare_cmd(
     baseline = json.loads(path.read_text())
     report = EvalReport.model_validate_json(src.read_text())
     regressions = []
-    for s in report.suites:
-        b = baseline.get(s.suite)
+    now = {s.suite: s for s in report.suites}
+    # Iterate the union: a suite that disappeared from the report is a regression, not a pass.
+    for name in sorted(set(now) | set(baseline)):
+        b = baseline.get(name)
+        s = now.get(name)
+        if s is None:
+            regressions.append(f"{name}: in the baseline but not in this report")
+            continue
         if not b or not b["total"]:
-            rprint(f"  [yellow]{s.suite}[/yellow]: not in baseline, not compared")
+            rprint(f"  [yellow]{name}[/yellow]: not in baseline, not compared")
             continue
         before = b["passed"] / b["total"]
         if s.rate + tolerance < before:
-            regressions.append(f"{s.suite}: {before:.0%} → {s.rate:.0%}")
+            regressions.append(f"{name}: {before:.0%} → {s.rate:.0%}")
     if regressions:
         rprint("[red]regressions:[/red] " + "; ".join(regressions))
         raise typer.Exit(1)

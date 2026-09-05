@@ -116,6 +116,21 @@ pub enum TraceEvent {
 }
 
 impl TraceEvent {
+    /// The snake-case name this event serialises under, for clients that switch on the kind.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::RequestStarted { .. } => "request_started",
+            Self::ContextAssembled { .. } => "context_assembled",
+            Self::ModelCall { .. } => "model_call",
+            Self::ModelError { .. } => "model_error",
+            Self::PolicyDecision { .. } => "policy_decision",
+            Self::ToolStarted { .. } => "tool_started",
+            Self::ToolCall { .. } => "tool_call",
+            Self::Retrieval { .. } => "retrieval",
+            Self::Completed { .. } => "completed",
+        }
+    }
+
     /// What to show someone waiting on this run, or `None` when the event is bookkeeping.
     ///
     /// The match is exhaustive on purpose: a new event has to decide whether it is worth
@@ -123,7 +138,7 @@ impl TraceEvent {
     pub fn progress(&self) -> Option<String> {
         match self {
             Self::ToolStarted { tool, .. } => Some(match tool.as_str() {
-                "search_asu" | "public_search" => "searching ASU pages".to_owned(),
+                "search_asu" => "searching ASU pages".to_owned(),
                 "browser_navigate" => "opening the page".to_owned(),
                 "browser_snapshot" => "reading the page".to_owned(),
                 other => format!("running {other}"),
@@ -167,6 +182,26 @@ pub enum RunStatus {
     Cancelled,
     /// Failed with an error.
     Error,
+}
+
+impl RunStatus {
+    /// What to tell the caller when the loop stopped without the model writing an answer.
+    ///
+    /// `None` only for `Answered`, where the model's own text is the answer. The match is
+    /// exhaustive so a new status cannot end up returning an empty reply.
+    pub fn explain(&self) -> Option<&'static str> {
+        match self {
+            Self::Answered => None,
+            Self::AwaitingConfirmation => Some("I stopped to ask you first."),
+            Self::StepLimit => Some("I could not finish within the allowed number of steps."),
+            Self::Stalled => {
+                Some("I kept repeating myself without getting further; try rephrasing.")
+            }
+            Self::Deadline => Some("That took too long, so I stopped."),
+            Self::Cancelled => Some("Cancelled."),
+            Self::Error => Some("Something went wrong before I could answer."),
+        }
+    }
 }
 
 /// A trace event with its envelope.

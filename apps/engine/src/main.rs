@@ -1,8 +1,8 @@
 //! `SparkyAI` engine. One binary: the agent, its HTTP surface, and the Postgres adapters
 //! behind the harness store traits.
 //! Module boundaries (see `docs/ARCHITECTURE.md`): `core` imports nothing else in this crate;
-//! `agent::harness` imports only `core`; `agent::{model,tools}` and `stores` import `core` and
-//! `agent::harness`; `routes` and `wiring` compose them.
+//! `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each
+//! other; `routes` and `wiring` compose them.
 
 mod agent;
 mod core;

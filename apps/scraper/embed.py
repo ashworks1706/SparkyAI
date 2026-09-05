@@ -26,8 +26,11 @@ def embed_texts(texts: Sequence[str]) -> list[list[float]]:
             r = http.post("/embeddings", json={"model": cfg.name, "input": batch})
             if r.status_code >= 400:
                 raise EmbedError(f"embed endpoint returned {r.status_code}: {r.text[:300]}")
-            data = sorted(r.json()["data"], key=lambda d: d["index"])
-            vectors = [d["embedding"] for d in data]
+            try:
+                data = sorted(r.json()["data"], key=lambda d: d["index"])
+                vectors = [d["embedding"] for d in data]
+            except (KeyError, TypeError, ValueError) as e:
+                raise EmbedError(f"embed endpoint returned an unreadable body: {e}") from e
             if len(vectors) != len(batch):
                 raise EmbedError(f"asked for {len(batch)} vectors, got {len(vectors)}")
             for v in vectors:

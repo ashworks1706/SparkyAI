@@ -254,7 +254,20 @@ where
 {
     tokio::spawn(async move {
         let mut lines = BufReader::new(reader).lines();
-        while let Ok(Some(text)) = lines.next_line().await {
+        loop {
+            let text = match lines.next_line().await {
+                Ok(Some(text)) => text,
+                Ok(None) => break,
+                // A pane that quietly stops updating while the process still runs is the worst
+                // failure this console can have, so it says why it stopped.
+                Err(e) => {
+                    let _ = tx.send(Event::Log {
+                        unit: unit.clone(),
+                        line: LogLine::now(Stream::Meta, format!("log capture ended: {e}")),
+                    });
+                    break;
+                }
+            };
             let text = strip_ansi(&text);
             if tx
                 .send(Event::Log {

@@ -3,9 +3,8 @@
 The developer console starts services, runs tasks, shows health, and tails output.
 
 To chat with the agent, point any OpenAI-compatible client at the engine: base URL
-`http://localhost:8080/v1`, model `sparky`. That drives the whole loop — retrieval, tools,
-policy, citations. For the raw model with no agent around it, llama-server serves its own web UI
-on http://localhost:8000.
+`http://localhost:8080/v1`, model `sparky`, API key `SPARKY_ENGINE__SERVICE_TOKEN`. llama-server
+serves its own web UI on http://localhost:8000 for the raw model.
 
 ```bash
 just cli          # from anywhere inside the repo
@@ -71,6 +70,6 @@ Container state comes from `docker compose ps`. The status bar probes the engine
 
 ## Settings
 
-`SPARKY_ENGINE__BASE_URL`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `.env.example` and `src/core/config.rs`.
+`SPARKY_ENGINE__BASE_URL`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `src/core/config.rs`.
 
 The console keeps a bounded in-memory view and appends full unit output to `.sparky/logs/`.

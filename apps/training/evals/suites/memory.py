@@ -5,7 +5,7 @@ from __future__ import annotations
 from training.core.types import EvalCase, Score, TurnResult
 
 
-def score(case: EvalCase, turns: list[TurnResult]) -> Score:
+def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     if len(turns) < 2:
         return Score(passed=False, detail="memory cases need a follow_up")
     want = (case.expect.remembers or "").lower()

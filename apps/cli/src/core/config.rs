@@ -55,7 +55,7 @@ impl Default for Model {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Cli {
-    /// Phoenix UI, linked from chat replies and probed for health.
+    /// Phoenix UI, probed for health and opened with `o`.
     pub phoenix_url: String,
     /// Lines kept per unit.
     pub log_lines: usize,

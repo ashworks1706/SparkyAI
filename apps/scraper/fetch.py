@@ -47,12 +47,24 @@ def fetch_rendered(url: str) -> Fetched:
         browser = p.chromium.launch(headless=True)
         try:
             page = browser.new_page(user_agent=s.user_agent)
-            page.goto(url, wait_until="networkidle", timeout=int(s.request_timeout_secs * 1000))
+            response = page.goto(
+                url, wait_until="networkidle", timeout=int(s.request_timeout_secs * 1000)
+            )
+            # Reporting 200 for whatever loaded makes a rendered 404 look like a good page.
+            status = response.status if response else 0
             html = page.content()
             final_url = page.url
         finally:
             browser.close()
-    return Fetched(url=final_url, status=200, body=html.encode("utf-8"), content_type="text/html")
+    if status == 0:
+        raise FetchError(f"{url}: navigation returned no response")
+    if 400 <= status < 500:
+        raise FetchRejected(f"{url}: {status}")
+    if status >= 500:
+        raise FetchError(f"{url}: {status}")
+    return Fetched(
+        url=final_url, status=status, body=html.encode("utf-8"), content_type="text/html"
+    )
 
 
 def parse_firecrawl(url: str, payload: dict[str, Any]) -> Fetched:

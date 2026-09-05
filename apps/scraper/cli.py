@@ -65,7 +65,10 @@ def schedule(poll_secs: int = typer.Option(300, help="How often to check what is
             rows = {r["key"]: r for r in postgres.status_rows(conn)}
         now = datetime.now(UTC)
         for key, src in SOURCES.items():
-            last = rows.get(key, {}).get("last_fetch")
+            row = rows.get(key, {})
+            if row and not row.get("enabled", True):
+                continue
+            last = row.get("last_fetch")
             due = last is None or now - last >= timedelta(hours=src.fetch_every_hours)
             if not due:
                 continue

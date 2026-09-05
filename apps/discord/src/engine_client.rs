@@ -9,7 +9,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::core::types::{ChatRequest, ChatResponse, EngineError, Progress, Update};
+use crate::core::types::{ChatRequest, ChatResponse, EngineError, ErrorFrame, Progress, Update};
 use crate::sse::drain_frames;
 
 /// HTTP client bound to one engine.
@@ -79,11 +79,12 @@ impl EngineClient {
             buf.push_str(&String::from_utf8_lossy(&chunk));
             for (name, data) in drain_frames(&mut buf) {
                 match name.as_str() {
-                    "progress" => {
-                        if let Ok(p) = serde_json::from_str::<Progress>(&data) {
+                    "progress" => match serde_json::from_str::<Progress>(&data) {
+                        Ok(p) => {
                             let _ = tx.send(Update::Progress(p.text));
                         }
-                    }
+                        Err(e) => tracing::debug!(error = %e, "unreadable progress frame"),
+                    },
                     "answer" => match serde_json::from_str::<ChatResponse>(&data) {
                         Ok(answer) => {
                             answered = true;
@@ -98,10 +99,14 @@ impl EngineClient {
                     },
                     "error" => {
                         answered = true;
-                        let _ = tx.send(Update::Failed(EngineError::Status {
-                            status: 500,
-                            body: data.chars().take(300).collect(),
-                        }));
+                        // The frame carries the status the JSON route would have used; without
+                        // it a capacity 503 would be indistinguishable from an outage.
+                        let frame = serde_json::from_str::<ErrorFrame>(&data);
+                        let (status, body) = match &frame {
+                            Ok(f) => (f.status.unwrap_or(502), f.error.clone()),
+                            Err(_) => (502, data.chars().take(300).collect()),
+                        };
+                        let _ = tx.send(Update::Failed(EngineError::Status { status, body }));
                     }
                     _ => {}
                 }

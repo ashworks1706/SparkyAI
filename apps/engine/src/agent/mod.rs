@@ -1,5 +1,5 @@
 //! The thing that thinks: harness (types, traits, loop), model adapters, built-in tools.
-//! `harness` imports nothing else in the crate; `model` and `tools` import only `harness`.
+//! `harness`, `model`, and `tools` each import only `core`, never each other.
 
 pub mod harness;
 pub mod model;

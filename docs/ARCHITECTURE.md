@@ -50,7 +50,7 @@ apps/
     src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
     src/routes/     chat (JSON and SSE), openai (/v1), health
-    src/{telemetry,wiring}.rs
+    src/wiring.rs
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
   cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them. core/{config,types,tests}.
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
@@ -145,6 +145,8 @@ pub struct RequestContext {
     pub conversation_id: Uuid,
     pub deadline: Instant,
     pub cancel: CancellationToken,
+    /// Live progress goes here while a caller is watching; `None` for a plain request.
+    pub progress: Option<UnboundedSender<Progress>>,
 }
 
 pub struct Evidence {
@@ -191,7 +193,7 @@ pub trait ConversationStore {
 #[async_trait]
 pub trait MemoryStore {
     async fn recall(&self, ctx: &RequestContext, q: &MemoryQuery) -> Result<Vec<Memory>, StoreError>;
-    // write and forget arrive with Phase 3, when the agent starts producing memories
+    // write and forget arrive with Phase 4, when the agent starts producing memories
 }
 
 #[async_trait]
@@ -242,7 +244,7 @@ sequenceDiagram
     B->>PX: spans
 ```
 
-1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity, roles, and native permissions. Web, admin, and the `sparky` console hit the same endpoint.
+1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity, roles, and native permissions. Web and admin clients hit the same endpoints.
 2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`.
 3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.

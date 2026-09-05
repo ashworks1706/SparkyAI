@@ -5,7 +5,7 @@ from __future__ import annotations
 from training.core.types import EvalCase, Score, TurnResult
 
 
-def score(case: EvalCase, turns: list[TurnResult]) -> Score:
+def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     last = turns[-1]
     problems: list[str] = []
     if last.status != "answered":

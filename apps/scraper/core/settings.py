@@ -54,7 +54,10 @@ class Scraper(BaseModel):
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"
-    chunker_version: str = "para-1200-200-v1"
+
+    def chunker_version(self) -> str:
+        """Records the settings the chunks were actually cut with, so re-chunking is decidable."""
+        return f"para-{self.chunk_chars}-{self.chunk_overlap_chars}-v1"
 
 
 class Settings(BaseSettings):

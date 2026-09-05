@@ -8,7 +8,7 @@ OpenAI-compatible API, the only surface `apps/engine` and `apps/scraper` use.
 | Role | Default GGUF | Port | Flags |
 |---|---|---|---|
 | chat | `Qwen/Qwen3-4B-GGUF:Q4_K_M` | 8000 | `--jinja` for tool calls, `--metrics`, `--ctx-size 8192`, `--parallel 2` |
-| embeddings | `Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0` | 8001 | `--embeddings --pooling last`, batch 1024, `--parallel 2` |
+| embeddings | `Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0` | 8001 | `--embeddings --pooling last`, `--metrics`, batch 1024, `--parallel 2` |
 
 Override either with `SPARKY_CHAT_GGUF` or `SPARKY_EMBED_GGUF`.
 

@@ -91,6 +91,11 @@ impl Handler {
             self.followup(ctx, cmd, "Ask me something.".into()).await;
             return;
         }
+        let Some(guild_id) = cmd.guild_id else {
+            self.followup(ctx, cmd, "Ask me in the server, not in a DM.".into())
+                .await;
+            return;
+        };
         let roles = match self.role_names(ctx, cmd).await {
             Ok(roles) => roles,
             Err(e) => {
@@ -107,7 +112,7 @@ impl Handler {
         let conversation_id = self.conversations.lock().await.get(&cmd.user.id).copied();
         let req = ChatRequest {
             user_id: cmd.user.id.to_string(),
-            tenant_id: cmd.guild_id.unwrap_or(self.guild_id).to_string(),
+            tenant_id: guild_id.to_string(),
             channel_id: cmd.channel_id.to_string(),
             roles,
             conversation_id,
@@ -124,8 +129,11 @@ impl Handler {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let streaming = self.engine.chat_stream(&req, tx).instrument(span.clone());
         let (outcome, note) = tokio::join!(streaming, self.watch(ctx, cmd, &mut rx)).1;
-        if let Some(note) = note {
-            let _ = cmd.delete_followup(&ctx.http, note.id).await;
+        if let Some(note) = note
+            && let Err(e) = cmd.delete_followup(&ctx.http, note.id).await
+        {
+            // The progress line stays above the answer; say why rather than leaving a mystery.
+            tracing::warn!(error = %e, "could not clear the progress message");
         }
         let Some(outcome) = outcome else {
             tracing::error!(user = %cmd.user.id, "stream ended with no outcome");
@@ -205,9 +213,22 @@ impl Handler {
         let body = format!("_{text}…_");
         let builder = CreateInteractionResponseFollowup::new().content(body);
         if let Some(message) = existing {
-            cmd.edit_followup(&ctx.http, message.id, builder).await.ok()
+            match cmd.edit_followup(&ctx.http, message.id, builder).await {
+                Ok(updated) => Some(updated),
+                Err(e) => {
+                    tracing::warn!(error = %e, "progress edit failed");
+                    // Keep the message we have; a fresh one would leave two on screen.
+                    Some(message)
+                }
+            }
         } else {
-            cmd.create_followup(&ctx.http, builder).await.ok()
+            match cmd.create_followup(&ctx.http, builder).await {
+                Ok(posted) => Some(posted),
+                Err(e) => {
+                    tracing::warn!(error = %e, "progress message failed");
+                    None
+                }
+            }
         }
     }
 

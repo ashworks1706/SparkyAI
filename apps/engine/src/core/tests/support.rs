@@ -9,13 +9,15 @@ use serde_json::{Value, json};
 use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
+use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::tool::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::context::RequestContext;
-use crate::core::types::message::ToolCall;
+use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
+use crate::core::types::store::StoreError;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
 
@@ -161,6 +163,54 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         memory: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
+}
+
+/// A conversation store that remembers what the loop asked it to keep.
+#[derive(Default)]
+pub struct Recording {
+    turns: Mutex<Vec<Message>>,
+}
+
+impl Recording {
+    pub fn appended(&self) -> Vec<Message> {
+        self.turns.lock().map(|t| t.clone()).unwrap_or_default()
+    }
+}
+
+#[async_trait]
+impl ConversationStore for Recording {
+    async fn ensure(&self, _ctx: &RequestContext, _channel_id: &str) -> Result<(), StoreError> {
+        Ok(())
+    }
+
+    async fn load(&self, _ctx: &RequestContext, _limit: usize) -> Result<Vec<Message>, StoreError> {
+        Ok(Vec::new())
+    }
+
+    async fn append(&self, _ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError> {
+        if let Ok(mut kept) = self.turns.lock() {
+            kept.extend_from_slice(turns);
+        }
+        Ok(())
+    }
+}
+
+pub fn agent_with_store(
+    model: Scripted,
+    tools: ToolSet,
+    cfg: AgentConfig,
+    conversations: Arc<dyn ConversationStore>,
+) -> Agent {
+    let deps = AgentDeps {
+        model: Arc::new(model),
+        tools,
+        policy: Arc::new(RiskPolicy::new()),
+        trace: Arc::new(MemorySink::default()),
+        retriever: None,
+        conversations: Some(conversations),
+        memory: None,
+    };
+    Agent::new(deps, cfg, "sys")
 }
 
 pub fn ctx() -> RequestContext {

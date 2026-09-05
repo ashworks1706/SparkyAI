@@ -64,4 +64,8 @@ pub struct ErrorBody {
     pub request_id: Uuid,
     /// What went wrong.
     pub error: String,
+    /// HTTP status this would have carried. Present on the stream, where the frame is the only
+    /// place a client can read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<u16>,
 }

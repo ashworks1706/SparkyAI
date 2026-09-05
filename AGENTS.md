@@ -12,7 +12,7 @@ just check            # fmt-check, lint, test every unit — the gate; CI and th
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-scraper    # ruff + pytest in apps/scraper
 just check-training   # ruff + pytest in apps/training
-just check-web        # eslint + vitest + vite build in apps/web
+just check-web        # eslint + tsc --noEmit + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
@@ -26,6 +26,8 @@ just crawl            # self-hosted Firecrawl for the scraper
 just browser          # Playwright MCP browser tools for the engine
 just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
+just web              # Vite dev server on :5173
+just ps               # what compose has, across every profile
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
 just diagrams         # render ARCHITECTURE.md mermaid to verify syntax
@@ -58,7 +60,7 @@ Processes talk only via: discord → engine, engine → PostgreSQL / llama-serve
 
 ## Config
 
-All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/config.rs` and `apps/discord/src/config.rs` (Rust) and `settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
+All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/core/config/mod.rs`, `apps/discord/src/core/config.rs`, and `apps/cli/src/core/config.rs` (Rust) and `core/settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
 
 ## Rules
 

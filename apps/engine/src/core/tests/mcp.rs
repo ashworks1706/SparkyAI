@@ -18,14 +18,29 @@ fn reads_and_inspection_run_freely() {
 }
 
 #[test]
-fn interactions_are_drafts() {
+fn filling_a_page_in_is_a_draft() {
     for name in [
-        "browser_click",
         "browser_type",
         "browser_fill_form",
-        "browser_press_key",
+        "browser_select_option",
+        "browser_hover",
     ] {
         assert_eq!(risk_for(name), RiskClass::PrepareWrite, "{name}");
+    }
+}
+
+#[test]
+fn anything_that_can_commit_the_page_needs_confirmation() {
+    // Playwright MCP ships no tool with "submit" in its name: a form is submitted by clicking
+    // a button or pressing Enter, and browser_evaluate runs arbitrary script in the page.
+    for name in [
+        "browser_click",
+        "browser_press_key",
+        "browser_evaluate",
+        "browser_file_upload",
+        "browser_handle_dialog",
+    ] {
+        assert_eq!(risk_for(name), RiskClass::ExternalWrite, "{name}");
     }
 }
 

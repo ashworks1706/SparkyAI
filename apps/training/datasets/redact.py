@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from training.core.types import Message, TrainingExample
 
@@ -21,8 +22,18 @@ def redact_text(text: str) -> str:
     return text
 
 
+def _redact_call(call: dict[str, Any]) -> dict[str, Any]:
+    """Rewrites a tool call's values. Keys and ids are structure, not user text."""
+    return {k: redact_text(v) if isinstance(v, str) and k != "id" else v for k, v in call.items()}
+
+
 def redact_message(m: Message) -> Message:
-    return m.model_copy(update={"content": redact_text(m.content)})
+    return m.model_copy(
+        update={
+            "content": redact_text(m.content),
+            "tool_calls": [_redact_call(c) for c in m.tool_calls],
+        }
+    )
 
 
 def redact_example(ex: TrainingExample) -> TrainingExample:

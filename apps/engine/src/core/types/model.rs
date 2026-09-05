@@ -30,6 +30,8 @@ pub enum FinishReason {
     Length,
     /// Provider reported something else.
     Other,
+    /// The provider did not say why it stopped.
+    Unknown,
 }
 
 /// Token counts for one call.

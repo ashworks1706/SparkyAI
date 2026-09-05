@@ -67,7 +67,7 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# Developer console: start/stop every unit, tail logs, run tasks, chat with the agent
+# Developer console: start/stop every unit, tail logs, run tasks
 cli:
     cargo run -p cli --release
 
@@ -100,7 +100,7 @@ data *ARGS:
 # ---------- web ----------
 
 check-web:
-    cd apps/web && npm run lint && npm test && npm run build
+    cd apps/web && npm run lint && npm run typecheck && npm test && npm run build
 
 # Vite dev server
 web:

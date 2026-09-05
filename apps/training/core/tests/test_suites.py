@@ -34,10 +34,17 @@ def test_tool_selection_and_args():
     assert tool_selection.score(_case(tool="search_asu"), [_turn(events=ev)]).passed
     assert not tool_selection.score(_case(tool="search_asu"), [_turn()]).passed
     assert not tool_selection.score(_case(), [_turn(events=ev)]).passed
-    ok = tool_args.score(
+    named = tool_args.score(
+        _case(tool="search_asu", tool_args_contain={"query": "library"}), [_turn(events=ev)]
+    )
+    assert named.passed, "the key names the argument, the value is matched inside it"
+    wrong_key = tool_args.score(
         _case(tool="search_asu", tool_args_contain={"q": "library"}), [_turn(events=ev)]
     )
-    assert ok.passed
+    assert not wrong_key.passed, "an expectation naming an argument the tool lacks fails"
+    assert tool_args.score(_case(tool="search_asu"), [_turn(events=ev)]) is None, (
+        "no expectation means no result, not a free pass"
+    )
 
 
 def test_grounding_needs_citation_status_and_mentions():

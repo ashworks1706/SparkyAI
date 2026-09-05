@@ -46,9 +46,20 @@ def ask(
     if conversation_id:
         body["conversation_id"] = conversation_id
     url = (engine_url or cfg.engine_url).rstrip("/") + "/chat"
+    token = cfg.engine_service_token.get_secret_value()
+    if not token:
+        raise RunnerError(
+            "SPARKY_TRAINING__ENGINE_SERVICE_TOKEN is unset; the engine rejects unauthenticated "
+            "calls, so every case would fail with 401"
+        )
     started = time.monotonic()
     try:
-        r = httpx.post(url, json=body, timeout=cfg.request_timeout_secs)
+        r = httpx.post(
+            url,
+            json=body,
+            timeout=cfg.request_timeout_secs,
+            headers={"Authorization": f"Bearer {token}"},
+        )
     except httpx.HTTPError as e:
         raise RunnerError(f"engine at {url} unreachable: {e}") from e
     latency_ms = int((time.monotonic() - started) * 1000)

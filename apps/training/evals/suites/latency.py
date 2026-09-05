@@ -5,9 +5,9 @@ from __future__ import annotations
 from training.core.types import EvalCase, Score, TurnResult
 
 
-def score(case: EvalCase, turns: list[TurnResult]) -> Score:
+def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     limit = case.expect.max_latency_ms
     if limit is None:
-        return Score(passed=True, detail="no latency budget")
+        return None
     worst = max(t.latency_ms for t in turns)
     return Score(passed=worst <= limit, detail=f"{worst} ms vs {limit} ms budget")

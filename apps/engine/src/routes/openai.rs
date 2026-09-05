@@ -42,8 +42,8 @@ pub fn last_user_message(messages: &[ChatMessage]) -> Option<&str> {
 /// A conversation id that stays put while a chat grows. `OpenAI` clients resend the whole
 /// history every turn and carry no conversation id, so it is derived from the caller and the
 /// turn that opened the chat.
-pub fn conversation_for(user: Option<&str>, first_message: &str) -> Uuid {
-    let seed = format!("{}\u{0}{first_message}", user.unwrap_or_default());
+pub fn conversation_for(user: &str, first_message: &str) -> Uuid {
+    let seed = format!("{user}\u{0}{first_message}");
     Uuid::new_v5(&CONVERSATION_NS, seed.as_bytes())
 }
 
@@ -122,12 +122,18 @@ pub async fn completions(
         .map_or(input.as_str(), |m| m.content.trim())
         .to_owned();
 
-    let user = req
-        .user
-        .clone()
-        .unwrap_or_else(|| "openai-client".to_owned());
+    // Without an identity two callers would share a conversation id and, through it, each
+    // other's memories. OpenAI clients all send `user`; one that does not must say who it is
+    // before the engine will keep state for it.
+    let Some(user) = req.user.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            "set `user` on the request: the engine keeps conversation and memory per caller",
+        )
+            .into_response();
+    };
     let ctx = RequestContext::new(state.default_tenant.clone(), user, state.request_budget)
-        .with_conversation(conversation_for(req.user.as_deref(), &opener));
+        .with_conversation(conversation_for(user, &opener));
 
     if let Some(store) = &state.conversations
         && let Err(e) = store.ensure(&ctx, "openai").await

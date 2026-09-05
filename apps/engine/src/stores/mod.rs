@@ -1,4 +1,4 @@
 //! Store adapters. The only place a database connection is opened.
-//! Implements the `agent::harness` store traits; imports only `core` and `agent::harness`.
+//! Implements the `core::traits` store traits; imports only `core`.
 
 pub mod postgres;

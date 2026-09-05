@@ -150,36 +150,46 @@ impl Agent {
 
         loop {
             if let Some(stop) = self.check_limits(&run) {
-                return Ok(self.finish(&run, stop, String::new(), inputs.evidence, None));
+                return self
+                    .conclude(&run, stop, String::new(), inputs.evidence, None)
+                    .await;
             }
             run.steps += 1;
 
             match self.step(&mut run, &inputs).await {
                 Ok(StepOutcome::Continue) => {}
                 Ok(StepOutcome::Stop(status, text, confirmation)) => {
-                    self.persist(ctx, &run.new_turns).await?;
-                    return Ok(self.finish(&run, status, text, inputs.evidence, confirmation));
+                    return self
+                        .conclude(&run, status, text, inputs.evidence, confirmation)
+                        .await;
                 }
                 Err(ModelError::Cancelled) => {
-                    return Ok(self.finish(
-                        &run,
-                        RunStatus::Cancelled,
-                        String::new(),
-                        inputs.evidence,
-                        None,
-                    ));
+                    return self
+                        .conclude(
+                            &run,
+                            RunStatus::Cancelled,
+                            String::new(),
+                            inputs.evidence,
+                            None,
+                        )
+                        .await;
                 }
                 Err(ModelError::Timeout) => {
-                    return Ok(self.finish(
-                        &run,
-                        RunStatus::Deadline,
-                        String::new(),
-                        inputs.evidence,
-                        None,
-                    ));
+                    return self
+                        .conclude(
+                            &run,
+                            RunStatus::Deadline,
+                            String::new(),
+                            inputs.evidence,
+                            None,
+                        )
+                        .await;
                 }
                 Err(error) => {
-                    self.finish(&run, RunStatus::Error, String::new(), Vec::new(), None);
+                    // The turns are still kept: a failed request is part of the conversation.
+                    let _ = self
+                        .conclude(&run, RunStatus::Error, String::new(), inputs.evidence, None)
+                        .await;
                     return Err(error.into());
                 }
             }
@@ -336,7 +346,10 @@ impl Agent {
                         "I ran out of room before finishing the answer.".to_owned(),
                     )
                 } else {
-                    (RunStatus::Answered, String::new())
+                    (
+                        RunStatus::Answered,
+                        "The model returned nothing. Try rephrasing.".to_owned(),
+                    )
                 };
                 return Ok(StepOutcome::Stop(status, text, None));
             }
@@ -635,6 +648,25 @@ impl Agent {
             Err(error) => span.record("output.value", format!("error: {error}").as_str()),
         };
         content
+    }
+
+    /// Keeps the turns, records the outcome, and builds the answer. Every exit from the loop
+    /// goes through here so no path can drop a turn or return an empty reply.
+    async fn conclude(
+        &self,
+        run: &Run<'_>,
+        status: RunStatus,
+        text: String,
+        evidence: Vec<Evidence>,
+        confirmation: Option<ConfirmationRequest>,
+    ) -> Result<Answer, AgentError> {
+        self.persist(run.ctx, &run.new_turns).await?;
+        let text = if text.trim().is_empty() {
+            status.explain().unwrap_or_default().to_owned()
+        } else {
+            text
+        };
+        Ok(self.finish(run, status, text, evidence, confirmation))
     }
 
     async fn persist(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), AgentError> {

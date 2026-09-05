@@ -272,6 +272,8 @@ pub enum Event {
     Services(Result<HashMap<String, ServiceState>, String>),
     /// Fresh dependency probes.
     Health(Health),
+    /// The terminal stopped delivering input; the console cannot be driven any more.
+    InputLost(String),
 }
 
 /// Runner failures.

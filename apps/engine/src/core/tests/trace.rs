@@ -66,3 +66,78 @@ fn traceparent_parses_into_a_remote_parent() {
     assert!(parse_traceparent("garbage").is_none());
     assert!(parse_traceparent("00-00000000000000000000000000000000-0000000000000000-01").is_none());
 }
+
+#[test]
+fn kind_matches_the_name_each_event_serialises_under() {
+    use crate::core::types::model::{FinishReason, Usage};
+    use crate::core::types::policy::Decision;
+
+    let events = [
+        TraceEvent::RequestStarted {
+            input: String::new(),
+            tenant_id: String::new(),
+            user_id: String::new(),
+        },
+        TraceEvent::ContextAssembled {
+            step: 1,
+            message_count: 0,
+            estimated_tokens: 0,
+            evidence_ids: Vec::new(),
+        },
+        TraceEvent::ModelCall {
+            step: 1,
+            model: String::new(),
+            finish_reason: FinishReason::Stop,
+            usage: Usage::default(),
+            duration_ms: 0,
+            attempt: 0,
+        },
+        TraceEvent::ModelError {
+            step: 1,
+            attempt: 0,
+            error: String::new(),
+            retried: false,
+        },
+        TraceEvent::PolicyDecision {
+            step: 1,
+            tool: String::new(),
+            decision: Decision::Allow,
+        },
+        TraceEvent::ToolStarted {
+            step: 1,
+            tool: String::new(),
+        },
+        TraceEvent::ToolCall {
+            step: 1,
+            call_id: String::new(),
+            tool: String::new(),
+            arguments: serde_json::Value::Null,
+            result: Ok(String::new()),
+            duration_ms: 0,
+        },
+        TraceEvent::Retrieval {
+            step: 1,
+            query: String::new(),
+            chunk_ids: Vec::new(),
+            duration_ms: 0,
+        },
+        TraceEvent::Completed {
+            status: RunStatus::Answered,
+            steps: 1,
+            usage: Usage::default(),
+            cost_usd: 0.0,
+            duration_ms: 0,
+        },
+    ];
+
+    for event in &events {
+        let tag = serde_json::to_value(event)
+            .ok()
+            .and_then(|v| v.get("kind").and_then(|k| k.as_str()).map(str::to_owned));
+        assert_eq!(
+            tag.as_deref(),
+            Some(event.kind()),
+            "kind() drifted from the serde tag"
+        );
+    }
+}

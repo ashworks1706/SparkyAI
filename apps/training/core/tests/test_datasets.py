@@ -72,3 +72,27 @@ def test_verify_drops_bad_and_duplicate_examples():
     kept, reasons = verify([_ex("a"), _ex("b"), _ex("c", content=""), _ex("d", first="user")])
     assert [e.id for e in kept] == ["a"]
     assert reasons == {"duplicate": 1, "empty response": 1, "first message is not system": 1}
+
+
+def test_redaction_reaches_tool_call_arguments():
+    """Arguments carry whatever the user said; unredacted they land in the training set."""
+    from training.core.types import Message
+    from training.datasets.redact import redact_message
+
+    m = Message(
+        role="assistant",
+        content="",
+        tool_calls=[
+            {
+                "id": "c1",
+                "name": "search_asu",
+                "arguments": '{"query": "email me at student@asu.edu"}',
+            }
+        ],
+    )
+
+    out = redact_message(m)
+
+    assert "student@asu.edu" not in str(out.tool_calls)
+    assert "[email]" in str(out.tool_calls)
+    assert out.tool_calls[0]["name"] == "search_asu", "only values are rewritten"

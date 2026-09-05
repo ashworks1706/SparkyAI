@@ -78,6 +78,16 @@ pub enum EngineError {
     },
 }
 
+/// The engine's error frame on `/chat/stream`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ErrorFrame {
+    /// What went wrong.
+    pub error: String,
+    /// The status the JSON route would have returned, so capacity reads apart from an outage.
+    #[serde(default)]
+    pub status: Option<u16>,
+}
+
 /// One line of progress from `/chat/stream`.
 ///
 /// Only `text` is read: the engine renders the sentence, so a kind added there shows up here

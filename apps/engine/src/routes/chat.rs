@@ -13,7 +13,8 @@ use axum::response::{IntoResponse, Response};
 use futures::{StreamExt, stream};
 use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::json;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -113,15 +114,11 @@ pub async fn stream(
         .instrument(span),
     );
 
-    let progress = UnboundedReceiverStream::new(progress_rx)
-        .map(|p| sse("progress", &serde_json::to_value(&p).unwrap_or_default()));
+    let progress = UnboundedReceiverStream::new(progress_rx).map(|p| sse("progress", &p));
     let tail = stream::once(async move {
         match answer_rx.await {
-            Ok(Ok(answer)) => sse("answer", &serde_json::to_value(&answer).unwrap_or_default()),
-            Ok(Err(failure)) => sse(
-                "error",
-                &serde_json::to_value(&failure.body).unwrap_or_default(),
-            ),
+            Ok(Ok(answer)) => sse("answer", &answer),
+            Ok(Err(failure)) => sse("error", &failure.body),
             Err(e) => sse("error", &json!({ "error": e.to_string() })),
         }
     })
@@ -130,8 +127,18 @@ pub async fn stream(
     Sse::new(progress.chain(tail).map(Ok::<Event, Infallible>)).into_response()
 }
 
-fn sse(name: &str, body: &Value) -> Event {
-    Event::default().event(name).data(body.to_string())
+/// One server-sent event. A payload that cannot be serialised is reported as an error to the
+/// client and logged, never sent as an empty body that would read as a valid answer.
+fn sse<T: Serialize>(name: &str, body: &T) -> Event {
+    match serde_json::to_string(body) {
+        Ok(json) => Event::default().event(name).data(json),
+        Err(e) => {
+            tracing::error!(error = %e, event = name, "could not serialise a stream event");
+            Event::default()
+                .event("error")
+                .data(json!({ "error": "internal serialisation failure" }).to_string())
+        }
+    }
 }
 
 /// One turn, with the progress channel the caller wants events on, if any.
@@ -222,6 +229,7 @@ impl Failure {
             body: ErrorBody {
                 request_id,
                 error: error.to_owned(),
+                status: Some(status.as_u16()),
             },
         }
     }

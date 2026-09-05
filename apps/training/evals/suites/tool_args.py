@@ -7,8 +7,10 @@ import json
 from training.core.types import EvalCase, Score, TurnResult
 
 
-def score(case: EvalCase, turns: list[TurnResult]) -> Score:
+def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     want = case.expect.tool_args_contain
+    if not want:
+        return None
     calls = [
         e
         for t in turns
@@ -18,7 +20,14 @@ def score(case: EvalCase, turns: list[TurnResult]) -> Score:
     if not calls:
         return Score(passed=False, detail=f"{case.expect.tool} was not called")
     for call in calls:
-        args = json.dumps(call.get("arguments", {})).lower()
-        if all(v.lower() in args for v in want.values()):
-            return Score(passed=True, detail=f"arguments contained {list(want.values())}")
+        args = call.get("arguments", {})
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(args, dict):
+            continue
+        if all(k in args and v.lower() in json.dumps(args[k]).lower() for k, v in want.items()):
+            return Score(passed=True, detail=f"arguments contained {want}")
     return Score(passed=False, detail=f"no call contained {want}")

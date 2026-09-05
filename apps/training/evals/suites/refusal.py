@@ -13,7 +13,7 @@ _DECLINE = re.compile(
 )
 
 
-def score(case: EvalCase, turns: list[TurnResult]) -> Score:
+def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     last = turns[-1]
     declined = bool(_DECLINE.search(last.text))
     guessed = bool(last.citations) and not declined

@@ -19,7 +19,7 @@ SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no ho
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, no host ports except engine `:8080`. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, and no host ports except engine `:8080`. Phoenix, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
 
 ## Models
 
@@ -51,7 +51,9 @@ Phoenix holds one span per model call: the full prompt, the full reply, token co
 | Queue | `llamacpp:requests_processing`, `..._deferred` | deferred above zero means requests are waiting for a slot |
 | Batching efficiency | `llamacpp:n_busy_slots_per_decode` | near 1 with a non-empty queue means `--parallel` is too low |
 | Prompt cache hit rate | cached / (cached + new) | a stable system prompt keeps this high |
+| Server-reported speed | `llamacpp:predicted_tokens_seconds`, `..._prompt_tokens_seconds` | llama-server's own running average, independent of load |
+| Context ceiling | `llamacpp:n_tokens_max` | the largest context one slot accepts |
 
-`llama-server` starts with one slot; requests serialize until `--parallel N` is set in `compose.yml`. Each slot takes a `--ctx-size / N` share of the context window, so raise both together.
+Both servers start with two slots (`SPARKY_CHAT_PARALLEL`, `SPARKY_EMBED_PARALLEL`). Each slot takes a `--ctx-size / N` share of the context window, so raise both together.
 
 Grafana's admin password comes from `SPARKY_GRAFANA_PASSWORD` (default `admin`). Both ports bind to `127.0.0.1`. Tunnel to reach them on a remote host; set a real password before exposing either.

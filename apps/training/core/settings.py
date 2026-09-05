@@ -5,12 +5,14 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
+    # The engine rejects every /chat call without this; see apps/engine routes::chat::authorized.
+    engine_service_token: SecretStr = SecretStr("")
     phoenix_url: str = "http://localhost:6006"
     state_dir: Path = Path("../../.sparky")
     cases_dir: Path = Path("evals/cases")
