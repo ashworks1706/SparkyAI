@@ -61,7 +61,10 @@ async fn call_all(limited: Arc<Limited>, n: usize) -> Vec<Result<ModelResponse, 
     }
     let mut out = Vec::new();
     for h in handles {
-        out.push(h.await.unwrap_or_else(|e| Err(ModelError::Transport(e.to_string()))));
+        out.push(
+            h.await
+                .unwrap_or_else(|e| Err(ModelError::Transport(e.to_string()))),
+        );
     }
     out
 }
@@ -69,26 +72,21 @@ async fn call_all(limited: Arc<Limited>, n: usize) -> Vec<Result<ModelResponse, 
 #[tokio::test]
 async fn calls_never_exceed_the_slot_count() {
     let inner = Counting::new(Duration::from_millis(60));
-    let limited = Arc::new(Limited::new(
-        inner.clone(),
-        2,
-        Duration::from_secs(5),
-    ));
+    let limited = Arc::new(Limited::new(inner.clone(), 2, Duration::from_secs(5)));
 
     let results = call_all(limited, 5).await;
 
-    assert!(results.iter().all(Result::is_ok), "every call should be served");
+    assert!(
+        results.iter().all(Result::is_ok),
+        "every call should be served"
+    );
     assert_eq!(inner.peak.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
 async fn a_call_that_waits_past_its_budget_reports_busy() {
     let inner = Counting::new(Duration::from_millis(300));
-    let limited = Arc::new(Limited::new(
-        inner,
-        1,
-        Duration::from_millis(30),
-    ));
+    let limited = Arc::new(Limited::new(inner, 1, Duration::from_millis(30)));
 
     let results = call_all(limited, 2).await;
 

@@ -309,7 +309,7 @@ fn backoff_grows_and_spreads_retries_across_requests() {
     use crate::agent::harness::agent::backoff;
 
     let id = Uuid::from_u128(0);
-    let plenty = Duration::from_secs(60);
+    let plenty = Duration::from_mins(1);
     let first = backoff(1, id, plenty);
     let second = backoff(2, id, plenty);
     let third = backoff(3, id, plenty);
