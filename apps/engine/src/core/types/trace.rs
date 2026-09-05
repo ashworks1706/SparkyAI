@@ -67,6 +67,13 @@ pub enum TraceEvent {
         /// Verdict.
         decision: Decision,
     },
+    /// A tool is about to run.
+    ToolStarted {
+        /// Loop step.
+        step: u32,
+        /// Tool name.
+        tool: String,
+    },
     /// A tool ran.
     ToolCall {
         /// Loop step.
@@ -106,6 +113,40 @@ pub enum TraceEvent {
         /// Wall time.
         duration_ms: u64,
     },
+}
+
+impl TraceEvent {
+    /// What to show someone waiting on this run, or `None` when the event is bookkeeping.
+    ///
+    /// The match is exhaustive on purpose: a new event has to decide whether it is worth
+    /// interrupting the caller for, rather than silently defaulting to hidden.
+    pub fn progress(&self) -> Option<String> {
+        match self {
+            Self::ToolStarted { tool, .. } => Some(match tool.as_str() {
+                "search_asu" | "public_search" => "searching ASU pages".to_owned(),
+                "browser_navigate" => "opening the page".to_owned(),
+                "browser_snapshot" => "reading the page".to_owned(),
+                other => format!("running {other}"),
+            }),
+            Self::Retrieval {
+                query, chunk_ids, ..
+            } => Some(format!("found {} passages for {query:?}", chunk_ids.len())),
+            Self::PolicyDecision { tool, decision, .. } => match decision {
+                Decision::Deny { .. } => Some(format!("{tool} was not allowed")),
+                Decision::Confirm(_) => Some(format!("{tool} needs your approval")),
+                Decision::Allow => None,
+            },
+            Self::ModelError { retried: true, .. } => {
+                Some("the model stumbled, retrying".to_owned())
+            }
+            Self::RequestStarted { .. }
+            | Self::ContextAssembled { .. }
+            | Self::ModelCall { .. }
+            | Self::ModelError { .. }
+            | Self::ToolCall { .. }
+            | Self::Completed { .. } => None,
+        }
+    }
 }
 
 /// How a run ended.

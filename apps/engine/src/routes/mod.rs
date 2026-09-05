@@ -16,6 +16,7 @@ pub fn router(chat_state: chat::ChatState, health_state: health::HealthState) ->
         .with_state(health_state);
     let chat = Router::new()
         .route("/chat", post(chat::chat))
+        .route("/chat/stream", post(chat::stream))
         .route("/v1/chat/completions", post(openai::completions))
         .with_state(chat_state);
     Router::new()

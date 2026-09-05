@@ -70,6 +70,7 @@ All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/
 - The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
+- Live progress is a `TraceEvent`: give a new variant a line in `TraceEvent::progress` (or `None`) and every watching client shows it. Clients render the `text` the engine sends, never their own copy of the enum.
 - Errors: `thiserror` enums per crate, no `anyhow` in library crates, no `unwrap` outside tests.
 - Async: tokio. Traits use `async_trait` until native async traits cover our needs.
 - Logging: `tracing` macros, structured fields, no `println!`.

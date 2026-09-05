@@ -6,7 +6,11 @@ use opentelemetry::trace::TraceContextExt;
 use secrecy::{ExposeSecret, SecretString};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::core::types::{ChatRequest, ChatResponse, EngineError};
+use futures::StreamExt;
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::core::types::{ChatRequest, ChatResponse, EngineError, Progress, Update};
+use crate::sse::drain_frames;
 
 /// HTTP client bound to one engine.
 #[derive(Debug, Clone)]
@@ -31,33 +35,83 @@ impl EngineClient {
         })
     }
 
-    /// Runs one chat turn. Carries the current span's trace context so the engine's spans
-    /// land in the same Phoenix trace as the interaction.
-    pub async fn chat(&self, req: &ChatRequest) -> Result<ChatResponse, EngineError> {
+    /// Runs one chat turn, reporting progress on `tx` until the answer or a failure arrives.
+    /// Exactly one `Answer` or `Failed` is sent last.
+    pub async fn chat_stream(&self, req: &ChatRequest, tx: UnboundedSender<Update>) {
         let mut request = self
             .http
-            .post(format!("{}/chat", self.base_url))
+            .post(format!("{}/chat/stream", self.base_url))
             .bearer_auth(self.token.expose_secret())
             .json(req);
         if let Some(traceparent) = current_traceparent() {
             request = request.header("traceparent", traceparent);
         }
-        let response = request
-            .send()
-            .await
-            .map_err(|e| EngineError::Transport(e.to_string()))?;
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(e) => {
+                let _ = tx.send(Update::Failed(EngineError::Transport(e.to_string())));
+                return;
+            }
+        };
         let status = response.status();
-        let body = response
-            .text()
-            .await
-            .map_err(|e| EngineError::Transport(e.to_string()))?;
         if !status.is_success() {
-            return Err(EngineError::Status {
+            let body = response.text().await.unwrap_or_default();
+            let _ = tx.send(Update::Failed(EngineError::Status {
                 status: status.as_u16(),
                 body: body.chars().take(300).collect(),
-            });
+            }));
+            return;
         }
-        serde_json::from_str(&body).map_err(|e| EngineError::Transport(format!("bad body: {e}")))
+
+        let mut buf = String::new();
+        let mut body = response.bytes_stream();
+        let mut answered = false;
+        while let Some(chunk) = body.next().await {
+            let chunk = match chunk {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    if !answered {
+                        let _ = tx.send(Update::Failed(EngineError::Transport(e.to_string())));
+                    }
+                    return;
+                }
+            };
+            buf.push_str(&String::from_utf8_lossy(&chunk));
+            for (name, data) in drain_frames(&mut buf) {
+                match name.as_str() {
+                    "progress" => {
+                        if let Ok(p) = serde_json::from_str::<Progress>(&data) {
+                            let _ = tx.send(Update::Progress(p.text));
+                        }
+                    }
+                    "answer" => match serde_json::from_str::<ChatResponse>(&data) {
+                        Ok(answer) => {
+                            answered = true;
+                            let _ = tx.send(Update::Answer(Box::new(answer)));
+                        }
+                        Err(e) => {
+                            answered = true;
+                            let _ = tx.send(Update::Failed(EngineError::Transport(format!(
+                                "bad body: {e}"
+                            ))));
+                        }
+                    },
+                    "error" => {
+                        answered = true;
+                        let _ = tx.send(Update::Failed(EngineError::Status {
+                            status: 500,
+                            body: data.chars().take(300).collect(),
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if !answered {
+            let _ = tx.send(Update::Failed(EngineError::Transport(
+                "the engine closed the stream without answering".into(),
+            )));
+        }
     }
 }
 

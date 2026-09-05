@@ -1,6 +1,7 @@
 //! JSONL trace sink: one file per request, one event per line.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -8,6 +9,7 @@ use uuid::Uuid;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::context::RequestContext;
 use crate::core::types::trace::{TraceEvent, TraceRecord};
+use crate::core::types::wire::Progress;
 
 fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     TraceRecord {
@@ -53,5 +55,30 @@ impl TraceSink for JsonlSink {
         if let Err(e) = result {
             tracing::warn!(error = %e, path = %path.display(), "trace write failed");
         }
+    }
+}
+
+/// Records every event through the sink beneath it and, when the caller is watching, forwards
+/// the ones worth showing. New event kinds flow through without a change here.
+pub struct Fanout {
+    inner: Arc<dyn TraceSink>,
+}
+
+impl Fanout {
+    /// Wraps the sink that records the full trace.
+    pub fn new(inner: Arc<dyn TraceSink>) -> Self {
+        Self { inner }
+    }
+}
+
+impl TraceSink for Fanout {
+    fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
+        if let Some(tx) = &ctx.progress
+            && let Some(progress) = Progress::of(&event)
+        {
+            // A dropped receiver means the caller stopped watching; the trace still lands.
+            let _ = tx.send(progress);
+        }
+        self.inner.emit(ctx, event);
     }
 }

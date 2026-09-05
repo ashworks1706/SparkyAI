@@ -6,6 +6,7 @@ mod commands;
 mod core;
 mod engine_client;
 mod reply;
+mod sse;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

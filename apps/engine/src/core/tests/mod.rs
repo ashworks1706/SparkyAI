@@ -9,6 +9,7 @@ mod mcp;
 mod openai;
 mod policy;
 mod postgres;
+mod progress;
 mod rig_mapping;
 mod support;
 mod trace;

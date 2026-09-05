@@ -131,3 +131,39 @@ fn tools_the_agent_ran_are_listed_under_the_answer() {
     let quiet = render(&response("hi", vec![], "answered")).join("\n");
     assert!(!quiet.contains("Tools"), "no tools, no footer: {quiet}");
 }
+
+#[test]
+fn sse_frames_come_out_whole_even_when_the_bytes_arrive_split() {
+    use crate::sse::drain_frames;
+
+    let mut buf = String::new();
+
+    // A frame split across two reads yields nothing until it is complete.
+    buf.push_str("event: progress\ndata: {\"text\":\"sear");
+    assert!(drain_frames(&mut buf).is_empty());
+
+    buf.push_str("ching ASU pages\"}\n\nevent: done\ndata: {}\n\n");
+    let frames = drain_frames(&mut buf);
+    assert_eq!(
+        frames,
+        vec![
+            (
+                "progress".to_owned(),
+                "{\"text\":\"searching ASU pages\"}".to_owned()
+            ),
+            ("done".to_owned(), "{}".to_owned()),
+        ]
+    );
+    assert!(buf.is_empty(), "consumed frames leave the buffer clean");
+}
+
+#[test]
+fn a_frame_without_an_event_name_still_carries_its_data() {
+    use crate::sse::drain_frames;
+
+    let mut buf = String::from("data: {\"a\":1}\n\n");
+    assert_eq!(
+        drain_frames(&mut buf),
+        vec![(String::new(), "{\"a\":1}".to_owned())]
+    );
+}

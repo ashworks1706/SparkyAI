@@ -49,7 +49,7 @@ apps/
     src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
     src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
     src/stores/     postgres: Retriever, ConversationStore, MemoryStore
-    src/routes/     chat, health
+    src/routes/     chat (JSON and SSE), openai (/v1), health
     src/{telemetry,wiring}.rs
   discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
   cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them. core/{config,types,tests}.
@@ -104,7 +104,7 @@ flowchart LR
     ING --> PX
 ```
 
-Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; both run the same loop.
+Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
 
 ## Inside `engine`
 
@@ -223,7 +223,7 @@ sequenceDiagram
     participant PX as Phoenix
 
     U->>B: /ask question
-    B->>E: POST /chat with roles and traceparent
+    B->>E: POST /chat/stream with roles and traceparent
     E->>E: verify service token, build RequestContext
     E->>PG: load conversation, recall memory
     E->>M: embed the question

@@ -584,6 +584,13 @@ impl Agent {
         let Some(tool) = deps.tools.get(&call.name) else {
             return Err(ToolError::Failed(format!("no tool named `{}`", call.name)));
         };
+        deps.trace.emit(
+            ctx,
+            TraceEvent::ToolStarted {
+                step,
+                tool: call.name.clone(),
+            },
+        );
         let started = Instant::now();
         let limit = self.cfg.tool_timeout.min(ctx.remaining());
         let span = tracing::info_span!(

@@ -1,10 +1,12 @@
 //! serenity client setup and event handler.
 
 use secrecy::ExposeSecret;
+use std::time::{Duration, Instant};
+
 use serenity::all::{
     Client, CommandInteraction, Context, CreateInteractionResponse,
     CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EventHandler,
-    GatewayIntents, GuildId, Interaction, Permissions, Ready, ResolvedValue, UserId,
+    GatewayIntents, GuildId, Interaction, Message, Permissions, Ready, ResolvedValue, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -14,9 +16,12 @@ use uuid::Uuid;
 
 use crate::commands;
 use crate::core::config::Config;
-use crate::core::types::ChatRequest;
+use crate::core::types::{ChatRequest, ChatResponse, EngineError, Update};
 use crate::engine_client::EngineClient;
 use crate::reply;
+
+/// Shortest gap between edits of the progress message; Discord throttles faster than this.
+const EDIT_EVERY: Duration = Duration::from_millis(1_500);
 
 /// Per-process bot state and the serenity event handler.
 struct Handler {
@@ -116,7 +121,22 @@ impl Handler {
             "input.value" = %req.message,
             "output.value" = Empty,
         );
-        let outcome = self.engine.chat(&req).instrument(span.clone()).await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let streaming = self.engine.chat_stream(&req, tx).instrument(span.clone());
+        let (outcome, note) = tokio::join!(streaming, self.watch(ctx, cmd, &mut rx)).1;
+        if let Some(note) = note {
+            let _ = cmd.delete_followup(&ctx.http, note.id).await;
+        }
+        let Some(outcome) = outcome else {
+            tracing::error!(user = %cmd.user.id, "stream ended with no outcome");
+            self.followup(
+                ctx,
+                cmd,
+                reply::failure(&EngineError::Transport("no answer".into())),
+            )
+            .await;
+            return;
+        };
         match outcome {
             Ok(resp) => {
                 span.record("session.id", resp.conversation_id.to_string().as_str());
@@ -142,6 +162,52 @@ impl Handler {
                 tracing::error!(error = %e, user = %cmd.user.id, "engine call failed");
                 self.followup(ctx, cmd, reply::failure(&e)).await;
             }
+        }
+    }
+
+    /// Relays progress while the turn runs, and returns the outcome plus the progress message
+    /// still on screen, if any.
+    async fn watch(
+        &self,
+        ctx: &Context,
+        cmd: &CommandInteraction,
+        rx: &mut tokio::sync::mpsc::UnboundedReceiver<Update>,
+    ) -> (Option<Result<ChatResponse, EngineError>>, Option<Message>) {
+        let mut outcome = None;
+        let mut note: Option<Message> = None;
+        let mut last_edit: Option<Instant> = None;
+        while let Some(update) = rx.recv().await {
+            match update {
+                Update::Progress(text) => {
+                    // Discord throttles edits, so a burst of steps collapses into one.
+                    if last_edit.is_some_and(|at| at.elapsed() < EDIT_EVERY) {
+                        continue;
+                    }
+                    last_edit = Some(Instant::now());
+                    note = self.progress(ctx, cmd, note, &text).await;
+                }
+                Update::Answer(answer) => outcome = Some(Ok(*answer)),
+                Update::Failed(e) => outcome = Some(Err(e)),
+            }
+        }
+        (outcome, note)
+    }
+
+    /// Shows what the agent is doing, as one message edited in place. Returns it so the next
+    /// step edits the same message and the answer can clear it.
+    async fn progress(
+        &self,
+        ctx: &Context,
+        cmd: &CommandInteraction,
+        existing: Option<Message>,
+        text: &str,
+    ) -> Option<Message> {
+        let body = format!("_{text}…_");
+        let builder = CreateInteractionResponseFollowup::new().content(body);
+        if let Some(message) = existing {
+            cmd.edit_followup(&ctx.http, message.id, builder).await.ok()
+        } else {
+            cmd.create_followup(&ctx.http, builder).await.ok()
         }
     }
 

@@ -2,8 +2,11 @@
 
 use std::time::{Duration, Instant};
 
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+use crate::core::types::wire::Progress;
 
 /// Per-request state. Created at the edge (Discord, HTTP) and threaded
 /// through every model call, tool call, and trace event. Never global.
@@ -23,6 +26,8 @@ pub struct RequestContext {
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
     pub cancel: CancellationToken,
+    /// Where to send live progress, when the caller is watching.
+    pub progress: Option<UnboundedSender<Progress>>,
 }
 
 impl RequestContext {
@@ -36,7 +41,14 @@ impl RequestContext {
             conversation_id: Uuid::new_v4(),
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
+            progress: None,
         }
+    }
+
+    /// Sends live progress to `tx` for the length of this request.
+    pub fn listening_to(mut self, tx: UnboundedSender<Progress>) -> Self {
+        self.progress = Some(tx);
+        self
     }
 
     /// Continues an existing conversation.

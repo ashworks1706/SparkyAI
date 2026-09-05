@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
-use crate::agent::harness::trace::JsonlSink;
+use crate::agent::harness::trace::{Fanout, JsonlSink};
 use crate::agent::model::limit::Limited;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::mcp;
@@ -45,7 +45,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         ))
     };
 
-    let trace: Arc<dyn TraceSink> = Arc::new(JsonlSink::new(&cfg.agent.trace_dir)?);
+    let jsonl: Arc<dyn TraceSink> = Arc::new(JsonlSink::new(&cfg.agent.trace_dir)?);
+    let trace: Arc<dyn TraceSink> = Arc::new(Fanout::new(jsonl));
 
     let embed_client = rig_openai::client(&cfg.embedding.base_url, &cfg.embedding.api_key)
         .map_err(|e| anyhow::anyhow!("embedding client: {e}"))?;

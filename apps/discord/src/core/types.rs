@@ -77,3 +77,24 @@ pub enum EngineError {
         body: String,
     },
 }
+
+/// One line of progress from `/chat/stream`.
+///
+/// Only `text` is read: the engine renders the sentence, so a kind added there shows up here
+/// without a change on this side.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Progress {
+    /// Ready-to-display sentence.
+    pub text: String,
+}
+
+/// What arrives while a streamed turn runs.
+#[derive(Debug)]
+pub enum Update {
+    /// Something happened worth showing.
+    Progress(String),
+    /// The turn finished.
+    Answer(Box<ChatResponse>),
+    /// The turn failed.
+    Failed(EngineError),
+}

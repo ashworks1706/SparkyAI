@@ -124,6 +124,12 @@ pub struct MemorySink {
 }
 
 impl MemorySink {
+    pub fn new() -> Self {
+        Self {
+            records: Mutex::new(Vec::new()),
+        }
+    }
+
     pub fn records(&self) -> Vec<TraceRecord> {
         self.records.lock().map(|r| r.clone()).unwrap_or_default()
     }
