@@ -1,8 +1,7 @@
 # deploy/inference
 
-Model serving. Not our code — `llama-server` from llama.cpp — but a deployable we own the
-configuration for. Every model speaks the OpenAI-compatible API, which is the only surface
-`apps/engine` and `apps/scraper` know about.
+Model serving: `llama-server` from llama.cpp, configured here. Every model speaks the
+OpenAI-compatible API, the only surface `apps/engine` and `apps/scraper` use.
 
 `llama-server` serves one model per process, so each role is its own container.
 
@@ -23,11 +22,11 @@ Endpoints: `http://localhost:8000/v1` (chat) and `:8001/v1` (embeddings). From i
 the hosts are `chat` and `embed`.
 
 On a 6 GB card both fit with room to spare: embed takes ~0.9 GB, chat ~3.1 GB (2.5 GB of
-weights plus a 576 MB KV cache at 4096 context). The KV cache is what runs you out of VRAM
-first, so raise `SPARKY_CHAT_CTX` only with headroom; lower `--n-gpu-layers` to spill to CPU.
+weights plus a 576 MB KV cache at 4096 context). The KV cache grows with context; raise
+`SPARKY_CHAT_CTX` only with headroom, and lower `--n-gpu-layers` to spill to CPU.
 
 ## Deployed
 
 Same two services on a GPU host with a larger chat GGUF. `--ctx-size` and the number of
-parallel slots (`-np`) set the KV cache, which is what actually consumes VRAM under load;
-size the GPU for `ctx-size x slots`, not for the weights alone.
+parallel slots (`-np`) set the KV cache size. Size the GPU for `ctx-size x slots` plus the
+weights.
