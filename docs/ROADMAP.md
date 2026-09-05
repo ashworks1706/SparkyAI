@@ -2,8 +2,7 @@
 
 ## 3 — Discord v0.3
 
-- [ ] Expose the agent over a streaming chat API; Discord bot as a thin client
-- [ ] Add moderator ops with confirmation before any write: tickets, announcements, polls, escalation
+- [ ] Add moderator ops: tickets, announcements, polls, escalation
 - [ ] First deployment
 
 ## 4 — Memory, MCP, admin v0.4
