@@ -268,7 +268,7 @@ where
                     break;
                 }
             };
-            let text = strip_ansi(&text);
+            let text = sanitize_line(&text);
             if tx
                 .send(Event::Log {
                     unit: unit.clone(),
@@ -283,7 +283,7 @@ where
 }
 
 /// Removes ANSI escape sequences so colored output from children renders as plain text.
-pub fn strip_ansi(s: &str) -> String {
+pub fn sanitize_line(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -296,6 +296,11 @@ pub fn strip_ansi(s: &str) -> String {
                     }
                 }
             }
+            continue;
+        }
+        // A carriage return or backspace reaching the terminal moves the cursor out of the pane
+        // and overwrites whatever is drawn beside it. Tabs are the only control the pane keeps.
+        if c.is_control() && c != '\t' {
             continue;
         }
         out.push(c);

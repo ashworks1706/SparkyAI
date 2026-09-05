@@ -4,7 +4,7 @@ use crate::app::parse_command;
 use crate::core::config::repo_root;
 use crate::core::types::{Command, Group, LogLine, ServiceState, Status, Stream};
 use crate::logs::{LogBuffer, LogWriter};
-use crate::runner::{parse_ps, strip_ansi};
+use crate::runner::{parse_ps, sanitize_line};
 use crate::units::catalog;
 
 #[test]
@@ -132,12 +132,20 @@ fn ps_output_parses_as_array_or_lines() {
 }
 
 #[test]
-fn ansi_sequences_are_stripped() {
+fn a_log_line_cannot_move_the_cursor() {
     assert_eq!(
-        strip_ansi("\x1b[32m   Compiling\x1b[0m engine"),
+        sanitize_line("\x1b[32m   Compiling\x1b[0m engine"),
         "   Compiling engine"
     );
-    assert_eq!(strip_ansi("plain"), "plain");
+    assert_eq!(sanitize_line("plain"), "plain");
+    // docker compose rewrites its progress lines in place; a carriage return that reaches the
+    // terminal returns the cursor to column 0 and overwrites whatever is drawn to the left.
+    assert_eq!(
+        sanitize_line("Container deploy-embed-1  Recreated\r"),
+        "Container deploy-embed-1  Recreated"
+    );
+    assert_eq!(sanitize_line("a\rb\x08c\x07"), "abc");
+    assert_eq!(sanitize_line("keeps\ttabs"), "keeps\ttabs");
 }
 
 #[test]
