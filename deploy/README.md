@@ -38,3 +38,20 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 
 - Traces: every app exports OpenTelemetry to Phoenix (`SPARKY_TELEMETRY__OTLP_ENDPOINT`, default `http://localhost:4317`; empty disables). UI at http://localhost:6006. Engine spans carry OpenInference attributes; a Discord conversation is one Phoenix session.
 - Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
+- Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback only. They scrape `llama-server`, which exports Prometheus format on its own port because `chat` and `embed` run with `--metrics`. On a GPU host add `just gpu-metrics` for utilisation and VRAM.
+
+Phoenix and Grafana answer different questions and neither replaces the other. Phoenix holds one span per model call with the full prompt, the full reply, token counts, and latency — per request, and the source the training pipeline reads. Prometheus holds server-side time series — throughput, queue depth, batching — which is what tells you whether a slow request was slow to decode or was waiting for a slot.
+
+### Reading the dashboard
+
+| Panel | Metric | What it means |
+|---|---|---|
+| Generation throughput | `rate(llamacpp:tokens_predicted_total[1m])` | tokens per wall-clock second, all requests combined |
+| Prompt throughput | `llamacpp:prompt_tokens_total`, `..._cached_total` | prompt tokens evaluated vs. reused from cache |
+| Queue | `llamacpp:requests_processing`, `..._deferred` | deferred above zero means requests are waiting for a slot |
+| Batching efficiency | `llamacpp:n_busy_slots_per_decode` | near 1 with a non-empty queue means `--parallel` is too low |
+| Prompt cache hit rate | cached / (cached + new) | a stable system prompt should keep this high |
+
+`llama-server` starts with one slot. Requests serialize until `--parallel N` is set in `compose.yml`, and each slot takes a `--ctx-size / N` share of the context window, so raise both together.
+
+Grafana's admin password comes from `SPARKY_GRAFANA_PASSWORD` (default `admin`). Both ports bind to `127.0.0.1`; tunnel to reach them on a remote host, and set a real password before exposing either.

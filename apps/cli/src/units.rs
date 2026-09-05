@@ -7,8 +7,8 @@ fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Un
         id: id.into(),
         group: match profile {
             Some("model") => Group::Models,
+            Some("metrics" | "gpu-metrics") | None => Group::Infra,
             Some(_) => Group::Tools,
-            None => Group::Infra,
         },
         kind: Kind::Service {
             service: id.into(),
@@ -60,6 +60,14 @@ fn deploy(args: &[&str], hint: &str, follows: bool) -> Unit {
 
 /// Everything the console knows how to run.
 pub fn catalog() -> Vec<Unit> {
+    let mut units = services();
+    units.extend(processes());
+    units.extend(tasks());
+    units.extend(deploys());
+    units
+}
+
+fn services() -> Vec<Unit> {
     vec![
         service(
             "postgres",
@@ -74,6 +82,24 @@ pub fn catalog() -> Vec<Unit> {
             None,
             "traces from every app",
             Some("http://localhost:6006"),
+        ),
+        service(
+            "prometheus",
+            Some("metrics"),
+            "scrapes llama-server metrics",
+            Some("http://localhost:9090"),
+        ),
+        service(
+            "grafana",
+            Some("metrics"),
+            "inference dashboards over Prometheus",
+            Some("http://localhost:3000"),
+        ),
+        service(
+            "gpu-exporter",
+            Some("gpu-metrics"),
+            "GPU utilisation and VRAM, needs an NVIDIA GPU",
+            Some("http://localhost:9835"),
         ),
         service(
             "chat",
@@ -99,6 +125,11 @@ pub fn catalog() -> Vec<Unit> {
             "browser tools for the engine",
             Some("http://127.0.0.1:8931"),
         ),
+    ]
+}
+
+fn processes() -> Vec<Unit> {
+    vec![
         process(
             "engine",
             &["engine"],
@@ -117,6 +148,11 @@ pub fn catalog() -> Vec<Unit> {
             "Vite dev server",
             Some("http://localhost:5173"),
         ),
+    ]
+}
+
+fn tasks() -> Vec<Unit> {
+    vec![
         task_static(&["doctor"], "required tools, .env, hooks"),
         task_static(&["setup"], "install every unit's deps"),
         task_static(&["migrate"], "apply scraper migrations"),
@@ -136,6 +172,11 @@ pub fn catalog() -> Vec<Unit> {
         task_static(&["eval", "compare"], "fail on regression"),
         task_static(&["train", "sft", "--dry-run"], "validate config and data"),
         task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
+    ]
+}
+
+fn deploys() -> Vec<Unit> {
+    vec![
         deploy(
             &["up"],
             "dev stack: build images locally, start everything",

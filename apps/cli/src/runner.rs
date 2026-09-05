@@ -227,7 +227,7 @@ impl Runner {
     }
 }
 
-fn all_profiles() -> [&'static str; 6] {
+fn all_profiles() -> [&'static str; 10] {
     [
         "--profile",
         "model",
@@ -235,6 +235,10 @@ fn all_profiles() -> [&'static str; 6] {
         "crawl",
         "--profile",
         "browser",
+        "--profile",
+        "metrics",
+        "--profile",
+        "gpu-metrics",
     ]
 }
 

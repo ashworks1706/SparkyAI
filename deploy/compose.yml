@@ -58,6 +58,7 @@ services:
       - --n-gpu-layers
       - ${SPARKY_CHAT_NGL:-99}
       - --jinja
+      - --metrics
     volumes: [modelcache:/root/.cache/llama.cpp]
     ports: ["8000:8000"]
     healthcheck:
@@ -94,6 +95,7 @@ services:
       - "1024"
       - --n-gpu-layers
       - ${SPARKY_EMBED_NGL:-99}
+      - --metrics
     volumes: [modelcache:/root/.cache/llama.cpp]
     ports: ["8001:8001"]
     healthcheck:
@@ -209,6 +211,46 @@ services:
     volumes: [miniodata:/data]
     ports: ["9000:9000", "9001:9001"]
 
+  # Metrics store. Scrapes llama-server; ad-hoc queries at http://localhost:9090.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: [metrics]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+
+  # Dashboards over Prometheus: http://localhost:3000. The inference dashboard is provisioned.
+  grafana:
+    image: grafana/grafana:11.5.1
+    profiles: [metrics]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${SPARKY_GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # GPU utilisation and VRAM, read from nvidia-smi. Separate profile: needs a GPU.
+  gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.3.2
+    profiles: [gpu-metrics]
+    devices: ["/dev/nvidiactl:/dev/nvidiactl", "/dev/nvidia0:/dev/nvidia0"]
+    volumes: ["/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro"]
+    ports: ["127.0.0.1:9835:9835"]
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:
@@ -216,3 +258,5 @@ volumes:
   modelcache:
   phoenixdata:
   firecrawldata:
+  promdata:
+  grafanadata:

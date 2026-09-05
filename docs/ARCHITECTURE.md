@@ -400,6 +400,31 @@ Two forms of it:
 
 Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
 
+## Metrics
+
+Traces are per request; they cannot show whether the inference server is saturated. `llama-server` runs with `--metrics` and exports Prometheus format on its own port. Prometheus scrapes it, Grafana reads Prometheus. Both are opt-in (`just metrics`) and bind to loopback.
+
+```mermaid
+flowchart LR
+    subgraph inference["llama-server"]
+        CH["chat :8000/metrics"]
+        EM["embed :8001/metrics"]
+    end
+    GX["gpu-exporter :9835<br/>nvidia-smi · gpu-metrics profile"]
+    CH --> P[("prometheus :9090<br/>15s scrape · 15d retention")]
+    EM --> P
+    GX --> P
+    P --> G["grafana :3000<br/>SparkyAI inference"]
+    EN["engine"] -->|OTLP traces| PX["phoenix :6006"]
+    EN -->|"HTTP inference"| CH
+    PX -.->|"per request: prompt, reply, tokens, latency"| Q(["why was this answer wrong or slow?"])
+    G -.->|"per server: throughput, queue, batching"| R(["is the box saturated?"])
+```
+
+The two backends do not overlap: Phoenix ingests OTLP traces and holds no time series; Prometheus holds no prompts. A slow request is diagnosed by reading the `llm` span's latency in Phoenix against `llamacpp:requests_deferred` in Grafana for the same minute.
+
+Dashboard panels and the metric names behind them: `deploy/README.md`.
+
 ## Authenticated browser tasks (Phase 7)
 
 The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).

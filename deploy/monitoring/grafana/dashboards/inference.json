@@ -1,0 +1,184 @@
+{
+  "uid": "sparky-inference",
+  "title": "SparkyAI inference",
+  "tags": ["sparky", "llama.cpp"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+        "query": "label_values(llamacpp:n_decode_total, job)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Generation throughput",
+      "description": "Tokens the server actually produced per wall-clock second.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llamacpp:tokens_predicted_total{job=~\"$job\"}[1m])",
+          "legendFormat": "{{job}} tok/s"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Prompt throughput",
+      "description": "Prompt tokens evaluated per second, excluding tokens served from the prompt cache.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llamacpp:prompt_tokens_total{job=~\"$job\"}[1m])",
+          "legendFormat": "{{job}} new tok/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(llamacpp:prompt_tokens_cached_total{job=~\"$job\"}[1m])",
+          "legendFormat": "{{job}} cached tok/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Queue",
+      "description": "Deferred above zero means requests are waiting for a slot. This is the saturation signal.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "decimals": 0,
+          "custom": { "fillOpacity": 20, "lineInterpolation": "stepAfter" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llamacpp:requests_processing{job=~\"$job\"}",
+          "legendFormat": "{{job}} processing"
+        },
+        {
+          "refId": "B",
+          "expr": "llamacpp:requests_deferred{job=~\"$job\"}",
+          "legendFormat": "{{job}} deferred"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Batching efficiency",
+      "description": "Average busy slots per decode. Near 1 with a non-empty queue means --parallel is too low.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llamacpp:n_busy_slots_per_decode{job=~\"$job\"}",
+          "legendFormat": "{{job}} busy slots"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(llamacpp:n_decode_total{job=~\"$job\"}[1m])",
+          "legendFormat": "{{job}} decodes/s"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Server-reported speed",
+      "description": "llama-server's own running average for the last requests, independent of load.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 0 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llamacpp:predicted_tokens_seconds{job=~\"$job\"}",
+          "legendFormat": "{{job}} generation tok/s"
+        },
+        {
+          "refId": "B",
+          "expr": "llamacpp:prompt_tokens_seconds{job=~\"$job\"}",
+          "legendFormat": "{{job}} prompt tok/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Prompt cache hit rate",
+      "description": "Share of prompt tokens reused from cache. A long stable system prompt should keep this high.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llamacpp:prompt_tokens_cached_total{job=~\"$job\"}[5m]) / clamp_min(rate(llamacpp:prompt_tokens_cached_total{job=~\"$job\"}[5m]) + rate(llamacpp:prompt_tokens_total{job=~\"$job\"}[5m]), 0.001)",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Context ceiling",
+      "description": "llamacpp:n_tokens_max — the largest context the server will accept, per slot.",
+      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 16 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llamacpp:n_tokens_max{job=~\"$job\"}",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    }
+  ]
+}

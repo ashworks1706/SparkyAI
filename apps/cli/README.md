@@ -54,7 +54,7 @@ Commands: `:start engine`, `:stop chat`, `:restart discord`, `:ask <question>`,
 
 | Group | Units | How |
 |---|---|---|
-| infra | postgres, redis, minio, phoenix | `docker compose up -d` / `stop`, logs via `compose logs -f` |
+| infra | postgres, redis, minio, phoenix, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f` |
 | models | chat, embed | same, `--profile model` |
 | tools | firecrawl, playwright-mcp | same, `--profile crawl` / `browser` |
 | apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group so `cargo run` and its binary both go |

@@ -113,7 +113,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -142,12 +142,20 @@ crawl *ARGS:
 browser *ARGS:
     docker compose -f deploy/compose.yml --profile browser up -d {{ARGS}} playwright-mcp
 
+# Prometheus (:9090) and Grafana (:3000, dashboard "SparkyAI inference"). Needs SPARKY_GRAFANA_PASSWORD.
+metrics *ARGS:
+    docker compose -f deploy/compose.yml --profile metrics up -d {{ARGS}} prometheus grafana
+
+# GPU utilisation and VRAM into Prometheus. Only on a host with an NVIDIA GPU.
+gpu-metrics *ARGS:
+    docker compose -f deploy/compose.yml --profile gpu-metrics up -d {{ARGS}} gpu-exporter
+
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics logs -f {{ARGS}}
 
 # Build both images locally
 images:

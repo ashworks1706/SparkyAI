@@ -24,6 +24,8 @@ just infra            # postgres, redis, minio, phoenix
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
 just browser          # Playwright MCP browser tools for the engine
+just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
+just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
 just diagrams         # render ARCHITECTURE.md mermaid to verify syntax

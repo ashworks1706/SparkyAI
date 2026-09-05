@@ -1,0 +1,20 @@
+# Scrapes llama-server's Prometheus endpoint (enabled by --metrics on chat and embed).
+# Targets outside the running profiles show as down; that is the truth, not an error.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: chat
+    static_configs:
+      - targets: ["chat:8000"]
+  - job_name: embed
+    static_configs:
+      - targets: ["embed:8001"]
+  # Only up under the gpu-metrics profile.
+  - job_name: gpu
+    static_configs:
+      - targets: ["gpu-exporter:9835"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
