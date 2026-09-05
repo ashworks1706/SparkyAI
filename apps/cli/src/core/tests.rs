@@ -156,3 +156,24 @@ fn repo_root_is_found_from_a_nested_directory() {
     assert!(root.join("justfile").is_file());
     assert!(repo_root(std::path::Path::new("/")).is_none());
 }
+
+#[test]
+fn the_transcript_names_the_tools_a_turn_ran() {
+    use crate::chat::tools_line;
+    use crate::core::types::ToolRun;
+
+    assert_eq!(tools_line(&[]), None);
+    assert_eq!(
+        tools_line(&[
+            ToolRun {
+                tool: "public_search".into(),
+                ok: true
+            },
+            ToolRun {
+                tool: "browser_click".into(),
+                ok: false
+            },
+        ]),
+        Some("ran public_search → browser_click (failed)".to_owned())
+    );
+}

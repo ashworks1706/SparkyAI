@@ -8,6 +8,7 @@ use crate::core::types::assemble::Budget;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::policy::ConfirmationRequest;
+use crate::core::types::tool::ToolRun;
 use crate::core::types::trace::RunStatus;
 
 /// Knobs for the loop. All bounded; nothing runs forever.
@@ -65,6 +66,8 @@ pub struct Answer {
     pub status: RunStatus,
     /// Model calls made.
     pub steps: u32,
+    /// Tools that ran, in order.
+    pub tool_runs: Vec<ToolRun>,
     /// Tokens across every call.
     pub usage: Usage,
     /// Estimated cost in USD.

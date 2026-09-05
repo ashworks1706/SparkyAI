@@ -67,6 +67,20 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
             c.tool, c.summary
         );
     }
+    if !resp.tools.is_empty() {
+        let ran: Vec<String> = resp
+            .tools
+            .iter()
+            .map(|t| {
+                if t.ok {
+                    format!("`{}`", t.tool)
+                } else {
+                    format!("`{}` (failed)", t.tool)
+                }
+            })
+            .collect();
+        let _ = write!(body, "\n\n**Tools** {}", ran.join(" → "));
+    }
     if !resp.citations.is_empty() {
         body.push_str("\n\n**Sources**\n");
         for (i, c) in resp.citations.iter().enumerate() {

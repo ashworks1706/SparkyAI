@@ -113,6 +113,7 @@ async fn chat_inner(state: ChatState, req: ChatRequest) -> Response {
             confirmation: answer.confirmation,
             status: answer.status,
             steps: answer.steps,
+            tools: answer.tool_runs,
             tokens: answer.usage.total(),
             cost_usd: answer.cost_usd,
         })

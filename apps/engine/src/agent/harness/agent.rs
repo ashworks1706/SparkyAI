@@ -28,7 +28,7 @@ use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
 use crate::core::types::retrieval::RetrievalQuery;
-use crate::core::types::tool::ToolError;
+use crate::core::types::tool::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
 /// Longest value recorded on a span. Phoenix keeps whole values; the JSONL trace has the rest.
@@ -78,6 +78,8 @@ struct Run<'a> {
     new_turns: Vec<Message>,
     /// Every (tool, arguments) already executed this request, to catch loops.
     seen_calls: HashSet<String>,
+    /// Tools that ran, in order, for the answer and the client.
+    tool_runs: Vec<ToolRun>,
     /// Set after a step of nothing but repeats: the next model call gets no tools, so the
     /// model has to answer from what it already has.
     force_answer: bool,
@@ -132,6 +134,7 @@ impl Agent {
             usage: Usage::default(),
             new_turns: vec![Message::user(input)],
             seen_calls: HashSet::new(),
+            tool_runs: Vec::new(),
             force_answer: false,
         };
         self.deps.trace.emit(
@@ -418,6 +421,10 @@ impl Agent {
             join_all(fresh.iter().map(|call| self.run_tool(ctx, step, call))).await
         };
         for (call, result) in fresh.iter().zip(results) {
+            run.tool_runs.push(ToolRun {
+                tool: call.name.clone(),
+                ok: result.is_ok(),
+            });
             let content = result.unwrap_or_else(|error| format!("error: {error}"));
             run.new_turns
                 .push(Message::tool_result(&call.id, &call.name, content));
@@ -658,6 +665,7 @@ impl Agent {
             confirmation,
             status,
             steps: run.steps,
+            tool_runs: run.tool_runs.clone(),
             usage: run.usage,
             cost_usd,
         }

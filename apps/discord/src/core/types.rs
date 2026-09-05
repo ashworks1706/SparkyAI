@@ -48,6 +48,18 @@ pub struct ChatResponse {
     pub confirmation: Option<Confirmation>,
     /// How the run ended.
     pub status: String,
+    /// Tools the agent ran, in order.
+    #[serde(default)]
+    pub tools: Vec<ToolRun>,
+}
+
+/// One tool the agent ran.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ToolRun {
+    /// Tool name.
+    pub tool: String,
+    /// Whether it returned a result.
+    pub ok: bool,
 }
 
 /// Engine call failures.

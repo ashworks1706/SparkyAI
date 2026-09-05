@@ -15,6 +15,7 @@ fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
         citations,
         confirmation: None,
         status: status.into(),
+        tools: Vec::new(),
     }
 }
 
@@ -103,4 +104,30 @@ fn capacity_and_outage_read_differently_to_the_user() {
         body: String::new(),
     });
     assert!(broken.contains("unavailable"), "{broken}");
+}
+
+#[test]
+fn tools_the_agent_ran_are_listed_under_the_answer() {
+    use crate::core::types::ToolRun;
+
+    let mut resp = response("Hayden closes at 2am.", vec![], "answered");
+    resp.tools = vec![
+        ToolRun {
+            tool: "browser_navigate".into(),
+            ok: true,
+        },
+        ToolRun {
+            tool: "browser_snapshot".into(),
+            ok: false,
+        },
+    ];
+
+    let out = render(&resp).join("\n");
+
+    assert!(out.contains("browser_navigate"), "{out}");
+    assert!(out.contains("browser_snapshot"), "{out}");
+    assert!(out.contains("failed"), "a failed call is marked: {out}");
+
+    let quiet = render(&response("hi", vec![], "answered")).join("\n");
+    assert!(!quiet.contains("Tools"), "no tools, no footer: {quiet}");
 }

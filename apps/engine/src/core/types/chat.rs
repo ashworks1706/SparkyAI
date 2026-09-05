@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::types::policy::ConfirmationRequest;
+use crate::core::types::tool::ToolRun;
 use crate::core::types::trace::RunStatus;
 
 /// Request body.
@@ -48,6 +49,8 @@ pub struct ChatResponse {
     pub status: RunStatus,
     /// Model calls made.
     pub steps: u32,
+    /// Tools that ran, in order.
+    pub tools: Vec<ToolRun>,
     /// Total tokens.
     pub tokens: u32,
     /// Estimated cost in USD.

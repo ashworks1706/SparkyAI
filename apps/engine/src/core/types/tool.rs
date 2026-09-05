@@ -74,3 +74,12 @@ pub enum ToolError {
     #[error("tool cancelled")]
     Cancelled,
 }
+
+/// One tool the agent actually ran, in call order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolRun {
+    /// Tool name as the model called it.
+    pub tool: String,
+    /// Whether the call returned a result rather than an error.
+    pub ok: bool,
+}

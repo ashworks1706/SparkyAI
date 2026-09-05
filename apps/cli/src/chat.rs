@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::core::types::{ChatRequest, ChatResponse, Event};
+use crate::core::types::{ChatRequest, ChatResponse, Event, ToolRun};
 
 /// Client bound to one engine.
 #[derive(Clone)]
@@ -59,4 +59,22 @@ impl EngineClient {
         }
         serde_json::from_str(&body).map_err(|e| format!("bad reply body: {e}"))
     }
+}
+
+/// One line naming the tools a turn ran, or `None` when it ran none.
+pub fn tools_line(runs: &[ToolRun]) -> Option<String> {
+    if runs.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = runs
+        .iter()
+        .map(|r| {
+            if r.ok {
+                r.tool.clone()
+            } else {
+                format!("{} (failed)", r.tool)
+            }
+        })
+        .collect();
+    Some(format!("ran {}", names.join(" \u{2192} ")))
 }

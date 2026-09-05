@@ -7,7 +7,7 @@ use serde_json::json;
 
 use crate::agent::harness::agent::redact;
 use crate::agent::harness::tool::ToolSet;
-use crate::core::tests::support::{Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
+use crate::core::tests::support::{Boom, Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
 use crate::core::types::policy::Decision;
@@ -52,6 +52,33 @@ async fn tool_result_is_fed_back_and_loop_continues() {
     assert!(sink.records().iter().any(
         |record| matches!(&record.event, TraceEvent::ToolCall { tool, .. } if tool == "echo")
     ));
+    let runs = out.map(|answer| answer.tool_runs).unwrap_or_default();
+    assert_eq!(runs.len(), 1, "the answer reports what it ran");
+    assert_eq!(runs[0].tool, "echo");
+    assert!(runs[0].ok);
+}
+
+#[tokio::test]
+async fn a_failing_tool_is_reported_as_run_and_failed() {
+    let tools = ToolSet::new().with(Arc::new(Boom));
+    let (agent, _) = agent(
+        Scripted::new(vec![
+            Ok(calls(vec![("c1", "boom", json!({}))])),
+            Ok(text("recovered")),
+        ]),
+        tools,
+        AgentConfig::default(),
+    );
+
+    let runs = agent
+        .run(&ctx(), "go")
+        .await
+        .map(|answer| answer.tool_runs)
+        .unwrap_or_default();
+
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].tool, "boom");
+    assert!(!runs[0].ok, "a failed call still shows, marked failed");
 }
 
 #[tokio::test]

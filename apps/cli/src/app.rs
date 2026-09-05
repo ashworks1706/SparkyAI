@@ -246,6 +246,14 @@ impl App {
                     "{} · {} steps · {} tokens · {latency_ms} ms · trace {} · {}/projects",
                     r.status, r.steps, r.tokens, r.request_id, self.cfg.cli.phoenix_url
                 );
+                if let Some(line) = crate::chat::tools_line(&r.tools) {
+                    self.chat.turns.push(ChatTurn {
+                        role: Role::System,
+                        text: line,
+                        citations: Vec::new(),
+                        meta: None,
+                    });
+                }
                 self.chat.turns.push(ChatTurn {
                     role: Role::Agent,
                     text: r.text,

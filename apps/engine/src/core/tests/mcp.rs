@@ -70,3 +70,45 @@ fn compact_schema_trims_descriptions_and_noise() {
             .is_some_and(|d| d.len() <= 80)
     );
 }
+
+/// Live smoke test against a running Playwright MCP server. Start it with `just browser`, then
+/// `cargo test -p engine -- --ignored mcp_server`.
+#[tokio::test]
+#[ignore = "needs `just browser`"]
+async fn mcp_server_lists_the_tools_the_engine_asks_for() {
+    use crate::agent::tools::mcp;
+    use crate::core::config::Mcp;
+
+    let defaults = Mcp::default();
+    let tools = mcp::connect(
+        "http://127.0.0.1:8931/mcp",
+        &defaults.playwright_tools,
+        defaults.required_props_only,
+    )
+    .await
+    .unwrap_or_default();
+    assert!(!tools.is_empty(), "no tools; is `just browser` running?");
+
+    let names: Vec<String> = tools.iter().map(|t| t.definition().name).collect();
+    for wanted in &defaults.playwright_tools {
+        assert!(names.contains(wanted), "{wanted} missing from {names:?}");
+    }
+    let Some(navigate) = tools
+        .iter()
+        .find(|t| t.definition().name == "browser_navigate")
+    else {
+        unreachable!("browser_navigate is in the allowlist and was found above")
+    };
+    let schema = navigate.definition().parameters.to_string();
+    assert!(schema.contains("url"), "{schema}");
+
+    let output = navigate
+        .call(
+            &crate::core::tests::support::ctx(),
+            serde_json::json!({"url": "about:blank"}),
+        )
+        .await
+        .map(|o| o.content)
+        .unwrap_or_default();
+    assert!(!output.is_empty(), "browser_navigate returned nothing");
+}

@@ -182,3 +182,27 @@ impl Tool for Ordered {
         Ok(ToolOutput::text(n.to_string()))
     }
 }
+
+/// Always fails, so the loop has to carry on without it.
+pub struct Boom;
+
+#[async_trait]
+impl Tool for Boom {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: "boom".into(),
+            description: "always fails".into(),
+            parameters: serde_json::json!({"type": "object"}),
+            risk: RiskClass::ReadPublic,
+            sequential: false,
+        }
+    }
+
+    async fn call(
+        &self,
+        _ctx: &RequestContext,
+        _args: serde_json::Value,
+    ) -> Result<ToolOutput, ToolError> {
+        Err(ToolError::Failed("nope".into()))
+    }
+}
