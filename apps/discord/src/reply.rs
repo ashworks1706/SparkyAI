@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use crate::core::types::ChatResponse;
+use crate::core::types::{ChatResponse, EngineError};
 
 /// Discord's hard limit on message content.
 pub const MAX_MESSAGE: usize = 2_000;
@@ -30,6 +30,19 @@ pub fn chunk(text: &str, limit: usize) -> Vec<String> {
         rest = rest[split..].trim_start();
     }
     out
+}
+
+/// What to say when the engine call failed. Capacity is temporary and self-clearing; anything
+/// else is an outage.
+pub fn failure(e: &EngineError) -> String {
+    match e {
+        EngineError::Status { status: 503, .. } => {
+            "Sparky is busy with other questions right now. Try again in a moment.".into()
+        }
+        EngineError::Status { .. } | EngineError::Transport(_) => {
+            "Sparky is unavailable right now. Please try again shortly.".into()
+        }
+    }
 }
 
 /// The answer plus a citation footer, split into sendable messages.

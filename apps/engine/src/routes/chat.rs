@@ -18,6 +18,7 @@ use crate::core::types::agent::AgentError;
 use crate::core::types::chat::{ChatRequest, ChatResponse, ErrorBody};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
+use crate::core::types::model::ModelError;
 
 /// What the chat route needs.
 #[derive(Clone)]
@@ -116,6 +117,14 @@ async fn chat_inner(state: ChatState, req: ChatRequest) -> Response {
             cost_usd: answer.cost_usd,
         })
         .into_response(),
+        Err(AgentError::Model(ModelError::Busy)) => {
+            tracing::warn!(request_id = %ctx.request_id, "model at capacity");
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                &ctx,
+                "the model is at capacity",
+            )
+        }
         Err(AgentError::Model(e)) => {
             tracing::error!(error = %e, request_id = %ctx.request_id, "model failed");
             error(StatusCode::BAD_GATEWAY, &ctx, "the model is unavailable")

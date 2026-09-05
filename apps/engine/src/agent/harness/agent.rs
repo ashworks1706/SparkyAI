@@ -1,6 +1,7 @@
 //! The agent loop: model call → policy → tool execution → repeat until final answer, error,
 //! cancel, deadline, or step limit.
 
+use uuid::Uuid;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -560,8 +561,7 @@ impl Agent {
                         return Err(error);
                     }
                     attempt += 1;
-                    let backoff = Duration::from_millis(200 * u64::from(attempt));
-                    tokio::time::sleep(backoff.min(ctx.remaining())).await;
+                    tokio::time::sleep(backoff(attempt, ctx.request_id, ctx.remaining())).await;
                 }
             }
         }
@@ -724,4 +724,16 @@ pub(crate) fn redact(value: &Value) -> Value {
 fn json<T: serde::Serialize>(value: &T) -> String {
     serde_json::to_string(value)
         .unwrap_or_else(|e| format!("{{\"unserializable\":{:?}}}", e.to_string()))
+}
+
+/// Wait before retry `attempt`: doubling from 250 ms, capped at 8 s, spread by a per-request
+/// offset so concurrent requests do not retry in lockstep, and never past the deadline.
+pub fn backoff(attempt: u32, request_id: Uuid, remaining: Duration) -> Duration {
+    const BASE_MS: u64 = 250;
+    const CAP_MS: u64 = 8_000;
+    let doubled = BASE_MS.saturating_mul(1u64 << attempt.min(6)).min(CAP_MS);
+    let spread = doubled / 4;
+    #[allow(clippy::cast_possible_truncation)]
+    let offset = (request_id.as_u128() as u64) % spread.max(1);
+    Duration::from_millis(doubled - spread / 2 + offset).min(remaining)
 }

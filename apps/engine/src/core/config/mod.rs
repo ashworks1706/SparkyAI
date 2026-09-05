@@ -123,6 +123,10 @@ pub struct Agent {
     pub request_timeout_secs: u64,
     /// Budget per tool call.
     pub tool_timeout_secs: u64,
+    /// Model calls in flight at once. Match `llama-server --parallel`. 0 removes the limit.
+    pub model_slots: usize,
+    /// How long a request waits for a free model slot before reporting the model busy.
+    pub model_queue_wait_secs: u64,
     /// Sampling temperature.
     pub temperature: f32,
     /// Evidence chunks retrieved per request.
@@ -142,6 +146,8 @@ impl Default for Agent {
             max_model_retries: 2,
             request_timeout_secs: 90,
             tool_timeout_secs: 20,
+            model_slots: 2,
+            model_queue_wait_secs: 30,
             temperature: 0.3,
             retrieval_top_k: 6,
             history_turns: 20,

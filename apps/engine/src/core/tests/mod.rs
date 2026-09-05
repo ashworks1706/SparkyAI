@@ -4,6 +4,7 @@ mod agent;
 mod assemble;
 mod config;
 mod context;
+mod limit;
 mod mcp;
 mod policy;
 mod postgres;

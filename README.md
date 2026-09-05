@@ -3,7 +3,7 @@
 </p>
 
 <p  align="center">
-  <a >SparkyAI</a>
+  <a>SparkyAI</a>
 </p>
 
 <p align="center">

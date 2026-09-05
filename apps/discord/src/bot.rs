@@ -140,12 +140,7 @@ impl Handler {
             }
             Err(e) => {
                 tracing::error!(error = %e, user = %cmd.user.id, "engine call failed");
-                self.followup(
-                    ctx,
-                    cmd,
-                    "Sparky is unavailable right now. Please try again shortly.".into(),
-                )
-                .await;
+                self.followup(ctx, cmd, reply::failure(&e)).await;
             }
         }
     }

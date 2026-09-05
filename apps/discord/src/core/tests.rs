@@ -83,3 +83,24 @@ fn a_guild_role_cannot_impersonate_the_write_capability() {
         vec!["students".to_owned()]
     );
 }
+
+#[test]
+fn capacity_and_outage_read_differently_to_the_user() {
+    use crate::core::types::EngineError;
+    use crate::reply::failure;
+
+    let busy = failure(&EngineError::Status {
+        status: 503,
+        body: "the model is at capacity".into(),
+    });
+    assert!(busy.contains("busy"), "{busy}");
+
+    let down = failure(&EngineError::Transport("connection refused".into()));
+    assert!(down.contains("unavailable"), "{down}");
+
+    let broken = failure(&EngineError::Status {
+        status: 502,
+        body: String::new(),
+    });
+    assert!(broken.contains("unavailable"), "{broken}");
+}

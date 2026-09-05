@@ -301,3 +301,30 @@ async fn stateful_tools_run_in_order() {
         .collect();
     assert_eq!(order, vec!["1", "2", "3"]);
 }
+
+#[test]
+fn backoff_grows_and_spreads_retries_across_requests() {
+    use uuid::Uuid;
+
+    use crate::agent::harness::agent::backoff;
+
+    let id = Uuid::from_u128(0);
+    let plenty = Duration::from_secs(60);
+    let first = backoff(1, id, plenty);
+    let second = backoff(2, id, plenty);
+    let third = backoff(3, id, plenty);
+    assert!(first < second && second < third, "each wait is longer");
+    assert!(third <= Duration::from_secs(8), "capped");
+
+    // Two requests retrying at the same moment do not wake together.
+    assert_ne!(
+        backoff(1, Uuid::from_u128(1), plenty),
+        backoff(1, Uuid::from_u128(2), plenty)
+    );
+
+    // Never outlives the request.
+    assert_eq!(
+        backoff(3, id, Duration::from_millis(5)),
+        Duration::from_millis(5)
+    );
+}

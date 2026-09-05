@@ -5,10 +5,7 @@
 - [ ] Stand up search over ASU content with access controls
 - [ ] Build ingestion pipelines that keep sources fresh and deduplicated
 - [ ] Port v1 sources, simplest first: library hours, events, clubs, courses, scholarships, news, shuttles, jobs, sports
-- [ ] introduce distributed inference, search and embedding storage, true parallelism
-- [ ] setup inference dashboard and analytics, telemetry
 - [ ] Answer with citations and dates; add a reranker only if the eval set shows fusion alone falls short
-- [x] Ship a fixed ASU eval set (`apps/training/evals/cases`; grows with every failure)
 
 ## 3 — Discord v0.3
 
@@ -23,7 +20,6 @@
 - [ ] Personalized discovery and deadlines
 - [ ] Connect to external tools over MCP
 - [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
-- [x] Eval suites: tool selection/args, grounding, memory, permissions, clarification, refusal, latency (`just eval run`)
 
 ## 5 — Public beta v0.5
 
@@ -34,7 +30,6 @@
 Only after Phase 4 yields clean interaction data.
 
 - [ ] Baseline the untouched model on the eval suite
-- [x] Training dataset from real interactions (Phoenix `llm` spans, PII removed) — `just data export && just data verify`; v1 `finetune/` is regenerated, not reused
 - [ ] Post-train in stages, each gated on evals (`just train sft` + `just eval compare`; pipeline in place, no run yet)
 - [ ] Release: weights, quantized variants, config, dataset description, evals, limitations
 

@@ -103,6 +103,9 @@ pub enum ModelError {
     /// The request was cancelled.
     #[error("model call cancelled")]
     Cancelled,
+    /// Every model slot was busy for the whole queue wait.
+    #[error("model is at capacity")]
+    Busy,
 }
 
 impl ModelError {
@@ -111,7 +114,7 @@ impl ModelError {
         match self {
             Self::Transport(_) => true,
             Self::Status { status, .. } => *status >= 500 || *status == 429,
-            Self::Malformed(_) | Self::Timeout | Self::Cancelled => false,
+            Self::Malformed(_) | Self::Timeout | Self::Cancelled | Self::Busy => false,
         }
     }
 }

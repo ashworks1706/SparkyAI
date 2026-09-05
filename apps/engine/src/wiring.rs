@@ -7,10 +7,12 @@ use crate::agent::harness::agent::{Agent, AgentDeps};
 use crate::agent::harness::policy::RiskPolicy;
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::JsonlSink;
+use crate::agent::model::limit::Limited;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::mcp;
 use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
+use crate::core::traits::model::ModelProvider;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::assemble::Budget;
@@ -28,11 +30,20 @@ question, say so plainly and suggest where the user might look. Be brief.";
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let chat_client = rig_openai::client(&cfg.model.base_url, &cfg.model.api_key)
         .map_err(|e| anyhow::anyhow!("model client: {e}"))?;
-    let model = Arc::new(RigChat::new(
+    let chat = Arc::new(RigChat::new(
         chat_client,
         &cfg.model.name,
         cfg.model.thinking,
     ));
+    let model: Arc<dyn ModelProvider> = if cfg.agent.model_slots == 0 {
+        chat
+    } else {
+        Arc::new(Limited::new(
+            chat,
+            cfg.agent.model_slots,
+            Duration::from_secs(cfg.agent.model_queue_wait_secs),
+        ))
+    };
 
     let trace: Arc<dyn TraceSink> = Arc::new(JsonlSink::new(&cfg.agent.trace_dir)?);
 

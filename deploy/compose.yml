@@ -53,8 +53,11 @@ services:
       - 0.0.0.0
       - --port
       - "8000"
+      # ctx-size is the total across slots: each of --parallel N gets ctx-size / N.
       - --ctx-size
-      - ${SPARKY_CHAT_CTX:-4096}
+      - ${SPARKY_CHAT_CTX:-8192}
+      - --parallel
+      - ${SPARKY_CHAT_PARALLEL:-2}
       - --n-gpu-layers
       - ${SPARKY_CHAT_NGL:-99}
       - --jinja
@@ -88,7 +91,9 @@ services:
       - --pooling
       - last
       - --ctx-size
-      - ${SPARKY_EMBED_CTX:-2048}
+      - ${SPARKY_EMBED_CTX:-4096}
+      - --parallel
+      - ${SPARKY_EMBED_PARALLEL:-2}
       - --batch-size
       - "1024"
       - --ubatch-size
