@@ -15,4 +15,5 @@ mod query;
 mod rate_limit;
 mod rig_mapping;
 mod support;
+mod tokens;
 mod trace;

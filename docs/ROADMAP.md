@@ -17,9 +17,6 @@
 - [ ] Give the agent memory across conversations, with user-visible control and deletion
 - [ ] Personalized discovery and deadlines
 - [ ] Cite only the evidence that entered the prompt; today every retrieved chunk is cited and tool-found sources are not
-- [ ] One token estimator; `agent`, `assemble` and `message` each carry their own
-- [ ] Derive `AgentConfig` from `config::Agent` instead of a second set of defaults nothing keeps in step
-- [ ] Retrieval fusion tunable without a rebuild: candidate count and RRF `k` are literals
 - [ ] Redact tool output the way arguments already are, before authenticated pages reach a trace
 - [ ] Moderator ops: tickets, announcements, polls, escalation
 - [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback

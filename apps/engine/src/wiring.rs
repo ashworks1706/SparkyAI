@@ -74,7 +74,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let retriever = Arc::new(PgRetriever::new(
         pool.clone(),
         embedder,
-        retrieval_tuning(&cfg),
+        RetrievalTuning::from(&cfg.retrieval),
     ));
     let conversations = Arc::new(PgConversations::new(pool.clone()));
     let memory = Arc::new(PgMemory::new(pool.clone()));
@@ -191,18 +191,6 @@ fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
         pool.clone(),
         Duration::from_millis(cfg.query.poll_ms),
     ))
-}
-
-/// Hybrid retrieval settings for the PostgreSQL adapter.
-fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
-    RetrievalTuning {
-        candidates: cfg.retrieval.candidates,
-        rrf_k: cfg.retrieval.rrf_k,
-        text_search_config: cfg.retrieval.text_search_config.clone(),
-        dense: cfg.retrieval.dense,
-        lexical: cfg.retrieval.lexical,
-        min_score: cfg.retrieval.min_score,
-    }
 }
 
 /// Every tool the model may call, with tools.disabled removed at registration.

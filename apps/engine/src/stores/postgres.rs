@@ -67,6 +67,19 @@ pub struct RetrievalTuning {
     pub min_score: f32,
 }
 
+impl From<&crate::core::config::Retrieval> for RetrievalTuning {
+    fn from(cfg: &crate::core::config::Retrieval) -> Self {
+        Self {
+            candidates: cfg.candidates,
+            rrf_k: cfg.rrf_k,
+            text_search_config: cfg.text_search_config.clone(),
+            dense: cfg.dense,
+            lexical: cfg.lexical,
+            min_score: cfg.min_score,
+        }
+    }
+}
+
 /// Hybrid retrieval over the chunks table.
 pub struct PgRetriever {
     pool: PgPool,
