@@ -32,6 +32,61 @@ use crate::core::types::model::ModelError;
 use crate::core::types::wire::Progress;
 use uuid::Uuid;
 
+/// Fixed-window per-user rate limit, shared by every route that starts a run.
+///
+/// A window is a whole minute and resets for everyone at once: the point is to stop one caller
+/// from monopolising the model, not to meter usage precisely.
+#[derive(Clone)]
+pub struct RateLimiter {
+    per_min: u32,
+    state: Arc<std::sync::Mutex<RateWindow>>,
+}
+
+struct RateWindow {
+    started: std::time::Instant,
+    counts: std::collections::HashMap<String, u32>,
+}
+
+impl RateLimiter {
+    /// Allows `per_min` requests per user per minute. Zero removes the limit.
+    pub fn new(per_min: u32) -> Self {
+        Self {
+            per_min,
+            state: Arc::new(std::sync::Mutex::new(RateWindow {
+                started: std::time::Instant::now(),
+                counts: std::collections::HashMap::new(),
+            })),
+        }
+    }
+
+    /// Counts one request from `user` and says whether it may run.
+    pub fn allow(&self, user: &str) -> bool {
+        if self.per_min == 0 {
+            return true;
+        }
+        let Ok(mut state) = self.state.lock() else {
+            // A poisoned lock means a panic somewhere else; refusing traffic on top of that
+            // helps nobody, so the limit fails open and the panic is what gets fixed.
+            return true;
+        };
+        if state.started.elapsed() >= Duration::from_mins(1) {
+            state.started = std::time::Instant::now();
+            state.counts.clear();
+        }
+        let count = state.counts.entry(user.to_owned()).or_insert(0);
+        *count += 1;
+        *count <= self.per_min
+    }
+}
+
+impl std::fmt::Debug for RateLimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RateLimiter")
+            .field("per_min", &self.per_min)
+            .finish_non_exhaustive()
+    }
+}
+
 /// What the chat route needs.
 #[derive(Clone)]
 pub struct ChatState {
@@ -47,6 +102,18 @@ pub struct ChatState {
     pub default_tenant: String,
     /// Bearer token every caller must present.
     pub service_token: SecretString,
+    /// Per-user request limit.
+    pub rate_limit: RateLimiter,
+}
+
+/// The 429 returned when a caller is over the limit.
+pub fn too_many(user: &str) -> Response {
+    tracing::warn!(user, "rate limited");
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        "too many requests; wait a minute and ask again",
+    )
+        .into_response()
 }
 
 /// Parses a W3C `traceparent` header into a remote parent context.
@@ -73,6 +140,9 @@ pub async fn chat(
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
     }
+    if !state.rate_limit.allow(&req.user_id) {
+        return too_many(&req.user_id);
+    }
     let span = tracing::info_span!("http.chat", "sparky.user_id" = %req.user_id);
     if let Some(parent) = headers
         .get("traceparent")
@@ -97,6 +167,9 @@ pub async fn stream(
 ) -> Response {
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
+    }
+    if !state.rate_limit.allow(&req.user_id) {
+        return too_many(&req.user_id);
     }
     let span = tracing::info_span!("http.chat.stream", "sparky.user_id" = %req.user_id);
     if let Some(parent) = headers

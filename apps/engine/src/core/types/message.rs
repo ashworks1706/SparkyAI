@@ -99,12 +99,12 @@ impl Message {
     }
 
     /// Rough token estimate used for budgeting before a request is sent.
-    pub fn estimated_tokens(&self) -> usize {
+    pub fn estimated_tokens(&self, chars_per_token: usize) -> usize {
         let call_chars: usize = self
             .tool_calls
             .iter()
             .map(|c| c.name.len() + c.arguments.to_string().len())
             .sum();
-        (self.content.len() + call_chars) / 4 + 4
+        (self.content.len() + call_chars) / chars_per_token.max(1) + 4
     }
 }

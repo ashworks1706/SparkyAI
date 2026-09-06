@@ -36,6 +36,10 @@ pub struct ToolDefinition {
     /// with other calls in the same step.
     #[serde(default)]
     pub sequential: bool,
+    /// Overrides `agent.tool_timeout_secs` for this tool. A browser step and a database
+    /// lookup do not deserve the same budget.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u64>,
 }
 
 /// What a tool returns.

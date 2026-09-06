@@ -8,8 +8,10 @@ use crate::core::types::assemble::{Assembled, Budget, Sections};
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, Role};
 
-fn estimate(text: &str) -> usize {
-    text.len() / 4 + 4
+/// Rough token count. `chars_per_token` is a setting because the right divisor depends on the
+/// tokenizer, and a wrong one silently over- or under-fills the window.
+fn estimate(text: &str, chars_per_token: usize) -> usize {
+    text.len() / chars_per_token.max(1) + 4
 }
 
 /// Builds the message list within `budget`.
@@ -17,25 +19,27 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     let mut messages = Vec::new();
     let mut used = 0usize;
 
+    let cpt = budget.chars_per_token;
     let role_line = if ctx.roles.is_empty() {
-        format!("The user is `{}`. They hold no special roles.", ctx.user_id)
+        s.templates
+            .role_line_no_roles
+            .replace("{user}", &ctx.user_id)
     } else {
-        format!(
-            "The user is `{}`. Roles: {}.",
-            ctx.user_id,
-            ctx.roles.join(", ")
-        )
+        s.templates
+            .role_line
+            .replace("{user}", &ctx.user_id)
+            .replace("{roles}", &ctx.roles.join(", "))
     };
     let system = format!("{}\n\n{role_line}", s.system.trim());
-    used += estimate(&system);
+    used += estimate(&system, cpt);
     messages.push(Message::system(system));
 
     if !s.memory.is_empty() {
-        let mut block = String::from("What you remember about this user:\n");
-        let mut spent = estimate(&block);
+        let mut block = format!("{}\n", s.templates.memory_header.trim());
+        let mut spent = estimate(&block, cpt);
         for m in s.memory {
             let line = format!("- ({}) {}\n", m.kind.as_str(), m.content.trim());
-            let cost = estimate(&line);
+            let cost = estimate(&line, cpt);
             if spent + cost > budget.memory {
                 break;
             }
@@ -47,13 +51,10 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 
     let mut evidence_used = 0;
-    let input_cost = estimate(s.input);
+    let input_cost = estimate(s.input, cpt);
     if !s.evidence.is_empty() {
-        let mut block = String::from(
-            "Evidence from ASU sources. Answer only from this; cite sources by number. \
-             If it does not answer the question, say so.\n",
-        );
-        let mut spent = estimate(&block);
+        let mut block = format!("{}\n", s.templates.evidence_header.trim());
+        let mut spent = estimate(&block, cpt);
         // Evidence never eats the whole prompt: it is capped by its own budget and by what
         // remains of the total after the sections above and the current input.
         let evidence_budget = budget
@@ -67,7 +68,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
                 e.fetched_at.format("%Y-%m-%d"),
                 e.content.trim()
             );
-            let cost = estimate(&entry);
+            let cost = estimate(&entry, cpt);
             if spent + cost > evidence_budget {
                 break;
             }
@@ -84,7 +85,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     let mut kept: Vec<&Message> = Vec::new();
     let mut spent = 0usize;
     for m in s.history.iter().rev() {
-        let cost = m.estimated_tokens();
+        let cost = m.estimated_tokens(cpt);
         if spent + cost > history_budget {
             break;
         }

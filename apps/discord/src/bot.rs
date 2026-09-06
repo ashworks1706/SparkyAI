@@ -4,10 +4,10 @@ use secrecy::ExposeSecret;
 use std::time::{Duration, Instant};
 
 use serenity::all::{
-    Client, CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EditInteractionResponse,
-    EventHandler, GatewayIntents, GuildId, Interaction, Message, Permissions, Ready, ResolvedValue,
-    UserId,
+    ChannelId, Client, CommandInteraction, ComponentInteraction, Context,
+    CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage,
+    EditInteractionResponse, EventHandler, GatewayIntents, GuildId, Interaction, Message,
+    Permissions, Ready, ResolvedValue, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -22,15 +22,24 @@ use crate::core::types::{ChatRequest, ChatResponse, ConfirmRequest, EngineError,
 use crate::engine_client::EngineClient;
 use crate::reply;
 
-/// Shortest gap between edits of the progress message; Discord throttles faster than this.
-const EDIT_EVERY: Duration = Duration::from_millis(1_500);
-
 /// Per-process bot state and the serenity event handler.
 struct Handler {
     engine: EngineClient,
     guild_id: GuildId,
+    /// Channels the bot answers in. Empty answers everywhere it can see.
+    channels: Vec<ChannelId>,
+    /// Shortest gap between edits of the progress message.
+    edit_every: Duration,
+    /// Longest message posted before a reply is split.
+    max_message_chars: usize,
+    /// Shortest gap between one user's questions. Zero removes the limit.
+    cooldown: Duration,
+    /// Role name the engine's policy reads to allow write-side tools.
+    write_capability: String,
     /// Conversation each user is continuing. Lost on restart; `/reset` clears it.
     conversations: Mutex<std::collections::HashMap<UserId, Uuid>>,
+    /// When each user last asked, for the cooldown.
+    last_ask: Mutex<std::collections::HashMap<UserId, Instant>>,
 }
 
 /// Connects to Discord and runs until shutdown.
@@ -41,11 +50,28 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
     if cfg.discord.token.expose_secret().trim().is_empty() {
         anyhow::bail!("SPARKY_DISCORD__TOKEN is unset; create a bot at discord.com/developers");
     }
-    let engine = EngineClient::new(&cfg.engine.base_url, cfg.engine.service_token.clone())?;
+    let engine = EngineClient::new(
+        &cfg.engine.base_url,
+        cfg.engine.service_token.clone(),
+        Duration::from_secs(cfg.engine.connect_timeout_secs),
+        Duration::from_secs(cfg.engine.request_timeout_secs),
+    )?;
     let handler = Handler {
         engine,
         guild_id: GuildId::new(cfg.discord.guild_id),
+        channels: cfg
+            .bot
+            .channels
+            .iter()
+            .copied()
+            .map(ChannelId::new)
+            .collect(),
+        edit_every: Duration::from_millis(cfg.bot.edit_every_ms),
+        max_message_chars: cfg.bot.max_message_chars,
+        cooldown: Duration::from_secs(cfg.bot.cooldown_secs),
+        write_capability: cfg.bot.write_capability.clone(),
         conversations: Mutex::new(std::collections::HashMap::new()),
+        last_ask: Mutex::new(std::collections::HashMap::new()),
     };
     let intents = GatewayIntents::non_privileged();
     let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
@@ -71,14 +97,52 @@ impl Handler {
             .roles
             .iter()
             .filter_map(|id| roles.get(id).map(|r| r.name.clone()));
-        Ok(authorized_roles(names, member.permissions))
+        Ok(authorized_roles(
+            names,
+            member.permissions,
+            &self.write_capability,
+        ))
     }
 
-    async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
-        if let Err(e) = cmd.defer(&ctx.http).await {
-            tracing::warn!(error = %e, "defer failed");
-            return;
+    /// Whether the bot answers in this channel at all.
+    fn serves(&self, channel: ChannelId) -> bool {
+        self.channels.is_empty() || self.channels.contains(&channel)
+    }
+
+    /// Counts one question from `user` and says whether it may run. A turn occupies a model
+    /// slot for as long as it takes, so one impatient user can starve the guild.
+    async fn within_cooldown(&self, user: UserId) -> bool {
+        if self.cooldown.is_zero() {
+            return true;
         }
+        let mut last = self.last_ask.lock().await;
+        if last
+            .get(&user)
+            .is_some_and(|at| at.elapsed() < self.cooldown)
+        {
+            return false;
+        }
+        last.insert(user, Instant::now());
+        true
+    }
+
+    /// Why the bot will not take this question, if it will not.
+    async fn refusal(&self, cmd: &CommandInteraction) -> Option<String> {
+        if !self.serves(cmd.channel_id) {
+            return Some("I do not answer in this channel.".into());
+        }
+        if !self.within_cooldown(cmd.user.id).await {
+            return Some(format!(
+                "Give me {} seconds between questions.",
+                self.cooldown.as_secs()
+            ));
+        }
+        None
+    }
+
+    /// Builds the request for one `/ask`, or answers the user and returns `None` when it
+    /// cannot: an empty question, a DM, or roles that would not resolve.
+    async fn request_for(&self, ctx: &Context, cmd: &CommandInteraction) -> Option<ChatRequest> {
         let question = cmd
             .data
             .options()
@@ -91,12 +155,12 @@ impl Handler {
             .unwrap_or_default();
         if question.trim().is_empty() {
             self.followup(ctx, cmd, "Ask me something.".into()).await;
-            return;
+            return None;
         }
         let Some(guild_id) = cmd.guild_id else {
             self.followup(ctx, cmd, "Ask me in the server, not in a DM.".into())
                 .await;
-            return;
+            return None;
         };
         let roles = match self.role_names(ctx, cmd).await {
             Ok(roles) => roles,
@@ -108,17 +172,38 @@ impl Handler {
                     "I could not verify your roles, so I did not run that.".into(),
                 )
                 .await;
-                return;
+                return None;
             }
         };
-        let conversation_id = self.conversations.lock().await.get(&cmd.user.id).copied();
-        let req = ChatRequest {
+        Some(ChatRequest {
             user_id: cmd.user.id.to_string(),
             tenant_id: guild_id.to_string(),
             channel_id: cmd.channel_id.to_string(),
             roles,
-            conversation_id,
+            conversation_id: self.conversations.lock().await.get(&cmd.user.id).copied(),
             message: question,
+        })
+    }
+
+    async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
+        if let Some(reason) = self.refusal(cmd).await {
+            let msg = CreateInteractionResponseMessage::new()
+                .content(reason)
+                .ephemeral(true);
+            if let Err(e) = cmd
+                .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
+                .await
+            {
+                tracing::warn!(error = %e, "refusal response failed");
+            }
+            return;
+        }
+        if let Err(e) = cmd.defer(&ctx.http).await {
+            tracing::warn!(error = %e, "defer failed");
+            return;
+        }
+        let Some(req) = self.request_for(ctx, cmd).await else {
+            return;
         };
         let span = tracing::info_span!(
             "discord.ask",
@@ -176,7 +261,7 @@ impl Handler {
     /// Sends the answer, with the buttons it asks for on the message that asks.
     async fn answer(&self, ctx: &Context, cmd: &CommandInteraction, resp: &ChatResponse) {
         let rows = components::rows_for(resp);
-        let messages = reply::render(resp);
+        let messages = reply::render(resp, self.max_message_chars);
         let last = messages.len().saturating_sub(1);
         for (i, message) in messages.into_iter().enumerate() {
             let builder = CreateInteractionResponseFollowup::new().content(message);
@@ -206,7 +291,7 @@ impl Handler {
             match update {
                 Update::Progress(text) => {
                     // Discord throttles edits, so a burst of steps collapses into one.
-                    if last_edit.is_some_and(|at| at.elapsed() < EDIT_EVERY) {
+                    if last_edit.is_some_and(|at| at.elapsed() < self.edit_every) {
                         continue;
                     }
                     last_edit = Some(Instant::now());
@@ -271,26 +356,22 @@ impl Handler {
     }
 }
 
-/// The marker the engine's policy reads to allow write-side tools.
-pub(crate) const WRITE_CAPABILITY: &str = "MANAGE_GUILD";
-
 /// Whether a member's own Discord permissions let them ask for write-side tools.
 pub(crate) fn can_write(permissions: Permissions) -> bool {
     permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
 }
 
-/// Guild role names plus the write marker when the member's own Discord permissions grant it.
-/// A guild role named like the marker is dropped: only the permission bits confer write access.
+/// Guild role names plus `capability` when the member's own Discord permissions grant it.
+/// A guild role named like the capability is dropped: only the permission bits confer write
+/// access, so a guild cannot mint one by naming a role after it.
 pub(crate) fn authorized_roles(
     names: impl IntoIterator<Item = String>,
     permissions: Option<Permissions>,
+    capability: &str,
 ) -> Vec<String> {
-    let mut roles: Vec<String> = names
-        .into_iter()
-        .filter(|n| n != WRITE_CAPABILITY)
-        .collect();
+    let mut roles: Vec<String> = names.into_iter().filter(|n| n != capability).collect();
     if permissions.is_some_and(can_write) {
-        roles.push(WRITE_CAPABILITY.to_owned());
+        roles.push(capability.to_owned());
     }
     roles
 }
@@ -326,7 +407,7 @@ impl Handler {
         );
         let outcome = self.engine.confirm(&req).instrument(span).await;
         let body = match outcome {
-            Ok(resp) => reply::render(&resp).join("\n"),
+            Ok(resp) => reply::render(&resp, self.max_message_chars).join("\n"),
             Err(e) => {
                 tracing::error!(error = %e, user = %press.user.id, "confirm failed");
                 reply::failure(&e)

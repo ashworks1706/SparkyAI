@@ -15,11 +15,33 @@ use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
-/// Longest tool result handed back to the model; page snapshots can be enormous.
-const MAX_OUTPUT_CHARS: usize = 6_000;
-/// Longest per-property description kept in a schema. Tool schemas count against the
-/// context window on every step, so verbose ones are trimmed.
-const MAX_SCHEMA_DESCRIPTION: usize = 80;
+/// Limits applied to one MCP server's tools. Schemas and results count against the context
+/// window on every step, so every one of these is a setting.
+#[derive(Debug, Clone)]
+pub struct McpLimits {
+    /// Longest tool result handed back to the model; page snapshots can be enormous.
+    pub max_output_chars: usize,
+    /// Longest per-property description kept in a schema.
+    pub max_schema_description_chars: usize,
+    /// Longest tool description kept.
+    pub max_tool_description_chars: usize,
+    /// Show the model only each tool's required properties.
+    pub required_props_only: bool,
+    /// Per-tool timeout for this server, overriding the agent's default.
+    pub tool_timeout_secs: Option<u64>,
+}
+
+impl Default for McpLimits {
+    fn default() -> Self {
+        Self {
+            max_output_chars: 6_000,
+            max_schema_description_chars: 80,
+            max_tool_description_chars: 160,
+            required_props_only: true,
+            tool_timeout_secs: None,
+        }
+    }
+}
 
 /// Keeps only the `required` properties of an object schema. Small models tend to fill every
 /// optional field they are shown, which on browser tools means wrong targets and snapshots
@@ -45,7 +67,7 @@ pub fn required_only(value: Value) -> Value {
 }
 
 /// Drops schema noise the model does not need: long descriptions, titles, examples, `$schema`.
-pub fn compact_schema(value: Value) -> Value {
+pub fn compact_schema(value: Value, max_description: usize) -> Value {
     match value {
         Value::Object(map) => Value::Object(
             map.into_iter()
@@ -56,16 +78,18 @@ pub fn compact_schema(value: Value) -> Value {
                     if k == "description"
                         && let Value::String(s) = &v
                     {
-                        return (
-                            k,
-                            Value::String(s.chars().take(MAX_SCHEMA_DESCRIPTION).collect()),
-                        );
+                        return (k, Value::String(s.chars().take(max_description).collect()));
                     }
-                    (k, compact_schema(v))
+                    (k, compact_schema(v, max_description))
                 })
                 .collect(),
         ),
-        Value::Array(items) => Value::Array(items.into_iter().map(compact_schema).collect()),
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .map(|v| compact_schema(v, max_description))
+                .collect(),
+        ),
         other => other,
     }
 }
@@ -74,6 +98,7 @@ pub fn compact_schema(value: Value) -> Value {
 pub struct McpTool {
     peer: Peer<RoleClient>,
     definition: ToolDefinition,
+    max_output_chars: usize,
 }
 
 /// Risk by name. Reads and inspection run; interactions are drafts; anything that submits or
@@ -143,7 +168,7 @@ pub fn usable_output(text: String) -> String {
 pub async fn connect(
     url: &str,
     allow: &[String],
-    required_props_only: bool,
+    limits: &McpLimits,
 ) -> Result<Vec<Arc<dyn Tool>>, String> {
     let transport = StreamableHttpClientTransport::from_uri(url);
     let service = ().serve(transport).await.map_err(|e| e.to_string())?;
@@ -167,11 +192,14 @@ pub async fn connect(
                 .as_deref()
                 .unwrap_or(&name)
                 .chars()
-                .take(160)
+                .take(limits.max_tool_description_chars)
                 .collect(),
             parameters: {
-                let schema = compact_schema(Value::Object((*t.input_schema).clone()));
-                if required_props_only {
+                let schema = compact_schema(
+                    Value::Object((*t.input_schema).clone()),
+                    limits.max_schema_description_chars,
+                );
+                if limits.required_props_only {
                     required_only(schema)
                 } else {
                     schema
@@ -179,10 +207,12 @@ pub async fn connect(
             },
             name,
             sequential: true,
+            timeout_secs: limits.tool_timeout_secs,
         };
         tools.push(Arc::new(McpTool {
             peer: peer.clone(),
             definition,
+            max_output_chars: limits.max_output_chars,
         }));
     }
     Ok(tools)
@@ -228,8 +258,8 @@ impl Tool for McpTool {
             }));
         }
         let mut text = usable_output(text);
-        if text.chars().count() > MAX_OUTPUT_CHARS {
-            let cut: String = text.chars().take(MAX_OUTPUT_CHARS).collect();
+        if text.chars().count() > self.max_output_chars {
+            let cut: String = text.chars().take(self.max_output_chars).collect();
             text = format!("{cut}\n…[truncated]");
         }
         Ok(ToolOutput {

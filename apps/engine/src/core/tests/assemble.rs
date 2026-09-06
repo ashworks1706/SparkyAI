@@ -5,8 +5,9 @@ use uuid::Uuid;
 
 use crate::agent::harness::assemble::assemble;
 use crate::core::tests::support::ctx;
-use crate::core::types::assemble::{Budget, Sections};
+use crate::core::types::assemble::{Budget, Sections, Templates};
 use crate::core::types::evidence::Evidence;
+use crate::core::types::memory::{Memory, MemoryKind};
 use crate::core::types::message::{Message, Role};
 
 fn evidence(n: usize) -> Vec<Evidence> {
@@ -121,6 +122,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             evidence: &[],
             history: &history,
             input: "",
+            templates: Templates::default(),
         },
         Budget::default(),
     );
@@ -136,4 +138,64 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             .all(|m| !(m.role == Role::User && m.content.is_empty())),
         "no empty user turn is added"
     );
+}
+
+#[test]
+fn the_wording_around_every_section_comes_from_configuration() {
+    let ev = evidence(1);
+    let memories = vec![Memory {
+        id: Uuid::new_v4(),
+        kind: MemoryKind::Profile,
+        content: "prefers mornings".into(),
+        confidence: 1.0,
+        created_at: Utc::now(),
+        expires_at: None,
+    }];
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            memory: &memories,
+            evidence: &ev,
+            input: "q",
+            templates: Templates {
+                role_line_no_roles: "caller {user}",
+                memory_header: "REMEMBERED",
+                evidence_header: "SOURCES",
+                ..Templates::default()
+            },
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(text.contains("REMEMBERED"), "{text}");
+    assert!(text.contains("SOURCES"), "{text}");
+    assert!(text.contains("caller u"), "{text}");
+    assert!(!text.contains("Evidence from ASU sources"), "{text}");
+}
+
+#[test]
+fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
+    // Two characters per token is the pessimistic end: the same prompt is priced at roughly
+    // twice as many tokens, so less evidence survives the same budget.
+    let ev = evidence(20);
+    let count = |chars_per_token: usize| {
+        assemble(
+            &ctx(),
+            &Sections {
+                system: "s",
+                evidence: &ev,
+                input: "q",
+                ..Sections::default()
+            },
+            Budget {
+                evidence: 800,
+                chars_per_token,
+                ..Budget::default()
+            },
+        )
+        .evidence_used
+    };
+    assert!(count(2) < count(8), "{} < {}", count(2), count(8));
 }

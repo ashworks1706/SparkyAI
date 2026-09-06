@@ -75,7 +75,7 @@ fn compact_schema_trims_descriptions_and_noise() {
         "title": "T",
         "properties": {"a": {"description": "y".repeat(500), "default": 1}}
     });
-    let out = compact_schema(schema);
+    let out = compact_schema(schema, 80);
     assert!(out.get("$schema").is_none());
     assert!(out.get("title").is_none());
     assert!(out["properties"]["a"].get("default").is_none());
@@ -91,14 +91,14 @@ fn compact_schema_trims_descriptions_and_noise() {
 #[tokio::test]
 #[ignore = "needs `just browser`"]
 async fn mcp_server_lists_the_tools_the_engine_asks_for() {
-    use crate::agent::tools::mcp;
+    use crate::agent::tools::mcp::{self, McpLimits};
     use crate::core::config::Mcp;
 
     let defaults = Mcp::default();
     let tools = mcp::connect(
         "http://127.0.0.1:8931/mcp",
         &defaults.playwright_tools,
-        defaults.required_props_only,
+        &McpLimits::default(),
     )
     .await
     .unwrap_or_default();

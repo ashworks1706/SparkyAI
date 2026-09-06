@@ -15,6 +15,8 @@ pub struct Budget {
     pub history: usize,
     /// Cap on the memory section.
     pub memory: usize,
+    /// Characters per token the estimator assumes. Never zero.
+    pub chars_per_token: usize,
 }
 
 impl Default for Budget {
@@ -24,6 +26,33 @@ impl Default for Budget {
             evidence: 1_200,
             history: 1_000,
             memory: 300,
+            chars_per_token: 4,
+        }
+    }
+}
+
+/// The text assembly writes around the sections. Every field is configurable, so the wording
+/// of a prompt is a setting rather than a rebuild.
+#[derive(Debug, Clone, Copy)]
+pub struct Templates<'a> {
+    /// Line naming the user, with `{user}` and `{roles}`.
+    pub role_line: &'a str,
+    /// Line naming a user who holds no roles, with `{user}`.
+    pub role_line_no_roles: &'a str,
+    /// Heading above recalled memories.
+    pub memory_header: &'a str,
+    /// Heading above retrieved evidence.
+    pub evidence_header: &'a str,
+}
+
+impl Default for Templates<'_> {
+    fn default() -> Self {
+        Self {
+            role_line: "The user is `{user}`. Roles: {roles}.",
+            role_line_no_roles: "The user is `{user}`. They hold no special roles.",
+            memory_header: "What you remember about this user:",
+            evidence_header: "Evidence from ASU sources. Answer only from this; cite sources by \
+                              number. If it does not answer the question, say so.",
         }
     }
 }
@@ -41,6 +70,8 @@ pub struct Sections<'a> {
     pub history: &'a [Message],
     /// The user's current message.
     pub input: &'a str,
+    /// Wording written around the sections.
+    pub templates: Templates<'a>,
 }
 
 /// The assembled prompt plus what was left out.

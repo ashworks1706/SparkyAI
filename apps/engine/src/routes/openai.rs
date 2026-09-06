@@ -20,7 +20,7 @@ use crate::core::types::openai::{
     ModelList,
 };
 use crate::core::types::trace::RunStatus;
-use crate::routes::chat::{ChatState, authorized};
+use crate::routes::chat::{ChatState, authorized, too_many};
 
 /// The name the engine answers as. The agent may call several models in one run, so this names
 /// the agent rather than any one of them.
@@ -132,6 +132,9 @@ pub async fn completions(
         )
             .into_response();
     };
+    if !state.rate_limit.allow(user) {
+        return too_many(user);
+    }
     let ctx = RequestContext::new(state.default_tenant.clone(), user, state.request_budget)
         .with_conversation(conversation_for(user, &opener));
 

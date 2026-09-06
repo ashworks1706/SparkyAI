@@ -25,10 +25,14 @@ use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
 use crate::core::types::store::StoreError;
 
 /// Opens the pool. Fails fast if the database is unreachable.
-pub async fn connect(url: &SecretString, max_connections: u32) -> Result<PgPool, StoreError> {
+pub async fn connect(
+    url: &SecretString,
+    max_connections: u32,
+    acquire_timeout: Duration,
+) -> Result<PgPool, StoreError> {
     PgPoolOptions::new()
         .max_connections(max_connections)
-        .acquire_timeout(Duration::from_secs(5))
+        .acquire_timeout(acquire_timeout)
         .connect(url.expose_secret())
         .await
         .map_err(|e| StoreError::Database(e.to_string()))
@@ -40,21 +44,50 @@ fn db(e: sqlx::Error) -> StoreError {
     StoreError::Database(e.to_string())
 }
 
+/// How the two retrieval legs are run and fused.
+#[derive(Debug, Clone)]
+pub struct RetrievalTuning {
+    /// Candidates pulled from each leg before fusion.
+    pub candidates: i64,
+    /// Reciprocal rank fusion constant.
+    pub rrf_k: f32,
+    /// `PostgreSQL` text search configuration for the lexical leg.
+    pub text_search_config: String,
+    /// Run the pgvector leg.
+    pub dense: bool,
+    /// Run the full-text leg.
+    pub lexical: bool,
+    /// Drop fused results below this score.
+    pub min_score: f32,
+}
+
+impl Default for RetrievalTuning {
+    fn default() -> Self {
+        Self {
+            candidates: 20,
+            rrf_k: 60.0,
+            text_search_config: "english".into(),
+            dense: true,
+            lexical: true,
+            min_score: 0.0,
+        }
+    }
+}
+
 /// Hybrid retrieval over the `chunks` table.
 pub struct PgRetriever {
     pool: PgPool,
     embedder: Arc<dyn Embedder>,
-    /// Candidates pulled from each of dense and lexical before fusion.
-    candidates: i64,
+    tuning: RetrievalTuning,
 }
 
 impl PgRetriever {
     /// Builds a retriever. Fused order is final.
-    pub fn new(pool: PgPool, embedder: Arc<dyn Embedder>) -> Self {
+    pub fn new(pool: PgPool, embedder: Arc<dyn Embedder>, tuning: RetrievalTuning) -> Self {
         Self {
             pool,
             embedder,
-            candidates: 20,
+            tuning,
         }
     }
 }
@@ -86,6 +119,12 @@ const SELECT: &str =
     from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')
       and (cardinality($2::text[]) = 0 or c.category = any($2))";
+
+/// A `PostgreSQL` string literal. Used for the text search configuration, which names an
+/// object and so cannot be a bind parameter.
+pub(crate) fn quote_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
 
 /// pgvector's text input form: `[0.1,0.2,...]`.
 pub(crate) fn vector_literal(v: &[f32]) -> String {
@@ -125,64 +164,75 @@ impl Retriever for PgRetriever {
         query: &RetrievalQuery,
     ) -> Result<Vec<Evidence>, RetrievalError> {
         let store = |e: sqlx::Error| RetrievalError::Store(e.to_string());
-        let vectors = self
-            .embedder
-            .embed(std::slice::from_ref(&query.text))
-            .await?;
-        let Some(vector) = vectors.into_iter().next() else {
-            return Err(RetrievalError::Embedding("no vector returned".into()));
-        };
-        if vector.len() != self.embedder.dim() {
-            return Err(RetrievalError::Embedding(format!(
-                "embedding has {} dimensions; the index holds {}",
-                vector.len(),
-                self.embedder.dim()
-            )));
-        }
-
-        let dense_sql = format!("{SELECT} order by c.embedding <=> $3::vector limit $4");
-        let dense_rows = sqlx::query(&dense_sql)
-            .bind(&ctx.tenant_id)
-            .bind(&query.categories)
-            .bind(vector_literal(&vector))
-            .bind(self.candidates)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(store)?;
-
-        let lexical_sql = format!(
-            "{SELECT} and c.tsv @@ websearch_to_tsquery('english', $3)
-             order by ts_rank_cd(c.tsv, websearch_to_tsquery('english', $3)) desc limit $4"
-        );
-        let lexical_rows = sqlx::query(&lexical_sql)
-            .bind(&ctx.tenant_id)
-            .bind(&query.categories)
-            .bind(&query.text)
-            .bind(self.candidates)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(store)?;
-
         let mut by_id: HashMap<Uuid, Candidate> = HashMap::new();
-        let mut dense_ids = Vec::new();
-        for row in &dense_rows {
-            let c = row_to_candidate(row).map_err(store)?;
-            dense_ids.push(c.chunk_id);
-            by_id.insert(c.chunk_id, c);
+        let mut ranked: Vec<Vec<Uuid>> = Vec::with_capacity(2);
+
+        if self.tuning.dense {
+            let vectors = self
+                .embedder
+                .embed(std::slice::from_ref(&query.text))
+                .await?;
+            let Some(vector) = vectors.into_iter().next() else {
+                return Err(RetrievalError::Embedding("no vector returned".into()));
+            };
+            if vector.len() != self.embedder.dim() {
+                return Err(RetrievalError::Embedding(format!(
+                    "embedding has {} dimensions; the index holds {}",
+                    vector.len(),
+                    self.embedder.dim()
+                )));
+            }
+            let sql = format!("{SELECT} order by c.embedding <=> $3::vector limit $4");
+            let rows = sqlx::query(&sql)
+                .bind(&ctx.tenant_id)
+                .bind(&query.categories)
+                .bind(vector_literal(&vector))
+                .bind(self.tuning.candidates)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(store)?;
+            let mut ids = Vec::with_capacity(rows.len());
+            for row in &rows {
+                let c = row_to_candidate(row).map_err(store)?;
+                ids.push(c.chunk_id);
+                by_id.insert(c.chunk_id, c);
+            }
+            ranked.push(ids);
         }
-        let mut lexical_ids = Vec::new();
-        for row in &lexical_rows {
-            let c = row_to_candidate(row).map_err(store)?;
-            lexical_ids.push(c.chunk_id);
-            by_id.entry(c.chunk_id).or_insert(c);
+
+        if self.tuning.lexical {
+            // The text search configuration names a Postgres object, so it cannot be bound as
+            // a parameter. It is quoted as a literal, which is why it is validated at load.
+            let cfg = quote_literal(&self.tuning.text_search_config);
+            let sql = format!(
+                "{SELECT} and c.tsv @@ websearch_to_tsquery({cfg}, $3)
+                 order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $3)) desc limit $4"
+            );
+            let rows = sqlx::query(&sql)
+                .bind(&ctx.tenant_id)
+                .bind(&query.categories)
+                .bind(&query.text)
+                .bind(self.tuning.candidates)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(store)?;
+            let mut ids = Vec::with_capacity(rows.len());
+            for row in &rows {
+                let c = row_to_candidate(row).map_err(store)?;
+                ids.push(c.chunk_id);
+                by_id.entry(c.chunk_id).or_insert(c);
+            }
+            ranked.push(ids);
         }
+
         if by_id.is_empty() {
             return Ok(Vec::new());
         }
 
-        let fused = rrf(&[dense_ids, lexical_ids], 60.0);
+        let fused = rrf(&ranked, self.tuning.rrf_k);
         let ordered: Vec<(Candidate, f32)> = fused
             .into_iter()
+            .filter(|(_, score)| *score >= self.tuning.min_score)
             .filter_map(|(id, score)| by_id.remove(&id).map(|c| (c, score)))
             .collect();
 

@@ -1,13 +1,18 @@
 //! Logging and `OpenTelemetry` export over OTLP/gRPC to Phoenix (or any OTLP collector).
 //! One span per interaction, sharing the engine's session id so a conversation stitches.
 
+use std::time::Duration;
+
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
-use opentelemetry_sdk::{Resource, trace::SdkTracerProvider};
+use opentelemetry_sdk::{Resource, trace::Sampler, trace::SdkTracerProvider};
 use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::core::config::Telemetry;
+
+/// Default `service.name` and span-target prefix for this binary.
+const SERVICE: &str = "discord";
 
 /// Keeps the OTLP exporter alive; flushes on drop.
 pub struct Guard {
@@ -24,6 +29,13 @@ impl Drop for Guard {
 
 /// Installs the global `tracing` subscriber with fmt and optional OTLP layers.
 pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard> {
+    let service = cfg
+        .service_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(SERVICE)
+        .to_owned();
     let otel = match cfg
         .otlp_endpoint
         .as_deref()
@@ -33,12 +45,17 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
             let exporter = SpanExporter::builder()
                 .with_tonic()
                 .with_endpoint(endpoint)
+                .with_timeout(Duration::from_secs(cfg.export_timeout_secs))
                 .build()?;
             let provider = SdkTracerProvider::builder()
                 .with_batch_exporter(exporter)
+                // Ratio sampling keeps whole traces: a sampled root carries its children.
+                .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
+                    cfg.sample_ratio,
+                ))))
                 .with_resource(
                     Resource::builder()
-                        .with_service_name("discord")
+                        .with_service_name(service.clone())
                         .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
                         .build(),
                 )
@@ -56,10 +73,17 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
     };
     // Export only this crate's spans. Dependencies (serenity's gateway, Rig, tower-http)
     // instrument themselves too, and that noise would bury the request tree in Phoenix.
-    let own_spans = filter_fn(|meta| meta.target().starts_with("discord"));
+    let prefix = cfg
+        .span_target_prefix
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .unwrap_or(SERVICE)
+        .to_owned();
+    let own_spans = filter_fn(move |meta| meta.target().starts_with(&prefix));
     let otel_layer = otel.as_ref().map(|p| {
         tracing_opentelemetry::layer()
-            .with_tracer(p.tracer("discord"))
+            .with_tracer(p.tracer(service.clone()))
             .with_filter(own_spans)
     });
     tracing_subscriber::registry()

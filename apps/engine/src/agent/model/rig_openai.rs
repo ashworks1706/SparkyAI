@@ -34,17 +34,24 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
 pub struct RigChat {
     model: CompletionModel,
     name: String,
-    thinking: bool,
+    /// Provider-specific request fields sent with every completion: sampling parameters and
+    /// the chat-template switch. Built once from configuration.
+    additional_params: serde_json::Value,
 }
 
 impl RigChat {
-    /// Wraps `model_name` on `client`.
-    pub fn new(client: CompletionsClient, model_name: impl Into<String>, thinking: bool) -> Self {
+    /// Wraps `model_name` on `client`. `additional_params` must be a JSON object; it is sent
+    /// verbatim alongside every completion request.
+    pub fn new(
+        client: CompletionsClient,
+        model_name: impl Into<String>,
+        additional_params: serde_json::Value,
+    ) -> Self {
         let name = model_name.into();
         Self {
             model: CompletionModel::new(client, name.clone()),
             name,
-            thinking,
+            additional_params,
         }
     }
 }
@@ -176,10 +183,9 @@ impl ModelProvider for RigChat {
             tools,
             temperature: Some(f64::from(req.temperature)),
             max_tokens: Some(u64::from(req.max_tokens)),
-            // llama-server honours chat_template_kwargs; this switches Qwen3 thinking off.
-            additional_params: Some(serde_json::json!({
-                "chat_template_kwargs": { "enable_thinking": self.thinking }
-            })),
+            // llama-server honours chat_template_kwargs and the llama.cpp sampling fields;
+            // both arrive here from `[model]` configuration.
+            additional_params: Some(self.additional_params.clone()),
             output_schema: None,
             record_telemetry_content: false,
         };

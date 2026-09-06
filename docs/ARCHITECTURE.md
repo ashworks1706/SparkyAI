@@ -24,7 +24,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
 | Observability | OpenTelemetry → Phoenix; logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
-| Config | `SPARKY_<SECTION>__<KEY>` env vars | `config.rs`, `settings.py`, `.env.example` |
+| Config | `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` env vars, which win | `config.rs`, `settings.py`, `.env.example`, `sparky.example.toml` |
 | Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
 
@@ -282,11 +282,13 @@ The loop owns every stopping condition. Structured output gets one correction at
 | Class | Examples | Behavior |
 |---|---|---|
 | `ReadPublic` | search indexed pages, library hours | run |
-| `ReadAuthenticated` | read a page in the user's own browser session | run after session authorization |
+| `ReadAuthenticated` | read a page in the user's own browser session | deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | draft an announcement, fill a form without submitting | run |
-| `ExternalWrite` | post, create ticket, book, submit | require Manage Server, then confirm immediately before |
-| `Destructive` | delete, cancel | require Manage Server, then confirm immediately before |
+| `ExternalWrite` | post, create ticket, book, submit | require a `policy.write_roles` role, then confirm immediately before |
+| `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm immediately before |
 | `Forbidden` | another user's session, bypassing policy | deny |
+
+The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above; `policy.confirm_from` names the lowest class held for the caller's approval, so a deployment can hold drafts too while a new tool is being trusted. `Forbidden` is denied whatever the settings say. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
 
 A confirmation is bound to one exact action payload, is single-use and short-lived, states what happens / where / with what data / whether reversible, and is recorded in the trace. If the payload changes, confirm again. External writes are never auto-retried without an idempotency key.
 
@@ -429,12 +431,20 @@ Dashboard panels and the metric names behind them: `deploy/README.md`.
 
 The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
 
+## Configuration
+
+Two layers, lowest first: an optional TOML file (`sparky.toml`, or `SPARKY_CONFIG_FILE`) and `SPARKY_<SECTION>__<KEY>` environment variables. The environment always wins, so secrets stay in `.env` and lists and nested tables — MCP servers above all — stay in the file. A missing file is not an error, and every section but the endpoints has defaults, so a bare `.env` still boots. `sparky.example.toml` documents every knob at its default.
+
+Sections: `app`, `engine`, `discord`, `model` (with `model.sampling`), `postgres`, `embedding`, `telemetry`, `agent`, `prompt`, `policy`, `retrieval`, `tools`, `trace`, `http`, `mcp`, and `bot` for the Discord binary. The engine validates at boot and refuses to start on a combination it cannot serve: both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers sharing a name, a text search configuration that is not a plain identifier, or a `prompt.system_file` it cannot read. Nothing is silently clamped.
+
+`prompt` holds the wording the harness writes around every section, `system_file` included. Changing any of it changes the prompt hash, so a trace says which wording produced an answer.
+
 ## Deployment
 
 Two images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects) and `sparkyai-scraper`. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
 
 ## Open decisions
 
-Chat model size and quantization · whether a reranker earns its place once the eval set exists · parallel slots per llama-server under load · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
+Chat model size and quantization · whether a reranker earns its place once the eval set exists · parallel slots per llama-server under load · default `chars_per_token` once the tokenizer is measured · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
 
 Record each as a short note under `docs/decisions/` when made.

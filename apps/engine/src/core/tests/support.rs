@@ -94,6 +94,7 @@ impl Tool for Echo {
             parameters: json!({"type": "object"}),
             risk: self.0,
             sequential: false,
+            timeout_secs: None,
         }
     }
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
@@ -113,6 +114,7 @@ impl Tool for Slow {
             parameters: json!({"type": "object"}),
             risk: RiskClass::ReadPublic,
             sequential: false,
+            timeout_secs: None,
         }
     }
     async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
@@ -158,7 +160,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
     let deps = AgentDeps {
         model: Arc::new(model),
         tools,
-        policy: Arc::new(RiskPolicy::new()),
+        policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
         retriever: None,
         conversations: None,
@@ -253,7 +255,7 @@ pub fn agent_with_store(
     let deps = AgentDeps {
         model: Arc::new(model),
         tools,
-        policy: Arc::new(RiskPolicy::new()),
+        policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::default()),
         retriever: None,
         conversations: Some(conversations),
@@ -273,7 +275,7 @@ pub fn agent_holding(
     let deps = AgentDeps {
         model: Arc::new(model),
         tools,
-        policy: Arc::new(RiskPolicy::new()),
+        policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::default()),
         retriever: None,
         conversations: Some(conversations),
@@ -300,6 +302,7 @@ impl Tool for Ordered {
             parameters: json!({"type": "object"}),
             risk: self.0,
             sequential: true,
+            timeout_secs: None,
         }
     }
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
@@ -321,6 +324,7 @@ impl Tool for Boom {
             parameters: serde_json::json!({"type": "object"}),
             risk: RiskClass::ReadPublic,
             sequential: false,
+            timeout_secs: None,
         }
     }
 

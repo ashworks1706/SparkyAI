@@ -30,6 +30,14 @@ pub struct AgentConfig {
     pub retrieval_top_k: usize,
     /// Prior turns to load.
     pub history_turns: usize,
+    /// Memories recalled per request.
+    pub memory_recall_limit: usize,
+    /// First retry wait, doubled per attempt.
+    pub retry_base_ms: u64,
+    /// Longest retry wait.
+    pub retry_cap_ms: u64,
+    /// Longest value recorded on a span; the JSONL trace keeps the rest.
+    pub max_span_value_chars: usize,
     /// USD per million prompt tokens, for cost tracking. Zero for local models.
     pub usd_per_m_prompt: f64,
     /// USD per million completion tokens.
@@ -49,6 +57,10 @@ impl Default for AgentConfig {
             temperature: 0.3,
             retrieval_top_k: 6,
             history_turns: 20,
+            memory_recall_limit: 10,
+            retry_base_ms: 250,
+            retry_cap_ms: 8_000,
+            max_span_value_chars: 32_000,
             usd_per_m_prompt: 0.0,
             usd_per_m_completion: 0.0,
             budget: Budget::default(),

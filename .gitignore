@@ -4,6 +4,7 @@ target/
 .env
 .env.*
 !.env.example
+sparky.toml
 .venv/
 uv.lock
 .vscode

@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -24,19 +25,48 @@ fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
 #[derive(Debug)]
 pub struct JsonlSink {
     dir: PathBuf,
+    /// Stop writing a request's trace past this many bytes. Zero removes the limit.
+    max_file_bytes: u64,
 }
 
 impl JsonlSink {
-    /// Writes under `dir`, creating it if missing.
-    pub fn new(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
+    /// Writes under `dir`, creating it if missing. `max_file_bytes` caps one request's trace;
+    /// zero removes the limit.
+    pub fn new(dir: impl Into<PathBuf>, max_file_bytes: u64) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
-        Ok(Self { dir })
+        Ok(Self {
+            dir,
+            max_file_bytes,
+        })
     }
 
     /// Path of the trace file for a request.
     pub fn path_for(&self, request_id: Uuid) -> PathBuf {
         self.dir.join(format!("{request_id}.jsonl"))
+    }
+
+    /// Deletes trace files last modified more than `older_than` ago. Returns how many went.
+    /// Called once at boot: a long-lived engine otherwise fills its disk with traces.
+    pub fn prune(&self, older_than: Duration) -> std::io::Result<usize> {
+        let cutoff = SystemTime::now()
+            .checked_sub(older_than)
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let mut removed = 0;
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            if entry.path().extension().is_none_or(|e| e != "jsonl") {
+                continue;
+            }
+            let stale = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .is_ok_and(|modified| modified < cutoff);
+            if stale && std::fs::remove_file(entry.path()).is_ok() {
+                removed += 1;
+            }
+        }
+        Ok(removed)
     }
 }
 
@@ -51,11 +81,27 @@ impl TraceSink for JsonlSink {
             .create(true)
             .append(true)
             .open(&path)
-            .and_then(|mut f| writeln!(f, "{line}"));
+            .and_then(|mut f| {
+                // A runaway run — a browser snapshot loop above all — can write a trace far
+                // larger than anything that will ever be read. The cap drops the tail rather
+                // than the head, so the start of the run survives.
+                if self.max_file_bytes > 0 && f.metadata()?.len() >= self.max_file_bytes {
+                    return Ok(());
+                }
+                writeln!(f, "{line}")
+            });
         if let Err(e) = result {
             tracing::warn!(error = %e, path = %path.display(), "trace write failed");
         }
     }
+}
+
+/// Discards every event. Used when trace recording is switched off.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NullSink;
+
+impl TraceSink for NullSink {
+    fn emit(&self, _ctx: &RequestContext, _event: TraceEvent) {}
 }
 
 /// Records every event through the sink beneath it and, when the caller is watching, forwards

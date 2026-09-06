@@ -32,6 +32,7 @@ rmcp = { version = "3", features = ["client", "transport-child-process", "transp
 # interfaces
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
 axum = "0.8"
+tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.7", features = ["trace", "cors", "timeout"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "stream"] }
 

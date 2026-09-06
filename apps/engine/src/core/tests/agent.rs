@@ -337,23 +337,28 @@ fn backoff_grows_and_spreads_retries_across_requests() {
 
     let id = Uuid::from_u128(0);
     let plenty = Duration::from_mins(1);
-    let first = backoff(1, id, plenty);
-    let second = backoff(2, id, plenty);
-    let third = backoff(3, id, plenty);
+    let first = backoff(1, id, plenty, 250, 8_000);
+    let second = backoff(2, id, plenty, 250, 8_000);
+    let third = backoff(3, id, plenty, 250, 8_000);
     assert!(first < second && second < third, "each wait is longer");
     assert!(third <= Duration::from_secs(8), "capped");
 
     // Two requests retrying at the same moment do not wake together.
     assert_ne!(
-        backoff(1, Uuid::from_u128(1), plenty),
-        backoff(1, Uuid::from_u128(2), plenty)
+        backoff(1, Uuid::from_u128(1), plenty, 250, 8_000),
+        backoff(1, Uuid::from_u128(2), plenty, 250, 8_000)
     );
 
     // Never outlives the request.
     assert_eq!(
-        backoff(3, id, Duration::from_millis(5)),
+        backoff(3, id, Duration::from_millis(5), 250, 8_000),
         Duration::from_millis(5)
     );
+
+    // The cap is configuration, not a constant: a deployment behind a slow model can wait
+    // longer, and one in front of an impatient user cannot.
+    assert!(backoff(6, id, plenty, 250, 1_000) <= Duration::from_secs(1));
+    assert!(backoff(6, id, plenty, 1_000, 30_000) > Duration::from_secs(8));
 }
 
 #[tokio::test]

@@ -21,7 +21,7 @@ use crate::core::traits::policy::Policy;
 use crate::core::traits::retrieval::Retriever;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
-use crate::core::types::assemble::Sections;
+use crate::core::types::assemble::{Sections, Templates};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryQuery};
@@ -31,9 +31,6 @@ use crate::core::types::policy::{ConfirmationRequest, Decision, PendingAction, P
 use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
-
-/// Longest value recorded on a span. Phoenix keeps whole values; the JSONL trace has the rest.
-const MAX_SPAN_VALUE: usize = 32_000;
 
 /// The dependencies the loop drives. Every one is a trait with a test double.
 pub struct AgentDeps {
@@ -69,6 +66,45 @@ pub struct Agent {
     deps: Arc<AgentDeps>,
     cfg: AgentConfig,
     system_prompt: Arc<str>,
+    /// Wording written around the prompt sections. Owned so it can come from configuration.
+    prompt: Arc<PromptText>,
+}
+
+/// The configurable wording assembly writes around the sections.
+#[derive(Debug, Clone)]
+pub struct PromptText {
+    /// Line naming the user, with `{user}` and `{roles}`.
+    pub role_line: String,
+    /// Line naming a user who holds no roles, with `{user}`.
+    pub role_line_no_roles: String,
+    /// Heading above recalled memories.
+    pub memory_header: String,
+    /// Heading above retrieved evidence.
+    pub evidence_header: String,
+}
+
+impl Default for PromptText {
+    fn default() -> Self {
+        let d = Templates::default();
+        Self {
+            role_line: d.role_line.to_owned(),
+            role_line_no_roles: d.role_line_no_roles.to_owned(),
+            memory_header: d.memory_header.to_owned(),
+            evidence_header: d.evidence_header.to_owned(),
+        }
+    }
+}
+
+impl PromptText {
+    /// Borrowed view for one assembly pass.
+    fn templates(&self) -> Templates<'_> {
+        Templates {
+            role_line: &self.role_line,
+            role_line_no_roles: &self.role_line_no_roles,
+            memory_header: &self.memory_header,
+            evidence_header: &self.evidence_header,
+        }
+    }
 }
 
 /// What one request loaded before its first model call.
@@ -108,13 +144,20 @@ enum StepOutcome {
 }
 
 impl Agent {
-    /// Builds an agent over its dependencies.
+    /// Builds an agent over its dependencies, with the default prompt wording.
     pub fn new(deps: AgentDeps, cfg: AgentConfig, system_prompt: impl Into<Arc<str>>) -> Self {
         Self {
             deps: Arc::new(deps),
             cfg,
             system_prompt: system_prompt.into(),
+            prompt: Arc::new(PromptText::default()),
         }
+    }
+
+    /// Replaces the wording written around the prompt sections.
+    pub fn with_prompt_text(mut self, prompt: PromptText) -> Self {
+        self.prompt = Arc::new(prompt);
+        self
     }
 
     /// Runs one user message to completion. One `CHAIN` span per request, with the
@@ -323,7 +366,7 @@ impl Agent {
                     ctx,
                     &MemoryQuery {
                         kinds: Vec::new(),
-                        limit: 10,
+                        limit: self.cfg.memory_recall_limit,
                     },
                 )
                 .await
@@ -361,7 +404,7 @@ impl Agent {
                         .collect();
                     span.record(
                         "output.value",
-                        truncate(&json(&listing), MAX_SPAN_VALUE).as_str(),
+                        truncate(&json(&listing), self.cfg.max_span_value_chars).as_str(),
                     );
                     deps.trace.emit(
                         ctx,
@@ -397,7 +440,11 @@ impl Agent {
             .tools
             .definitions()
             .iter()
-            .map(|d| (d.name.len() + d.description.len() + d.parameters.to_string().len()) / 4 + 8)
+            .map(|d| {
+                (d.name.len() + d.description.len() + d.parameters.to_string().len())
+                    / self.cfg.budget.chars_per_token.max(1)
+                    + 8
+            })
             .sum();
         let mut budget = self.cfg.budget;
         budget.total = budget.total.saturating_sub(tool_tokens);
@@ -409,6 +456,7 @@ impl Agent {
                 evidence: &inputs.evidence,
                 history: &prompt_history,
                 input: run.input,
+                templates: self.prompt.templates(),
             },
             budget,
         );
@@ -651,7 +699,7 @@ impl Agent {
                     request.temperature,
                     request.tools.len()
                 ),
-                "input.value" = %truncate(&input_json, MAX_SPAN_VALUE),
+                "input.value" = %truncate(&input_json, self.cfg.max_span_value_chars),
                 "input.mime_type" = "application/json",
                 "output.value" = Empty,
                 "output.mime_type" = "application/json",
@@ -676,7 +724,10 @@ impl Agent {
                         i64::from(response.usage.completion_tokens),
                     );
                     let shown = json(&response.as_message());
-                    span.record("output.value", truncate(&shown, MAX_SPAN_VALUE).as_str());
+                    span.record(
+                        "output.value",
+                        truncate(&shown, self.cfg.max_span_value_chars).as_str(),
+                    );
                     deps.trace.emit(
                         ctx,
                         TraceEvent::ModelCall {
@@ -705,7 +756,14 @@ impl Agent {
                         return Err(error);
                     }
                     attempt += 1;
-                    tokio::time::sleep(backoff(attempt, ctx.request_id, ctx.remaining())).await;
+                    tokio::time::sleep(backoff(
+                        attempt,
+                        ctx.request_id,
+                        ctx.remaining(),
+                        self.cfg.retry_base_ms,
+                        self.cfg.retry_cap_ms,
+                    ))
+                    .await;
                 }
             }
         }
@@ -729,7 +787,13 @@ impl Agent {
             },
         );
         let started = Instant::now();
-        let limit = self.cfg.tool_timeout.min(ctx.remaining());
+        // A tool may declare its own budget; a browser step and a database lookup do not
+        // deserve the same one. The request deadline still wins.
+        let declared = tool
+            .definition()
+            .timeout_secs
+            .map_or(self.cfg.tool_timeout, Duration::from_secs);
+        let limit = declared.min(ctx.remaining());
         let span = tracing::info_span!(
             "tool",
             "openinference.span.kind" = "TOOL",
@@ -897,12 +961,17 @@ fn json<T: serde::Serialize>(value: &T) -> String {
         .unwrap_or_else(|e| format!("{{\"unserializable\":{:?}}}", e.to_string()))
 }
 
-/// Wait before retry `attempt`: doubling from 250 ms, capped at 8 s, spread by a per-request
-/// offset so concurrent requests do not retry in lockstep, and never past the deadline.
-pub fn backoff(attempt: u32, request_id: Uuid, remaining: Duration) -> Duration {
-    const BASE_MS: u64 = 250;
-    const CAP_MS: u64 = 8_000;
-    let doubled = BASE_MS.saturating_mul(1u64 << attempt.min(6)).min(CAP_MS);
+/// Wait before retry `attempt`: doubling from `base_ms`, capped at `cap_ms`, spread by a
+/// per-request offset so concurrent requests do not retry in lockstep, and never past the
+/// deadline.
+pub fn backoff(
+    attempt: u32,
+    request_id: Uuid,
+    remaining: Duration,
+    base_ms: u64,
+    cap_ms: u64,
+) -> Duration {
+    let doubled = base_ms.saturating_mul(1u64 << attempt.min(6)).min(cap_ms);
     let spread = doubled / 4;
     #[allow(clippy::cast_possible_truncation)]
     let offset = (request_id.as_u128() as u64) % spread.max(1);

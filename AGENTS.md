@@ -60,7 +60,9 @@ Processes talk only via: discord → engine, engine → PostgreSQL / llama-serve
 
 ## Config
 
-All settings come from `SPARKY_<SECTION>__<KEY>` env vars into `apps/engine/src/core/config/mod.rs`, `apps/discord/src/core/config.rs`, and `apps/cli/src/core/config.rs` (Rust) and `core/settings.py` (Python packages). Secrets are `SecretString`; never log them. Add a field there and to `.env.example` in the same change.
+Two layers, lowest first: an optional TOML file (`sparky.toml`, or `SPARKY_CONFIG_FILE`) and `SPARKY_<SECTION>__<KEY>` env vars, which win. They load into `apps/engine/src/core/config/mod.rs`, `apps/discord/src/core/config.rs`, and `apps/cli/src/core/config.rs` (Rust) and `core/settings.py` (Python packages). Secrets are `SecretString` and belong in `.env`; lists and nested tables — MCP servers above all — belong in the file. Never log a secret.
+
+Add a field there, to `.env.example`, and to `sparky.example.toml` at its default in the same change. Every harness knob is a setting: the loop's limits, the prompt budgets and the wording around them, sampling, retrieval tuning, what the policy allows, which tools register, tracing, and the HTTP surface. Reject a bad combination in `Config::validate` at boot rather than clamping it at runtime.
 
 ## Rules
 

@@ -25,14 +25,14 @@ fn action(risk: RiskClass) -> ProposedAction {
 
 #[tokio::test]
 async fn reads_are_allowed() {
-    let p = RiskPolicy::new();
+    let p = RiskPolicy::default();
     let d = p.authorize(&ctx(&[]), &action(RiskClass::ReadPublic)).await;
     assert!(matches!(d, Decision::Allow));
 }
 
 #[tokio::test]
 async fn writes_without_role_are_denied() {
-    let p = RiskPolicy::new();
+    let p = RiskPolicy::default();
     let d = p
         .authorize(&ctx(&[]), &action(RiskClass::ExternalWrite))
         .await;
@@ -41,7 +41,7 @@ async fn writes_without_role_are_denied() {
 
 #[tokio::test]
 async fn writes_with_role_need_confirmation() {
-    let p = RiskPolicy::new();
+    let p = RiskPolicy::default();
     let d = p
         .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))
         .await;
@@ -50,7 +50,7 @@ async fn writes_with_role_need_confirmation() {
 
 #[tokio::test]
 async fn forbidden_is_denied_regardless_of_role() {
-    let p = RiskPolicy::new();
+    let p = RiskPolicy::default();
     let d = p
         .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::Forbidden))
         .await;
@@ -67,4 +67,71 @@ fn payload_hash_changes_with_arguments() {
         payload_hash(&json!({"a": 1})),
         payload_hash(&json!({"a": 1}))
     );
+}
+
+#[tokio::test]
+async fn the_role_that_may_write_is_configuration() {
+    let p = RiskPolicy::new(
+        vec!["officers".into()],
+        false,
+        crate::core::types::tool::RiskClass::ExternalWrite,
+    );
+    assert!(matches!(
+        p.authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))
+            .await,
+        Decision::Deny { .. }
+    ));
+    assert!(matches!(
+        p.authorize(&ctx(&["officers"]), &action(RiskClass::ExternalWrite))
+            .await,
+        Decision::Confirm(_)
+    ));
+}
+
+#[tokio::test]
+async fn an_empty_write_role_list_denies_everyone() {
+    let p = RiskPolicy::new(Vec::new(), false, RiskClass::ExternalWrite);
+    let d = p
+        .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))
+        .await;
+    assert!(matches!(d, Decision::Deny { .. }), "{d:?}");
+}
+
+#[tokio::test]
+async fn confirm_from_moves_where_the_loop_stops_to_ask() {
+    // Lowering it holds drafts too, which is what a deployment wants while a new tool is
+    // being trusted.
+    let cautious = RiskPolicy::new(vec!["MANAGE_GUILD".into()], false, RiskClass::PrepareWrite);
+    assert!(matches!(
+        cautious
+            .authorize(&ctx(&[]), &action(RiskClass::PrepareWrite))
+            .await,
+        Decision::Confirm(_)
+    ));
+
+    // Raising it past every class an unprivileged caller can reach lets drafts run.
+    let relaxed = RiskPolicy::new(vec!["MANAGE_GUILD".into()], false, RiskClass::Destructive);
+    assert!(matches!(
+        relaxed
+            .authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))
+            .await,
+        Decision::Allow
+    ));
+}
+
+#[tokio::test]
+async fn authenticated_reads_open_only_when_they_are_switched_on() {
+    let closed = RiskPolicy::default();
+    assert!(matches!(
+        closed
+            .authorize(&ctx(&[]), &action(RiskClass::ReadAuthenticated))
+            .await,
+        Decision::Deny { .. }
+    ));
+    let open = RiskPolicy::new(vec!["MANAGE_GUILD".into()], true, RiskClass::ExternalWrite);
+    assert!(matches!(
+        open.authorize(&ctx(&[]), &action(RiskClass::ReadAuthenticated))
+            .await,
+        Decision::Allow
+    ));
 }

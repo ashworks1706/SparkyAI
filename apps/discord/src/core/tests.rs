@@ -40,7 +40,10 @@ fn long_text_splits_on_line_boundaries_under_the_limit() {
 
 #[test]
 fn citations_are_appended_as_a_footer() {
-    let out = render(&response("2am", vec!["lib — url".into()], "answered"));
+    let out = render(
+        &response("2am", vec!["lib — url".into()], "answered"),
+        2_000,
+    );
     assert_eq!(out.len(), 1);
     assert!(out[0].contains("**Sources**"));
     assert!(out[0].contains("1. lib — url"));
@@ -48,7 +51,7 @@ fn citations_are_appended_as_a_footer() {
 
 #[test]
 fn empty_answer_explains_the_status() {
-    let out = render(&response("", vec![], "deadline"));
+    let out = render(&response("", vec![], "deadline"), 2_000);
     assert!(out[0].contains("too long"));
 }
 
@@ -68,19 +71,24 @@ fn discord_management_permissions_grant_write_access() {
 
 #[test]
 fn a_guild_role_cannot_impersonate_the_write_capability() {
-    use crate::bot::{WRITE_CAPABILITY, authorized_roles};
+    use crate::bot::authorized_roles;
+    use crate::core::config::WRITE_CAPABILITY;
 
     let named = vec!["students".to_owned(), WRITE_CAPABILITY.to_owned()];
     assert_eq!(
-        authorized_roles(named.clone(), Some(Permissions::MANAGE_MESSAGES)),
+        authorized_roles(
+            named.clone(),
+            Some(Permissions::MANAGE_MESSAGES),
+            WRITE_CAPABILITY
+        ),
         vec!["students".to_owned()]
     );
     assert_eq!(
-        authorized_roles(named, Some(Permissions::MANAGE_GUILD)),
+        authorized_roles(named, Some(Permissions::MANAGE_GUILD), WRITE_CAPABILITY),
         vec!["students".to_owned(), WRITE_CAPABILITY.to_owned()]
     );
     assert_eq!(
-        authorized_roles(vec!["students".to_owned()], None),
+        authorized_roles(vec!["students".to_owned()], None, WRITE_CAPABILITY),
         vec!["students".to_owned()]
     );
 }
@@ -122,13 +130,13 @@ fn tools_the_agent_ran_are_listed_under_the_answer() {
         },
     ];
 
-    let out = render(&resp).join("\n");
+    let out = render(&resp, 2_000).join("\n");
 
     assert!(out.contains("browser_navigate"), "{out}");
     assert!(out.contains("browser_snapshot"), "{out}");
     assert!(out.contains("failed"), "a failed call is marked: {out}");
 
-    let quiet = render(&response("hi", vec![], "answered")).join("\n");
+    let quiet = render(&response("hi", vec![], "answered"), 2_000).join("\n");
     assert!(!quiet.contains("Tools"), "no tools, no footer: {quiet}");
 }
 

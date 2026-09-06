@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use figment::Figment;
-use figment::providers::Env;
+use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
 
 /// Console settings.
@@ -76,9 +76,15 @@ impl Default for Cli {
     }
 }
 
-/// Loads settings from the environment.
+/// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
+pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
+
+/// Loads settings from the TOML layer then the environment, which wins.
 pub fn load() -> anyhow::Result<Config> {
+    let path =
+        std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());
     Figment::new()
+        .merge(Toml::file(path))
         .merge(Env::prefixed("SPARKY_").split("__"))
         .extract()
         .map_err(|e| anyhow::anyhow!("config: {e}"))

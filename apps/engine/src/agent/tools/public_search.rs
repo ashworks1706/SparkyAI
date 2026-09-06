@@ -50,6 +50,7 @@ impl Tool for PublicSearch {
             }),
             risk: RiskClass::ReadPublic,
             sequential: false,
+            timeout_secs: None,
         }
     }
 

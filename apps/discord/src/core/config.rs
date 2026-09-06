@@ -1,6 +1,7 @@
 //! Bot configuration from `SPARKY_*` env. Only what the bot needs; the API owns everything else.
 
-use figment::{Figment, providers::Env};
+use figment::Figment;
+use figment::providers::{Env, Format, Toml};
 use secrecy::SecretString;
 use serde::Deserialize;
 
@@ -16,6 +17,42 @@ pub struct Config {
     /// Trace export.
     #[serde(default)]
     pub telemetry: Telemetry,
+    /// How the bot behaves in the guild.
+    #[serde(default)]
+    pub bot: Bot,
+}
+
+/// The marker the engine's policy reads to allow write-side tools, when none is configured.
+pub const WRITE_CAPABILITY: &str = "MANAGE_GUILD";
+
+/// How the bot behaves in the guild. Everything here is presentation and pacing; the engine
+/// still decides what may run.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Bot {
+    /// Channel ids the bot answers in. Empty answers in every channel it can see.
+    pub channels: Vec<u64>,
+    /// Longest message posted before the reply is split.
+    pub max_message_chars: usize,
+    /// Shortest gap between edits of the progress message; Discord throttles faster than this.
+    pub edit_every_ms: u64,
+    /// Seconds one user must wait between questions. 0 removes the limit.
+    pub cooldown_secs: u64,
+    /// The role name the engine's policy reads to allow write-side tools. Must match
+    /// `SPARKY_POLICY__WRITE_ROLES` on the engine.
+    pub write_capability: String,
+}
+
+impl Default for Bot {
+    fn default() -> Self {
+        Self {
+            channels: Vec::new(),
+            max_message_chars: 2_000,
+            edit_every_ms: 1_500,
+            cooldown_secs: 0,
+            write_capability: WRITE_CAPABILITY.to_owned(),
+        }
+    }
 }
 
 /// Process-level settings.
@@ -34,6 +71,20 @@ pub struct Engine {
     pub base_url: String,
     /// Shared secret presented on every request.
     pub service_token: SecretString,
+    /// How long to wait for the connection.
+    #[serde(default = "default_connect_timeout_secs")]
+    pub connect_timeout_secs: u64,
+    /// How long to wait for a whole answer. Keep it above the engine's own request budget.
+    #[serde(default = "default_request_timeout_secs")]
+    pub request_timeout_secs: u64,
+}
+
+fn default_connect_timeout_secs() -> u64 {
+    5
+}
+
+fn default_request_timeout_secs() -> u64 {
+    120
 }
 
 /// Discord credentials and guild.
@@ -51,21 +102,53 @@ pub struct Discord {
 pub struct Telemetry {
     /// OTLP/gRPC endpoint.
     pub otlp_endpoint: Option<String>,
+    /// `service.name` on exported spans. Defaults to `discord`.
+    pub service_name: Option<String>,
+    /// Fraction of traces exported, 0.0 to 1.0.
+    pub sample_ratio: f64,
+    /// Budget for one export batch.
+    pub export_timeout_secs: u64,
+    /// Only spans whose target starts with this are exported. Defaults to `discord`.
+    pub span_target_prefix: Option<String>,
 }
 
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
             otlp_endpoint: Some("http://localhost:4317".into()),
+            service_name: None,
+            sample_ratio: 1.0,
+            export_timeout_secs: 10,
+            span_target_prefix: None,
         }
     }
 }
 
+/// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
+pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
+
 impl Config {
-    /// Loads from `SPARKY_*` variables, `__` separating nesting.
+    /// Loads the TOML layer then `SPARKY_*` variables, `__` separating nesting. Environment
+    /// values win, so the bot and the engine can share one file and differ only in secrets.
     pub fn load() -> anyhow::Result<Self> {
-        Ok(Figment::new()
+        let path =
+            std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());
+        let cfg: Self = Figment::new()
+            .merge(Toml::file(path))
             .merge(Env::prefixed("SPARKY_").split("__"))
-            .extract()?)
+            .extract()?;
+        if !(0.0..=1.0).contains(&cfg.telemetry.sample_ratio) {
+            anyhow::bail!(
+                "telemetry.sample_ratio must be between 0 and 1, got {}",
+                cfg.telemetry.sample_ratio
+            );
+        }
+        if cfg.bot.max_message_chars == 0 || cfg.bot.max_message_chars > 2_000 {
+            anyhow::bail!(
+                "bot.max_message_chars must be between 1 and 2000, got {}",
+                cfg.bot.max_message_chars
+            );
+        }
+        Ok(cfg)
     }
 }

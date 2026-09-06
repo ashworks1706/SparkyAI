@@ -4,7 +4,8 @@ use std::fmt::Write;
 
 use crate::core::types::{ChatResponse, EngineError};
 
-/// Discord's hard limit on message content.
+/// Discord's hard limit on message content. `bot.max_message_chars` may go below it, never
+/// above.
 pub const MAX_MESSAGE: usize = 2_000;
 
 /// Splits `text` into messages of at most `limit` bytes on line, then space, boundaries.
@@ -46,7 +47,7 @@ pub fn failure(e: &EngineError) -> String {
 }
 
 /// The answer plus a citation footer, split into sendable messages.
-pub fn render(resp: &ChatResponse) -> Vec<String> {
+pub fn render(resp: &ChatResponse, limit: usize) -> Vec<String> {
     let mut body = resp.text.trim().to_owned();
     if body.is_empty() {
         body = match resp.status.as_str() {
@@ -85,5 +86,5 @@ pub fn render(resp: &ChatResponse) -> Vec<String> {
             let _ = writeln!(body, "{}. {c}", i + 1);
         }
     }
-    chunk(&body, MAX_MESSAGE)
+    chunk(&body, limit.clamp(1, MAX_MESSAGE))
 }

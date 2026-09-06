@@ -23,11 +23,17 @@ pub struct EngineClient {
 }
 
 impl EngineClient {
-    /// Builds a client for `base_url`.
-    pub fn new(base_url: &str, token: SecretString) -> Result<Self, EngineError> {
+    /// Builds a client for `base_url`. `request_timeout` must exceed the engine's own request
+    /// budget, or the bot gives up on answers the engine is still writing.
+    pub fn new(
+        base_url: &str,
+        token: SecretString,
+        connect_timeout: Duration,
+        request_timeout: Duration,
+    ) -> Result<Self, EngineError> {
         let http = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_mins(2))
+            .connect_timeout(connect_timeout)
+            .timeout(request_timeout)
             .build()
             .map_err(|e| EngineError::Transport(e.to_string()))?;
         Ok(Self {

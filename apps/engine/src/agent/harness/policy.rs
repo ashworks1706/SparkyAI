@@ -1,4 +1,4 @@
-//! The default `RiskPolicy` and payload hashing for confirmations.
+//! The configurable `RiskPolicy` and payload hashing for confirmations.
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -19,53 +19,93 @@ pub fn payload_hash(arguments: &Value) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-/// The default risk policy.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RiskPolicy;
+/// What the policy allows, denies, and holds. Comes from the `[policy]` configuration section.
+#[derive(Debug, Clone)]
+pub struct RiskPolicy {
+    write_roles: Vec<String>,
+    allow_authenticated_reads: bool,
+    confirm_from: RiskClass,
+}
+
+impl Default for RiskPolicy {
+    fn default() -> Self {
+        Self {
+            write_roles: vec!["MANAGE_GUILD".into()],
+            allow_authenticated_reads: false,
+            confirm_from: RiskClass::ExternalWrite,
+        }
+    }
+}
 
 impl RiskPolicy {
-    /// Creates the policy.
-    pub const fn new() -> Self {
-        Self
+    /// Builds the policy. `write_roles` gates `external_write` and above; `confirm_from` is the
+    /// lowest risk class held for the caller's approval.
+    pub fn new(
+        write_roles: Vec<String>,
+        allow_authenticated_reads: bool,
+        confirm_from: RiskClass,
+    ) -> Self {
+        Self {
+            write_roles,
+            allow_authenticated_reads,
+            confirm_from,
+        }
+    }
+
+    /// Whether the request's roles include one that may run write-class tools.
+    fn may_write(&self, ctx: &RequestContext) -> bool {
+        self.write_roles.iter().any(|role| ctx.has_role(role))
+    }
+
+    /// How the confirmation describes what is about to happen.
+    fn summary(action: &ProposedAction) -> String {
+        format!(
+            "Run `{}` with {}. {}",
+            action.tool,
+            action.arguments,
+            if action.risk == RiskClass::Destructive {
+                "This cannot be undone."
+            } else {
+                "This posts or submits externally."
+            }
+        )
     }
 }
 
 #[async_trait]
 impl Policy for RiskPolicy {
     async fn authorize(&self, ctx: &RequestContext, action: &ProposedAction) -> Decision {
-        match action.risk {
-            RiskClass::ReadPublic | RiskClass::PrepareWrite => Decision::Allow,
-            RiskClass::ReadAuthenticated => Decision::Deny {
-                reason: "authenticated reads are not enabled".into(),
-            },
-            RiskClass::ExternalWrite | RiskClass::Destructive => {
-                if !ctx.has_role("MANAGE_GUILD") {
-                    return Decision::Deny {
-                        reason: format!(
-                            "`{}` requires Discord's Manage Server permission",
-                            action.tool
-                        ),
-                    };
-                }
-                Decision::Confirm(ConfirmationRequest {
-                    token: Uuid::new_v4(),
-                    tool: action.tool.clone(),
-                    payload_hash: payload_hash(&action.arguments),
-                    summary: format!(
-                        "Run `{}` with {}. {}",
-                        action.tool,
-                        action.arguments,
-                        if action.risk == RiskClass::Destructive {
-                            "This cannot be undone."
-                        } else {
-                            "This posts or submits externally."
-                        }
-                    ),
-                })
-            }
-            RiskClass::Forbidden => Decision::Deny {
+        if action.risk == RiskClass::Forbidden {
+            return Decision::Deny {
                 reason: format!("`{}` is forbidden", action.tool),
-            },
+            };
         }
+        if action.risk == RiskClass::ReadAuthenticated && !self.allow_authenticated_reads {
+            return Decision::Deny {
+                reason: "authenticated reads are not enabled".into(),
+            };
+        }
+        if action.risk >= RiskClass::ExternalWrite && !self.may_write(ctx) {
+            return Decision::Deny {
+                reason: if self.write_roles.is_empty() {
+                    format!("`{}` is disabled: no role may run write tools", action.tool)
+                } else {
+                    format!(
+                        "`{}` requires one of these roles: {}",
+                        action.tool,
+                        self.write_roles.join(", ")
+                    )
+                },
+            };
+        }
+        if action.risk >= self.confirm_from {
+            return Decision::Confirm(ConfirmationRequest {
+                token: Uuid::new_v4(),
+                tool: action.tool.clone(),
+                payload_hash: payload_hash(&action.arguments),
+                summary: Self::summary(action),
+            });
+        }
+        Decision::Allow
     }
 }
