@@ -1,4 +1,4 @@
-//! `ReadPublic`: search indexed ASU sources through `Retriever`.
+//! `ReadPublic`: search the indexed knowledge base through `Retriever`.
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -14,12 +14,12 @@ use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput}
 use crate::core::types::wire::SearchArgs;
 
 /// Lets the model run a targeted search when the up-front retrieval was not enough.
-pub struct PublicSearch {
+pub struct KnowledgeSearch {
     retriever: Arc<dyn Retriever>,
     top_k: usize,
 }
 
-impl PublicSearch {
+impl KnowledgeSearch {
     /// Searches with `retriever`, returning at most `top_k` chunks.
     pub fn new(retriever: Arc<dyn Retriever>, top_k: usize) -> Self {
         Self { retriever, top_k }
@@ -27,14 +27,14 @@ impl PublicSearch {
 }
 
 #[async_trait]
-impl Tool for PublicSearch {
+impl Tool for KnowledgeSearch {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
-            name: "search_asu".into(),
+            name: "search_knowledge_base".into(),
             description:
-                "Search indexed public ASU sources (library hours, events, clubs, courses, \
-                          scholarships, news, shuttles, jobs, sports). Use when you need facts you \
-                          do not already have evidence for."
+                "Search the knowledge base of indexed public ASU pages (library hours, events, \
+                          clubs, courses, scholarships, news, shuttles, jobs, sports). Use when you \
+                          need facts you do not already have evidence for."
                     .into(),
             parameters: json!({
                 "type": "object",

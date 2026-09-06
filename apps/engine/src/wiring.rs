@@ -9,8 +9,8 @@ use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::agent::model::limit::Limited;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
+use crate::agent::tools::knowledge_search::KnowledgeSearch;
 use crate::agent::tools::mcp::{self, McpLimits};
-use crate::agent::tools::public_search::PublicSearch;
 use crate::core::config::Config;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::model::ModelProvider;
@@ -216,8 +216,8 @@ fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
 async fn build_tools(cfg: &Config, retriever: Arc<PgRetriever>) -> anyhow::Result<ToolSet> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
-    if cfg.tools.public_search {
-        let search: Arc<dyn Tool> = Arc::new(PublicSearch::new(retriever, cfg.retrieval.top_k));
+    if cfg.tools.knowledge_search {
+        let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(retriever, cfg.retrieval.top_k));
         if !disabled(&search.definition().name) {
             tools = tools.with(search);
         }

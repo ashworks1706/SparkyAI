@@ -113,7 +113,7 @@ flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
     HARNESS["agent::harness<br/>loop · policy · assemble · tools · trace"]
     MODEL["agent::model<br/>rig_openai"]
-    TOOLS["agent::tools<br/>public_search · mcp"]
+    TOOLS["agent::tools<br/>knowledge_search · mcp"]
     STORES["stores<br/>postgres"]
     CORE["core<br/>config · types · traits · tests"]
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::types::trace::TraceEvent;
 
-/// Arguments the model passes to `search_asu`.
+/// Arguments the model passes to `search_knowledge_base`.
 #[derive(Deserialize)]
 pub struct SearchArgs {
     /// What to look for.

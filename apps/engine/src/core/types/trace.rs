@@ -138,7 +138,7 @@ impl TraceEvent {
     pub fn progress(&self) -> Option<String> {
         match self {
             Self::ToolStarted { tool, .. } => Some(match tool.as_str() {
-                "search_asu" => "searching ASU pages".to_owned(),
+                "search_knowledge_base" => "searching the knowledge base".to_owned(),
                 "browser_navigate" => "opening the page".to_owned(),
                 "browser_snapshot" => "reading the page".to_owned(),
                 other => format!("running {other}"),

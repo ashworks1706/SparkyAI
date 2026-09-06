@@ -19,11 +19,11 @@ use crate::core::types::wire::Progress;
 fn events_the_caller_should_see_carry_their_own_wording() {
     let started = TraceEvent::ToolStarted {
         step: 1,
-        tool: "search_asu".into(),
+        tool: "search_knowledge_base".into(),
     };
     assert_eq!(
         started.progress().as_deref(),
-        Some("searching ASU pages"),
+        Some("searching the knowledge base"),
         "a tool the engine ships gets wording a student understands"
     );
 
@@ -109,7 +109,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
         &listening,
         TraceEvent::ToolStarted {
             step: 1,
-            tool: "search_asu".into(),
+            tool: "search_knowledge_base".into(),
         },
     );
     fanout.emit(
@@ -124,7 +124,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
 
     assert_eq!(sink.records().len(), 2, "every event is still traced");
     let seen = rx.try_recv().ok().map(|p: Progress| p.text);
-    assert_eq!(seen.as_deref(), Some("searching ASU pages"));
+    assert_eq!(seen.as_deref(), Some("searching the knowledge base"));
     assert!(rx.try_recv().is_err(), "only user-visible events are sent");
 }
 

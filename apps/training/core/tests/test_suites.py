@@ -30,19 +30,26 @@ def _case(**expect):
 
 
 def test_tool_selection_and_args():
-    ev = [{"kind": "tool_call", "tool": "search_asu", "arguments": {"query": "Library hours"}}]
-    assert tool_selection.score(_case(tool="search_asu"), [_turn(events=ev)]).passed
-    assert not tool_selection.score(_case(tool="search_asu"), [_turn()]).passed
+    ev = [
+        {
+            "kind": "tool_call",
+            "tool": "search_knowledge_base",
+            "arguments": {"query": "Library hours"},
+        }
+    ]
+    assert tool_selection.score(_case(tool="search_knowledge_base"), [_turn(events=ev)]).passed
+    assert not tool_selection.score(_case(tool="search_knowledge_base"), [_turn()]).passed
     assert not tool_selection.score(_case(), [_turn(events=ev)]).passed
     named = tool_args.score(
-        _case(tool="search_asu", tool_args_contain={"query": "library"}), [_turn(events=ev)]
+        _case(tool="search_knowledge_base", tool_args_contain={"query": "library"}),
+        [_turn(events=ev)],
     )
     assert named.passed, "the key names the argument, the value is matched inside it"
     wrong_key = tool_args.score(
-        _case(tool="search_asu", tool_args_contain={"q": "library"}), [_turn(events=ev)]
+        _case(tool="search_knowledge_base", tool_args_contain={"q": "library"}), [_turn(events=ev)]
     )
     assert not wrong_key.passed, "an expectation naming an argument the tool lacks fails"
-    assert tool_args.score(_case(tool="search_asu"), [_turn(events=ev)]) is None, (
+    assert tool_args.score(_case(tool="search_knowledge_base"), [_turn(events=ev)]) is None, (
         "no expectation means no result, not a free pass"
     )
 
@@ -64,7 +71,7 @@ def test_refusal_and_clarification():
     assert clarification.score(
         _case(clarify=True), [_turn(text="Which library do you mean?")]
     ).passed
-    ev = [{"kind": "tool_call", "tool": "search_asu", "arguments": {}}]
+    ev = [{"kind": "tool_call", "tool": "search_knowledge_base", "arguments": {}}]
     assert not clarification.score(_case(clarify=True), [_turn(text="Which?", events=ev)]).passed
 
 

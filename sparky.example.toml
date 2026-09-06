@@ -79,7 +79,7 @@ confirm_from = "external_write"    # lowest risk class held for approval; see be
 
 [tools]
 disabled = []                  # names never registered, whatever their source
-public_search = true           # the built-in retrieval tool
+knowledge_search = true        # the built-in retrieval tool, `search_knowledge_base`
 
 # ---------------------------------------------------------------- MCP servers
 # The environment cannot carry a list of tables, so servers live here. `mcp.playwright_url`

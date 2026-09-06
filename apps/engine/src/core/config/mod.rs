@@ -440,14 +440,14 @@ pub struct Tools {
     /// Tool names never registered, whatever their source.
     pub disabled: Vec<String>,
     /// Register the built-in retrieval tool.
-    pub public_search: bool,
+    pub knowledge_search: bool,
 }
 
 impl Default for Tools {
     fn default() -> Self {
         Self {
             disabled: Vec::new(),
-            public_search: true,
+            knowledge_search: true,
         }
     }
 }

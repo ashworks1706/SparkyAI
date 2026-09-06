@@ -65,7 +65,7 @@ fn tools_and_citations_ride_along_in_the_content() {
         status: RunStatus::Answered,
         steps: 2,
         tool_runs: vec![ToolRun {
-            tool: "public_search".into(),
+            tool: "search_knowledge_base".into(),
             ok: true,
         }],
         usage: Usage::default(),
@@ -75,7 +75,7 @@ fn tools_and_citations_ride_along_in_the_content() {
     let out = transcript(&answer);
 
     assert!(out.starts_with("Open 7am to 2am."));
-    assert!(out.contains("public_search"), "{out}");
+    assert!(out.contains("search_knowledge_base"), "{out}");
     assert!(out.contains("lib.asu.edu/hours"), "{out}");
 }
 
