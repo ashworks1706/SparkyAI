@@ -125,7 +125,7 @@ impl Tool for Slow {
     }
 }
 
-/// Keeps every trace record so tests can inspect the loop.
+/// Keeps every trace record for tests to inspect.
 #[derive(Default)]
 pub struct MemorySink {
     records: Mutex<Vec<TraceRecord>>,
@@ -291,8 +291,7 @@ pub fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
 }
 
-/// Sequential tool: records the order it is called in by sleeping longer for smaller inputs,
-/// so parallel execution would reverse the observed order.
+/// Sequential tool: records call order by sleeping longer for smaller inputs.
 pub struct Ordered(pub RiskClass);
 
 #[async_trait]
@@ -314,7 +313,7 @@ impl Tool for Ordered {
     }
 }
 
-/// Always fails, so the loop has to carry on without it.
+/// Always fails.
 pub struct Boom;
 
 #[async_trait]
@@ -339,14 +338,14 @@ impl Tool for Boom {
     }
 }
 
-/// A `SourceQueries` double: a fixed registry and a canned outcome per source.
+/// A SourceQueries double: a fixed registry and a canned outcome per source.
 pub struct FakeQueries {
     sources: Vec<QuerySourceInfo>,
     answers: std::collections::HashMap<String, Result<QueryOutcome, String>>,
 }
 
 impl FakeQueries {
-    /// Offers `sources` and rejects anything not given an answer.
+    /// Offers sources and rejects anything not given an answer.
     pub fn new(sources: Vec<QuerySourceInfo>) -> Self {
         Self {
             sources,
@@ -354,7 +353,7 @@ impl FakeQueries {
         }
     }
 
-    /// Answers `source` with this page text.
+    /// Answers source with this page text.
     pub fn answering(mut self, source: &str, text: &str) -> Self {
         self.answers.insert(
             source.to_owned(),
@@ -367,7 +366,7 @@ impl FakeQueries {
         self
     }
 
-    /// Rejects `source` with this reason, as the worker would.
+    /// Rejects source with this reason.
     pub fn rejecting(mut self, source: &str, reason: &str) -> Self {
         self.answers
             .insert(source.to_owned(), Err(reason.to_owned()));

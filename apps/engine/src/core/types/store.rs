@@ -1,4 +1,4 @@
-//! `StoreError`, shared by the conversation and memory stores.
+//! StoreError, shared by the conversation and memory stores.
 
 /// Store failures.
 #[derive(Debug, thiserror::Error)]

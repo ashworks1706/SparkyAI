@@ -1,9 +1,9 @@
-//! Server-sent event framing, for the engine's `/chat/stream`.
+//! Server-sent event framing for the engine /chat/stream endpoint.
 
-/// Pulls every complete `event:`/`data:` frame out of `buf`, leaving any partial tail behind.
+/// Pulls every complete event and data frame out of buf, leaving any partial tail behind.
 ///
-/// Returns `(event name, data)` pairs in arrival order. A frame with no `event:` line reports an
-/// empty name, which is what the SSE default (`message`) means here.
+/// Returns (event name, data) pairs in arrival order. A frame with no event line reports an
+/// empty name, the SSE default.
 pub fn drain_frames(buf: &mut String) -> Vec<(String, String)> {
     let mut frames = Vec::new();
     while let Some(end) = buf.find("\n\n") {

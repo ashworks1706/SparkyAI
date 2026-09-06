@@ -1,4 +1,4 @@
-//! `ConversationStore` trait.
+//! ConversationStore trait.
 
 use async_trait::async_trait;
 
@@ -9,9 +9,9 @@ use crate::core::types::store::StoreError;
 /// Durable conversation history, scoped by tenant and conversation.
 #[async_trait]
 pub trait ConversationStore: Send + Sync {
-    /// Ensures the conversation row exists for this request's user.
+    /// Ensures the conversation row exists for the user of this request.
     async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError>;
-    /// Loads the most recent `limit` turns, oldest first.
+    /// Loads the most recent limit turns, oldest first.
     async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError>;
     /// Appends turns in order.
     async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError>;

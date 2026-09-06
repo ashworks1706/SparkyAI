@@ -1,4 +1,4 @@
-"""One module per public ASU source, registered in SOURCES. A source is a row in `sources`."""
+"""One module per public ASU source, registered in SOURCES. A source is a row in sources."""
 
 from __future__ import annotations
 

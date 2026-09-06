@@ -1,4 +1,4 @@
-"""Out-of-scope or unanswerable questions must be declined, not guessed."""
+"""Out-of-scope or unanswerable questions are declined."""
 
 from __future__ import annotations
 

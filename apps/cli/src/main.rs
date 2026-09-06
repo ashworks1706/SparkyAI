@@ -1,4 +1,4 @@
-//! `sparky`: the developer console. Runs every unit in the repo, streams its logs, and probes
+//! The sparky developer console. Runs every unit in the repo, streams its logs, and probes
 //! the engine and its dependencies, from one modal terminal UI.
 
 mod app;
@@ -63,7 +63,7 @@ async fn run(
     terminal.draw(|f| ui::draw(f, app))?;
     while let Some(event) = rx.recv().await {
         app.handle(event);
-        // Drain whatever else is queued so a burst of log lines costs one redraw.
+        // Drain whatever else is queued. A burst of log lines costs one redraw.
         while let Ok(more) = rx.try_recv() {
             app.handle(more);
         }
@@ -92,8 +92,7 @@ async fn keys(tx: mpsc::UnboundedSender<Event>) {
             Ok(TermEvent::Key(k)) if k.kind == KeyEventKind::Press => Event::Key(k),
             Ok(TermEvent::Resize(_, _)) => Event::Resize,
             Ok(_) => continue,
-            // Losing the keyboard leaves a console that redraws but cannot be quit, so say so
-            // and shut down rather than sitting there.
+            // Losing the keyboard shuts the console down.
             Err(e) => Event::InputLost(e.to_string()),
         };
         if tx.send(mapped).is_err() {

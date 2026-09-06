@@ -32,11 +32,11 @@ struct Handler {
     edit_every: Duration,
     /// Longest message posted before a reply is split.
     max_message_chars: usize,
-    /// Shortest gap between one user's questions. Zero removes the limit.
+    /// Shortest gap between the questions of one user. Zero removes the limit.
     cooldown: Duration,
-    /// Role name the engine's policy reads to allow write-side tools.
+    /// Role name the engine policy reads to allow write-side tools.
     write_capability: String,
-    /// Conversation each user is continuing. Lost on restart; `/reset` clears it.
+    /// Conversation each user is continuing. Lost on restart, and cleared by /reset.
     conversations: Mutex<std::collections::HashMap<UserId, Uuid>>,
     /// When each user last asked, for the cooldown.
     last_ask: Mutex<std::collections::HashMap<UserId, Instant>>,
@@ -83,7 +83,7 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
 
 impl Handler {
     /// Role names the member holds, resolved against the guild. A lookup failure is an
-    /// error, not an empty list: permissions must never silently drop.
+    /// error, not an empty list.
     async fn role_names(
         &self,
         ctx: &Context,
@@ -109,8 +109,7 @@ impl Handler {
         self.channels.is_empty() || self.channels.contains(&channel)
     }
 
-    /// Counts one question from `user` and says whether it may run. A turn occupies a model
-    /// slot for as long as it takes, so one impatient user can starve the guild.
+    /// Counts one question from user and says whether it may run.
     async fn within_cooldown(&self, user: UserId) -> bool {
         if self.cooldown.is_zero() {
             return true;
@@ -140,8 +139,8 @@ impl Handler {
         None
     }
 
-    /// Builds the request for one `/ask`, or answers the user and returns `None` when it
-    /// cannot: an empty question, a DM, or roles that would not resolve.
+    /// Builds the request for one /ask, or answers the user and returns None on an empty
+    /// question, a DM, or roles that would not resolve.
     async fn request_for(&self, ctx: &Context, cmd: &CommandInteraction) -> Option<ChatRequest> {
         let question = cmd
             .data
@@ -219,7 +218,7 @@ impl Handler {
         if let Some(note) = note
             && let Err(e) = cmd.delete_followup(&ctx.http, note.id).await
         {
-            // The progress line stays above the answer; say why rather than leaving a mystery.
+            // The progress line stays above the answer and says what happened.
             tracing::warn!(error = %e, "could not clear the progress message");
         }
         let Some(outcome) = outcome else {
@@ -290,7 +289,7 @@ impl Handler {
         while let Some(update) = rx.recv().await {
             match update {
                 Update::Progress(text) => {
-                    // Discord throttles edits, so a burst of steps collapses into one.
+                    // A burst of steps collapses into one edit.
                     if last_edit.is_some_and(|at| at.elapsed() < self.edit_every) {
                         continue;
                     }
@@ -304,8 +303,8 @@ impl Handler {
         (outcome, note)
     }
 
-    /// Shows what the agent is doing, as one message edited in place. Returns it so the next
-    /// step edits the same message and the answer can clear it.
+    /// Shows what the agent is doing, as one message edited in place. Returns the message for
+    /// the next step to edit.
     async fn progress(
         &self,
         ctx: &Context,
@@ -320,7 +319,7 @@ impl Handler {
                 Ok(updated) => Some(updated),
                 Err(e) => {
                     tracing::warn!(error = %e, "progress edit failed");
-                    // Keep the message we have; a fresh one would leave two on screen.
+                    // Keep the message we have.
                     Some(message)
                 }
             }
@@ -356,14 +355,14 @@ impl Handler {
     }
 }
 
-/// Whether a member's own Discord permissions let them ask for write-side tools.
+/// Whether the Discord permissions of a member let them ask for write-side tools.
 pub(crate) fn can_write(permissions: Permissions) -> bool {
     permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
 }
 
-/// Guild role names plus `capability` when the member's own Discord permissions grant it.
-/// A guild role named like the capability is dropped: only the permission bits confer write
-/// access, so a guild cannot mint one by naming a role after it.
+/// Guild role names plus capability when the member Discord permissions grant it.
+/// A guild role named like the capability is dropped. Only the permission bits confer
+/// write access.
 pub(crate) fn authorized_roles(
     names: impl IntoIterator<Item = String>,
     permissions: Option<Permissions>,
@@ -377,8 +376,8 @@ pub(crate) fn authorized_roles(
 }
 
 impl Handler {
-    /// Answers a pressed button. The engine decides whether this caller may: it only accepts
-    /// the one it asked, so a bystander pressing Approve changes nothing.
+    /// Answers a pressed button. The engine only accepts the caller it asked, so a bystander
+    /// pressing Approve changes nothing.
     async fn pressed(&self, ctx: &Context, press: &ComponentInteraction) {
         let Some(id) = components::CustomId::parse(&press.data.custom_id) else {
             tracing::debug!(custom_id = %press.data.custom_id, "component is not ours");
@@ -413,7 +412,7 @@ impl Handler {
                 reply::failure(&e)
             }
         };
-        // The buttons are spent either way; clearing them stops a second press.
+        // The buttons are spent either way. Clearing them stops a second press.
         let edit = EditInteractionResponse::new().components(Vec::new());
         if let Err(e) = press.edit_response(&ctx.http, edit).await {
             tracing::warn!(error = %e, "could not clear the buttons");

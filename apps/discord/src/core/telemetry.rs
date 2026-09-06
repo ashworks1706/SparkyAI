@@ -1,5 +1,5 @@
-//! Logging and `OpenTelemetry` export over OTLP/gRPC to Phoenix (or any OTLP collector).
-//! One span per interaction, sharing the engine's session id so a conversation stitches.
+//! Logging and OpenTelemetry export over OTLP/gRPC to Phoenix or any OTLP collector.
+//! One span per interaction, sharing the engine session id.
 
 use std::time::Duration;
 
@@ -11,10 +11,10 @@ use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::Subscribe
 
 use crate::core::config::Telemetry;
 
-/// Default `service.name` and span-target prefix for this binary.
+/// Default service.name and span-target prefix for this binary.
 const SERVICE: &str = "discord";
 
-/// Keeps the OTLP exporter alive; flushes on drop.
+/// Keeps the OTLP exporter alive. Flushes on drop.
 pub struct Guard {
     otel: Option<SdkTracerProvider>,
 }
@@ -27,7 +27,7 @@ impl Drop for Guard {
     }
 }
 
-/// Installs the global `tracing` subscriber with fmt and optional OTLP layers.
+/// Installs the global tracing subscriber with fmt and optional OTLP layers.
 pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let service = cfg
         .service_name
@@ -49,7 +49,7 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
                 .build()?;
             let provider = SdkTracerProvider::builder()
                 .with_batch_exporter(exporter)
-                // Ratio sampling keeps whole traces: a sampled root carries its children.
+                // Ratio sampling keeps whole traces. A sampled root carries its children.
                 .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
                     cfg.sample_ratio,
                 ))))
@@ -71,8 +71,7 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
     } else {
         tracing_subscriber::fmt::layer().json().boxed()
     };
-    // Export only this crate's spans. Dependencies (serenity's gateway, Rig, tower-http)
-    // instrument themselves too, and that noise would bury the request tree in Phoenix.
+    // Export only the spans of this crate.
     let prefix = cfg
         .span_target_prefix
         .as_deref()

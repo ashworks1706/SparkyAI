@@ -11,8 +11,7 @@ pub mod health;
 pub mod openai;
 pub mod rate_limit;
 
-/// Limits applied to the whole HTTP surface. Built from `[http]`; no `Default`, so the
-/// numbers live in configuration and nowhere else.
+/// Limits applied to the whole HTTP surface. Built from [http]; no Default.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Largest request body accepted, in bytes.
@@ -21,8 +20,8 @@ pub struct Limits {
     pub concurrency: usize,
 }
 
-/// Cross-origin policy. `origins` holding a single `*` allows any origin, which is what the
-/// Vite dev server needs; an empty list adds no CORS headers at all.
+/// Cross-origin policy. An origins list holding a single * allows any origin; an empty list
+/// adds no CORS headers.
 pub fn cors(origins: &[String]) -> Option<CorsLayer> {
     if origins.is_empty() {
         return None;

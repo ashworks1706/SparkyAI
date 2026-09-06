@@ -1,9 +1,8 @@
 //! Configuration. Every external service and every harness knob is configured here and
 //! nowhere else.
 //!
-//! Two layers, lowest first: an optional TOML file (`sparky.toml`, or `SPARKY_CONFIG_FILE`)
-//! and `SPARKY_*` environment variables. Env always wins, so secrets stay out of the file and
-//! lists and nested tables — MCP servers above all — stay out of the environment.
+//! Two layers, lowest first: an optional TOML file (sparky.toml, or SPARKY_CONFIG_FILE)
+//! and SPARKY_* environment variables. Env values win over file values.
 
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
@@ -15,10 +14,10 @@ use crate::core::types::agent::AgentConfig;
 use crate::core::types::assemble::{self, Budget};
 use crate::core::types::tool::RiskClass;
 
-/// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
+/// TOML layer read when SPARKY_CONFIG_FILE is unset. Missing is not an error.
 pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
 
-/// Root configuration, loaded from a TOML file and `SPARKY_*` environment variables.
+/// Root configuration, loaded from a TOML file and SPARKY_* environment variables.
 #[derive(Debug, Deserialize)]
 pub struct Config {
     /// Process-level settings.
@@ -29,11 +28,11 @@ pub struct Config {
     pub discord: Discord,
     /// Chat model endpoint.
     pub model: Model,
-    /// `PostgreSQL`, the source of truth and the retrieval index.
+    /// PostgreSQL, the source of truth and the retrieval index.
     pub postgres: Postgres,
     /// Embedding endpoint, used to embed queries at retrieval time.
     pub embedding: Embedding,
-    /// `OpenTelemetry` export.
+    /// OpenTelemetry export.
     #[serde(default)]
     pub telemetry: Telemetry,
     /// Loop limits and prompt budgets.
@@ -68,18 +67,18 @@ pub struct Config {
 /// Process-level settings.
 #[derive(Debug, Deserialize)]
 pub struct App {
-    /// `development`, `staging`, or `production`.
+    /// development, staging, or production.
     pub env: String,
     /// Bind address for the HTTP server.
     pub http_addr: String,
-    /// `tracing` filter directive, e.g. `info,sparky=debug`.
+    /// tracing filter directive, e.g. info,sparky=debug.
     pub log_level: String,
 }
 
 /// Client authentication.
 #[derive(Debug, Deserialize)]
 pub struct Engine {
-    /// Bearer token every `/chat` caller must present.
+    /// Bearer token every /chat caller must present.
     pub service_token: SecretString,
 }
 
@@ -90,8 +89,8 @@ pub struct Discord {
     pub guild_id: u64,
 }
 
-/// Provider sampling parameters. Every field is optional; only what is set is sent, so the
-/// server's own defaults apply to the rest.
+/// Provider sampling parameters. Every field is optional; only what is set is sent. The server
+/// defaults apply to the rest.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Sampling {
@@ -99,15 +98,15 @@ pub struct Sampling {
     pub top_p: Option<f64>,
     /// Keep only the k most likely tokens.
     pub top_k: Option<u32>,
-    /// Drop tokens below this fraction of the top token's probability.
+    /// Drop tokens below this fraction of the probability of the top token.
     pub min_p: Option<f64>,
     /// Penalty applied to tokens already in the context.
     pub repeat_penalty: Option<f64>,
-    /// `OpenAI`-style presence penalty.
+    /// OpenAI-style presence penalty.
     pub presence_penalty: Option<f64>,
-    /// `OpenAI`-style frequency penalty.
+    /// OpenAI-style frequency penalty.
     pub frequency_penalty: Option<f64>,
-    /// Fixes sampling, so a run reproduces. Set it for eval.
+    /// Fixes sampling. Set it for eval.
     pub seed: Option<u64>,
     /// Stop sequences.
     pub stop: Vec<String>,
@@ -164,10 +163,10 @@ impl Sampling {
     }
 }
 
-/// Chat model served by `llama-server` (OpenAI-compatible).
+/// Chat model served by llama-server (OpenAI-compatible).
 #[derive(Debug, Deserialize)]
 pub struct Model {
-    /// OpenAI-compatible base URL, ending in `/v1`.
+    /// OpenAI-compatible base URL, ending in /v1.
     pub base_url: String,
     /// API key for the endpoint.
     pub api_key: SecretString,
@@ -181,22 +180,22 @@ pub struct Model {
     /// USD per million completion tokens; zero for local serving.
     #[serde(default)]
     pub usd_per_m_completion: f64,
-    /// Let Qwen3-style models emit reasoning before answering. Off by default: reasoning is
-    /// dropped from the answer and burns the completion budget on small contexts.
+    /// Let Qwen3-style models emit reasoning before answering. Off by default; the reasoning is
+    /// dropped from the answer.
     #[serde(default)]
     pub thinking: bool,
     /// Sampling parameters sent with every completion.
     #[serde(default)]
     pub sampling: Sampling,
-    /// A JSON object merged into the provider request, for anything `sampling` does not name.
-    /// Set keys win over `sampling`.
+    /// A JSON object merged into the provider request, for anything sampling does not name.
+    /// Set keys win over sampling.
     #[serde(default)]
     pub extra_params_json: Option<String>,
 }
 
 impl Model {
-    /// Provider-specific request fields: the chat template switch, `sampling`, then
-    /// `extra_params_json` on top.
+    /// Provider-specific request fields: the chat template switch, sampling, then
+    /// extra_params_json on top.
     pub fn additional_params(&self) -> Result<Value, ConfigError> {
         let mut map = self.sampling.to_json();
         map.insert(
@@ -229,17 +228,17 @@ pub struct Mcp {
     /// Servers to connect to at boot. Expressed in the TOML layer; the environment cannot
     /// carry a list of tables.
     pub servers: Vec<McpServer>,
-    /// Default for a server that does not set `required_props_only`.
+    /// Default for a server that does not set required_props_only.
     pub required_props_only: bool,
-    /// Longest tool result handed back to the model; page snapshots can be enormous.
+    /// Longest tool result handed back to the model.
     pub max_output_chars: usize,
     /// Longest per-property description kept in a tool schema.
     pub max_schema_description_chars: usize,
     /// Longest tool description kept.
     pub max_tool_description_chars: usize,
-    /// Legacy single-server form, folded into `servers` as `playwright`. Prefer `servers`.
+    /// Legacy single-server form, folded into servers as playwright. Prefer servers.
     pub playwright_url: Option<String>,
-    /// Tools exposed by the legacy `playwright_url` server.
+    /// Tools exposed by the legacy playwright_url server.
     pub playwright_tools: Vec<String>,
 }
 
@@ -248,21 +247,21 @@ pub struct Mcp {
 pub struct McpServer {
     /// Name used in logs and errors.
     pub name: String,
-    /// Streamable-HTTP endpoint, e.g. `http://localhost:8931/mcp`.
+    /// Streamable-HTTP endpoint, e.g. http://localhost:8931/mcp.
     pub url: String,
     /// Remote tool names to expose; empty exposes every tool the server lists.
     #[serde(default)]
     pub tools: Vec<String>,
-    /// Overrides `mcp.required_props_only` for this server.
+    /// Overrides mcp.required_props_only for this server.
     #[serde(default)]
     pub required_props_only: Option<bool>,
-    /// Overrides `agent.tool_timeout_secs` for this server's tools.
+    /// Overrides agent.tool_timeout_secs for the tools of this server.
     #[serde(default)]
     pub tool_timeout_secs: Option<u64>,
 }
 
 impl Mcp {
-    /// Configured servers, with the legacy `playwright_url` folded in and empty URLs dropped.
+    /// Configured servers, with the legacy playwright_url folded in and empty URLs dropped.
     pub fn resolved_servers(&self) -> Vec<McpServer> {
         let mut out: Vec<McpServer> = self
             .servers
@@ -298,7 +297,7 @@ impl Default for Mcp {
             max_schema_description_chars: 80,
             max_tool_description_chars: 160,
             playwright_url: None,
-            // Enough to browse and read; every schema costs context on every step.
+            // Enough to browse and read.
             playwright_tools: [
                 "browser_navigate",
                 "browser_navigate_back",
@@ -314,7 +313,7 @@ impl Default for Mcp {
     }
 }
 
-/// Agent loop limits. Every field has a default so a bare `.env` still boots.
+/// Agent loop limits. Every field has a default so a bare .env still boots.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Agent {
@@ -326,9 +325,9 @@ pub struct Agent {
     pub request_timeout_secs: u64,
     /// Budget per tool call, unless the tool declares its own.
     pub tool_timeout_secs: u64,
-    /// How long a held action waits for its caller's approval.
+    /// How long a held action waits for caller approval.
     pub confirmation_ttl_secs: u64,
-    /// Model calls in flight at once. Match `llama-server --parallel`. 0 removes the limit.
+    /// Model calls in flight at once. Match llama-server --parallel. 0 removes the limit.
     pub model_slots: usize,
     /// How long a request waits for a free model slot before reporting the model busy.
     pub model_queue_wait_secs: u64,
@@ -346,8 +345,7 @@ pub struct Agent {
     pub history_budget_tokens: usize,
     /// Cap on the memory section.
     pub memory_budget_tokens: usize,
-    /// Characters per token the budget estimator assumes. Lower it for a tokenizer that
-    /// splits ASU jargon and URLs finely.
+    /// Characters per token the budget estimator assumes.
     pub chars_per_token: usize,
     /// First retry wait, doubled per attempt.
     pub retry_base_ms: u64,
@@ -382,18 +380,17 @@ impl Default for Agent {
     }
 }
 
-/// The text the harness writes around every prompt. Changing any of it changes the prompt
-/// hash, so a trace says which wording produced an answer.
+/// The text the harness writes around every prompt. Changing any of it changes the prompt hash.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Prompt {
-    /// System instructions. Overrides the built-in default; overridden by `system_file`.
+    /// System instructions. Overrides the built-in default; overridden by system_file.
     pub system: Option<String>,
     /// Path to a file holding the system instructions. Read once at boot.
     pub system_file: Option<String>,
-    /// Line naming the user, with `{user}` and `{roles}`.
+    /// Line naming the user, with {user} and {roles}.
     pub role_line: String,
-    /// Line naming a user who holds no roles, with `{user}`.
+    /// Line naming a user who holds no roles, with {user}.
     pub role_line_no_roles: String,
     /// Heading above recalled memories.
     pub memory_header: String,
@@ -418,9 +415,9 @@ impl Default for Prompt {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Policy {
-    /// Roles allowed to run `external_write` and above. Empty denies everyone.
+    /// Roles allowed to run external_write and above. Empty denies everyone.
     pub write_roles: Vec<String>,
-    /// Let tools read inside the user's own authenticated session.
+    /// Let tools read inside the authenticated session of the user.
     pub allow_authenticated_reads: bool,
     /// Lowest risk class that must be confirmed before it runs.
     pub confirm_from: RiskClass,
@@ -448,13 +445,11 @@ pub struct Tools {
     pub query_source: bool,
 }
 
-/// How a live source query runs. `[tools]` decides whether it is offered at all; this decides
-/// how it behaves once it is.
+/// How a live source query runs. [tools] decides whether it is offered at all.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Query {
-    /// Budget for one live query, end to end. A live fetch is far slower than a database read,
-    /// so this overrides `agent.tool_timeout_secs` for this tool.
+    /// Budget for one live query, end to end. Overrides agent.tool_timeout_secs for this tool.
     pub timeout_secs: u64,
     /// How often the engine checks whether the worker has answered.
     pub poll_ms: u64,
@@ -485,11 +480,11 @@ impl Default for Tools {
 pub struct Retrieval {
     /// Evidence chunks handed to the prompt per request.
     pub top_k: usize,
-    /// Candidates pulled from each leg before fusion. Raise it for recall, at query cost.
+    /// Candidates pulled from each leg before fusion.
     pub candidates: i64,
     /// Reciprocal rank fusion constant. Lower trusts the top of each list more.
     pub rrf_k: f32,
-    /// `PostgreSQL` text search configuration for the lexical leg.
+    /// PostgreSQL text search configuration for the lexical leg.
     pub text_search_config: String,
     /// Run the pgvector leg.
     pub dense: bool,
@@ -513,7 +508,7 @@ impl Default for Retrieval {
     }
 }
 
-/// JSONL trace recording. One file per request under `dir`.
+/// JSONL trace recording. One file per request under dir.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Trace {
@@ -521,7 +516,7 @@ pub struct Trace {
     pub enabled: bool,
     /// Directory for JSONL traces.
     pub dir: String,
-    /// Stop writing a request's trace past this many bytes. 0 removes the limit.
+    /// Stop writing the trace of a request past this many bytes. 0 removes the limit.
     pub max_file_bytes: u64,
     /// Delete traces older than this at boot. 0 keeps them forever.
     pub retention_hours: u64,
@@ -548,8 +543,8 @@ pub struct Http {
     pub concurrency_limit: usize,
     /// Requests one user may start per minute. 0 removes the limit.
     pub rate_limit_per_min: u32,
-    /// Origins allowed to call the engine from a browser. A single `*` allows any; empty adds
-    /// no CORS headers, which is right when only the bot calls the engine.
+    /// Origins allowed to call the engine from a browser. A single * allows any; empty adds
+    /// no CORS headers.
     pub cors_origins: Vec<String>,
     /// How long in-flight requests get to finish after a shutdown signal.
     pub shutdown_grace_secs: u64,
@@ -567,10 +562,10 @@ impl Default for Http {
     }
 }
 
-/// `PostgreSQL` connection.
+/// PostgreSQL connection.
 #[derive(Debug, Deserialize)]
 pub struct Postgres {
-    /// `libpq` connection URL.
+    /// libpq connection URL.
     pub url: SecretString,
     /// Maximum pooled connections.
     #[serde(default = "default_max_connections")]
@@ -591,13 +586,13 @@ fn default_acquire_timeout_secs() -> u64 {
 /// Embedding endpoint (OpenAI-compatible).
 #[derive(Debug, Deserialize)]
 pub struct Embedding {
-    /// Base URL, ending in `/v1`.
+    /// Base URL, ending in /v1.
     pub base_url: String,
     /// API key for the endpoint.
     pub api_key: SecretString,
     /// Model name as served.
     pub name: String,
-    /// Vector dimension; must match the `chunks.embedding` column.
+    /// Vector dimension; must match the chunks.embedding column.
     pub dim: u32,
 }
 
@@ -607,14 +602,14 @@ pub struct Embedding {
 pub struct Telemetry {
     /// OTLP/gRPC endpoint. Phoenix locally; unset or empty disables trace export.
     pub otlp_endpoint: Option<String>,
-    /// `service.name` on exported spans. Defaults to the binary's own name.
+    /// service.name on exported spans. Defaults to the name of the binary.
     pub service_name: Option<String>,
     /// Fraction of traces exported, 0.0 to 1.0.
     pub sample_ratio: f64,
     /// Budget for one export batch.
     pub export_timeout_secs: u64,
-    /// Only spans whose target starts with this are exported. Defaults to the binary's name,
-    /// which keeps dependency spans out of Phoenix.
+    /// Only spans whose target starts with this are exported. Defaults to the name of the
+    /// binary.
     pub span_target_prefix: Option<String>,
 }
 
@@ -643,16 +638,14 @@ impl Agent {
     }
 }
 
-/// Declared here rather than beside the type so the numbers exist once. Every field comes
-/// from `[agent]`; the model-owned ones stand in for a `[model]` section that has no defaults
-/// of its own, since a deployment must name its own endpoint.
+/// Default budgets. Every field comes from [agent].
 impl Default for Budget {
     fn default() -> Self {
         Agent::default().budget()
     }
 }
 
-/// Declared here for the same reason as `Budget`: `[agent]` is where these values live.
+/// Default loop settings. Every field comes from [agent].
 impl Default for AgentConfig {
     fn default() -> Self {
         let agent = Agent::default();
@@ -669,8 +662,7 @@ impl Default for AgentConfig {
             max_span_value_chars: agent.max_span_value_chars,
             retrieval_top_k: Retrieval::default().top_k,
             budget: agent.budget(),
-            // `[model]` has no defaults — a deployment names its own endpoint — so these are
-            // the only values here not read from a settings struct.
+            // [model] has no defaults; these values are not read from a settings struct.
             max_tokens: 1024,
             usd_per_m_prompt: 0.0,
             usd_per_m_completion: 0.0,
@@ -691,21 +683,20 @@ pub enum ConfigError {
 
 /// Settings that moved to another section.
 ///
-/// Nothing rejects an unknown `SPARKY_*` variable — the apps share one `.env`, so the engine
-/// sees the scraper's keys and vice versa. That makes a stale key indistinguishable from a
-/// foreign one, and a deployment would keep running with a setting it thought it had changed.
-/// These are named, so moving one is a boot failure that says where it went.
+/// An unknown SPARKY_* variable is not rejected: the apps share one .env, so the engine sees
+/// the scraper keys and the scraper sees the engine keys. A variable named here is a boot
+/// failure that reports where it went.
 const RENAMED: [(&str, &str); 2] = [
     ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
     ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
 ];
 
 impl Config {
-    /// Fails on a variable that has moved, naming what replaced it. `is_set` reports whether
-    /// a variable is present, so this is testable without touching the process environment.
+    /// Fails on a variable that has moved, naming what replaced it. is_set reports whether a
+    /// variable is present.
     ///
     /// # Errors
-    /// Returns [`ConfigError::Invalid`] when a renamed variable is still set.
+    /// Returns [ConfigError::Invalid] when a renamed variable is still set.
     pub fn reject_renamed(is_set: impl Fn(&str) -> bool) -> Result<(), ConfigError> {
         match RENAMED.into_iter().find(|(old, _)| is_set(old)) {
             Some((old, new)) => Err(ConfigError::Invalid(format!(
@@ -715,8 +706,8 @@ impl Config {
         }
     }
 
-    /// Loads the TOML layer then `SPARKY_*` variables, `__` separating nesting:
-    /// `SPARKY_POSTGRES__URL`. Environment values win over the file.
+    /// Loads the TOML layer then SPARKY_* variables, __ separating nesting:
+    /// SPARKY_POSTGRES__URL. Environment values win over the file.
     pub fn load() -> Result<Self, ConfigError> {
         Self::reject_renamed(|key| std::env::var_os(key).is_some())?;
         let path =
@@ -784,8 +775,8 @@ impl Config {
                 ));
             }
         }
-        // The prompt itself is never trimmed, so a section budget above the total is a
-        // configuration error rather than something assembly quietly ignores.
+        // A section budget above the total is a configuration error; the prompt is never
+        // trimmed.
         for (name, value) in [
             ("evidence", self.agent.evidence_budget_tokens),
             ("history", self.agent.history_budget_tokens),
@@ -801,7 +792,7 @@ impl Config {
         Ok(())
     }
 
-    /// System instructions: `prompt.system_file`, else `prompt.system`, else `fallback`.
+    /// System instructions: prompt.system_file, else prompt.system, else fallback.
     pub fn system_prompt(&self, fallback: &str) -> Result<String, ConfigError> {
         if let Some(path) = self
             .prompt

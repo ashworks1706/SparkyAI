@@ -1,5 +1,5 @@
 """OpenTelemetry export over OTLP/gRPC to Phoenix (or any OTLP collector). One span per source
-run, with OpenInference attributes so it reads like the engine's spans. Empty endpoint disables."""
+run, with OpenInference attributes. An empty endpoint disables export."""
 
 from __future__ import annotations
 

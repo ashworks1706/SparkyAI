@@ -1,4 +1,4 @@
-//! `ConfirmationStore` trait.
+//! ConfirmationStore trait.
 
 use std::time::Duration;
 
@@ -9,10 +9,10 @@ use crate::core::types::context::RequestContext;
 use crate::core::types::policy::PendingAction;
 use crate::core::types::store::StoreError;
 
-/// Holds actions waiting on their caller's approval.
+/// Holds actions waiting on caller approval.
 #[async_trait]
 pub trait ConfirmationStore: Send + Sync {
-    /// Holds `pending` under `token` until the caller answers or `ttl` passes.
+    /// Holds pending under token until the caller answers or ttl passes.
     async fn hold(
         &self,
         ctx: &RequestContext,
@@ -22,10 +22,10 @@ pub trait ConfirmationStore: Send + Sync {
         ttl: Duration,
     ) -> Result<(), StoreError>;
 
-    /// Answers a held confirmation and returns what to run, or `None` when the token is not
-    /// this caller's, has already been answered, or has expired.
+    /// Answers a held confirmation and returns what to run, or None when the token belongs to
+    /// another caller, has already been answered, or has expired.
     ///
-    /// Implementations resolve in one statement so a token cannot be claimed twice.
+    /// Implementations resolve in one statement; a token cannot be claimed twice.
     async fn claim(
         &self,
         ctx: &RequestContext,

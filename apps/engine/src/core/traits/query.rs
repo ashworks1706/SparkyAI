@@ -1,4 +1,4 @@
-//! `SourceQueries` trait: the registry of live query sources and the queue that runs them.
+//! SourceQueries trait: the registry of live query sources and the queue that runs them.
 
 use async_trait::async_trait;
 
@@ -14,7 +14,7 @@ pub trait SourceQueries: Send + Sync {
     /// Sources currently offered. Read once at boot to build the tool.
     async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError>;
 
-    /// Queues `request` and waits for the worker's answer, or fails inside the request's budget.
+    /// Queues request and waits for the worker answer, or fails inside the request budget.
     async fn run(
         &self,
         ctx: &RequestContext,

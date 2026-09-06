@@ -1,4 +1,4 @@
-//! Console state and the key map. Rendering is in `ui`; processes are in `runner`.
+//! Console state and the key map. Rendering is in ui, processes are in runner.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,7 +31,7 @@ pub struct UnitState {
     pub started_at: Option<Instant>,
     /// Start again once the current instance has exited.
     restart_pending: bool,
-    /// The console asked it to stop; the exit that follows is not a failure.
+    /// The console asked it to stop. The exit that follows is not a failure.
     stopping: bool,
 }
 
@@ -42,13 +42,13 @@ pub struct App {
     log_writer: LogWriter,
     /// Units in sidebar order.
     pub units: Vec<UnitState>,
-    /// Index into `units`.
+    /// Index into units.
     pub selected: usize,
     /// Input mode.
     pub mode: Mode,
     /// Pane keys act on.
     pub focus: Focus,
-    /// The `:` or `/` line being typed.
+    /// The command or search line being typed.
     pub input: String,
     /// Active log search.
     pub search: String,
@@ -60,16 +60,16 @@ pub struct App {
     pub help: bool,
     /// One-line notice in the status bar.
     pub notice: Option<String>,
-    /// Rows the log pane had at the last draw; drives paging.
+    /// Rows the log pane had at the last draw. Drives paging.
     pub log_rows: usize,
-    /// Set by `:q` and `q`.
+    /// Set by the quit command and the q key.
     pub should_quit: bool,
-    /// First half of a two-key chord such as `gg`.
+    /// First half of a two-key chord such as gg.
     pending_key: Option<char>,
 }
 
 impl App {
-    /// A console over the repo at `root`.
+    /// A console over the repo at root.
     pub fn new(cfg: Config, root: PathBuf, tx: &UnboundedSender<Event>) -> anyhow::Result<Self> {
         let log_dir = if cfg.cli.log_dir.is_absolute() {
             cfg.cli.log_dir.clone()
@@ -342,7 +342,7 @@ impl App {
         };
     }
 
-    /// Follows a running service's container logs when it is selected.
+    /// Follows the container logs of a running service when it is selected.
     fn on_select(&mut self) {
         self.search_hit = None;
         let u = self.current();
@@ -536,7 +536,7 @@ impl UnitState {
     }
 }
 
-/// Parses the text typed after `:`.
+/// Parses the text typed after a colon.
 pub fn parse_command(text: &str) -> Command {
     let mut words = text.split_whitespace();
     let Some(head) = words.next() else {

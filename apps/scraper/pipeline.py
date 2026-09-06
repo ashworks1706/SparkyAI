@@ -1,4 +1,4 @@
-"""fetch → hash → snapshot → extract → chunk → embed → index. One run per source."""
+"""Fetch, hash, snapshot, extract, chunk, embed, index. One run per source."""
 
 from __future__ import annotations
 
@@ -67,13 +67,12 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             overlap_chars=cfg.scraper.chunk_overlap_chars,
         )
         if not pieces:
-            # replace_chunks deletes before it inserts, so writing nothing here would drop the
-            # source's whole index and report success.
+            # replace_chunks deletes before it inserts.
             raise PipelineError(
                 f"{source.key}: extraction produced no text from {len(fetched.body)} bytes; "
                 "refusing to replace the index with nothing"
             )
-        # The title prefix gives each embedding the page context a lone paragraph lacks.
+        # Each embedded text is prefixed with the page title.
         texts = [f"{title}\n{p}" for p in pieces]
         vectors = embed.embed_texts(texts)
 

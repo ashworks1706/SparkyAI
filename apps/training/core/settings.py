@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
-    # The engine rejects every /chat call without this; see apps/engine routes::chat::authorized.
+    # The engine rejects every /chat call without this. See apps/engine routes::chat::authorized.
     engine_service_token: SecretStr = SecretStr("")
     phoenix_url: str = "http://localhost:6006"
     state_dir: Path = Path("../../.sparky")

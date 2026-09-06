@@ -75,7 +75,7 @@ def test_verify_drops_bad_and_duplicate_examples():
 
 
 def test_redaction_reaches_tool_call_arguments():
-    """Arguments carry whatever the user said; unredacted they land in the training set."""
+    """Redaction rewrites the string values inside tool call arguments."""
     from training.core.types import Message
     from training.datasets.redact import redact_message
 

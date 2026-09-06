@@ -1,7 +1,7 @@
 """SFT with Unsloth QLoRA on the verified examples, then GGUF export.
 
-Everything heavy is imported inside `train` so `--dry-run` works without a GPU or the
-`train` extra: it validates the config and the dataset and reports what a run would do.
+Heavy imports live inside train. --dry-run validates the config and the dataset and reports
+what a run would do, without a GPU or the train extra.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def plan(config_path: Path) -> SftPlan:
 
 
 def train(config_path: Path) -> Path:
-    """Runs SFT and returns the exported GGUF path. Needs the `train` extra and a GPU."""
+    """Runs SFT and returns the exported GGUF path. Needs the train extra and a GPU."""
     cfg = load_config(config_path)
     examples = load_examples(cfg.dataset)
     try:

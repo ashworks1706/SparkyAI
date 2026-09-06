@@ -1,6 +1,5 @@
-//! MCP servers as tools. Each remote tool becomes a `Tool` with a `RiskClass` derived from its
-//! name, so `Policy` gates it like any built-in. Today this serves Playwright MCP; Phase 7 puts
-//! the browser behind per-user contexts and tightens the risk mapping.
+//! MCP servers as tools. Each remote tool becomes a Tool with a RiskClass derived from its
+//! name, and Policy gates it like any built-in. This serves Playwright MCP.
 
 use std::sync::Arc;
 
@@ -15,19 +14,19 @@ use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
-/// Limits applied to one MCP server's tools. Schemas and results count against the context
-/// window on every step, so every one of these is a setting.
+/// Limits applied to the tools of one MCP server. Schemas and results count against the
+/// context window on every step.
 #[derive(Debug, Clone)]
 pub struct McpLimits {
-    /// Longest tool result handed back to the model; page snapshots can be enormous.
+    /// Longest tool result handed back to the model.
     pub max_output_chars: usize,
     /// Longest per-property description kept in a schema.
     pub max_schema_description_chars: usize,
     /// Longest tool description kept.
     pub max_tool_description_chars: usize,
-    /// Show the model only each tool's required properties.
+    /// Show the model only the required properties of each tool.
     pub required_props_only: bool,
-    /// Per-tool timeout for this server, overriding the agent's default.
+    /// Per-tool timeout for this server, overriding the default of the agent.
     pub tool_timeout_secs: Option<u64>,
 }
 
@@ -38,7 +37,7 @@ impl Default for McpLimits {
 }
 
 impl From<&crate::core::config::Mcp> for McpLimits {
-    /// Server-level limits, before a server's own overrides.
+    /// Server-level limits, before the overrides of a single server.
     fn from(cfg: &crate::core::config::Mcp) -> Self {
         Self {
             max_output_chars: cfg.max_output_chars,
@@ -50,9 +49,7 @@ impl From<&crate::core::config::Mcp> for McpLimits {
     }
 }
 
-/// Keeps only the `required` properties of an object schema. Small models tend to fill every
-/// optional field they are shown, which on browser tools means wrong targets and snapshots
-/// written to files instead of returned.
+/// Keeps only the required properties of an object schema.
 pub fn required_only(value: Value) -> Value {
     let Value::Object(mut map) = value else {
         return value;
@@ -73,7 +70,7 @@ pub fn required_only(value: Value) -> Value {
     Value::Object(map)
 }
 
-/// Drops schema noise the model does not need: long descriptions, titles, examples, `$schema`.
+/// Drops schema noise the model does not need: long descriptions, titles, examples, $schema.
 pub fn compact_schema(value: Value, max_description: usize) -> Value {
     match value {
         Value::Object(map) => Value::Object(
@@ -108,8 +105,8 @@ pub struct McpTool {
     max_output_chars: usize,
 }
 
-/// Risk by name. Reads and inspection run; interactions are drafts; anything that submits or
-/// is unrecognised must be confirmed.
+/// Risk by name. Reads and inspection run, interactions are drafts, and anything that submits
+/// or is unrecognised must be confirmed.
 pub fn risk_for(name: &str) -> RiskClass {
     /// Look at the page without changing it.
     const READS: [&str; 10] = [
@@ -126,9 +123,7 @@ pub fn risk_for(name: &str) -> RiskClass {
     ];
     /// Change what the page holds without committing it. Reversible by navigating away.
     const DRAFTS: [&str; 5] = ["type", "fill_form", "select_option", "hover", "drag"];
-    /// Can commit the page or run code in it. Playwright MCP ships no tool with "submit" in
-    /// its name — a form is submitted by clicking a button or pressing Enter — so these are
-    /// listed by name rather than inferred.
+    /// Can commit the page or run code in it. Listed by name.
     const COMMITS: [&str; 6] = [
         "submit",
         "click",
@@ -146,15 +141,14 @@ pub fn risk_for(name: &str) -> RiskClass {
     if READS.iter().any(|k| name.contains(k)) {
         return RiskClass::ReadPublic;
     }
-    // An unrecognised tool is treated as consequential until someone classifies it.
+    // An unrecognised tool is treated as consequential until it is classified.
     RiskClass::ExternalWrite
 }
 
 /// Replaces a snapshot the server saved to its own filesystem with the way to read the page.
 ///
-/// `browser_navigate` answers with `### Snapshot` followed by a link to a file inside the MCP
-/// container. The engine cannot open it, and the heading reads as though the page came back, so
-/// the model carries on without ever seeing it.
+/// browser_navigate answers with a Snapshot heading followed by a link to a file inside the MCP
+/// container, which the engine cannot open.
 pub fn usable_output(text: String) -> String {
     const SAVED: &str = "[Snapshot](.playwright-mcp/";
     if !text.contains(SAVED) {
@@ -170,8 +164,8 @@ pub fn usable_output(text: String) -> String {
     )
 }
 
-/// Connects to a Streamable-HTTP MCP server and wraps its tools. `allow` limits which remote
-/// tools are exposed; empty means all. The connection lives as long as the process.
+/// Connects to a Streamable-HTTP MCP server and wraps its tools. allow limits which remote
+/// tools are exposed, and empty means all. The connection lives as long as the process.
 pub async fn connect(
     url: &str,
     allow: &[String],

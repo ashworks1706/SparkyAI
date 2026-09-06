@@ -4,11 +4,11 @@ use std::fmt::Write;
 
 use crate::core::types::{ChatResponse, EngineError};
 
-/// Discord's hard limit on message content. `bot.max_message_chars` may go below it, never
+/// The Discord hard limit on message content. bot.max_message_chars may go below it, never
 /// above.
 pub const MAX_MESSAGE: usize = 2_000;
 
-/// Splits `text` into messages of at most `limit` bytes on line, then space, boundaries.
+/// Splits text into messages of at most limit bytes on line, then space, boundaries.
 pub fn chunk(text: &str, limit: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = text.trim();
@@ -33,7 +33,7 @@ pub fn chunk(text: &str, limit: usize) -> Vec<String> {
     out
 }
 
-/// What to say when the engine call failed. Capacity is temporary and self-clearing; anything
+/// What to say when the engine call failed. Capacity is temporary and self-clearing. Anything
 /// else is an outage.
 pub fn failure(e: &EngineError) -> String {
     match e {

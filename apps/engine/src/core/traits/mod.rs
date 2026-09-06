@@ -1,5 +1,5 @@
-//! The interfaces every adapter implements. Types are in `core::types`; implementations live
-//! in `agent::harness`, `agent::model`, `agent::tools`, and `stores`.
+//! The interfaces every adapter implements. Types are in core::types; implementations live
+//! in agent::harness, agent::model, agent::tools, and stores.
 
 pub mod confirmation;
 pub mod conversation;

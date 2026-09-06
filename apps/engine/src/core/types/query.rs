@@ -1,8 +1,7 @@
-//! `QuerySourceInfo`, `QueryRequest`, `QueryOutcome`: live parameterized source queries.
+//! QuerySourceInfo, QueryRequest, QueryOutcome: live parameterized source queries.
 //!
-//! A query source is a page the scraper fetches on demand with parameters the model supplies,
-//! for questions the index cannot answer: a space too large to enumerate, like every term of
-//! the class catalog. What comes back answers one caller and is never retrieval evidence.
+//! A query source is a page the scraper fetches on demand with parameters the model supplies.
+//! What comes back answers one caller and is never retrieval evidence.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +15,7 @@ pub struct QueryParam {
     /// Whether the query fails without it.
     #[serde(default)]
     pub required: bool,
-    /// A value that works, when one helps.
+    /// An example value.
     #[serde(default)]
     pub example: Option<String>,
 }
@@ -46,7 +45,7 @@ pub struct QueryRequest {
 pub struct QueryOutcome {
     /// The source that answered.
     pub source: String,
-    /// The URL actually fetched, so an answer can cite where it came from.
+    /// The URL actually fetched.
     pub url: String,
     /// Readable text of the page.
     pub text: String,
@@ -59,7 +58,7 @@ pub enum QueryError {
     #[error("query queue: {0}")]
     Store(String),
     /// The worker rejected it: an unknown source, a missing parameter, an unreadable page.
-    /// The reason goes back to the model, which can correct itself.
+    /// The reason goes back to the model.
     #[error("{0}")]
     Rejected(String),
     /// No worker answered inside the budget.

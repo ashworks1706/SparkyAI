@@ -1,4 +1,4 @@
-"""HTML → normalized text."""
+"""HTML to normalized text."""
 
 from __future__ import annotations
 

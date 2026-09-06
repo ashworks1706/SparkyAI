@@ -108,8 +108,8 @@ fn history_never_starts_with_a_tool_result() {
 
 #[test]
 fn a_resumed_run_appends_no_input_of_its_own() {
-    // Resuming after an approval has no new user turn: the question and the tool call it
-    // produced are already in history, and the tool result is the next thing to say.
+    // Resuming after an approval has no new user turn: the question and the tool call are
+    // already in history, and the tool result comes next.
     let history = vec![
         Message::user("ban that spammer"),
         Message::assistant("working on it"),
@@ -177,8 +177,8 @@ fn the_wording_around_every_section_comes_from_configuration() {
 
 #[test]
 fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
-    // Two characters per token is the pessimistic end: the same prompt is priced at roughly
-    // twice as many tokens, so less evidence survives the same budget.
+    // Two characters per token prices the same prompt at roughly twice as many tokens, and
+    // less evidence survives the same budget.
     let ev = evidence(20);
     let count = |chars_per_token: usize| {
         assemble(

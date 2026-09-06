@@ -1,4 +1,4 @@
-"""Did the engine call the tool the case expects (and nothing riskier)?"""
+"""Scores whether the engine called the tool the case expects."""
 
 from __future__ import annotations
 

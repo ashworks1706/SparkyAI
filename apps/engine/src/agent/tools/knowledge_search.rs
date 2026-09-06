@@ -1,4 +1,4 @@
-//! `ReadPublic`: search the indexed knowledge base through `Retriever`.
+//! ReadPublic: search the indexed knowledge base through Retriever.
 
 use std::fmt::Write;
 use std::sync::Arc;
@@ -13,14 +13,14 @@ use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::core::types::wire::SearchArgs;
 
-/// Lets the model run a targeted search when the up-front retrieval was not enough.
+/// Runs a targeted search over the indexed knowledge base.
 pub struct KnowledgeSearch {
     retriever: Arc<dyn Retriever>,
     top_k: usize,
 }
 
 impl KnowledgeSearch {
-    /// Searches with `retriever`, returning at most `top_k` chunks.
+    /// Searches with retriever, returning at most top_k chunks.
     pub fn new(retriever: Arc<dyn Retriever>, top_k: usize) -> Self {
         Self { retriever, top_k }
     }

@@ -1,15 +1,15 @@
-//! `ToolDefinition`, `RiskClass`, `ToolOutput`, `ToolError`.
+//! ToolDefinition, RiskClass, ToolOutput, ToolError.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// What a tool can do to the world. Drives `Policy`.
+/// What a tool can do to the world. Drives Policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RiskClass {
     /// Reads public data. Runs freely.
     ReadPublic,
-    /// Reads inside the user's own authenticated session.
+    /// Reads inside the authenticated session of the user.
     ReadAuthenticated,
     /// Drafts or fills without submitting.
     PrepareWrite,
@@ -21,14 +21,14 @@ pub enum RiskClass {
     Forbidden,
 }
 
-/// What the model sees, and what `Policy` classifies.
+/// What the model sees, and what Policy classifies.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// Unique name the model calls.
     pub name: String,
     /// What it does, for the model.
     pub description: String,
-    /// JSON Schema for `arguments`.
+    /// JSON Schema for arguments.
     pub parameters: Value,
     /// Risk classification.
     pub risk: RiskClass,
@@ -36,8 +36,7 @@ pub struct ToolDefinition {
     /// with other calls in the same step.
     #[serde(default)]
     pub sequential: bool,
-    /// Overrides `agent.tool_timeout_secs` for this tool. A browser step and a database
-    /// lookup do not deserve the same budget.
+    /// Overrides agent.tool_timeout_secs for this tool.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_secs: Option<u64>,
 }
@@ -62,13 +61,13 @@ impl ToolOutput {
     }
 }
 
-/// Tool failures. Reported to the model as text so it can recover.
+/// Tool failures. Reported to the model as text.
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
     /// Arguments did not match the schema.
     #[error("invalid arguments: {0}")]
     InvalidArguments(String),
-    /// The tool's own failure.
+    /// The failure of the tool itself.
     #[error("{0}")]
     Failed(String),
     /// Ran past its timeout.
@@ -84,6 +83,6 @@ pub enum ToolError {
 pub struct ToolRun {
     /// Tool name as the model called it.
     pub tool: String,
-    /// Whether the call returned a result rather than an error.
+    /// Whether the call returned a result.
     pub ok: bool,
 }

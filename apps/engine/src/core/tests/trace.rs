@@ -192,9 +192,9 @@ fn pruning_removes_traces_older_than_the_retention_window() {
     let Ok(()) = std::fs::write(dir.join("keep.txt"), "not a trace\n") else {
         unreachable!("could not write the decoy")
     };
-    // Nothing here is old enough yet, so a long window removes nothing.
+    // Nothing here is old enough yet; a long window removes nothing.
     assert_eq!(sink.prune(std::time::Duration::from_hours(1)).ok(), Some(0));
-    // A zero window makes everything stale, and only `.jsonl` files go.
+    // A zero window makes everything stale, and only .jsonl files go.
     assert_eq!(sink.prune(std::time::Duration::ZERO).ok(), Some(1));
     assert!(dir.join("keep.txt").exists(), "other files are left alone");
     let _ = std::fs::remove_dir_all(&dir);

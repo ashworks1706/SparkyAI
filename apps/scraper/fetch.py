@@ -50,7 +50,7 @@ def fetch_rendered(url: str) -> Fetched:
             response = page.goto(
                 url, wait_until="networkidle", timeout=int(s.request_timeout_secs * 1000)
             )
-            # Reporting 200 for whatever loaded makes a rendered 404 look like a good page.
+            # The status comes from the navigation response, not from whatever rendered.
             status = response.status if response else 0
             html = page.content()
             final_url = page.url
@@ -68,8 +68,8 @@ def fetch_rendered(url: str) -> Fetched:
 
 
 def parse_firecrawl(url: str, payload: dict[str, Any]) -> Fetched:
-    """Turns a `/v2/scrape` response into a page. Anything short of markdown plus a status
-    code is a fetch failure, not an empty page."""
+    """Turns a /v2/scrape response into a page. Anything short of markdown plus a status
+    code is a fetch failure."""
     if not payload.get("success"):
         raise FetchError(f"firecrawl failed for {url}: {str(payload.get('error'))[:200]}")
     data = payload.get("data")
@@ -123,8 +123,8 @@ def fetch_firecrawl(url: str) -> Fetched:
 
 
 def fetch(url: str, *, needs_js: bool = False) -> Fetched:
-    """Fetches by the configured fetcher. Firecrawl renders JS itself, so `needs_js` only
-    matters on the plain HTTP path."""
+    """Fetches by the configured fetcher. Firecrawl renders JS itself; needs_js applies only
+    on the plain HTTP path."""
     if settings().scraper.fetcher == "firecrawl":
         return fetch_firecrawl(url)
     return fetch_rendered(url) if needs_js else fetch_http(url)

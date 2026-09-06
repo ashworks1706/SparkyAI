@@ -1,4 +1,4 @@
-//! The configurable `RiskPolicy` and payload hashing for confirmations.
+//! The configurable RiskPolicy and payload hashing for confirmations.
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -9,17 +9,17 @@ use crate::core::types::context::RequestContext;
 use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
 use crate::core::types::tool::RiskClass;
 
-/// Stable hash of the canonical JSON of `arguments`. A changed payload needs a new confirmation.
+/// Stable hash of the canonical JSON of arguments. A changed payload needs a new confirmation.
 pub fn payload_hash(arguments: &Value) -> String {
     use std::hash::{Hash, Hasher};
-    // serde_json sorts map keys when `preserve_order` is off, so this is canonical.
+    // serde_json sorts map keys when preserve_order is off, and the string is canonical.
     let canonical = arguments.to_string();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
 
-/// What the policy allows, denies, and holds. Comes from the `[policy]` configuration section.
+/// What the policy allows, denies, and holds. Comes from the [policy] configuration section.
 #[derive(Debug, Clone)]
 pub struct RiskPolicy {
     write_roles: Vec<String>,
@@ -44,8 +44,8 @@ impl From<&crate::core::config::Policy> for RiskPolicy {
 }
 
 impl RiskPolicy {
-    /// Builds the policy. `write_roles` gates `external_write` and above; `confirm_from` is the
-    /// lowest risk class held for the caller's approval.
+    /// Builds the policy. write_roles gates external_write and above. confirm_from is the
+    /// lowest risk class held for approval by the caller.
     pub fn new(
         write_roles: Vec<String>,
         allow_authenticated_reads: bool,
@@ -58,7 +58,7 @@ impl RiskPolicy {
         }
     }
 
-    /// Whether the request's roles include one that may run write-class tools.
+    /// Whether the roles of the request include one that may run write-class tools.
     fn may_write(&self, ctx: &RequestContext) -> bool {
         self.write_roles.iter().any(|role| ctx.has_role(role))
     }

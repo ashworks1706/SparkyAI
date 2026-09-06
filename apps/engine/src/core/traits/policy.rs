@@ -1,4 +1,4 @@
-//! `Policy` trait.
+//! Policy trait.
 
 use async_trait::async_trait;
 

@@ -1,4 +1,4 @@
-//! `TraceSink` trait.
+//! TraceSink trait.
 
 use crate::core::types::context::RequestContext;
 use crate::core::types::trace::TraceEvent;

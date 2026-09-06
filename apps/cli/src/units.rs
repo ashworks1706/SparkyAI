@@ -1,4 +1,4 @@
-//! The catalog: every unit the repo can run, in sidebar order.
+//! The catalog of every unit the repo can run, in sidebar order.
 
 use crate::core::types::{Group, Kind, Unit};
 
@@ -31,7 +31,7 @@ fn process(id: &str, args: &[&str], hint: &str, url: Option<&str>) -> Unit {
     }
 }
 
-/// A one-shot recipe; the id is the recipe line itself.
+/// A one-shot recipe. The id is the recipe line itself.
 pub fn task(args: &[String], hint: &str) -> Unit {
     Unit {
         id: args.join(" "),
@@ -48,7 +48,7 @@ fn task_static(args: &[&str], hint: &str) -> Unit {
     task(&args, hint)
 }
 
-/// A recipe in the deploy section; `follows` marks the ones that stream until stopped.
+/// A recipe in the deploy section. The follows flag marks the ones that stream until stopped.
 fn deploy(args: &[&str], hint: &str, follows: bool) -> Unit {
     let mut unit = task_static(args, hint);
     unit.group = Group::Deploy;

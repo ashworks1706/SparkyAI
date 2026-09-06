@@ -1,4 +1,4 @@
-//! The engine test suite. One file per unit under test; shared doubles in `support`.
+//! The engine test suite. One file per unit under test; shared doubles in support.
 
 mod agent;
 mod assemble;

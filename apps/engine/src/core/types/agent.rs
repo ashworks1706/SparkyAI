@@ -1,4 +1,4 @@
-//! `AgentConfig`, `Answer`, `AgentError`.
+//! AgentConfig, Answer, AgentError.
 
 use std::time::Duration;
 
@@ -13,8 +13,7 @@ use crate::core::types::trace::RunStatus;
 
 /// Knobs for the loop. All bounded; nothing runs forever.
 ///
-/// `Default` is implemented in `core::config`, where every one of these values is declared, so
-/// a change to a setting cannot leave a second copy behind.
+/// Default is implemented in core::config.
 #[derive(Debug, Clone, Copy)]
 pub struct AgentConfig {
     /// Maximum model calls per request.
@@ -23,7 +22,7 @@ pub struct AgentConfig {
     pub max_model_retries: u32,
     /// Per-tool-call timeout.
     pub tool_timeout: Duration,
-    /// How long a held action waits for its caller's approval.
+    /// How long a held action waits for caller approval.
     pub confirmation_ttl: Duration,
     /// Completion budget per model call.
     pub max_tokens: u32,

@@ -21,17 +21,17 @@ fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     }
 }
 
-/// Appends one JSON line per event to `<dir>/<request_id>.jsonl`.
+/// Appends one JSON line per event to <dir>/<request_id>.jsonl.
 #[derive(Debug)]
 pub struct JsonlSink {
     dir: PathBuf,
-    /// Stop writing a request's trace past this many bytes. Zero removes the limit.
+    /// Stop writing the trace of a request past this many bytes. Zero removes the limit.
     max_file_bytes: u64,
 }
 
 impl JsonlSink {
-    /// Writes under `dir`, creating it if missing. `max_file_bytes` caps one request's trace;
-    /// zero removes the limit.
+    /// Writes under dir, creating it if missing. max_file_bytes caps the trace of one request.
+    /// Zero removes the limit.
     pub fn new(dir: impl Into<PathBuf>, max_file_bytes: u64) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
@@ -46,8 +46,8 @@ impl JsonlSink {
         self.dir.join(format!("{request_id}.jsonl"))
     }
 
-    /// Deletes trace files last modified more than `older_than` ago. Returns how many went.
-    /// Called once at boot: a long-lived engine otherwise fills its disk with traces.
+    /// Deletes trace files last modified more than older_than ago. Returns how many were
+    /// removed. Called once at boot.
     pub fn prune(&self, older_than: Duration) -> std::io::Result<usize> {
         let cutoff = SystemTime::now()
             .checked_sub(older_than)
@@ -82,9 +82,7 @@ impl TraceSink for JsonlSink {
             .append(true)
             .open(&path)
             .and_then(|mut f| {
-                // A runaway run — a browser snapshot loop above all — can write a trace far
-                // larger than anything that will ever be read. The cap drops the tail rather
-                // than the head, so the start of the run survives.
+                // The cap drops the tail of the trace, keeping the start of the run.
                 if self.max_file_bytes > 0 && f.metadata()?.len() >= self.max_file_bytes {
                     return Ok(());
                 }
@@ -105,7 +103,7 @@ impl TraceSink for NullSink {
 }
 
 /// Records every event through the sink beneath it and, when the caller is watching, forwards
-/// the ones worth showing. New event kinds flow through without a change here.
+/// the ones that map to progress.
 pub struct Fanout {
     inner: Arc<dyn TraceSink>,
 }
@@ -122,7 +120,7 @@ impl TraceSink for Fanout {
         if let Some(tx) = &ctx.progress
             && let Some(progress) = Progress::of(&event)
         {
-            // A dropped receiver means the caller stopped watching; the trace still lands.
+            // A dropped receiver means the caller stopped watching. The trace still lands.
             let _ = tx.send(progress);
         }
         self.inner.emit(ctx, event);

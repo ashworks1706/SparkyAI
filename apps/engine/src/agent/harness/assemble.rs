@@ -1,15 +1,15 @@
 //! Context assembly. Fixed section order and per-section token budgets.
 //!
-//! Order: system instructions → role line → memory → evidence → history → current turn.
-//! When over budget, evidence and history are trimmed before anything else; the system
-//! prompt and the current turn are never dropped.
+//! Order: system instructions, role line, memory, evidence, history, current turn.
+//! When over budget, evidence and history are trimmed first. The system prompt and the
+//! current turn are never dropped.
 
 use crate::core::types::assemble::{Assembled, Budget, Sections};
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, Role};
 use crate::core::types::tokens::estimate;
 
-/// Builds the message list within `budget`.
+/// Builds the message list within budget.
 pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assembled {
     let mut messages = Vec::new();
     let mut used = 0usize;
@@ -50,8 +50,8 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     if !s.evidence.is_empty() {
         let mut block = format!("{}\n", s.templates.evidence_header.trim());
         let mut spent = estimate(&block, cpt);
-        // Evidence never eats the whole prompt: it is capped by its own budget and by what
-        // remains of the total after the sections above and the current input.
+        // Evidence is capped by its own budget and by what remains of the total after the
+        // sections above and the current input.
         let evidence_budget = budget
             .evidence
             .min(budget.total.saturating_sub(used + input_cost));

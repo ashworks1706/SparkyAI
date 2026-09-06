@@ -1,4 +1,4 @@
-"""Ambiguous questions get a clarifying question back, not a tool call on a guess."""
+"""Ambiguous questions get a clarifying question back and no tool call."""
 
 from __future__ import annotations
 

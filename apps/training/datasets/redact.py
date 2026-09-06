@@ -23,7 +23,7 @@ def redact_text(text: str) -> str:
 
 
 def _redact_call(call: dict[str, Any]) -> dict[str, Any]:
-    """Rewrites a tool call's values. Keys and ids are structure, not user text."""
+    """Rewrites the string values of a tool call. Keys and ids are left alone."""
     return {k: redact_text(v) if isinstance(v, str) and k != "id" else v for k, v in call.items()}
 
 

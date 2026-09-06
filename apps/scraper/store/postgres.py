@@ -43,7 +43,7 @@ def connection() -> Iterator[psycopg.Connection]:
 
 
 def migrate(conn: psycopg.Connection) -> list[str]:
-    """Applies every unapplied `NNNN_*.sql` in order. Returns the names applied."""
+    """Applies every unapplied NNNN_*.sql in order. Returns the names applied."""
     conn.execute(
         """
         create table if not exists schema_migrations (
@@ -67,7 +67,7 @@ def migrate(conn: psycopg.Connection) -> list[str]:
 def upsert_source(
     conn: psycopg.Connection, key: str, url: str, category: str, fetch_every_hours: int
 ) -> SourceRow:
-    """Creates or refreshes the `sources` row for a registered source."""
+    """Creates or refreshes the sources row for a registered source."""
     row = conn.execute(
         """
         insert into sources (key, url, category, fetch_every)
@@ -84,7 +84,7 @@ def upsert_source(
 
 
 def latest_version(conn: psycopg.Connection, source_id: uuid.UUID) -> dict | None:
-    """Most recent `source_versions` row, or None."""
+    """Most recent source_versions row, or None."""
     return conn.execute(
         """
         select id, content_hash, fetched_at from source_versions
@@ -137,8 +137,8 @@ def replace_chunks(
     fetched_at: datetime,
     chunks: Sequence[ChunkRow],
 ) -> int:
-    """Drops the source's previous chunks and writes the new version's. The index reflects the
-    current page; `source_versions` keeps the history."""
+    """Drops the previous chunks for the source and writes the new ones. The index reflects the
+    current page; source_versions keeps the history."""
     conn.execute("delete from chunks where source_id = %s", (source.id,))
     with conn.cursor() as cur:
         cur.executemany(
@@ -181,7 +181,7 @@ def status_rows(conn: psycopg.Connection) -> list[dict]:
 
 def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource]) -> int:
     """Publishes the registry the engine reads to build its tool. Sources no longer in code are
-    disabled rather than deleted, so a job already queued against one still resolves."""
+    disabled, not deleted."""
     keys = [s.key for s in sources]
     with conn.cursor() as cur:
         cur.executemany(
@@ -222,8 +222,8 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
 
 
 def claim_job(conn: psycopg.Connection, kind: str) -> Job | None:
-    """Takes the oldest queued job of `kind`, or `None`. `skip locked` lets several workers run
-    without one blocking on another's row."""
+    """Takes the oldest queued job of kind, or None. skip locked lets several workers run
+    concurrently."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """

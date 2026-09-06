@@ -1,9 +1,9 @@
-//! Wire types mirrored from the engine's `/chat` contract, plus the client error.
+//! Wire types mirrored from the engine /chat contract, plus the client error.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// What the bot sends. Mirrors `engine::core::types::chat::ChatRequest`.
+/// What the bot sends. Mirrors engine::core::types::chat::ChatRequest.
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
     /// Discord user id.
@@ -32,7 +32,7 @@ pub struct Confirmation {
     pub summary: String,
 }
 
-/// What the engine returns. Mirrors `engine::core::types::chat::ChatResponse`.
+/// What the engine returns. Mirrors engine::core::types::chat::ChatResponse.
 #[derive(Debug, Deserialize)]
 pub struct ChatResponse {
     /// Trace id.
@@ -79,20 +79,19 @@ pub enum EngineError {
     },
 }
 
-/// The engine's error frame on `/chat/stream`.
+/// The engine error frame on /chat/stream.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ErrorFrame {
     /// What went wrong.
     pub error: String,
-    /// The status the JSON route would have returned, so capacity reads apart from an outage.
+    /// The status the JSON route would have returned.
     #[serde(default)]
     pub status: Option<u16>,
 }
 
-/// One line of progress from `/chat/stream`.
+/// One line of progress from /chat/stream.
 ///
-/// Only `text` is read: the engine renders the sentence, so a kind added there shows up here
-/// without a change on this side.
+/// Only text is read. The engine renders the sentence.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Progress {
     /// Ready-to-display sentence.
@@ -110,7 +109,7 @@ pub enum Update {
     Failed(EngineError),
 }
 
-/// `POST /confirm`: answer an action the engine is holding.
+/// Body of POST /confirm, answering an action the engine is holding.
 #[derive(Debug, Serialize)]
 pub struct ConfirmRequest {
     /// The token from the confirmation.

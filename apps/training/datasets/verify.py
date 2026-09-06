@@ -32,7 +32,7 @@ def reject_reason(ex: TrainingExample) -> str | None:
 
 
 def verify(examples: list[TrainingExample]) -> tuple[list[TrainingExample], dict[str, int]]:
-    """Returns (kept, reasons) where reasons counts every rejection cause."""
+    """Returns (kept, reasons), where reasons counts each rejection cause."""
     kept: list[TrainingExample] = []
     reasons: dict[str, int] = {}
     seen: set[str] = set()

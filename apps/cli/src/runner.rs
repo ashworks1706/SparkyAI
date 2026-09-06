@@ -1,6 +1,6 @@
-//! Starts, stops, and streams the output of units. Host processes run under `setsid` so a stop
-//! kills the whole tree (`cargo run` and the binary it spawned). Compose services are driven
-//! through `docker compose` and followed with `logs -f`.
+//! Starts, stops, and streams the output of units. Host processes run under setsid, and a stop
+//! kills the whole tree. Compose services are driven through docker compose and followed with
+//! logs -f.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ pub struct Runner {
     tx: UnboundedSender<Event>,
     /// Process-group ids of host processes and tasks, by unit id.
     groups: HashMap<String, u32>,
-    /// `docker compose logs -f` children, by service name.
+    /// The docker compose logs -f children, by service name.
     followers: HashMap<String, Child>,
 }
 
@@ -52,7 +52,7 @@ impl Runner {
         }
     }
 
-    /// Stops a unit. Host trees get SIGTERM; services get `compose stop`.
+    /// Stops a unit. Host trees get SIGTERM, services get compose stop.
     pub fn stop(&mut self, unit: &Unit) -> Result<(), RunnerError> {
         match &unit.kind {
             Kind::Service { service, profile } => {
@@ -87,7 +87,7 @@ impl Runner {
         self.groups.remove(unit_id);
     }
 
-    /// Begins streaming a service's container logs, if not already.
+    /// Begins streaming the container logs of a service, if not already.
     pub fn follow(&mut self, service: &str) -> Result<(), RunnerError> {
         if self.followers.contains_key(service) {
             return Ok(());
@@ -99,7 +99,7 @@ impl Runner {
         Ok(())
     }
 
-    /// Stops following a service's logs.
+    /// Stops following the logs of a service.
     pub fn unfollow(&mut self, service: &str) {
         if let Some(mut child) = self.followers.remove(service) {
             let _ = child.start_kill();
@@ -122,7 +122,7 @@ impl Runner {
         self.groups.clear();
     }
 
-    /// One `docker compose ps -a --format json` snapshot, keyed by service.
+    /// One docker compose ps -a --format json snapshot, keyed by service.
     pub async fn service_states(root: &PathBuf) -> Result<HashMap<String, ServiceState>, String> {
         let out = Command::new("docker")
             .args(["compose", "-f", COMPOSE_FILE])
@@ -159,8 +159,8 @@ impl Runner {
         cmd
     }
 
-    /// Spawns, streams both outputs as log lines, and reports the exit; `track` records the
-    /// process group so `stop` can kill it.
+    /// Spawns, streams both outputs as log lines, and reports the exit. The track flag records
+    /// the process group for stop to kill.
     fn spawn_streaming(
         &mut self,
         unit_id: &str,
@@ -258,8 +258,7 @@ where
             let text = match lines.next_line().await {
                 Ok(Some(text)) => text,
                 Ok(None) => break,
-                // A pane that quietly stops updating while the process still runs is the worst
-                // failure this console can have, so it says why it stopped.
+                // Report why log capture stopped.
                 Err(e) => {
                     let _ = tx.send(Event::Log {
                         unit: unit.clone(),
@@ -298,8 +297,7 @@ pub fn sanitize_line(s: &str) -> String {
             }
             continue;
         }
-        // A carriage return or backspace reaching the terminal moves the cursor out of the pane
-        // and overwrites whatever is drawn beside it. Tabs are the only control the pane keeps.
+        // Tabs are the only control character the pane keeps.
         if c.is_control() && c != '\t' {
             continue;
         }
@@ -308,7 +306,7 @@ pub fn sanitize_line(s: &str) -> String {
     out
 }
 
-/// Parses `docker compose ps --format json`: a JSON array on older releases, one object per
+/// Parses docker compose ps --format json: a JSON array on older releases, one object per
 /// line on newer ones. Anything else is an error, not an empty stack.
 pub fn parse_ps(raw: &str) -> Result<HashMap<String, ServiceState>, String> {
     #[derive(serde::Deserialize)]

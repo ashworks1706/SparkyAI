@@ -1,4 +1,4 @@
-//! Bot configuration from `SPARKY_*` env. Only what the bot needs; the API owns everything else.
+//! Bot configuration from SPARKY_* env. Only what the bot needs. The API owns everything else.
 
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
@@ -22,11 +22,11 @@ pub struct Config {
     pub bot: Bot,
 }
 
-/// The marker the engine's policy reads to allow write-side tools, when none is configured.
+/// The marker the engine policy reads to allow write-side tools, when none is configured.
 pub const WRITE_CAPABILITY: &str = "MANAGE_GUILD";
 
-/// How the bot behaves in the guild. Everything here is presentation and pacing; the engine
-/// still decides what may run.
+/// How the bot behaves in the guild. Everything here is presentation and pacing. The engine
+/// decides what may run.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Bot {
@@ -34,12 +34,12 @@ pub struct Bot {
     pub channels: Vec<u64>,
     /// Longest message posted before the reply is split.
     pub max_message_chars: usize,
-    /// Shortest gap between edits of the progress message; Discord throttles faster than this.
+    /// Shortest gap between edits of the progress message.
     pub edit_every_ms: u64,
     /// Seconds one user must wait between questions. 0 removes the limit.
     pub cooldown_secs: u64,
-    /// The role name the engine's policy reads to allow write-side tools. Must match
-    /// `SPARKY_POLICY__WRITE_ROLES` on the engine.
+    /// The role name the engine policy reads to allow write-side tools. Must match
+    /// SPARKY_POLICY__WRITE_ROLES on the engine.
     pub write_capability: String,
 }
 
@@ -58,9 +58,9 @@ impl Default for Bot {
 /// Process-level settings.
 #[derive(Debug, Deserialize)]
 pub struct App {
-    /// `development`, `staging`, or `production`.
+    /// One of development, staging, or production.
     pub env: String,
-    /// `tracing` filter directive.
+    /// The tracing filter directive.
     pub log_level: String,
 }
 
@@ -74,7 +74,7 @@ pub struct Engine {
     /// How long to wait for the connection.
     #[serde(default = "default_connect_timeout_secs")]
     pub connect_timeout_secs: u64,
-    /// How long to wait for a whole answer. Keep it above the engine's own request budget.
+    /// How long to wait for a whole answer. Keep it above the engine request budget.
     #[serde(default = "default_request_timeout_secs")]
     pub request_timeout_secs: u64,
 }
@@ -96,19 +96,19 @@ pub struct Discord {
     pub guild_id: u64,
 }
 
-/// Trace export. Defaults to the local Phoenix collector; an empty endpoint disables it.
+/// Trace export. Defaults to the local Phoenix collector. An empty endpoint disables it.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {
     /// OTLP/gRPC endpoint.
     pub otlp_endpoint: Option<String>,
-    /// `service.name` on exported spans. Defaults to `discord`.
+    /// The service.name on exported spans. Defaults to discord.
     pub service_name: Option<String>,
     /// Fraction of traces exported, 0.0 to 1.0.
     pub sample_ratio: f64,
     /// Budget for one export batch.
     pub export_timeout_secs: u64,
-    /// Only spans whose target starts with this are exported. Defaults to `discord`.
+    /// Only spans whose target starts with this are exported. Defaults to discord.
     pub span_target_prefix: Option<String>,
 }
 
@@ -124,12 +124,12 @@ impl Default for Telemetry {
     }
 }
 
-/// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
+/// TOML layer read when SPARKY_CONFIG_FILE is unset. Missing is not an error.
 pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
 
 impl Config {
-    /// Loads the TOML layer then `SPARKY_*` variables, `__` separating nesting. Environment
-    /// values win, so the bot and the engine can share one file and differ only in secrets.
+    /// Loads the TOML layer then SPARKY_* variables, with __ separating nesting. Environment
+    /// values win.
     pub fn load() -> anyhow::Result<Self> {
         let path =
             std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());

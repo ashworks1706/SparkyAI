@@ -1,4 +1,4 @@
-//! `MemoryKind`, `Memory`, `MemoryQuery`.
+//! MemoryKind, Memory, MemoryQuery.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -50,7 +50,7 @@ pub struct Memory {
     pub kind: MemoryKind,
     /// The remembered text.
     pub content: String,
-    /// Confidence at write time, 0–1.
+    /// Confidence at write time, 0 to 1.
     pub confidence: f32,
     /// When it was written.
     pub created_at: DateTime<Utc>,

@@ -10,10 +10,10 @@ use crate::core::traits::model::ModelProvider;
 use crate::core::types::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
 
-/// Admits `slots` model calls at once and queues the rest for up to `max_wait`.
+/// Admits slots model calls at once and queues the rest for up to max_wait.
 ///
-/// `slots` mirrors `llama-server --parallel`: holding the limit here keeps the queue inside the
-/// engine, under this request's deadline and cancellation, instead of in the inference server.
+/// slots mirrors llama-server --parallel. The queue stays inside the engine, under the deadline
+/// and cancellation of the request.
 pub struct Limited {
     inner: Arc<dyn ModelProvider>,
     permits: Semaphore,
@@ -21,7 +21,7 @@ pub struct Limited {
 }
 
 impl Limited {
-    /// Wraps a provider. `slots` must be at least 1; `wiring` skips the wrapper when unlimited.
+    /// Wraps a provider. slots must be at least 1. wiring skips the wrapper when unlimited.
     pub fn new(inner: Arc<dyn ModelProvider>, slots: usize, max_wait: Duration) -> Self {
         Self {
             inner,

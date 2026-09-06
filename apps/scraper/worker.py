@@ -1,8 +1,7 @@
-"""Runs live query jobs the engine queues. The scraper's only online path.
+"""Runs live query jobs the engine queues. The only online path in the scraper.
 
-The engine cannot call the scraper — they meet in the database — so a query arrives as a `jobs`
-row and its answer goes back the same way. Nothing here writes to `chunks`: a live result
-answers one caller and is not retrieval evidence.
+A query arrives as a jobs row and its answer goes back the same way. Nothing here writes to
+chunks. A live result answers one caller and is not retrieval evidence.
 """
 
 from __future__ import annotations
@@ -20,17 +19,17 @@ from scraper.store import postgres
 
 log = structlog.get_logger()
 
-#: `jobs.kind` this worker claims.
+#: jobs.kind this worker claims.
 KIND = "source_query"
 
 
 def run_job(job: Job) -> QueryResult:
-    """Fetches one live query. Raises `QueryError` with a reason the model can act on."""
+    """Fetches one live query. Raises QueryError with a reason the model can act on."""
     key = str(job.input.get("source", ""))
     source = QUERY_SOURCES.get(key)
     if source is None:
         raise QueryError(f"unknown source {key!r}; known: {', '.join(sorted(QUERY_SOURCES))}")
-    # `or {}` would swallow an empty list here, so the type is checked before the fallback.
+    # The fallback applies only when params is absent; the type is checked separately.
     raw = job.input.get("params")
     if raw is None:
         raw = {}
@@ -69,7 +68,7 @@ def poll_once() -> bool:
         try:
             result = run_job(job)
         except QueryError as e:
-            # The model asked for something impossible; the reason is the useful answer.
+            # The reason is stored on the job.
             log.info("query rejected", job=str(job.id), error=str(e))
             postgres.fail_job(conn, job.id, str(e))
         except Exception as e:
@@ -95,6 +94,6 @@ def serve(poll_secs: float = 0.5) -> None:
             if poll_once():
                 continue
         except Exception as e:
-            # A database blip must not end the worker; the next poll retries.
+            # The next poll retries.
             log.error("worker poll failed", error=str(e))
         time.sleep(poll_secs)

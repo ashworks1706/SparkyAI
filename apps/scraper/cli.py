@@ -1,4 +1,4 @@
-"""`scraper run <source>|--all`, `scraper schedule`, `scraper status`, `scraper migrate`."""
+"""scraper run <source>|--all, scraper schedule, scraper status, scraper migrate."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def run(
             typer.echo(
                 f"{key}: {'indexed' if result.changed else 'unchanged'} ({result.chunks} chunks)"
             )
-        except Exception as e:  # one bad source must not stop the rest; exit code says so
+        except Exception as e:  # one bad source does not stop the rest
             failures += 1
             log.error("source failed", source=key, error=str(e))
             typer.echo(f"{key}: FAILED — {e}", err=True)
@@ -67,7 +67,7 @@ def run_worker(
 
 @app.command()
 def schedule(poll_secs: int = typer.Option(300, help="How often to check what is due.")) -> None:
-    """Runs each source when its `fetch_every` interval has elapsed. Blocks forever."""
+    """Runs each source when its fetch_every interval has elapsed. Blocks forever."""
     while True:
         with postgres.connection() as conn:
             rows = {r["key"]: r for r in postgres.status_rows(conn)}
@@ -103,7 +103,7 @@ def status() -> None:
 
 @app.command()
 def migrate() -> None:
-    """Apply `migrations/` to Postgres."""
+    """Apply migrations/ to Postgres."""
     with postgres.connection() as conn:
         applied = postgres.migrate(conn)
     typer.echo("applied: " + (", ".join(applied) if applied else "nothing (up to date)"))

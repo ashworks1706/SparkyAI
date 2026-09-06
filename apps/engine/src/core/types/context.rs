@@ -1,4 +1,4 @@
-//! `RequestContext` — per-request state threaded through every call.
+//! RequestContext holds per-request state threaded through every call.
 
 use std::time::{Duration, Instant};
 
@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::core::types::wire::Progress;
 
-/// Per-request state. Created at the edge (Discord, HTTP) and threaded
-/// through every model call, tool call, and trace event. Never global.
+/// Per-request state. Created at the edge (Discord, HTTP) and threaded through every model
+/// call, tool call, and trace event. Never global.
 #[derive(Debug, Clone)]
 pub struct RequestContext {
     /// Unique id for this request; the trace id.
@@ -31,7 +31,7 @@ pub struct RequestContext {
 }
 
 impl RequestContext {
-    /// Creates a context with a fresh `request_id` and conversation.
+    /// Creates a context with a fresh request_id and conversation.
     pub fn new(tenant_id: impl Into<String>, user_id: impl Into<String>, budget: Duration) -> Self {
         Self {
             request_id: Uuid::new_v4(),
@@ -45,7 +45,7 @@ impl RequestContext {
         }
     }
 
-    /// Sends live progress to `tx` for the length of this request.
+    /// Sends live progress to tx for the length of this request.
     pub fn listening_to(mut self, tx: UnboundedSender<Progress>) -> Self {
         self.progress = Some(tx);
         self
@@ -63,7 +63,7 @@ impl RequestContext {
         self
     }
 
-    /// Whether the caller holds `role`.
+    /// Whether the caller holds role.
     pub fn has_role(&self, role: &str) -> bool {
         self.roles.iter().any(|r| r == role)
     }

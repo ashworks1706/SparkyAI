@@ -1,4 +1,4 @@
-"""Runs golden cases against the engine's /chat and collects each turn's answer and trace."""
+"""Runs golden cases against the engine /chat and collects the answer and trace for each turn."""
 
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def ask(
 
 
 def run_case(case: EvalCase, engine_url: str | None = None) -> list[TurnResult]:
-    """One or two turns; the follow-up continues the same conversation."""
+    """One or two turns. The follow-up continues the same conversation."""
     user_id = f"eval-{case.id}"
     first = ask(
         case.question,

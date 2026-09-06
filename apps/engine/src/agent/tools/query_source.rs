@@ -1,7 +1,7 @@
-//! `ReadPublic`: run a live parameterized source query through the scraper's worker.
+//! ReadPublic: run a live parameterized source query through the worker of the scraper.
 //!
-//! One tool for every query source there will ever be. The sources come from the registry the
-//! scraper publishes, so adding one is a scraper change and costs the model no extra schema.
+//! One tool covers every query source. The sources come from the registry the scraper
+//! publishes.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -23,9 +23,7 @@ pub struct QuerySourceTool {
 
 /// The description the model reads: what each source answers and what it takes.
 ///
-/// Parameters are documented in prose rather than as a `oneOf` per source. A schema that
-/// changes shape with one field's value is more correct and, for a small model, likelier to
-/// produce nothing usable.
+/// Parameters are documented in prose, not as a oneOf per source.
 pub fn describe(sources: &[QuerySourceInfo]) -> String {
     let mut text = String::from(
         "Fetch live data from an ASU site that the knowledge base does not cover. Slower than \
@@ -54,8 +52,8 @@ pub fn describe(sources: &[QuerySourceInfo]) -> String {
 }
 
 impl QuerySourceTool {
-    /// Builds the tool over the sources the registry currently offers. `timeout_secs` overrides
-    /// the agent's default, since a live fetch takes far longer than a database read.
+    /// Builds the tool over the sources the registry currently offers. timeout_secs overrides
+    /// the default of the agent.
     pub fn new(
         queries: Arc<dyn SourceQueries>,
         sources: &[QuerySourceInfo],
@@ -103,8 +101,8 @@ impl Tool for QuerySourceTool {
             return Err(ToolError::InvalidArguments("source is empty".into()));
         }
         let outcome = self.queries.run(ctx, &request).await.map_err(|e| match e {
-            // A rejection is the model's to fix — a missing parameter, an unknown source — so
-            // it comes back as text it can act on rather than as a failed run.
+            // A rejection, such as a missing parameter or an unknown source, comes back as
+            // text the model can act on.
             QueryError::Rejected(reason) => ToolError::InvalidArguments(reason),
             QueryError::Cancelled => ToolError::Cancelled,
             QueryError::Timeout(_) => ToolError::Timeout,

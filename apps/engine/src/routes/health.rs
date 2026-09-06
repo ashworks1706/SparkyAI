@@ -13,7 +13,7 @@ use crate::core::types::health::Readiness;
 pub struct HealthState {
     /// The store every request needs.
     pub pool: PgPool,
-    /// Chat model base URL, ending in `/v1`.
+    /// Chat model base URL, ending in /v1.
     pub model_base_url: String,
 }
 
@@ -22,7 +22,8 @@ pub async fn live() -> StatusCode {
     StatusCode::OK
 }
 
-/// 200 only when Postgres and the model endpoint both answer; 503 with the report otherwise.
+/// Returns 200 when Postgres and the model endpoint both answer, and 503 with the report when
+/// either does not.
 pub async fn ready(State(state): State<HealthState>) -> Response {
     let postgres = sqlx::query("select 1").execute(&state.pool).await.is_ok();
     let model = reqwest::Client::new()

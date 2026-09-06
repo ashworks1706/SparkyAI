@@ -4,9 +4,9 @@ from __future__ import annotations
 
 
 def chunk_text(text: str, *, max_chars: int = 1200, overlap_chars: int = 200) -> list[str]:
-    """Splits on paragraph boundaries, packing paragraphs up to `max_chars`. Paragraphs longer
-    than the limit are split on sentence-ish boundaries. Consecutive chunks share `overlap_chars`
-    of trailing context so facts straddling a boundary survive."""
+    """Splits on paragraph boundaries, packing paragraphs up to max_chars. Paragraphs longer
+    than the limit are split on sentence-ish boundaries. Consecutive chunks share overlap_chars
+    of trailing context."""
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
     overlap_chars = max(0, min(overlap_chars, max_chars // 2))

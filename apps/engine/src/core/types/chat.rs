@@ -1,4 +1,4 @@
-//! `ChatRequest`, `ChatResponse`, `ErrorBody` — the `/chat` wire contract with clients.
+//! ChatRequest, ChatResponse, and ErrorBody are the /chat wire contract with clients.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -64,22 +64,21 @@ pub struct ErrorBody {
     pub request_id: Uuid,
     /// What went wrong.
     pub error: String,
-    /// HTTP status this would have carried. Present on the stream, where the frame is the only
-    /// place a client can read it.
+    /// HTTP status this would have carried. Present on the stream.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<u16>,
 }
 
-/// `POST /confirm`: answer an action the engine is holding.
+/// POST /confirm: answer an action the engine is holding.
 #[derive(Debug, Deserialize)]
 pub struct ConfirmRequest {
-    /// The token from the `ConfirmationRequest`.
+    /// The token from the ConfirmationRequest.
     pub token: Uuid,
     /// Whether to run it.
     pub approve: bool,
     /// Who is answering. Only the caller who was asked may answer.
     pub user_id: String,
-    /// Guild or other scope; the engine's default when absent.
+    /// Guild or other scope; the engine default when absent.
     #[serde(default)]
     pub tenant_id: Option<String>,
     /// The conversation the held action belongs to.

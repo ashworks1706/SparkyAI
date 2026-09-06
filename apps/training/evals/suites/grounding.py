@@ -1,4 +1,4 @@
-"""Is the answer cited from the expected source, and does it mention what it should?"""
+"""Scores whether the answer cites the expected source and mentions the expected terms."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-//! The `query_source` tool: what the model is shown, and how a worker's answer or refusal reads.
+//! The query_source tool: what the model is shown, and how a worker answer or refusal reads.
 
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ fn every_source_is_one_schema_and_its_parameters_are_described_in_prose() {
         "optional parameters are not marked required: {text}"
     );
 
-    // Adding sources must not add schemas: that cost is paid on every step of every request.
+    // Adding sources must not add schemas.
     let definition = tool(FakeQueries::new(vec![class_search()])).definition();
     let props = &definition.parameters["properties"];
     assert_eq!(props.as_object().map(serde_json::Map::len), Some(2));
@@ -92,7 +92,7 @@ async fn a_refusal_comes_back_as_something_the_model_can_fix() {
     let err = tool(queries)
         .call(&ctx(), json!({"source": "class_search", "params": {}}))
         .await;
-    // InvalidArguments is fed back for the model to correct; Failed would end the attempt.
+    // InvalidArguments is fed back for the model to correct.
     match err {
         Err(ToolError::InvalidArguments(reason)) => assert!(reason.contains("needs: term")),
         other => unreachable!("expected a correctable refusal, got {other:?}"),

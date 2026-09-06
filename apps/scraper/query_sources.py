@@ -1,11 +1,8 @@
 """The registry of live parameterized sources, and the URL each one builds.
 
-Distinct from `sources/`, which are pages fetched on a schedule into the retrieval index. A
-query source answers a question the index cannot: a combinatorial space too large to enumerate,
-like every term x subject x level of the class catalog.
-
-The URLs and parameter encodings here were carried over from the v1 Selenium tools, which drove
-these same pages; only the transport changed.
+Distinct from sources/, which are pages fetched on a schedule into the retrieval index. A query
+source covers a combinatorial space too large to enumerate, like every term by subject by level
+of the class catalog.
 """
 
 from __future__ import annotations
@@ -14,8 +11,8 @@ import urllib.parse
 
 from scraper.core.types import QueryError, QueryParam, QuerySource
 
-# ASU term codes are `2` + the two-digit calendar year + the session digit, so "Fall 2026" is
-# 2267. v1 carried a hardcoded map that went stale after three terms; deriving it does not.
+# ASU term codes are 2 plus the two-digit calendar year plus the session digit.
+# Fall 2026 is 2267.
 _TERM_DIGIT = {"spring": "1", "summer": "4", "fall": "7"}
 
 _DAYS = {
@@ -41,7 +38,7 @@ _LEVELS = {
 
 
 def term_code(term: str) -> str:
-    """`"Fall 2026"` -> `"2267"`. Raises `QueryError` on anything else."""
+    """Fall 2026 to 2267. Raises QueryError on anything else."""
     parts = term.strip().split()
     if len(parts) != 2:
         raise QueryError(f"term must look like 'Fall 2026', got {term!r}")
@@ -69,7 +66,7 @@ def _mapped(value: str | None, mapping: dict[str, str], what: str) -> str:
 
 
 def _classlist_url(params: dict[str, str]) -> str:
-    """ASU class catalog search. Only `term` is required; everything else narrows."""
+    """ASU class catalog search. Only term is required; everything else narrows."""
     query = {
         "advanced": "true",
         "campusOrOnlineSelection": "A",

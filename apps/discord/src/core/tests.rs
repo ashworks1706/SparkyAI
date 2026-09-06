@@ -1,4 +1,4 @@
-//! Bot unit tests: reply chunking and rendering.
+//! Bot unit tests for reply chunking and rendering.
 
 use uuid::Uuid;
 

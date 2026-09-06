@@ -1,4 +1,4 @@
-"""Wall-clock per turn stays under the case's budget."""
+"""Wall-clock per turn stays under the case budget."""
 
 from __future__ import annotations
 

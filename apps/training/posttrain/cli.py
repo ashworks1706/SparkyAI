@@ -1,4 +1,4 @@
-"""`train sft --config configs/train/sft.yaml [--dry-run]`."""
+"""train sft --config configs/train/sft.yaml [--dry-run]."""
 
 from __future__ import annotations
 

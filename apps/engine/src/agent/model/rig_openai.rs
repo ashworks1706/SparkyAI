@@ -1,5 +1,5 @@
-//! Chat and embeddings over Rig's OpenAI-compatible client, pointed at llama-server.
-//! Rig owns the wire format; this module maps between its types and `core::types`.
+//! Chat and embeddings over the OpenAI-compatible client of Rig, pointed at llama-server.
+//! Rig owns the wire format. This module maps between the Rig types and core::types.
 
 use ::rig_core::client::BearerAuth;
 use ::rig_core::completion::{
@@ -20,7 +20,7 @@ use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelRes
 use crate::core::types::retrieval::RetrievalError;
 use crate::core::types::tool::ToolDefinition;
 
-/// Builds a Rig client for one OpenAI-compatible base URL (ending in `/v1`).
+/// Builds a Rig client for one OpenAI-compatible base URL (ending in /v1).
 pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClient, String> {
     CompletionsClient::builder()
         .api_key(BearerAuth::from(api_key.expose_secret().to_owned()))
@@ -29,7 +29,7 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
         .map_err(|e| e.to_string())
 }
 
-/// `ModelProvider` over Rig's chat-completions model.
+/// ModelProvider over the chat-completions model of Rig.
 #[derive(Clone)]
 pub struct RigChat {
     model: CompletionModel,
@@ -40,8 +40,8 @@ pub struct RigChat {
 }
 
 impl RigChat {
-    /// Wraps `model_name` on `client`. `additional_params` must be a JSON object; it is sent
-    /// verbatim alongside every completion request.
+    /// Wraps model_name on client. additional_params must be a JSON object, sent verbatim
+    /// alongside every completion request.
     pub fn new(
         client: CompletionsClient,
         model_name: impl Into<String>,
@@ -56,9 +56,8 @@ impl RigChat {
     }
 }
 
-/// Splits our flat message list into Rig's preamble plus chat history.
-/// Fails on a tool result that carries no call id or tool name: assembly produced a history the
-/// provider cannot represent.
+/// Splits the flat message list into the Rig preamble plus chat history.
+/// Fails on a tool result that carries no call id or tool name.
 pub(crate) fn to_rig(
     messages: &[Message],
 ) -> Result<(Option<String>, Vec<RigMessage>), ModelError> {
@@ -112,7 +111,7 @@ fn tool_to_rig(t: &ToolDefinition) -> RigTool {
     }
 }
 
-/// Maps Rig's response content into ours. Reasoning and media are dropped.
+/// Maps Rig response content into core types. Reasoning and media are dropped.
 pub(crate) fn from_rig(choice: Vec<AssistantContent>) -> (String, Vec<ToolCall>) {
     let mut text = String::new();
     let mut calls = Vec::new();
@@ -183,17 +182,16 @@ impl ModelProvider for RigChat {
             tools,
             temperature: Some(f64::from(req.temperature)),
             max_tokens: Some(u64::from(req.max_tokens)),
-            // llama-server honours chat_template_kwargs and the llama.cpp sampling fields;
-            // both arrive here from `[model]` configuration.
+            // llama-server honours chat_template_kwargs and the llama.cpp sampling fields.
+            // Both arrive here from [model] configuration.
             additional_params: Some(self.additional_params.clone()),
             output_schema: None,
             record_telemetry_content: false,
         };
         let response = self.model.completion(request).await.map_err(map_error)?;
         let (content, tool_calls) = from_rig(response.choice);
-        // Rig does not surface the provider's finish reason. Tool calls and text are the two
-        // cases it can be read off the response; an empty completion is not guessed at, since
-        // it can be a length cut, a refusal, or reasoning the adapter dropped.
+        // Rig does not surface the finish reason of the provider. Tool calls and text are the
+        // two cases readable off the response. An empty completion stays Unknown.
         let finish_reason = if !tool_calls.is_empty() {
             FinishReason::ToolCalls
         } else if content.trim().is_empty() {
@@ -214,7 +212,7 @@ impl ModelProvider for RigChat {
     }
 }
 
-/// `Embedder` over Rig's OpenAI-compatible embeddings model.
+/// Embedder over the OpenAI-compatible embeddings model of Rig.
 #[derive(Clone)]
 pub struct RigEmbedder {
     model: GenericEmbeddingModel<::rig_core::providers::openai::OpenAICompletionsExt>,
@@ -222,7 +220,7 @@ pub struct RigEmbedder {
 }
 
 impl RigEmbedder {
-    /// Wraps `model_name` on `client`; `dim` must match the index the scraper wrote.
+    /// Wraps model_name on client. dim must match the index the scraper wrote.
     pub fn new(client: CompletionsClient, model_name: impl Into<String>, dim: usize) -> Self {
         Self {
             model: GenericEmbeddingModel::new(client, model_name, dim),
@@ -258,7 +256,7 @@ impl Embedder for RigEmbedder {
                     self.dim
                 )));
             }
-            // f64 → f32 narrowing is intended; the index stores f32.
+            // f64 to f32 narrowing is intended. The index stores f32.
             #[allow(clippy::cast_possible_truncation)]
             out.push(e.vec.into_iter().map(|x| x as f32).collect());
         }

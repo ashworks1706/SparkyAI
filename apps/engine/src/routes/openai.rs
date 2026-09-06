@@ -1,5 +1,5 @@
-//! `POST /v1/chat/completions` and `GET /v1/models`: the agent behind an `OpenAI`-compatible API,
-//! so any off-the-shelf chat client drives the full loop instead of talking to the raw model.
+//! POST /v1/chat/completions and GET /v1/models. The agent behind an OpenAI-compatible API,
+//! which any off-the-shelf chat client can drive.
 
 use std::fmt::Write;
 
@@ -22,14 +22,13 @@ use crate::core::types::openai::{
 use crate::core::types::trace::RunStatus;
 use crate::routes::chat::{ChatState, authorized, too_many};
 
-/// The name the engine answers as. The agent may call several models in one run, so this names
-/// the agent rather than any one of them.
+/// The name the engine answers as. It names the agent, not any one model.
 pub const MODEL: &str = "sparky";
 
-/// Namespace for conversation ids derived from a client's first message.
+/// Namespace for conversation ids derived from the first message of a client.
 const CONVERSATION_NS: Uuid = Uuid::from_u128(0x5041_524b_5941_4931_4f50_454e_4149_0001);
 
-/// The newest user turn, the only one the engine needs: it keeps its own history.
+/// The newest user turn. The engine keeps its own history.
 pub fn last_user_message(messages: &[ChatMessage]) -> Option<&str> {
     messages
         .iter()
@@ -39,16 +38,14 @@ pub fn last_user_message(messages: &[ChatMessage]) -> Option<&str> {
         .filter(|text| !text.is_empty())
 }
 
-/// A conversation id that stays put while a chat grows. `OpenAI` clients resend the whole
-/// history every turn and carry no conversation id, so it is derived from the caller and the
+/// A conversation id that stays put while a chat grows. It is derived from the caller and the
 /// turn that opened the chat.
 pub fn conversation_for(user: &str, first_message: &str) -> Uuid {
     let seed = format!("{user}\u{0}{first_message}");
     Uuid::new_v5(&CONVERSATION_NS, seed.as_bytes())
 }
 
-/// The answer as one block of text: `OpenAI`'s schema has nowhere to put tool runs or
-/// citations, so they follow the answer the way the Discord client renders them.
+/// The answer as one block of text, with tool runs and citations following it.
 pub fn transcript(answer: &Answer) -> String {
     let mut out = answer.text.trim().to_owned();
     if let Some(c) = &answer.confirmation {
@@ -88,7 +85,7 @@ fn finish_reason(status: &RunStatus) -> &'static str {
     }
 }
 
-/// Lists the one model the engine answers as, so clients that probe first do not fail.
+/// Lists the one model the engine answers as.
 pub async fn models() -> Response {
     Json(ModelList {
         object: "list",
@@ -122,9 +119,7 @@ pub async fn completions(
         .map_or(input.as_str(), |m| m.content.trim())
         .to_owned();
 
-    // Without an identity two callers would share a conversation id and, through it, each
-    // other's memories. OpenAI clients all send `user`; one that does not must say who it is
-    // before the engine will keep state for it.
+    // Conversation and memory are keyed by caller identity, so the request must carry one.
     let Some(user) = req.user.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -170,8 +165,7 @@ pub async fn completions(
     let created = chrono::Utc::now().timestamp();
 
     if req.stream {
-        // The engine does not stream tokens, so the answer arrives as a single delta. Clients
-        // that require SSE work; nobody is told a token arrived before it did.
+        // The engine does not stream tokens. The answer arrives as a single delta.
         let first = json!({
             "id": id, "object": "chat.completion.chunk", "created": created, "model": MODEL,
             "choices": [{"index": 0, "delta": {"role": "assistant", "content": content},

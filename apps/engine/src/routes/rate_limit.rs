@@ -3,10 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Fixed-window per-user rate limit, shared by every route that starts a run.
+/// Fixed-window per-user rate limit.
 ///
-/// A window is a whole minute and resets for everyone at once: the point is to stop one caller
-/// from monopolising the model, not to meter usage precisely.
+/// A window is a whole minute and resets for everyone at once.
 #[derive(Clone)]
 pub struct RateLimiter {
     per_min: u32,
@@ -19,7 +18,7 @@ struct RateWindow {
 }
 
 impl RateLimiter {
-    /// Allows `per_min` requests per user per minute. Zero removes the limit.
+    /// Allows per_min requests per user per minute. Zero removes the limit.
     pub fn new(per_min: u32) -> Self {
         Self {
             per_min,
@@ -30,15 +29,14 @@ impl RateLimiter {
         }
     }
 
-    /// Counts one request from `user` and says whether it may run.
+    /// Counts one request from a user and says whether it may run.
     pub fn allow(&self, user: &str) -> bool {
         if self.per_min == 0 {
             return true;
         }
         let Ok(mut state) = self.state.lock() else {
-            // A poisoned lock means a panic elsewhere. Refusing every request on top of that
-            // helps nobody, so the limit opens — but it opens loudly, because a silently
-            // disabled rate limit is indistinguishable from one that is working.
+            // A poisoned lock means a panic elsewhere. The limit opens and the event is
+            // logged at error level.
             tracing::error!(
                 user,
                 "rate limiter lock poisoned; requests are unlimited until restart"

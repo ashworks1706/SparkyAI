@@ -1,4 +1,4 @@
-//! `Retriever` and `Embedder` traits.
+//! Retriever and Embedder traits.
 
 use async_trait::async_trait;
 
@@ -6,7 +6,7 @@ use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
 use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
 
-/// Finds evidence for a query, scoped to the request's tenant.
+/// Finds evidence for a query, scoped to the request tenant.
 #[async_trait]
 pub trait Retriever: Send + Sync {
     /// Returns evidence best first.

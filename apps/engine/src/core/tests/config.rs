@@ -19,8 +19,7 @@ fn every_section_budget_fits_inside_the_prompt_budget() {
     }
 }
 
-/// Loads a config from the sections that have no defaults plus `extra`, so what is under test
-/// is `validate` and the defaults rather than deserialization.
+/// Loads a config from the sections that have no defaults plus extra.
 fn load(extra: &str) -> Result<Config, String> {
     use figment::providers::{Format, Toml};
 
@@ -55,7 +54,7 @@ dim = 1024
     Ok(cfg)
 }
 
-/// The config `extra` produces, or a failure naming why it did not load.
+/// The config extra produces, or a failure naming why it did not load.
 fn ok(extra: &str) -> Config {
     match load(extra) {
         Ok(cfg) => cfg,
@@ -63,7 +62,7 @@ fn ok(extra: &str) -> Config {
     }
 }
 
-/// The rejection `extra` produces, or a failure saying it was accepted.
+/// The rejection extra produces, or a failure saying it was accepted.
 fn err(extra: &str) -> String {
     match load(extra) {
         Ok(_) => unreachable!("expected {extra:?} to be rejected"),
@@ -82,7 +81,7 @@ fn a_bare_config_is_valid_and_takes_every_default() {
 
 #[test]
 fn turning_off_both_retrieval_legs_is_rejected() {
-    // With neither leg the engine would answer every question with no evidence at all.
+    // With neither leg the engine retrieves no evidence.
     let e = err("[retrieval]\ndense = false\nlexical = false\n");
     assert!(e.contains("both off"), "{e}");
 }
@@ -95,7 +94,7 @@ fn a_section_budget_above_the_prompt_budget_is_rejected() {
 
 #[test]
 fn a_text_search_configuration_that_is_not_an_identifier_is_rejected() {
-    // It is interpolated into SQL, so nothing but a plain identifier may reach the database.
+    // It is interpolated into SQL; only a plain identifier may reach the database.
     let e = err("[retrieval]\ntext_search_config = \"english'; drop table chunks --\"\n");
     assert!(e.contains("text_search_config"), "{e}");
 }
@@ -131,7 +130,7 @@ fn two_servers_sharing_a_name_are_rejected() {
     assert!(e.contains("two servers named"), "{e}");
 }
 
-/// The provider request body built from `[model]`, or a failure naming why it was not.
+/// The provider request body built from [model], or a failure naming why it was not.
 fn params(cfg: &Config) -> serde_json::Value {
     match cfg.model.additional_params() {
         Ok(value) => value,
@@ -141,7 +140,7 @@ fn params(cfg: &Config) -> serde_json::Value {
 
 #[test]
 fn sampling_sends_only_what_is_set() {
-    // Everything unset is left to the server's own defaults rather than guessed at here.
+    // Everything unset is left to the server defaults.
     let cfg = ok("[model.sampling]\ntop_p = 0.9\nseed = 7\n");
     let sent = params(&cfg);
     assert_eq!(sent["top_p"], 0.9);
@@ -166,7 +165,7 @@ fn extra_params_that_is_not_a_json_object_is_reported() {
     }
 }
 
-/// The system prompt `cfg` resolves to, or a failure naming why it did not resolve.
+/// The system prompt cfg resolves to, or a failure naming why it did not resolve.
 fn prompt(cfg: &Config) -> String {
     match cfg.system_prompt("built-in") {
         Ok(text) => text,
@@ -197,17 +196,16 @@ fn the_system_prompt_falls_back_then_yields_to_config_then_to_a_file() {
 
 #[test]
 fn a_missing_system_prompt_file_fails_at_boot() {
-    // Booting with the built-in prompt when the operator asked for a file would answer users
-    // in a voice nobody chose.
+    // A named system_file that cannot be read is a boot failure, not a fall back to the
+    // built-in prompt.
     let cfg = ok("[prompt]\nsystem_file = \"/nonexistent/sparky-prompt.md\"\n");
     assert!(cfg.system_prompt("built-in").is_err());
 }
 
 #[test]
 fn a_setting_that_moved_sections_fails_the_boot_rather_than_being_ignored() {
-    // Unknown SPARKY_* variables cannot be rejected wholesale — the apps share one `.env`, so
-    // the engine sees the scraper's keys. A key that moved is named instead, because silently
-    // ignoring it leaves a deployment running with a setting it believes it changed.
+    // Unknown SPARKY_* variables are not rejected wholesale: the apps share one .env, so the
+    // engine sees the scraper keys. A key that moved is named instead.
     let stale = "SPARKY_AGENT__TRACE_DIR";
     match Config::reject_renamed(|key| key == stale) {
         Ok(()) => unreachable!("a moved setting must not be ignored"),

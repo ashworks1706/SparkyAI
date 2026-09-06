@@ -1,4 +1,4 @@
-//! The agent loop: model call → policy → tool execution → repeat until final answer, error,
+//! The agent loop: model call, policy, tool execution, repeated until final answer, error,
 //! cancel, deadline, or step limit.
 
 use std::collections::HashSet;
@@ -49,34 +49,34 @@ pub struct AgentDeps {
     pub conversations: Option<Arc<dyn ConversationStore>>,
     /// Cross-conversation memory, when configured.
     pub memory: Option<Arc<dyn MemoryStore>>,
-    /// Where actions wait for their caller's approval, when configured.
+    /// Where actions wait for approval by the caller, when configured.
     pub confirmations: Option<Arc<dyn ConfirmationStore>>,
 }
 
-/// Why `authorize_all` stopped.
+/// Why authorize_all stopped.
 enum HeldError {
     /// The caller must approve before anything runs.
     Confirm(ConfirmationRequest),
-    /// The action could not be held, so approving it later would be impossible.
+    /// The action could not be held for later approval.
     Store(String),
 }
 
-/// The loop. Cheap to clone; holds only `Arc`s.
+/// The loop. Cheap to clone, holding only Arcs.
 #[derive(Clone)]
 pub struct Agent {
     deps: Arc<AgentDeps>,
     cfg: AgentConfig,
     system_prompt: Arc<str>,
-    /// Wording written around the prompt sections. Owned so it can come from configuration.
+    /// Wording written around the prompt sections. Owned, and sourced from configuration.
     prompt: Arc<PromptText>,
 }
 
 /// The configurable wording assembly writes around the sections.
 #[derive(Debug, Clone)]
 pub struct PromptText {
-    /// Line naming the user, with `{user}` and `{roles}`.
+    /// Line naming the user, with {user} and {roles}.
     pub role_line: String,
-    /// Line naming a user who holds no roles, with `{user}`.
+    /// Line naming a user who holds no roles, with {user}.
     pub role_line_no_roles: String,
     /// Heading above recalled memories.
     pub memory_header: String,
@@ -133,11 +133,10 @@ struct Run<'a> {
     seen_calls: HashSet<String>,
     /// Tools that ran, in order, for the answer and the client.
     tool_runs: Vec<ToolRun>,
-    /// Set after a step of nothing but repeats: the next model call gets no tools, so the
-    /// model has to answer from what it already has.
+    /// Set after a step of nothing but repeats. The next model call gets no tools.
     force_answer: bool,
-    /// Leading `new_turns` entries assembly appends itself, so the prompt must not repeat them.
-    /// One for a fresh request, none when resuming after an approval.
+    /// Leading new_turns entries that assembly appends itself, which the prompt must not
+    /// repeat. One for a fresh request, none when resuming after an approval.
     appended_by_assembly: usize,
 }
 
@@ -166,8 +165,8 @@ impl Agent {
         self
     }
 
-    /// Runs one user message to completion. One `CHAIN` span per request, with the
-    /// conversation as the session so a Discord thread reads as one session in Phoenix.
+    /// Runs one user message to completion. One CHAIN span per request, with the conversation
+    /// as the session.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
         let span = tracing::info_span!(
             "agent.run",
@@ -190,8 +189,8 @@ impl Agent {
 
     /// Runs an action the caller approved and carries on to an answer.
     ///
-    /// The question and the tool call it produced are already in history, so nothing new is
-    /// said here: the tool result is the next turn, and the loop continues from it.
+    /// The question and the tool call it produced are already in history. The tool result is
+    /// the next turn, and the loop continues from it.
     pub async fn resume(
         &self,
         ctx: &RequestContext,
@@ -325,7 +324,7 @@ impl Agent {
                         .await;
                 }
                 Err(error) => {
-                    // The turns are still kept: a failed request is part of the conversation.
+                    // The turns are still kept. A failed request is part of the conversation.
                     let _ = self
                         .conclude(
                             run,
@@ -436,12 +435,12 @@ impl Agent {
     /// One model call and whatever tool calls it asks for.
     async fn step(&self, run: &mut Run<'_>, inputs: &Inputs) -> Result<StepOutcome, ModelError> {
         let ctx = run.ctx;
-        // Prompt history is prior turns plus this request's own turns so far, minus the
+        // Prompt history is prior turns plus the turns of this request so far, minus the
         // current input, which assembly appends itself.
         let mut prompt_history = inputs.history.clone();
         prompt_history.extend(run.new_turns.iter().skip(run.appended_by_assembly).cloned());
         let cpt = self.cfg.budget.chars_per_token;
-        // Tool schemas ride along with every request, so they come out of the same budget.
+        // Tool schemas ride along with every request and come out of the same budget.
         let tool_tokens: usize = self
             .deps
             .tools
@@ -517,7 +516,7 @@ impl Agent {
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
             Ok(calls) => calls,
             Err(HeldError::Store(error)) => {
-                // An action nobody can approve later must not be offered for approval.
+                // An action that cannot be approved later is not offered for approval.
                 return Err(ModelError::Transport(format!(
                     "could not hold the action for approval: {error}"
                 )));
@@ -535,16 +534,16 @@ impl Agent {
         self.execute(run, runnable).await
     }
 
-    /// Runs the calls policy allowed. Repeats are refused and reported; a step made only of
-    /// repeats stalls the run. Stateful tools force in-order execution.
+    /// Runs the calls policy allowed. Repeats are refused and reported, and a step made only
+    /// of repeats stalls the run. Stateful tools force in-order execution.
     async fn execute(
         &self,
         run: &mut Run<'_>,
         runnable: Vec<ToolCall>,
     ) -> Result<StepOutcome, ModelError> {
         let ctx = run.ctx;
-        // A call the model already made with identical arguments is not run again; it is told
-        // so. A step made of nothing but repeats means the model is looping.
+        // A call the model already made with identical arguments is not run again. The model
+        // is told so.
         let mut fresh = Vec::with_capacity(runnable.len());
         let mut repeats = 0usize;
         for call in runnable {
@@ -576,7 +575,7 @@ impl Agent {
         }
 
         // Independent calls run in parallel, each under its own timeout. Anything stateful
-        // (a browser) forces the whole step to run in order.
+        // forces the whole step to run in order.
         let step = run.steps;
         let stateful = fresh.iter().any(|call| {
             self.deps
@@ -606,7 +605,7 @@ impl Agent {
     }
 
     /// Runs policy over every call before anything executes. Denials are fed back as tool
-    /// results; the first confirmation stops the run.
+    /// results, and the first confirmation stops the run.
     async fn authorize_all(
         &self,
         run: &mut Run<'_>,
@@ -691,7 +690,7 @@ impl Agent {
                 temperature: self.cfg.temperature,
             };
             let started = Instant::now();
-            // Full prompt and full reply as JSON: this is what a training example is made of.
+            // Full prompt and full reply as JSON.
             let input_json = json(&request.messages);
             let span = tracing::info_span!(
                 "llm",
@@ -793,8 +792,7 @@ impl Agent {
             },
         );
         let started = Instant::now();
-        // A tool may declare its own budget; a browser step and a database lookup do not
-        // deserve the same one. The request deadline still wins.
+        // A tool may declare its own budget. The request deadline still wins.
         let declared = tool
             .definition()
             .timeout_secs
@@ -845,7 +843,7 @@ impl Agent {
     }
 
     /// Keeps the turns, records the outcome, and builds the answer. Every exit from the loop
-    /// goes through here so no path can drop a turn or return an empty reply.
+    /// goes through here.
     async fn conclude(
         &self,
         run: &Run<'_>,
@@ -915,7 +913,7 @@ fn ms(since: Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// Cuts `text` to at most `max` bytes on a char boundary, marking the cut.
+/// Cuts text to at most max bytes on a char boundary, marking the cut.
 pub(crate) fn truncate(text: &str, max: usize) -> String {
     if text.len() <= max {
         text.to_owned()
@@ -960,16 +958,14 @@ pub(crate) fn redact(value: &Value) -> Value {
     }
 }
 
-/// JSON for a span attribute. A value that will not serialize is recorded as such rather than
-/// as an empty string.
+/// JSON for a span attribute. A value that will not serialize is recorded as unserializable.
 fn json<T: serde::Serialize>(value: &T) -> String {
     serde_json::to_string(value)
         .unwrap_or_else(|e| format!("{{\"unserializable\":{:?}}}", e.to_string()))
 }
 
-/// Wait before retry `attempt`: doubling from `base_ms`, capped at `cap_ms`, spread by a
-/// per-request offset so concurrent requests do not retry in lockstep, and never past the
-/// deadline.
+/// Wait before retry attempt: doubling from base_ms, capped at cap_ms, spread by a per-request
+/// offset, and never past the deadline.
 pub fn backoff(
     attempt: u32,
     request_id: Uuid,

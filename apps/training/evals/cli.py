@@ -1,4 +1,4 @@
-"""`eval run`, `eval compare`, `eval baseline`."""
+"""eval run, eval compare, eval baseline."""
 
 from __future__ import annotations
 
@@ -85,8 +85,7 @@ def run_cmd(
                 continue
             score = _suite(name).score(case, turns)
             if score is None:
-                # The case carries no expectation for this suite; counting it as a pass would
-                # inflate the rate the baseline gate compares against.
+                # The case carries no expectation for this suite, so it is not counted.
                 continue
             results.append(
                 CaseResult(
@@ -102,7 +101,7 @@ def run_cmd(
 
 @app.command("baseline")
 def baseline_cmd(src: Path = typer.Option(None)) -> None:
-    """Promote the last report's suite rates to the committed baseline."""
+    """Promote the last report suite rates to the committed baseline."""
     src = src or settings().training.eval_report_path
     report = EvalReport.model_validate_json(src.read_text())
     baseline = {s.suite: {"passed": s.passed, "total": s.total} for s in report.suites}
@@ -116,7 +115,7 @@ def compare_cmd(
     src: Path = typer.Option(None),
     tolerance: float = typer.Option(0.0, help="Allowed drop in pass rate per suite."),
 ) -> None:
-    """Fail when any suite's pass rate fell below the baseline."""
+    """Fail when any suite pass rate fell below the baseline."""
     src = src or settings().training.eval_report_path
     path = settings().training.baseline_path
     if not path.exists():
@@ -126,7 +125,7 @@ def compare_cmd(
     report = EvalReport.model_validate_json(src.read_text())
     regressions = []
     now = {s.suite: s for s in report.suites}
-    # Iterate the union: a suite that disappeared from the report is a regression, not a pass.
+    # Iterate the union: a suite missing from the report counts as a regression.
     for name in sorted(set(now) | set(baseline)):
         b = baseline.get(name)
         s = now.get(name)

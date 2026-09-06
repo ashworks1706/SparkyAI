@@ -27,7 +27,7 @@ use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
 
-/// Default system prompt, used when neither `prompt.system_file` nor `prompt.system` is set.
+/// Default system prompt, used when neither prompt.system_file nor prompt.system is set.
 /// Versioned by content; changes show up in traces via the prompt hash.
 pub const SYSTEM_PROMPT: &str = "You are Sparky, the ASU AI Society's assistant on Discord. \
 Answer from the evidence you are given or from tools; never from memory of the web. \
@@ -63,7 +63,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         usize::try_from(cfg.embedding.dim)?,
     ));
 
-    // Every configured dependency must be reachable at boot. Nothing degrades silently.
+    // Every configured dependency must be reachable at boot.
     let pool = postgres::connect(
         &cfg.postgres.url,
         cfg.postgres.max_connections,
@@ -125,9 +125,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         shutdown().await;
         let _ = signalled.send(());
     });
-    // Graceful shutdown waits for in-flight requests with no bound of its own. A request
-    // holding a model slot can outlive any deadline the deployment has, so the grace period
-    // is what finally ends the process.
+    // The grace period bounds how long in-flight requests may finish.
     tokio::select! {
         result = server => result?,
         () = expire(wait, grace) => {
@@ -137,7 +135,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Resolves `grace` after the shutdown signal, and never if it does not arrive.
+/// Resolves grace after the shutdown signal, and never if it does not arrive.
 async fn expire(wait: tokio::sync::oneshot::Receiver<()>, grace: Duration) {
     if wait.await.is_err() {
         std::future::pending::<()>().await;
@@ -145,8 +143,8 @@ async fn expire(wait: tokio::sync::oneshot::Receiver<()>, grace: Duration) {
     tokio::time::sleep(grace).await;
 }
 
-/// Where traces are recorded, or a sink that drops them when recording is off. Old traces are
-/// pruned once here rather than on a timer: a long-lived engine otherwise fills its disk.
+/// Where traces are recorded, or a sink that drops them when recording is off. Traces older
+/// than the retention window are pruned once here.
 fn trace_sink(cfg: &Config) -> anyhow::Result<Arc<dyn TraceSink>> {
     if !cfg.trace.enabled {
         tracing::info!("jsonl traces are off");
@@ -166,7 +164,7 @@ fn trace_sink(cfg: &Config) -> anyhow::Result<Arc<dyn TraceSink>> {
     Ok(Arc::new(sink))
 }
 
-/// The loop's limits and budgets, gathered from the sections that own them.
+/// The loop limits and budgets, gathered from the sections that own them.
 fn agent_config(cfg: &Config) -> AgentConfig {
     AgentConfig {
         max_steps: cfg.agent.max_steps,
@@ -187,7 +185,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
     }
 }
 
-/// The registry and queue the scraper's worker serves.
+/// The registry and queue the scraper worker serves.
 fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
     Arc::new(PgSourceQueries::new(
         pool.clone(),
@@ -195,7 +193,7 @@ fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
     ))
 }
 
-/// Hybrid retrieval settings for the `PostgreSQL` adapter.
+/// Hybrid retrieval settings for the PostgreSQL adapter.
 fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
     RetrievalTuning {
         candidates: cfg.retrieval.candidates,
@@ -207,8 +205,7 @@ fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
     }
 }
 
-/// Every tool the model may call, with `tools.disabled` removed at registration so a disabled
-/// tool costs no context and cannot be reached at all.
+/// Every tool the model may call, with tools.disabled removed at registration.
 async fn build_tools(
     cfg: &Config,
     retriever: Arc<PgRetriever>,
@@ -223,8 +220,7 @@ async fn build_tools(
         }
     }
     if cfg.tools.query_source {
-        // An empty registry means the scraper has never published one, so there is nothing to
-        // offer. Registering the tool anyway would advertise sources that do not exist.
+        // An empty registry means the scraper has published no sources.
         let sources = queries.sources().await?;
         if sources.is_empty() {
             tracing::info!("no query sources registered; run `just worker` to publish them");

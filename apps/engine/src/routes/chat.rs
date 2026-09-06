@@ -1,5 +1,5 @@
-//! `POST /chat`: one user message in, one answer with citations out. `POST /chat/stream` runs
-//! the same turn and reports each step as it happens before the same answer.
+//! POST /chat takes one user message and returns one answer with citations. POST /chat/stream
+//! runs the same turn and reports each step as it happens before the same answer.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -62,7 +62,7 @@ pub fn too_many(user: &str) -> Response {
         .into_response()
 }
 
-/// Parses a W3C `traceparent` header into a remote parent context.
+/// Parses a W3C traceparent header into a remote parent context.
 pub fn parse_traceparent(value: &str) -> Option<opentelemetry::Context> {
     let mut parts = value.trim().split('-');
     let (_version, trace_id, span_id, flags) =
@@ -76,8 +76,8 @@ pub fn parse_traceparent(value: &str) -> Option<opentelemetry::Context> {
         .then(|| opentelemetry::Context::new().with_remote_span_context(remote))
 }
 
-/// Handles one chat turn. Runs under an `http.chat` span parented to the caller's
-/// `traceparent`, so the bot's interaction and the engine's loop share one trace.
+/// Handles one chat turn. Runs under an http.chat span parented to the traceparent of the
+/// caller.
 pub async fn chat(
     State(state): State<ChatState>,
     headers: HeaderMap,
@@ -104,8 +104,8 @@ pub async fn chat(
     }
 }
 
-/// The same turn as `chat`, reported as it happens: a `progress` event per step worth showing,
-/// then one `answer` event with the usual `ChatResponse` or an error body, then `done`.
+/// The same turn as chat, reported as it happens. A progress event per step worth showing,
+/// then one answer event with a ChatResponse or an error body, then done.
 pub async fn stream(
     State(state): State<ChatState>,
     headers: HeaderMap,
@@ -149,8 +149,8 @@ pub async fn stream(
     Sse::new(progress.chain(tail).map(Ok::<Event, Infallible>)).into_response()
 }
 
-/// One server-sent event. A payload that cannot be serialised is reported as an error to the
-/// client and logged, never sent as an empty body that would read as a valid answer.
+/// One server-sent event. A payload that cannot be serialised is reported to the client as an
+/// error and logged.
 fn sse<T: Serialize>(name: &str, body: &T) -> Event {
     match serde_json::to_string(body) {
         Ok(json) => Event::default().event(name).data(json),
@@ -275,7 +275,7 @@ pub async fn confirm(
         }
     };
     let Some(pending) = claimed else {
-        // Expired, already answered, or someone else's. All three read the same to the caller.
+        // Expired, already answered, or held for another caller.
         return Failure::new(
             StatusCode::CONFLICT,
             ctx.request_id,

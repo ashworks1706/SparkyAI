@@ -1,4 +1,4 @@
-//! `ProposedAction`, `ConfirmationRequest`, `Decision`.
+//! ProposedAction, ConfirmationRequest, Decision.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -32,11 +32,10 @@ pub struct ConfirmationRequest {
 
 /// A confirmation the engine is holding, with everything needed to run it once approved.
 ///
-/// The caller never sends the arguments back: they are read from here, so an approval cannot
-/// change what it approves.
+/// The caller never sends the arguments back; they are read from here.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingAction {
-    /// Provider call id the tool result must answer, so the loop can carry on from it.
+    /// Provider call id the tool result must answer.
     pub call_id: String,
     /// What runs on approval.
     pub action: ProposedAction,

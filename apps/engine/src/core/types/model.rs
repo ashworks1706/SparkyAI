@@ -1,4 +1,4 @@
-//! `ModelRequest`, `ModelResponse`, `Usage`, `FinishReason`, `ModelError`.
+//! ModelRequest, ModelResponse, Usage, FinishReason, ModelError.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub enum FinishReason {
     Stop,
     /// Wants tools executed.
     ToolCalls,
-    /// Hit `max_tokens`.
+    /// Hit max_tokens.
     Length,
     /// Provider reported something else.
     Other,
@@ -49,7 +49,7 @@ impl Usage {
         self.prompt_tokens + self.completion_tokens
     }
 
-    /// Adds another call's usage into this one.
+    /// Adds the usage of another call into this one.
     pub fn add(&mut self, other: Usage) {
         self.prompt_tokens += other.prompt_tokens;
         self.completion_tokens += other.completion_tokens;
@@ -96,7 +96,7 @@ pub enum ModelError {
         /// Response body, truncated.
         body: String,
     },
-    /// Response could not be parsed into `ModelResponse`.
+    /// Response could not be parsed into ModelResponse.
     #[error("model response malformed: {0}")]
     Malformed(String),
     /// The request deadline passed.

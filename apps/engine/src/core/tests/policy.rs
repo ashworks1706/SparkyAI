@@ -1,4 +1,4 @@
-//! `RiskPolicy` decisions and confirmation payload hashing.
+//! RiskPolicy decisions and confirmation payload hashing.
 
 use std::time::Duration;
 
@@ -99,8 +99,7 @@ async fn an_empty_write_role_list_denies_everyone() {
 
 #[tokio::test]
 async fn confirm_from_moves_where_the_loop_stops_to_ask() {
-    // Lowering it holds drafts too, which is what a deployment wants while a new tool is
-    // being trusted.
+    // Lowering it holds drafts too.
     let cautious = RiskPolicy::new(vec!["MANAGE_GUILD".into()], false, RiskClass::PrepareWrite);
     assert!(matches!(
         cautious

@@ -31,8 +31,8 @@ fn filling_a_page_in_is_a_draft() {
 
 #[test]
 fn anything_that_can_commit_the_page_needs_confirmation() {
-    // Playwright MCP ships no tool with "submit" in its name: a form is submitted by clicking
-    // a button or pressing Enter, and browser_evaluate runs arbitrary script in the page.
+    // Playwright MCP ships no tool named submit. A form is submitted by clicking a button or
+    // pressing Enter, and browser_evaluate runs arbitrary script in the page.
     for name in [
         "browser_click",
         "browser_press_key",
@@ -86,8 +86,8 @@ fn compact_schema_trims_descriptions_and_noise() {
     );
 }
 
-/// Live smoke test against a running Playwright MCP server. Start it with `just browser`, then
-/// `cargo test -p engine -- --ignored mcp_server`.
+/// Live smoke test against a running Playwright MCP server. Start it with just browser, then
+/// cargo test -p engine -- --ignored mcp_server.
 #[tokio::test]
 #[ignore = "needs `just browser`"]
 async fn mcp_server_lists_the_tools_the_engine_asks_for() {
@@ -133,8 +133,7 @@ fn a_snapshot_saved_to_a_file_tells_the_model_how_to_read_the_page() {
     use crate::agent::tools::mcp::usable_output;
 
     // browser_navigate writes the page to a file inside the MCP container and returns a path
-    // the engine cannot open. Left alone it reads as "### Snapshot" and the model moves on
-    // believing it has the page.
+    // the engine cannot open.
     let navigate = "### Page\n- Page URL: https://example.com/\n### Snapshot\n\
                     - [Snapshot](.playwright-mcp/page-2026-09-05T04-07-54-110Z.yml)";
     let out = usable_output(navigate.to_owned());

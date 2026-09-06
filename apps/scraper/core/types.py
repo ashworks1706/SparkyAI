@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Source:
-    """A registered public ASU source. A row in `sources`, never a folder."""
+    """A registered public ASU source. A row in sources, never a folder."""
 
     key: str
     url: str
@@ -30,9 +30,9 @@ class QueryParam:
 
 @dataclass(frozen=True)
 class QuerySource:
-    """A source the model queries live with parameters, rather than one fetched on a schedule.
+    """A source the model queries live with parameters. Not fetched on a schedule.
 
-    `to_url` turns the model's parameters into the URL to fetch. Results answer one caller and
+    to_url turns the model parameters into the URL to fetch. Results answer one caller and
     are never written to the retrieval index.
     """
 
@@ -58,7 +58,7 @@ class QueryError(RuntimeError):
 
 @dataclass(frozen=True)
 class Job:
-    """A claimed `jobs` row."""
+    """A claimed jobs row."""
 
     id: uuid.UUID
     kind: str
@@ -67,8 +67,8 @@ class Job:
 
 @dataclass(frozen=True)
 class Fetched:
-    """One fetched page. `text` is set when the fetcher already produced clean text (markdown
-    from Firecrawl); otherwise the pipeline extracts it from `body`."""
+    """One fetched page. text is set when the fetcher produced clean text (markdown from
+    Firecrawl). When text is None the pipeline extracts it from body."""
 
     url: str
     status: int
@@ -80,7 +80,7 @@ class Fetched:
 
 @dataclass(frozen=True)
 class SourceRow:
-    """The `sources` row for a source."""
+    """The sources row for a source."""
 
     id: uuid.UUID
     key: str

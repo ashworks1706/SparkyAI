@@ -81,3 +81,5 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+# Comments are plain ASCII with no backticks. See Conventions in AGENTS.md.
+doc_markdown = "allow"

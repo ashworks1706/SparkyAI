@@ -25,7 +25,7 @@ impl LogWriter {
         })
     }
 
-    /// Appends and flushes one line to the unit's log file.
+    /// Appends and flushes one line to the unit log file.
     pub fn append(&mut self, unit: &str, line: &LogLine) -> std::io::Result<()> {
         let name = log_name(unit);
         if !self.files.contains_key(&name) {
@@ -67,7 +67,7 @@ fn log_name(unit: &str) -> String {
     format!("{}.log", stem.trim_matches('-'))
 }
 
-/// Keeps the newest `cap` lines of one unit.
+/// Keeps the newest cap lines of one unit.
 #[derive(Debug)]
 pub struct LogBuffer {
     lines: VecDeque<LogLine>,
@@ -75,7 +75,7 @@ pub struct LogBuffer {
 }
 
 impl LogBuffer {
-    /// An empty buffer that holds at most `cap` lines.
+    /// An empty buffer that holds at most cap lines.
     pub fn new(cap: usize) -> Self {
         Self {
             lines: VecDeque::with_capacity(cap.min(1024)),
@@ -111,8 +111,8 @@ impl LogBuffer {
         self.lines.clear();
     }
 
-    /// Index of the next line containing `needle` (case-insensitive) after `from`, wrapping
-    /// around; `backwards` searches toward older lines.
+    /// Index of the next line containing needle, case-insensitive, after from, wrapping
+    /// around. Setting backwards searches toward older lines.
     pub fn find(&self, needle: &str, from: usize, backwards: bool) -> Option<usize> {
         if needle.is_empty() || self.lines.is_empty() {
             return None;

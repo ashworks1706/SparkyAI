@@ -138,8 +138,7 @@ fn a_log_line_cannot_move_the_cursor() {
         "   Compiling engine"
     );
     assert_eq!(sanitize_line("plain"), "plain");
-    // docker compose rewrites its progress lines in place; a carriage return that reaches the
-    // terminal returns the cursor to column 0 and overwrites whatever is drawn to the left.
+    // docker compose rewrites its progress lines in place with a carriage return.
     assert_eq!(
         sanitize_line("Container deploy-embed-1  Recreated\r"),
         "Container deploy-embed-1  Recreated"

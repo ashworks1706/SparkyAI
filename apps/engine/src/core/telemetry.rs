@@ -1,5 +1,5 @@
-//! Logging and `OpenTelemetry` export over OTLP/gRPC to Phoenix (or any OTLP collector).
-//! Spans carry `OpenInference` attributes. An empty endpoint disables export.
+//! Logging and OpenTelemetry export over OTLP/gRPC to Phoenix (or any OTLP collector).
+//! Spans carry OpenInference attributes. An empty endpoint disables export.
 
 use std::time::Duration;
 
@@ -24,7 +24,7 @@ impl Drop for Guard {
     }
 }
 
-/// Installs the global `tracing` subscriber with fmt and optional OTLP layers.
+/// Installs the global tracing subscriber with fmt and optional OTLP layers.
 pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let service = cfg
         .service_name
@@ -47,8 +47,7 @@ pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyho
                 .build()?;
             let provider = SdkTracerProvider::builder()
                 .with_batch_exporter(exporter)
-                // Ratio sampling keeps whole traces: a sampled root carries its children, so a
-                // ratio below 1 thins traces rather than punching holes in them.
+                // Ratio sampling keeps whole traces: a sampled root carries its children.
                 .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
                     cfg.sample_ratio,
                 ))))
@@ -71,8 +70,7 @@ pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyho
     } else {
         tracing_subscriber::fmt::layer().json().boxed()
     };
-    // Export only this crate's spans. Dependencies (serenity's gateway, Rig, tower-http)
-    // instrument themselves too, and that noise would bury the request tree in Phoenix.
+    // Export only the spans of this crate.
     let prefix = cfg
         .span_target_prefix
         .as_deref()

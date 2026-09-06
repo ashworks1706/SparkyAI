@@ -1,4 +1,4 @@
-# SparkyAI monorepo tasks. `just` lists them; `just <recipe>`.
+# SparkyAI monorepo tasks. Running just with no arguments lists them.
 # Units: engine, discord, cli (Rust) · scraper, training (Python) · web (TypeScript) · infra (Compose)
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
@@ -14,7 +14,7 @@ doctor:
 
 # Create .env from the example (no-op if it exists)
 env:
-    @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env — fill in tokens and model URLs"; }
+    @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env, fill in tokens and model URLs"; }
 
 # Install the pre-commit hook (runs the gate for touched units)
 hooks:
@@ -130,7 +130,7 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores + Phoenix trace UI (http://localhost:6006); run the engine on the host with `just engine`.
+# Datastores and the Phoenix trace UI on http://localhost:6006. The engine runs on the host..
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio phoenix
 

@@ -1,4 +1,4 @@
-//! `TraceEvent`, `RunStatus`, `TraceRecord`.
+//! TraceEvent, RunStatus, TraceRecord.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -84,7 +84,7 @@ pub enum TraceEvent {
         tool: String,
         /// Validated arguments.
         arguments: Value,
-        /// `Ok` text or `Err` message, truncated.
+        /// Ok text or Err message, truncated.
         result: Result<String, String>,
         /// Wall time.
         duration_ms: u64,
@@ -131,10 +131,9 @@ impl TraceEvent {
         }
     }
 
-    /// What to show someone waiting on this run, or `None` when the event is bookkeeping.
+    /// What to show someone waiting on this run, or None when the event is bookkeeping.
     ///
-    /// The match is exhaustive on purpose: a new event has to decide whether it is worth
-    /// interrupting the caller for, rather than silently defaulting to hidden.
+    /// The match is exhaustive: a new event must decide whether it is shown.
     pub fn progress(&self) -> Option<String> {
         match self {
             Self::ToolStarted { tool, .. } => Some(match tool.as_str() {
@@ -188,8 +187,7 @@ pub enum RunStatus {
 impl RunStatus {
     /// What to tell the caller when the loop stopped without the model writing an answer.
     ///
-    /// `None` only for `Answered`, where the model's own text is the answer. The match is
-    /// exhaustive so a new status cannot end up returning an empty reply.
+    /// None only for Answered, where the model text is the answer. The match is exhaustive.
     pub fn explain(&self) -> Option<&'static str> {
         match self {
             Self::Answered => None,

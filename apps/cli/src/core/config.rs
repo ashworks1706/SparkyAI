@@ -1,5 +1,5 @@
-//! Settings from `SPARKY_<SECTION>__<KEY>` env vars. Every field has a default so the console
-//! runs from a fresh clone; the engine's own `.env` is honoured when present.
+//! Settings from SPARKY_<SECTION>__<KEY> env vars. Every field has a default. The engine .env
+//! is honoured when present.
 
 use std::path::{Path, PathBuf};
 
@@ -55,7 +55,7 @@ impl Default for Model {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Cli {
-    /// Phoenix UI, probed for health and opened with `o`.
+    /// Phoenix UI, probed for health and opened with the o key.
     pub phoenix_url: String,
     /// Lines kept per unit.
     pub log_lines: usize,
@@ -76,7 +76,7 @@ impl Default for Cli {
     }
 }
 
-/// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
+/// TOML layer read when SPARKY_CONFIG_FILE is unset. Missing is not an error.
 pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
 
 /// Loads settings from the TOML layer then the environment, which wins.
@@ -90,7 +90,7 @@ pub fn load() -> anyhow::Result<Config> {
         .map_err(|e| anyhow::anyhow!("config: {e}"))
 }
 
-/// Walks up from `start` to the directory holding the repo's `justfile`.
+/// Walks up from start to the directory holding the repo justfile.
 pub fn repo_root(start: &Path) -> Option<PathBuf> {
     start
         .ancestors()

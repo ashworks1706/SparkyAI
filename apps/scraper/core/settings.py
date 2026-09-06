@@ -33,7 +33,7 @@ class Firecrawl(BaseModel):
     base_url: str = "http://localhost:3002"
     api_key: SecretStr = SecretStr("")
     timeout_ms: int = 60_000
-    # Many ASU pages fill in content after load; give them a moment before extracting.
+    # ASU pages fill in content after load; wait before extracting.
     wait_for_ms: int = 5_000
     only_main_content: bool = True
 
@@ -46,19 +46,19 @@ class Telemetry(BaseModel):
 class Scraper(BaseModel):
     # Public ASU content is shared across every guild; the engine reads this tenant for all.
     tenant_id: str = "public"
-    # "firecrawl" renders JS and returns markdown; "http" is plain httpx + bs4 (Playwright when
+    # firecrawl renders JS and returns markdown; http is plain httpx + bs4 (Playwright when
     # the source needs JS).
     fetcher: Literal["firecrawl", "http"] = "firecrawl"
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
-    # Longest live query result handed back to the engine; it must fit the prompt.
+    # Longest live query result handed back to the engine.
     query_max_chars: int = 12_000
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"
 
     def chunker_version(self) -> str:
-        """Records the settings the chunks were actually cut with, so re-chunking is decidable."""
+        """Records the settings the chunks were cut with."""
         return f"para-{self.chunk_chars}-{self.chunk_overlap_chars}-v1"
 
 

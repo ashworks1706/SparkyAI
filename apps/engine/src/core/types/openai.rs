@@ -1,12 +1,12 @@
-//! Wire shapes for the `OpenAI`-compatible surface, so off-the-shelf chat clients can drive the
-//! agent. Only the fields the engine honours are modelled; the rest are ignored on the way in.
+//! Wire shapes for the OpenAI-compatible surface. Only the fields the engine honours are
+//! modelled; the rest are ignored on the way in.
 
 use serde::{Deserialize, Serialize};
 
-/// One turn as an `OpenAI` client sends or receives it.
+/// One turn as an OpenAI client sends or receives it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChatMessage {
-    /// `system`, `user`, or `assistant`.
+    /// system, user, or assistant.
     pub role: String,
     /// Message text. Clients may send null for tool-only turns.
     #[serde(default, deserialize_with = "null_as_empty")]
@@ -20,7 +20,7 @@ where
     Ok(Option::<String>::deserialize(d)?.unwrap_or_default())
 }
 
-/// `POST /v1/chat/completions` body.
+/// POST /v1/chat/completions body.
 #[derive(Debug, Deserialize)]
 pub struct CompletionRequest {
     /// Full history as the client knows it; the engine reads the newest user turn.
@@ -28,17 +28,17 @@ pub struct CompletionRequest {
     /// Clients that want server-sent events. The engine sends the answer as one event.
     #[serde(default)]
     pub stream: bool,
-    /// Caller identity, used to keep one client's chats apart.
+    /// Caller identity, used to keep the chats of one client apart.
     #[serde(default)]
     pub user: Option<String>,
 }
 
-/// `POST /v1/chat/completions` response.
+/// POST /v1/chat/completions response.
 #[derive(Debug, Serialize)]
 pub struct CompletionResponse {
-    /// Completion id; carries the engine's request id so it can be found in a trace.
+    /// Completion id; carries the engine request id.
     pub id: String,
-    /// Always `chat.completion`.
+    /// Always chat.completion.
     pub object: &'static str,
     /// Unix seconds.
     pub created: i64,
@@ -57,11 +57,11 @@ pub struct Choice {
     pub index: u32,
     /// The assistant turn.
     pub message: ChatMessage,
-    /// `stop`, or the run status when it ended some other way.
+    /// stop, or the run status when it ended some other way.
     pub finish_reason: String,
 }
 
-/// Token totals in `OpenAI`'s shape.
+/// Token totals in the OpenAI shape.
 #[derive(Debug, Serialize)]
 #[allow(
     clippy::struct_field_names,
@@ -76,24 +76,24 @@ pub struct CompletionUsage {
     pub total_tokens: u32,
 }
 
-/// `GET /v1/models` response.
+/// GET /v1/models response.
 #[derive(Debug, Serialize)]
 pub struct ModelList {
-    /// Always `list`.
+    /// Always list.
     pub object: &'static str,
     /// The single model the engine answers as.
     pub data: Vec<ModelCard>,
 }
 
-/// One entry in `GET /v1/models`.
+/// One entry in GET /v1/models.
 #[derive(Debug, Serialize)]
 pub struct ModelCard {
     /// Model name.
     pub id: String,
-    /// Always `model`.
+    /// Always model.
     pub object: &'static str,
     /// Unix seconds.
     pub created: i64,
-    /// Always `sparky`.
+    /// Always sparky.
     pub owned_by: &'static str,
 }

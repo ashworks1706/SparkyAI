@@ -1,15 +1,14 @@
-//! Buttons the bot puts on its own messages, and the `custom_id` that identifies them.
+//! Buttons the bot puts on its own messages, and the custom_id that identifies them.
 //!
-//! A component is described here as a `ButtonSpec` and turned into serenity's builders at the
-//! edge, so what a message offers can be decided and tested without a Discord connection.
-//! Adding a button is a new `Action`, a row that includes it, and an arm in the bot's dispatch.
+//! A component is described here as a ButtonSpec and turned into serenity builders at the edge.
+//! Adding a button is a new Action, a row that includes it, and an arm in the bot dispatch.
 
 use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
 use uuid::Uuid;
 
 use crate::core::types::ChatResponse;
 
-/// Marks a `custom_id` as this bot's, so a component from anywhere else is ignored.
+/// Marks a custom_id as belonging to this bot. A component from anywhere else is ignored.
 const PREFIX: &str = "sparky";
 
 /// What a button does when someone presses it.
@@ -38,8 +37,8 @@ impl Action {
     }
 }
 
-/// Everything a pressed button has to tell the bot. Discord caps `custom_id` at 100 bytes, so
-/// the two ids are written without dashes.
+/// Everything a pressed button has to tell the bot. Discord caps custom_id at 100 bytes. The
+/// two ids are written without dashes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CustomId {
     /// What to do.
@@ -60,7 +59,7 @@ impl CustomId {
         }
     }
 
-    /// Reads an id back, or `None` when the bot did not mint it.
+    /// Reads an id back, or None when the bot did not mint it.
     pub fn parse(raw: &str) -> Option<Self> {
         let mut parts = raw.split(':');
         if parts.next()? != PREFIX {
@@ -92,7 +91,7 @@ impl std::fmt::Display for CustomId {
     }
 }
 
-/// One button, described without serenity so it can be decided and tested on its own.
+/// One button, described without serenity types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ButtonSpec {
     /// What pressing it means.

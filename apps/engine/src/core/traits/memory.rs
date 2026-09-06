@@ -1,4 +1,4 @@
-//! `MemoryStore` trait. Recall is always scoped to tenant and user.
+//! MemoryStore trait. Recall is always scoped to tenant and user.
 
 use async_trait::async_trait;
 

@@ -1,4 +1,4 @@
-//! `RetrievalQuery`, `RetrievalError`.
+//! RetrievalQuery, RetrievalError.
 
 /// A retrieval request.
 #[derive(Debug, Clone)]

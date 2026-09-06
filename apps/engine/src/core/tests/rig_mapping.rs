@@ -1,4 +1,4 @@
-//! Mapping between `core::types` messages and Rig's message model.
+//! Mapping between core::types messages and the Rig message model.
 
 use ::rig_core::completion::AssistantContent;
 use ::rig_core::message::Message as RigMessage;

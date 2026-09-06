@@ -355,8 +355,7 @@ fn backoff_grows_and_spreads_retries_across_requests() {
         Duration::from_millis(5)
     );
 
-    // The cap is configuration, not a constant: a deployment behind a slow model can wait
-    // longer, and one in front of an impatient user cannot.
+    // The cap is configuration, not a constant.
     assert!(backoff(6, id, plenty, 250, 1_000) <= Duration::from_secs(1));
     assert!(backoff(6, id, plenty, 1_000, 30_000) > Duration::from_secs(8));
 }

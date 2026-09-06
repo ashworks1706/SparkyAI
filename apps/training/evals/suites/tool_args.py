@@ -1,4 +1,4 @@
-"""Did the expected tool receive arguments containing the expected values?"""
+"""Scores whether the expected tool received arguments containing the expected values."""
 
 from __future__ import annotations
 

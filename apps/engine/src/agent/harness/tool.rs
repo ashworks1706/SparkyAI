@@ -1,4 +1,4 @@
-//! `ToolSet`: the tools available to one agent, keyed by name.
+//! ToolSet: the tools available to one agent, keyed by name.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

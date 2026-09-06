@@ -1,4 +1,4 @@
-//! `ModelProvider` and `Embedder` implementations, both through Rig's OpenAI-compatible client
+//! ModelProvider and Embedder implementations, both through the OpenAI-compatible client of Rig
 //! pointed at llama-server.
 
 pub mod limit;

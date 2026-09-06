@@ -1,4 +1,4 @@
-//! Typed HTTP client for the engine's `/chat`. Service token auth.
+//! Typed HTTP client for the engine /chat endpoint. Service token auth.
 
 use std::time::Duration;
 
@@ -23,8 +23,8 @@ pub struct EngineClient {
 }
 
 impl EngineClient {
-    /// Builds a client for `base_url`. `request_timeout` must exceed the engine's own request
-    /// budget, or the bot gives up on answers the engine is still writing.
+    /// Builds a client for base_url. The request_timeout must exceed the engine request
+    /// budget.
     pub fn new(
         base_url: &str,
         token: SecretString,
@@ -67,8 +67,8 @@ impl EngineClient {
         serde_json::from_str(&body).map_err(|e| EngineError::Transport(format!("bad body: {e}")))
     }
 
-    /// Runs one chat turn, reporting progress on `tx` until the answer or a failure arrives.
-    /// Exactly one `Answer` or `Failed` is sent last.
+    /// Runs one chat turn, reporting progress on tx until the answer or a failure arrives.
+    /// Exactly one Answer or Failed is sent last.
     pub async fn chat_stream(&self, req: &ChatRequest, tx: UnboundedSender<Update>) {
         let mut request = self
             .http
@@ -131,8 +131,7 @@ impl EngineClient {
                     },
                     "error" => {
                         answered = true;
-                        // The frame carries the status the JSON route would have used; without
-                        // it a capacity 503 would be indistinguishable from an outage.
+                        // The frame carries the status the JSON route would have used.
                         let frame = serde_json::from_str::<ErrorFrame>(&data);
                         let (status, body) = match &frame {
                             Ok(f) => (f.status.unwrap_or(502), f.error.clone()),
@@ -152,7 +151,7 @@ impl EngineClient {
     }
 }
 
-/// W3C `traceparent` for the current span, if tracing is exporting.
+/// W3C traceparent for the current span, if tracing is exporting.
 pub fn current_traceparent() -> Option<String> {
     let cx = tracing::Span::current().context();
     let sc = cx.span().span_context().clone();

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class Message(BaseModel):
-    """One chat turn, matching the engine's `core::types::message::Message`."""
+    """One chat turn, matching the engine core::types::message::Message."""
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str = ""
@@ -19,7 +19,7 @@ class Message(BaseModel):
 
 
 class TrainingExample(BaseModel):
-    """One model call as it happened: the full prompt and the reply. One `llm` span."""
+    """One model call: the full prompt and the reply. One llm span."""
 
     id: str
     messages: list[Message]
@@ -31,8 +31,7 @@ class TrainingExample(BaseModel):
 
 
 class Expectation(BaseModel):
-    """What a golden case expects of the engine. Every field is optional; suites read the
-    ones they care about."""
+    """What a golden case expects of the engine. Every field is optional."""
 
     status: str | None = None
     source_key: str | None = None
@@ -47,7 +46,7 @@ class Expectation(BaseModel):
 
 
 class EvalCase(BaseModel):
-    """A hand-written question with expectations. `follow_up` makes a two-turn case."""
+    """A hand-written question with expectations. follow_up makes a two-turn case."""
 
     id: str
     suites: list[str]
@@ -58,7 +57,7 @@ class EvalCase(BaseModel):
 
 
 class TurnResult(BaseModel):
-    """The engine's answer to one turn plus its trace."""
+    """The engine answer to one turn plus its trace."""
 
     request_id: str
     conversation_id: str
@@ -128,7 +127,7 @@ class ExportConfig(BaseModel):
 
 
 class SftConfig(BaseModel):
-    """`configs/train/sft.yaml`. Every knob is explicit; an unknown or missing key fails."""
+    """configs/train/sft.yaml. An unknown or missing key fails."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -143,7 +142,7 @@ class SftConfig(BaseModel):
 
 
 class SftPlan(BaseModel):
-    """What `train sft` would do, printed before it does it."""
+    """What train sft would do, printed before it does it."""
 
     base_model: str
     dataset: Path
@@ -156,7 +155,7 @@ class SftPlan(BaseModel):
 
 
 class ExportError(RuntimeError):
-    """Phoenix answered with something other than complete `llm` spans."""
+    """Phoenix answered with something other than complete llm spans."""
 
 
 class RunnerError(RuntimeError):

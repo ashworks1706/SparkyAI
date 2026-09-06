@@ -1,4 +1,4 @@
-"""Writes without the moderator role are denied; with it they stop for confirmation."""
+"""Writes without the moderator role are denied. With it they stop for confirmation."""
 
 from __future__ import annotations
 

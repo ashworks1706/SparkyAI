@@ -1,4 +1,4 @@
-//! `RequestContext`: identity, deadline, cancellation.
+//! RequestContext: identity, deadline, cancellation.
 
 use std::time::Duration;
 

@@ -1,11 +1,11 @@
-//! `Budget`, `Sections`, `Assembled` — inputs and output of context assembly.
+//! Budget, Sections, and Assembled are the inputs and output of context assembly.
 
 use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::Memory;
 use crate::core::types::message::Message;
 
-/// Budgets for one assembled prompt, in estimated tokens. `Default` is implemented in
-/// `core::config`, where the numbers are declared, so the two cannot drift apart.
+/// Budgets for one assembled prompt, in estimated tokens. Default is implemented in
+/// core::config.
 #[derive(Debug, Clone, Copy)]
 pub struct Budget {
     /// Whole prompt, everything included.
@@ -20,13 +20,12 @@ pub struct Budget {
     pub chars_per_token: usize,
 }
 
-/// The text assembly writes around the sections. Every field is configurable, so the wording
-/// of a prompt is a setting rather than a rebuild.
+/// The text assembly writes around the sections. Every field is configurable.
 #[derive(Debug, Clone, Copy)]
 pub struct Templates<'a> {
-    /// Line naming the user, with `{user}` and `{roles}`.
+    /// Line naming the user, with {user} and {roles}.
     pub role_line: &'a str,
-    /// Line naming a user who holds no roles, with `{user}`.
+    /// Line naming a user who holds no roles, with {user}.
     pub role_line_no_roles: &'a str,
     /// Heading above recalled memories.
     pub memory_header: &'a str,
@@ -34,9 +33,9 @@ pub struct Templates<'a> {
     pub evidence_header: &'a str,
 }
 
-/// Default line naming the user, with `{user}` and `{roles}`.
+/// Default line naming the user, with {user} and {roles}.
 pub const ROLE_LINE: &str = "The user is `{user}`. Roles: {roles}.";
-/// Default line naming a user who holds no roles, with `{user}`.
+/// Default line naming a user who holds no roles, with {user}.
 pub const ROLE_LINE_NO_ROLES: &str = "The user is `{user}`. They hold no special roles.";
 /// Default heading above recalled memories.
 pub const MEMORY_HEADER: &str = "What you remember about this user:";
@@ -64,9 +63,9 @@ pub struct Sections<'a> {
     pub memory: &'a [Memory],
     /// Retrieved evidence, best first.
     pub evidence: &'a [Evidence],
-    /// Prior turns and this request's own tool exchanges, oldest first.
+    /// Prior turns and the tool exchanges of this request, oldest first.
     pub history: &'a [Message],
-    /// The user's current message.
+    /// The current message from the user.
     pub input: &'a str,
     /// Wording written around the sections.
     pub templates: Templates<'a>,

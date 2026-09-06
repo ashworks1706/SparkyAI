@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
 
-  # Model serving. Not started by default: `just model`. One llama-server per model.
+  # Model serving. Started by just model. One llama-server per model.
   chat:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     profiles: [model]
@@ -125,7 +125,7 @@ services:
     ports: ["6006:6006", "4317:4317"]
     restart: unless-stopped
 
-  # Firecrawl, self-hosted: the scraper's fetch + extract. Not started by default: `just crawl`.
+  # Firecrawl, self-hosted. The scraper fetch and extract path. Started by just crawl.
   # No API key: USE_DB_AUTHENTICATION is off. Five containers, all internal except the API.
   firecrawl:
     image: ghcr.io/firecrawl/firecrawl:latest
@@ -141,7 +141,7 @@ services:
       NUQ_RABBITMQ_URL: amqp://firecrawl-rabbitmq:5672
       POSTGRES_HOST: firecrawl-postgres
       POSTGRES_PORT: 5432
-      # nuq-postgres initialises its schema in the default `postgres` database.
+      # nuq-postgres initialises its schema in the default postgres database.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
       POSTGRES_DB: postgres
@@ -178,11 +178,11 @@ services:
     restart: unless-stopped
 
   # Playwright MCP: the browser as tools for the engine's own loop. Not started by default:
-  # `just browser`. Headless, isolated profile, loopback-only port.
+  # Started by just browser. Headless, isolated profile, loopback-only port.
   playwright-mcp:
     image: mcr.microsoft.com/playwright/mcp:latest
     profiles: [browser]
-    # The image entrypoint is already `node /app/cli.js --headless --browser chromium`.
+    # The image entrypoint is already node /app/cli.js --headless --browser chromium.
     command: ["--isolated", "--port", "8931", "--host", "0.0.0.0", "--allowed-hosts", "localhost:8931,127.0.0.1:8931,playwright-mcp:8931"]
     init: true
     ports: ["127.0.0.1:8931:8931"]

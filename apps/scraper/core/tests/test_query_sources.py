@@ -11,7 +11,6 @@ from scraper.worker import run_job
 
 
 def test_term_codes_are_derived_rather_than_tabulated():
-    # v1 carried a hardcoded map that went stale after three terms.
     assert term_code("Fall 2024") == "2247"
     assert term_code("Spring 2025") == "2251"
     assert term_code("Summer 2024") == "2244"
@@ -33,7 +32,7 @@ def test_class_search_url_carries_only_the_filters_that_were_given():
     assert "term=2267" in url
     assert "keywords=CSE+310" in url
     assert "level=undergrad" in url
-    # Empty filters would narrow the search to nothing rather than leaving it open.
+    # Empty filters are omitted from the URL.
     assert "daysOfWeek" not in url
 
 

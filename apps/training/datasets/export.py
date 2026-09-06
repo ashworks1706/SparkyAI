@@ -1,7 +1,7 @@
-"""Pull `llm` spans from Phoenix and turn each into a `TrainingExample`.
+"""Pull llm spans from Phoenix and turn each into a TrainingExample.
 
-Only the engine records full prompts (as JSON on the `llm` span), so Phoenix is the source.
-The JSONL trace holds events, not prompts, and is used by evals rather than here.
+The engine records full prompts as JSON on the llm span. The JSONL trace holds events, not
+prompts, and is read by evals.
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ query($first: Int!, $after: String) {
 
 
 def span_to_example(span: dict[str, Any]) -> TrainingExample | None:
-    """One Phoenix span row → example. Spans that are not `llm`, or that ended before a reply
-    was recorded, are skipped; a malformed `llm` span is an error, since the engine wrote it."""
+    """One Phoenix span row to an example. Spans that are not llm, or that ended before a reply
+    was recorded, are skipped. A malformed llm span raises."""
     if span.get("name") != "llm":
         return None
     span_id = span["context"]["spanId"]
@@ -78,7 +78,7 @@ def _page(url: str, after: str | None) -> dict[str, Any]:
 
 
 def fetch_spans(phoenix_url: str | None = None) -> list[dict[str, Any]]:
-    """Every span in every project. Pages through Phoenix so nothing is silently cut off."""
+    """Every span in every project, paged through Phoenix."""
     url = (phoenix_url or settings().training.phoenix_url).rstrip("/") + "/graphql"
     spans: list[dict[str, Any]] = []
     after: str | None = None

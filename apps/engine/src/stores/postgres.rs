@@ -1,5 +1,5 @@
-//! `PostgreSQL` adapter: `Retriever` (pgvector dense + FTS lexical, fused with RRF),
-//! `ConversationStore`, and `MemoryStore` over one connection pool.
+//! PostgreSQL adapter: Retriever (pgvector dense + FTS lexical, fused with RRF),
+//! ConversationStore, and MemoryStore over one connection pool.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -43,21 +43,21 @@ pub async fn connect(
         .map_err(|e| StoreError::Database(e.to_string()))
 }
 
-/// Used as a `map_err` function pointer, so it takes the error by value.
+/// Maps a sqlx error to a StoreError. Takes the error by value for use as a map_err function
+/// pointer.
 #[allow(clippy::needless_pass_by_value)]
 fn db(e: sqlx::Error) -> StoreError {
     StoreError::Database(e.to_string())
 }
 
-/// How the two retrieval legs are run and fused. Built from `[retrieval]`; there is no
-/// `Default`, so these values exist in configuration and nowhere else.
+/// How the two retrieval legs are run and fused. Built from [retrieval]; there is no Default.
 #[derive(Debug, Clone)]
 pub struct RetrievalTuning {
     /// Candidates pulled from each leg before fusion.
     pub candidates: i64,
     /// Reciprocal rank fusion constant.
     pub rrf_k: f32,
-    /// `PostgreSQL` text search configuration for the lexical leg.
+    /// PostgreSQL text search configuration for the lexical leg.
     pub text_search_config: String,
     /// Run the pgvector leg.
     pub dense: bool,
@@ -67,7 +67,7 @@ pub struct RetrievalTuning {
     pub min_score: f32,
 }
 
-/// Hybrid retrieval over the `chunks` table.
+/// Hybrid retrieval over the chunks table.
 pub struct PgRetriever {
     pool: PgPool,
     embedder: Arc<dyn Embedder>,
@@ -75,7 +75,7 @@ pub struct PgRetriever {
 }
 
 impl PgRetriever {
-    /// Builds a retriever. Fused order is final.
+    /// Builds a retriever.
     pub fn new(pool: PgPool, embedder: Arc<dyn Embedder>, tuning: RetrievalTuning) -> Self {
         Self {
             pool,
@@ -106,20 +106,19 @@ fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Erro
     })
 }
 
-/// Public ASU content is written under tenant `public` and visible to every guild.
+/// Public ASU content is written under tenant public and visible to every guild.
 const SELECT: &str =
     "select c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, c.fetched_at
     from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')
       and (cardinality($2::text[]) = 0 or c.category = any($2))";
 
-/// A `PostgreSQL` string literal. Used for the text search configuration, which names an
-/// object and so cannot be a bind parameter.
+/// Quotes a value as a PostgreSQL string literal.
 pub(crate) fn quote_literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-/// pgvector's text input form: `[0.1,0.2,...]`.
+/// pgvector text input form: [0.1,0.2,...].
 pub(crate) fn vector_literal(v: &[f32]) -> String {
     let mut s = String::with_capacity(v.len() * 10 + 2);
     s.push('[');
@@ -133,7 +132,7 @@ pub(crate) fn vector_literal(v: &[f32]) -> String {
     s
 }
 
-/// Reciprocal rank fusion: each ranked list contributes 1 / (k + rank).
+/// Reciprocal rank fusion. Each ranked list contributes 1 / (k + rank).
 pub(crate) fn rrf(lists: &[Vec<Uuid>], k: f32) -> Vec<(Uuid, f32)> {
     let mut scores: HashMap<Uuid, f32> = HashMap::new();
     for list in lists {
@@ -194,8 +193,8 @@ impl Retriever for PgRetriever {
         }
 
         if self.tuning.lexical {
-            // The text search configuration names a Postgres object, so it cannot be bound as
-            // a parameter. It is quoted as a literal, which is why it is validated at load.
+            // The text search configuration names a Postgres object and cannot be bound as a
+            // parameter. It is quoted as a literal and validated at load.
             let cfg = quote_literal(&self.tuning.text_search_config);
             let sql = format!(
                 "{SELECT} and c.tsv @@ websearch_to_tsquery({cfg}, $3)
@@ -345,7 +344,7 @@ fn role_str(m: &Message) -> &'static str {
     }
 }
 
-/// Memories table. Every query is scoped by tenant and user; the interface cannot cross users.
+/// Memories table. Every query is scoped by tenant and user.
 pub struct PgMemory {
     pool: PgPool,
 }
@@ -402,7 +401,7 @@ impl MemoryStore for PgMemory {
     }
 }
 
-/// Actions waiting on their caller's approval, in `confirmations`.
+/// Actions waiting on caller approval, in confirmations.
 pub struct PgConfirmations {
     pool: PgPool,
 }
@@ -454,8 +453,8 @@ impl ConfirmationStore for PgConfirmations {
         token: Uuid,
         approved: bool,
     ) -> Result<Option<PendingAction>, StoreError> {
-        // One statement: the row moves out of `pending` as it is read, so a second click and a
-        // second caller both find nothing. The user join is what limits it to whoever asked.
+        // One statement. The row moves out of pending as it is read, and the user join limits
+        // it to the caller who was asked.
         let row = sqlx::query(
             "update confirmations c
                 set status = case when $1 then 'confirmed' else 'denied' end,
@@ -486,20 +485,19 @@ impl ConfirmationStore for PgConfirmations {
     }
 }
 
-/// The registry and job queue the scraper's worker serves.
+/// The registry and job queue the scraper worker serves.
 ///
-/// The engine never fetches the page: it writes a `jobs` row and waits for the answer to appear
-/// on it. That is the whole channel between the two processes.
+/// The engine writes a jobs row and waits for the answer to appear on it.
 pub struct PgSourceQueries {
     pool: PgPool,
     poll: Duration,
 }
 
-/// `jobs.kind` the scraper's worker claims.
+/// The jobs.kind the scraper worker claims.
 const QUERY_JOB_KIND: &str = "source_query";
 
 impl PgSourceQueries {
-    /// Polls a queued job every `poll` until it resolves or the request runs out of time.
+    /// Polls a queued job every poll interval until it resolves or the request runs out of time.
     pub fn new(pool: PgPool, interval: Duration) -> Self {
         Self {
             pool,
@@ -606,7 +604,7 @@ impl SourceQueries for PgSourceQueries {
                 "cancelled" => return Err(QueryError::Cancelled),
                 _ => {}
             }
-            // Sleeping past the deadline would report a timeout later than it happened.
+            // The sleep never runs past the deadline.
             tokio::time::sleep(self.poll.min(ctx.remaining())).await;
         }
     }

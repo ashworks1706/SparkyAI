@@ -92,8 +92,7 @@ fn the_wire_form_reads_without_knowing_the_variant() {
     };
     let wire = serde_json::to_value(&progress).unwrap_or(json!(null));
 
-    // A client renders `text` and needs no match arm of its own; `event` is for the ones
-    // that want to special-case a kind they already know.
+    // A client renders text and needs no match arm of its own; event names the kind.
     assert_eq!(wire["text"], json!("opening the page"));
     assert_eq!(wire["event"], json!("tool_started"));
 }
