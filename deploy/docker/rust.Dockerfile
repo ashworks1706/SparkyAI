@@ -17,5 +17,7 @@ RUN cargo build --release -p engine -p discord
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/target/release/engine /engine
 COPY --from=builder /app/target/release/discord /discord
+# Settings layer. The working directory is /, and the environment overrides it.
+COPY sparky.toml /sparky.toml
 EXPOSE 8080
 ENTRYPOINT ["/engine"]

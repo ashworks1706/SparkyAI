@@ -1,12 +1,26 @@
-"""Settings from SPARKY_* env: where traces, Phoenix, the engine, and data live."""
+"""Settings from sparky.toml and SPARKY_* env: where traces, Phoenix, the engine, and data live."""
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
+
+
+def _toml_files() -> tuple[Path, ...]:
+    """Where sparky.toml is looked for. SPARKY_CONFIG_FILE overrides both paths."""
+    override = os.environ.get("SPARKY_CONFIG_FILE")
+    if override:
+        return (Path(override),)
+    return (Path("../../sparky.toml"), Path("sparky.toml"))
 
 
 class Training(BaseModel):
@@ -46,6 +60,23 @@ class Settings(BaseSettings):
     )
 
     training: Training = Training()
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Environment first, then .env, then sparky.toml. Earlier sources win."""
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            TomlConfigSettingsSource(settings_cls, toml_file=_toml_files()),
+        )
 
 
 @lru_cache(maxsize=1)

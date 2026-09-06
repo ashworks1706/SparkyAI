@@ -7,6 +7,8 @@ WORKDIR /app
 COPY apps/scraper/pyproject.toml apps/scraper/.python-version ./
 RUN uv sync --no-dev --no-install-project
 COPY apps/scraper .
+# Settings layer. The working directory is /app, and the environment overrides it.
+COPY sparky.toml /app/sparky.toml
 RUN uv sync --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 ENTRYPOINT ["scraper"]

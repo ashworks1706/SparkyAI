@@ -12,7 +12,7 @@ default:
 doctor:
     ./scripts/doctor.sh
 
-# Create .env from the example (no-op if it exists)
+# Create .env from the example (no-op if it exists). Settings live in the committed sparky.toml
 env:
     @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env, fill in tokens and model URLs"; }
 

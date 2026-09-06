@@ -24,7 +24,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
 | Observability | OpenTelemetry → Phoenix; logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
-| Config | `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` env vars, which win | `config.rs`, `settings.py`, `.env.example`, `sparky.example.toml` |
+| Config | `sparky.toml` (committed), then `SPARKY_*` env vars from `.env`, which win | `sparky.toml`, `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
 
@@ -450,7 +450,9 @@ A worker refusal (unknown source, missing parameter, unreadable page) comes back
 
 ## Configuration
 
-Two layers, lowest first: an optional TOML file (`sparky.toml`, or `SPARKY_CONFIG_FILE`) and `SPARKY_<SECTION>__<KEY>` environment variables. The environment always wins, so secrets stay in `.env` and lists and nested tables — MCP servers above all — stay in the file. A missing file is not an error, and every section but the endpoints has defaults, so a bare `.env` still boots. `sparky.example.toml` documents every knob at its default.
+Two layers, lowest first: `sparky.toml` and `SPARKY_<SECTION>__<KEY>` environment variables, which win. `sparky.toml` is committed and holds every tunable value, so a change to the retrieval fusion or a prompt budget is reviewed like code. `.env` is not committed and holds only secrets, per-machine URLs, and what docker compose and the justfile read. Both images bake `sparky.toml` in; compose overrides the service URLs through the environment.
+
+Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
 
 Sections: `app`, `engine`, `discord`, `model` (with `model.sampling`), `postgres`, `embedding`, `telemetry`, `agent`, `prompt`, `policy`, `retrieval`, `tools`, `query`, `trace`, `http`, `mcp`, and `bot` for the Discord binary. A default belongs to exactly one settings struct: the adapters build themselves from those and declare none of their own, so a changed setting cannot leave a stale copy behind. The engine validates at boot and refuses to start on a combination it cannot serve: both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers sharing a name, a text search configuration that is not a plain identifier, or a `prompt.system_file` it cannot read. Nothing is silently clamped.
 

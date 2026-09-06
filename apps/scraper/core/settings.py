@@ -1,12 +1,27 @@
-"""Settings from SPARKY_* env: postgres, object_store, embedding, scraper."""
+"""Settings from sparky.toml and SPARKY_* env: postgres, object_store, embedding, scraper."""
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
+
+
+def _toml_files() -> tuple[Path, ...]:
+    """Where sparky.toml is looked for. SPARKY_CONFIG_FILE overrides both paths."""
+    override = os.environ.get("SPARKY_CONFIG_FILE")
+    if override:
+        return (Path(override),)
+    return (Path("../../sparky.toml"), Path("sparky.toml"))
 
 
 class Postgres(BaseModel):
@@ -77,6 +92,23 @@ class Settings(BaseSettings):
     firecrawl: Firecrawl = Firecrawl()
     telemetry: Telemetry = Telemetry()
     scraper: Scraper = Scraper()
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Environment first, then .env, then sparky.toml. Earlier sources win."""
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            TomlConfigSettingsSource(settings_cls, toml_file=_toml_files()),
+        )
 
 
 @lru_cache(maxsize=1)

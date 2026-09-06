@@ -14,7 +14,8 @@ Starts engine, discord, scraper, Phoenix (trace UI at http://localhost:6006), Po
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
-cp .env.example .env               # production values; SPARKY_APP__ENV=production
+cp .env.example .env               # secrets and per-machine URLs; SPARKY_APP__ENV=production
+                                   # settings live in the committed sparky.toml
 SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no host ports
 just prod-logs engine
 ```

@@ -1,0 +1,187 @@
+# SparkyAI settings. Committed, reviewed, and read by every app.
+#
+# Two layers, lowest first: this file, then SPARKY_<SECTION>__<KEY> environment variables,
+# which win. Secrets, per-machine URLs and the values docker compose overrides live in .env.
+# Anything tunable lives here.
+#
+# Read by apps/engine, apps/discord and apps/cli (Rust, figment) and by apps/scraper and
+# apps/training (Python, tomllib through pydantic-settings). Point elsewhere with
+# SPARKY_CONFIG_FILE.
+
+[app]
+log_level = "info,sparky=debug"
+
+# ---------------------------------------------------------------- the agent loop
+[agent]
+max_steps = 8
+max_model_retries = 2
+request_timeout_secs = 90
+tool_timeout_secs = 20
+confirmation_ttl_secs = 600
+model_slots = 2                # match llama-server --parallel
+model_queue_wait_secs = 30
+temperature = 0.3
+history_turns = 20
+memory_recall_limit = 10
+
+# Prompt budgets in estimated tokens. A section budget above the total is rejected at boot.
+# chars_per_token is what makes an estimate an estimate. Lower it for a tokenizer that splits
+# URLs and course codes finely.
+prompt_budget_tokens = 3000
+evidence_budget_tokens = 1200
+history_budget_tokens = 1000
+memory_budget_tokens = 300
+chars_per_token = 4
+
+retry_base_ms = 250
+retry_cap_ms = 8000
+max_span_value_chars = 32000
+
+# ---------------------------------------------------------------- what the model is told
+# Changing any of this changes the prompt hash. system_file beats system, which beats the
+# built-in default.
+[prompt]
+# system_file = "prompts/sparky.md"
+role_line = "The user is `{user}`. Roles: {roles}."
+role_line_no_roles = "The user is `{user}`. They hold no special roles."
+memory_header = "What you remember about this user:"
+evidence_header = "Evidence from ASU sources. Answer only from this; cite sources by number. If it does not answer the question, say so."
+
+# ---------------------------------------------------------------- the model
+# base_url and api_key are per-machine and live in .env.
+[model]
+name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
+max_tokens = 2048
+thinking = false
+usd_per_m_prompt = 0.0
+usd_per_m_completion = 0.0
+
+# Only what is set is sent. The server defaults apply to the rest.
+[model.sampling]
+# top_p = 0.9
+# top_k = 40
+# min_p = 0.05
+# repeat_penalty = 1.05
+# seed = 42
+
+# base_url and api_key are per-machine and live in .env.
+[embedding]
+name = "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0"
+dim = 1024
+batch_size = 32                # apps/scraper only
+
+# ---------------------------------------------------------------- retrieval
+# Two legs fused with reciprocal rank fusion. Turning both off is rejected at boot.
+[retrieval]
+top_k = 6                      # evidence chunks handed to the prompt
+candidates = 20                # pulled from each leg before fusion
+rrf_k = 60.0
+text_search_config = "english"
+dense = true
+lexical = true
+min_score = 0.0
+
+# ---------------------------------------------------------------- what may run
+# Risk classes in order: read_public, read_authenticated, prepare_write, external_write,
+# destructive, forbidden.
+[policy]
+write_roles = ["MANAGE_GUILD"]
+allow_authenticated_reads = false
+confirm_from = "external_write"
+
+[tools]
+disabled = []
+knowledge_search = true
+query_source = true
+
+# Live source queries need just worker. Without it every query times out.
+[query]
+timeout_secs = 90
+poll_ms = 400
+
+# ---------------------------------------------------------------- MCP
+# playwright_url is per-machine and lives in .env. Additional servers go in [[mcp.servers]],
+# which the environment cannot express.
+[mcp]
+required_props_only = true
+max_output_chars = 6000
+max_schema_description_chars = 80
+max_tool_description_chars = 160
+
+# [[mcp.servers]]
+# name = "example"
+# url = "http://localhost:9000/mcp"
+# tools = []
+# required_props_only = true
+# tool_timeout_secs = 45
+
+# ---------------------------------------------------------------- traces
+[trace]
+enabled = true
+dir = ".sparky/traces"
+max_file_bytes = 0             # 0 removes the limit
+retention_hours = 0            # 0 keeps them forever
+
+# otlp_endpoint is per-machine and lives in .env.
+[telemetry]
+sample_ratio = 1.0
+export_timeout_secs = 10
+
+# ---------------------------------------------------------------- the HTTP surface
+[http]
+max_body_bytes = 1048576
+concurrency_limit = 0          # 0 removes the limit
+rate_limit_per_min = 0         # per user, 0 removes the limit
+cors_origins = []              # ["*"] for the Vite dev server
+shutdown_grace_secs = 10
+
+# ---------------------------------------------------------------- the Discord bot
+[bot]
+channels = []                  # empty answers in every channel it can see
+max_message_chars = 2000       # the Discord hard limit
+edit_every_ms = 1500
+cooldown_secs = 0
+write_capability = "MANAGE_GUILD"
+
+# ---------------------------------------------------------------- postgres
+# url carries the password and lives in .env.
+[postgres]
+max_connections = 10
+acquire_timeout_secs = 5
+
+# ---------------------------------------------------------------- the scraper
+[scraper]
+tenant_id = "public"           # public ASU content, readable by every guild
+fetcher = "firecrawl"          # firecrawl renders JS and returns markdown; http is plain httpx
+user_agent = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
+request_timeout_secs = 30.0
+chunk_chars = 1200
+chunk_overlap_chars = 200
+query_max_chars = 12000
+parser_version = "bs4-text-v1"
+
+# base_url is per-machine and lives in .env.
+[firecrawl]
+timeout_ms = 60000
+wait_for_ms = 5000             # ASU pages fill in content after load
+only_main_content = true
+
+# endpoint and keys are per-machine and live in .env.
+[object_store]
+bucket = "sparky"
+region = "us-east-1"
+
+# ---------------------------------------------------------------- the developer console
+[cli]
+phoenix_url = "http://localhost:6006"
+log_lines = 5000
+log_dir = ".sparky/logs"
+health_interval_secs = 5
+
+# ---------------------------------------------------------------- training and evals
+# engine_url, phoenix_url and engine_service_token are per-machine and live in .env.
+[training]
+state_dir = "../../.sparky"
+cases_dir = "evals/cases"
+baseline_path = "evals/baseline.json"
+request_timeout_secs = 180.0
