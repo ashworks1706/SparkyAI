@@ -12,10 +12,15 @@
 - [ ] A fixture per source with the fields it must yield, so an extractor change fails in CI rather than in an answer
 - [ ] First deployment
 
-## 4 — Memory, moderator ops, admin v0.4
+## 4 — Memory and harness v0.4
 
 - [ ] Give the agent memory across conversations, with user-visible control and deletion
 - [ ] Personalized discovery and deadlines
+- [ ] Cite only the evidence that entered the prompt; today every retrieved chunk is cited and tool-found sources are not
+- [ ] One token estimator; `agent`, `assemble` and `message` each carry their own
+- [ ] Derive `AgentConfig` from `config::Agent` instead of a second set of defaults nothing keeps in step
+- [ ] Retrieval fusion tunable without a rebuild: candidate count and RRF `k` are literals
+- [ ] Redact tool output the way arguments already are, before authenticated pages reach a trace
 - [ ] Moderator ops: tickets, announcements, polls, escalation
 - [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
 
@@ -31,10 +36,11 @@ Only after Phase 4 yields clean interaction data.
 - [ ] Post-train in stages, each gated on evals (`just train sft` + `just eval compare`; pipeline in place, no run yet)
 - [ ] Release: weights, quantized variants, config, dataset description, evals, limitations
 
-## 7 — Sandboxed automation v0.6
+## 7 — Authenticated tasks v0.6
 
 - [ ] Authenticated browser sessions through the Playwright MCP server: one isolated context per user, allowlisted domains, limits, logging, cleanup
 - [ ] Human confirmation for any authenticated or consequential submission
+- [ ] MyASU: the first authenticated integration, read-only before anything else
 
 ## 8 — v1.0
 
@@ -42,4 +48,6 @@ Only after Phase 4 yields clean interaction data.
 
 ## Out of scope until stated otherwise
 
-MyASU / authenticated integrations · GPA or coursework access · unrestricted browser autonomy · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.
+GPA or coursework access · unrestricted browser autonomy · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.
+
+MyASU moved into phase 7 on 2026-09-05; see `decisions/0001-myasu.md`.

@@ -47,7 +47,7 @@ apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the i
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
-docs/             ROADMAP.md, ARCHITECTURE.md, decisions/
+docs/             ROADMAP.md, ARCHITECTURE.md, decisions/ (one note per decision, numbered)
 ```
 
 Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
