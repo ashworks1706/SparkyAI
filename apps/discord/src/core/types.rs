@@ -21,8 +21,7 @@ pub struct ChatRequest {
     pub message: String,
 }
 
-/// A pending confirmation the engine wants the user to approve. The token is not carried
-/// because the bot cannot relay approvals until the Phase 3 confirm endpoint exists.
+/// An action the engine is holding until the caller who asked answers it.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Confirmation {
     /// Single-use token the buttons echo back so the engine can find the held action.
