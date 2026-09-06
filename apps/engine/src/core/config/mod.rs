@@ -441,6 +441,13 @@ pub struct Tools {
     pub disabled: Vec<String>,
     /// Register the built-in retrieval tool.
     pub knowledge_search: bool,
+    /// Register the live source-query tool, when the scraper has published a registry.
+    pub query_source: bool,
+    /// Budget for one live query, end to end. A live fetch is far slower than a database read,
+    /// so this overrides `agent.tool_timeout_secs` for this tool.
+    pub query_timeout_secs: u64,
+    /// How often the engine checks whether the worker has answered.
+    pub query_poll_ms: u64,
 }
 
 impl Default for Tools {
@@ -448,6 +455,9 @@ impl Default for Tools {
         Self {
             disabled: Vec::new(),
             knowledge_search: true,
+            query_source: true,
+            query_timeout_secs: 90,
+            query_poll_ms: 400,
         }
     }
 }
@@ -661,6 +671,9 @@ impl Config {
                 "retrieval.text_search_config must be a plain identifier, got {:?}",
                 self.retrieval.text_search_config
             ));
+        }
+        if self.tools.query_source && self.tools.query_poll_ms == 0 {
+            return invalid("tools.query_poll_ms must be at least 1".into());
         }
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());

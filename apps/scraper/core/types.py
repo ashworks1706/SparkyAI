@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 
@@ -16,6 +16,53 @@ class Source:
     category: str
     fetch_every_hours: int = 24
     needs_js: bool = False
+
+
+@dataclass(frozen=True)
+class QueryParam:
+    """One parameter a query source accepts. Shown to the model, checked by the worker."""
+
+    name: str
+    description: str
+    required: bool = False
+    example: str | None = None
+
+
+@dataclass(frozen=True)
+class QuerySource:
+    """A source the model queries live with parameters, rather than one fetched on a schedule.
+
+    `build_url` turns the model's parameters into the URL to fetch. Results answer one caller
+    and are never written to the retrieval index.
+    """
+
+    key: str
+    description: str
+    params: tuple[QueryParam, ...]
+    build_url: Callable[[dict[str, str]], str]
+    needs_js: bool = False
+
+
+@dataclass(frozen=True)
+class QueryResult:
+    """What one live query produced."""
+
+    source: str
+    url: str
+    text: str
+
+
+class QueryError(RuntimeError):
+    """The query could not be answered; the reason goes back to the model."""
+
+
+@dataclass(frozen=True)
+class Job:
+    """A claimed `jobs` row."""
+
+    id: uuid.UUID
+    kind: str
+    input: dict
 
 
 @dataclass(frozen=True)

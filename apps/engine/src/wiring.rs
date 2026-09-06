@@ -11,9 +11,11 @@ use crate::agent::model::limit::Limited;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::knowledge_search::KnowledgeSearch;
 use crate::agent::tools::mcp::{self, McpLimits};
+use crate::agent::tools::query_source::QuerySourceTool;
 use crate::core::config::Config;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::model::ModelProvider;
+use crate::core::traits::query::SourceQueries;
 use crate::core::traits::tool::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
@@ -22,7 +24,7 @@ use crate::routes::Limits;
 use crate::routes::chat::{ChatState, RateLimiter};
 use crate::routes::health::HealthState;
 use crate::stores::postgres::{
-    self, PgConfirmations, PgConversations, PgMemory, PgRetriever, RetrievalTuning,
+    self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
 
 /// Default system prompt, used when neither `prompt.system_file` nor `prompt.system` is set.
@@ -78,7 +80,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
-    let tools = build_tools(&cfg, retriever.clone()).await?;
+    let tools = build_tools(&cfg, retriever.clone(), source_queries(&cfg, &pool)).await?;
 
     let agent_cfg = agent_config(&cfg);
 
@@ -199,6 +201,14 @@ fn agent_config(cfg: &Config) -> AgentConfig {
     }
 }
 
+/// The registry and queue the scraper's worker serves.
+fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
+    Arc::new(PgSourceQueries::new(
+        pool.clone(),
+        Duration::from_millis(cfg.tools.query_poll_ms),
+    ))
+}
+
 /// Hybrid retrieval settings for the `PostgreSQL` adapter.
 fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
     RetrievalTuning {
@@ -213,13 +223,35 @@ fn retrieval_tuning(cfg: &Config) -> RetrievalTuning {
 
 /// Every tool the model may call, with `tools.disabled` removed at registration so a disabled
 /// tool costs no context and cannot be reached at all.
-async fn build_tools(cfg: &Config, retriever: Arc<PgRetriever>) -> anyhow::Result<ToolSet> {
+async fn build_tools(
+    cfg: &Config,
+    retriever: Arc<PgRetriever>,
+    queries: Arc<dyn SourceQueries>,
+) -> anyhow::Result<ToolSet> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
     if cfg.tools.knowledge_search {
         let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(retriever, cfg.retrieval.top_k));
         if !disabled(&search.definition().name) {
             tools = tools.with(search);
+        }
+    }
+    if cfg.tools.query_source {
+        // An empty registry means the scraper has never published one, so there is nothing to
+        // offer. Registering the tool anyway would advertise sources that do not exist.
+        let sources = queries.sources().await?;
+        if sources.is_empty() {
+            tracing::info!("no query sources registered; run `just worker` to publish them");
+        } else {
+            let tool: Arc<dyn Tool> = Arc::new(QuerySourceTool::new(
+                queries,
+                &sources,
+                cfg.tools.query_timeout_secs,
+            ));
+            if !disabled(&tool.definition().name) {
+                tracing::info!(count = sources.len(), "query sources registered");
+                tools = tools.with(tool);
+            }
         }
     }
     for server in cfg.mcp.resolved_servers() {

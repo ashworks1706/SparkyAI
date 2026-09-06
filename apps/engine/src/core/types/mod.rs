@@ -12,6 +12,7 @@ pub mod message;
 pub mod model;
 pub mod openai;
 pub mod policy;
+pub mod query;
 pub mod retrieval;
 pub mod store;
 pub mod tool;

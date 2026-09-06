@@ -141,6 +141,7 @@ impl TraceEvent {
                 "search_knowledge_base" => "searching the knowledge base".to_owned(),
                 "browser_navigate" => "opening the page".to_owned(),
                 "browser_snapshot" => "reading the page".to_owned(),
+                "query_source" => "checking a live ASU page".to_owned(),
                 other => format!("running {other}"),
             }),
             Self::Retrieval {

@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 import typer
 
-from scraper import pipeline
+from scraper import pipeline, worker
 from scraper.core import telemetry
 from scraper.sources import SOURCES
 from scraper.store import postgres
@@ -55,6 +55,14 @@ def run(
             typer.echo(f"{key}: FAILED — {e}", err=True)
     if failures:
         raise typer.Exit(1)
+
+
+@app.command(name="worker")
+def worker_cmd(
+    poll_secs: float = typer.Option(0.5, help="How often to look for a queued job."),
+) -> None:
+    """Answer live query jobs the engine queues. Publishes the source registry, then blocks."""
+    worker.serve(poll_secs=poll_secs)
 
 
 @app.command()

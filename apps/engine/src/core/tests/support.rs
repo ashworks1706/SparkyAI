@@ -12,6 +12,7 @@ use crate::agent::harness::tool::ToolSet;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::model::ModelProvider;
+use crate::core::traits::query::SourceQueries;
 use crate::core::traits::tool::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
@@ -19,6 +20,7 @@ use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::policy::PendingAction;
+use crate::core::types::query::{QueryError, QueryOutcome, QueryRequest, QuerySourceInfo};
 use crate::core::types::store::StoreError;
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
@@ -334,5 +336,63 @@ impl Tool for Boom {
         _args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         Err(ToolError::Failed("nope".into()))
+    }
+}
+
+/// A `SourceQueries` double: a fixed registry and a canned outcome per source.
+pub struct FakeQueries {
+    sources: Vec<QuerySourceInfo>,
+    answers: std::collections::HashMap<String, Result<QueryOutcome, String>>,
+}
+
+impl FakeQueries {
+    /// Offers `sources` and rejects anything not given an answer.
+    pub fn new(sources: Vec<QuerySourceInfo>) -> Self {
+        Self {
+            sources,
+            answers: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Answers `source` with this page text.
+    pub fn answering(mut self, source: &str, text: &str) -> Self {
+        self.answers.insert(
+            source.to_owned(),
+            Ok(QueryOutcome {
+                source: source.to_owned(),
+                url: format!("https://example.test/{source}"),
+                text: text.to_owned(),
+            }),
+        );
+        self
+    }
+
+    /// Rejects `source` with this reason, as the worker would.
+    pub fn rejecting(mut self, source: &str, reason: &str) -> Self {
+        self.answers
+            .insert(source.to_owned(), Err(reason.to_owned()));
+        self
+    }
+}
+
+#[async_trait]
+impl SourceQueries for FakeQueries {
+    async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError> {
+        Ok(self.sources.clone())
+    }
+
+    async fn run(
+        &self,
+        _ctx: &RequestContext,
+        request: &QueryRequest,
+    ) -> Result<QueryOutcome, QueryError> {
+        match self.answers.get(&request.source) {
+            Some(Ok(outcome)) => Ok(outcome.clone()),
+            Some(Err(reason)) => Err(QueryError::Rejected(reason.clone())),
+            None => Err(QueryError::Rejected(format!(
+                "unknown source {:?}",
+                request.source
+            ))),
+        }
     }
 }

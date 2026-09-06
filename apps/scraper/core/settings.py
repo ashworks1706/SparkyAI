@@ -51,6 +51,8 @@ class Scraper(BaseModel):
     fetcher: Literal["firecrawl", "http"] = "firecrawl"
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
+    # Longest live query result handed back to the engine; it must fit the prompt.
+    query_max_chars: int = 12_000
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"

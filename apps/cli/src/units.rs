@@ -143,6 +143,12 @@ fn processes() -> Vec<Unit> {
             None,
         ),
         process(
+            "worker",
+            &["worker"],
+            "answers the engine's live source queries",
+            None,
+        ),
+        process(
             "web",
             &["web"],
             "Vite dev server",

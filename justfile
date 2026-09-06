@@ -83,6 +83,10 @@ check-training:
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
 
+# Answer the engine's live source queries; publishes the source registry on start
+worker *ARGS:
+    cd apps/scraper && uv run scraper worker {{ARGS}}
+
 # Apply migrations
 migrate:
     cd apps/scraper && uv run scraper migrate

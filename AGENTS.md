@@ -18,6 +18,7 @@ just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
 just cli              # developer console (TUI): every unit, its logs, and tasks
 just scraper ...      # e.g. just scraper run library_hours
+just worker           # answer the engine's live source queries (apps/scraper)
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio, phoenix
@@ -43,14 +44,14 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}. Exports one span per interaction to Phoenix.
 apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. core/{config,types,tests}.
-apps/scraper/     Python — offline ingestion: fetch, chunk, embed, write the index. Migrations live here. core/{settings,types,telemetry,tests}. One span per source run to Phoenix.
+apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. Also the worker answering the engine's live `query_source` jobs. Migrations live here. core/{settings,types,telemetry,tests}. One span per source run to Phoenix.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/ (one note per decision, numbered)
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP, scraper → Firecrawl / PostgreSQL / llama-server embed. The scraper never serves a request; it and the engine meet only in the database, including live `query_source` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -71,7 +72,7 @@ Add a field there, to `.env.example`, and to `sparky.example.toml` at its defaul
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
-- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages.
+- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages. A live query result answers one caller and is never written to the index.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Live progress is a `TraceEvent`: give a new variant a line in `TraceEvent::progress` (or `None`) and every watching client shows it. Clients render the `text` the engine sends, never their own copy of the enum.

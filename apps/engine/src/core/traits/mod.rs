@@ -6,6 +6,7 @@ pub mod conversation;
 pub mod memory;
 pub mod model;
 pub mod policy;
+pub mod query;
 pub mod retrieval;
 pub mod tool;
 pub mod trace;

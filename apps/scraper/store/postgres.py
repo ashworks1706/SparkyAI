@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -13,7 +14,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, SourceRow, StoreError
+from scraper.core.types import ChunkRow, Job, QuerySource, SourceRow, StoreError
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -176,3 +177,86 @@ def status_rows(conn: psycopg.Connection) -> list[dict]:
         from sources s order by s.key
         """
     ).fetchall()
+
+
+def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource]) -> int:
+    """Publishes the registry the engine reads to build its tool. Sources no longer in code are
+    disabled rather than deleted, so a job already queued against one still resolves."""
+    keys = [s.key for s in sources]
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            insert into query_sources (key, description, params, enabled, updated_at)
+            values (%s, %s, %s::jsonb, true, now())
+            on conflict (key) do update
+              set description = excluded.description,
+                  params = excluded.params,
+                  enabled = true,
+                  updated_at = now()
+            """,
+            [
+                (
+                    s.key,
+                    s.description,
+                    json.dumps(
+                        [
+                            {
+                                "name": p.name,
+                                "description": p.description,
+                                "required": p.required,
+                                "example": p.example,
+                            }
+                            for p in s.params
+                        ]
+                    ),
+                )
+                for s in sources
+            ],
+        )
+        cur.execute(
+            "update query_sources set enabled = false, updated_at = now() "
+            "where enabled and not (key = any(%s))",
+            (keys,),
+        )
+    return len(keys)
+
+
+def claim_job(conn: psycopg.Connection, kind: str) -> Job | None:
+    """Takes the oldest queued job of `kind`, or `None`. `skip locked` lets several workers run
+    without one blocking on another's row."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            update jobs set status = 'running', attempts = attempts + 1, updated_at = now()
+            where id = (
+                select id from jobs
+                where status = 'queued' and kind = %s
+                  and (deadline is null or deadline > now())
+                order by created_at
+                for update skip locked
+                limit 1
+            )
+            returning id, kind, input
+            """,
+            (kind,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return Job(id=row["id"], kind=row["kind"], input=row["input"] or {})
+
+
+def finish_job(conn: psycopg.Connection, job_id: uuid.UUID, result: dict) -> None:
+    """Marks a job done and stores what it produced."""
+    conn.execute(
+        "update jobs set status = 'done', result = %s::jsonb, updated_at = now() where id = %s",
+        (json.dumps(result), job_id),
+    )
+
+
+def fail_job(conn: psycopg.Connection, job_id: uuid.UUID, error: str) -> None:
+    """Marks a job failed with a reason the caller can read."""
+    conn.execute(
+        "update jobs set status = 'failed', error = %s, updated_at = now() where id = %s",
+        (error[:2000], job_id),
+    )

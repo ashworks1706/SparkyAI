@@ -113,7 +113,7 @@ flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
     HARNESS["agent::harness<br/>loop · policy · assemble · tools · trace"]
     MODEL["agent::model<br/>rig_openai"]
-    TOOLS["agent::tools<br/>knowledge_search · mcp"]
+    TOOLS["agent::tools<br/>knowledge_search · query_source · mcp"]
     STORES["stores<br/>postgres"]
     CORE["core<br/>config · types · traits · tests"]
 
@@ -430,6 +430,23 @@ Dashboard panels and the metric names behind them: `deploy/README.md`.
 ## Authenticated browser tasks (Phase 7)
 
 The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
+
+## Live source queries
+
+Two ways to answer a question about an ASU page. `search_knowledge_base` reads the index the scraper wrote on a schedule. `query_source` runs a page **now**, with parameters the model supplies, for spaces too large to enumerate: every term x subject x level of the class catalog, or a scholarship search filtered by the student's own situation.
+
+The engine never fetches that page. The scraper owns fetching, and the two meet in the database, so a query is a `jobs` row:
+
+```
+model ──► query_source(source, params)
+engine ──► insert jobs(kind='source_query', input, deadline) ──► poll
+scraper worker ──► claim (for update skip locked) ──► fetch ──► result | error
+engine ──► reads the row, hands the text back to the model
+```
+
+`query_sources` is the registry: key, description, and the parameters each accepts. `just worker` publishes it on start and the engine reads it at boot to build one tool over every source. Adding a source is a scraper change — a module and a registry row — so the model's schema cost stays constant no matter how many exist. An empty registry means no tool, rather than a tool advertising sources that do not exist.
+
+A worker refusal (unknown source, missing parameter, unreadable page) comes back as `InvalidArguments`, which the loop feeds to the model to correct, not as a failed run. **Nothing a live query returns is written to `chunks`.** It answers one caller; the index is the scraper's alone.
 
 ## Configuration
 

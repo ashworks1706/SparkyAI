@@ -2,3 +2,4 @@
 
 pub mod knowledge_search;
 pub mod mcp;
+pub mod query_source;

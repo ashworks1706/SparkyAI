@@ -11,6 +11,7 @@ mod openai;
 mod policy;
 mod postgres;
 mod progress;
+mod query;
 mod rig_mapping;
 mod support;
 mod trace;
