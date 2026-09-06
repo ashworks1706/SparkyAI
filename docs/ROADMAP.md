@@ -19,7 +19,7 @@
 - [ ] Cite only the evidence that entered the prompt; today every retrieved chunk is cited and tool-found sources are not
 - [ ] Redact tool output the way arguments already are, before authenticated pages reach a trace
 - [ ] Moderator ops: tickets, announcements, polls, escalation
-roadma- [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
+- [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
 
 ## 5 — Public beta v0.5
 
