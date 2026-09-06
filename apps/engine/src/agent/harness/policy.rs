@@ -29,11 +29,17 @@ pub struct RiskPolicy {
 
 impl Default for RiskPolicy {
     fn default() -> Self {
-        Self {
-            write_roles: vec!["MANAGE_GUILD".into()],
-            allow_authenticated_reads: false,
-            confirm_from: RiskClass::ExternalWrite,
-        }
+        Self::from(&crate::core::config::Policy::default())
+    }
+}
+
+impl From<&crate::core::config::Policy> for RiskPolicy {
+    fn from(cfg: &crate::core::config::Policy) -> Self {
+        Self::new(
+            cfg.write_roles.clone(),
+            cfg.allow_authenticated_reads,
+            cfg.confirm_from,
+        )
     }
 }
 

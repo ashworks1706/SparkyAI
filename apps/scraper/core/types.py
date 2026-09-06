@@ -32,14 +32,14 @@ class QueryParam:
 class QuerySource:
     """A source the model queries live with parameters, rather than one fetched on a schedule.
 
-    `build_url` turns the model's parameters into the URL to fetch. Results answer one caller
-    and are never written to the retrieval index.
+    `to_url` turns the model's parameters into the URL to fetch. Results answer one caller and
+    are never written to the retrieval index.
     """
 
     key: str
     description: str
     params: tuple[QueryParam, ...]
-    build_url: Callable[[dict[str, str]], str]
+    to_url: Callable[[dict[str, str]], str]
     needs_js: bool = False
 
 

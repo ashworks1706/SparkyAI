@@ -33,11 +33,18 @@ pub struct McpLimits {
 
 impl Default for McpLimits {
     fn default() -> Self {
+        Self::from(&crate::core::config::Mcp::default())
+    }
+}
+
+impl From<&crate::core::config::Mcp> for McpLimits {
+    /// Server-level limits, before a server's own overrides.
+    fn from(cfg: &crate::core::config::Mcp) -> Self {
         Self {
-            max_output_chars: 6_000,
-            max_schema_description_chars: 80,
-            max_tool_description_chars: 160,
-            required_props_only: true,
+            max_output_chars: cfg.max_output_chars,
+            max_schema_description_chars: cfg.max_schema_description_chars,
+            max_tool_description_chars: cfg.max_tool_description_chars,
+            required_props_only: cfg.required_props_only,
             tool_timeout_secs: None,
         }
     }

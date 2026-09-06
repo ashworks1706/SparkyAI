@@ -11,6 +11,8 @@ use secrecy::SecretString;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use crate::core::types::agent::AgentConfig;
+use crate::core::types::assemble::{self, Budget};
 use crate::core::types::tool::RiskClass;
 
 /// TOML layer read when `SPARKY_CONFIG_FILE` is unset. Missing is not an error.
@@ -42,13 +44,16 @@ pub struct Config {
     pub prompt: Prompt,
     /// What the risk policy allows, denies, and holds for confirmation.
     #[serde(default)]
-    pub policy: PolicyRules,
+    pub policy: Policy,
     /// Hybrid retrieval tuning.
     #[serde(default)]
     pub retrieval: Retrieval,
     /// Which tools are registered.
     #[serde(default)]
     pub tools: Tools,
+    /// How a live source query runs.
+    #[serde(default)]
+    pub query: Query,
     /// JSONL trace recording.
     #[serde(default)]
     pub trace: Trace,
@@ -401,12 +406,10 @@ impl Default for Prompt {
         Self {
             system: None,
             system_file: None,
-            role_line: "The user is `{user}`. Roles: {roles}.".into(),
-            role_line_no_roles: "The user is `{user}`. They hold no special roles.".into(),
-            memory_header: "What you remember about this user:".into(),
-            evidence_header: "Evidence from ASU sources. Answer only from this; cite sources by \
-                              number. If it does not answer the question, say so."
-                .into(),
+            role_line: assemble::ROLE_LINE.into(),
+            role_line_no_roles: assemble::ROLE_LINE_NO_ROLES.into(),
+            memory_header: assemble::MEMORY_HEADER.into(),
+            evidence_header: assemble::EVIDENCE_HEADER.into(),
         }
     }
 }
@@ -414,7 +417,7 @@ impl Default for Prompt {
 /// What the risk policy allows, denies, and holds for confirmation.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
-pub struct PolicyRules {
+pub struct Policy {
     /// Roles allowed to run `external_write` and above. Empty denies everyone.
     pub write_roles: Vec<String>,
     /// Let tools read inside the user's own authenticated session.
@@ -423,7 +426,7 @@ pub struct PolicyRules {
     pub confirm_from: RiskClass,
 }
 
-impl Default for PolicyRules {
+impl Default for Policy {
     fn default() -> Self {
         Self {
             write_roles: vec!["MANAGE_GUILD".into()],
@@ -443,11 +446,27 @@ pub struct Tools {
     pub knowledge_search: bool,
     /// Register the live source-query tool, when the scraper has published a registry.
     pub query_source: bool,
+}
+
+/// How a live source query runs. `[tools]` decides whether it is offered at all; this decides
+/// how it behaves once it is.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Query {
     /// Budget for one live query, end to end. A live fetch is far slower than a database read,
     /// so this overrides `agent.tool_timeout_secs` for this tool.
-    pub query_timeout_secs: u64,
+    pub timeout_secs: u64,
     /// How often the engine checks whether the worker has answered.
-    pub query_poll_ms: u64,
+    pub poll_ms: u64,
+}
+
+impl Default for Query {
+    fn default() -> Self {
+        Self {
+            timeout_secs: 90,
+            poll_ms: 400,
+        }
+    }
 }
 
 impl Default for Tools {
@@ -456,8 +475,6 @@ impl Default for Tools {
             disabled: Vec::new(),
             knowledge_search: true,
             query_source: true,
-            query_timeout_secs: 90,
-            query_poll_ms: 400,
         }
     }
 }
@@ -613,6 +630,54 @@ impl Default for Telemetry {
     }
 }
 
+impl Agent {
+    /// The prompt budgets these settings describe.
+    pub fn budget(&self) -> Budget {
+        Budget {
+            total: self.prompt_budget_tokens,
+            evidence: self.evidence_budget_tokens,
+            history: self.history_budget_tokens,
+            memory: self.memory_budget_tokens,
+            chars_per_token: self.chars_per_token,
+        }
+    }
+}
+
+/// Declared here rather than beside the type so the numbers exist once. Every field comes
+/// from `[agent]`; the model-owned ones stand in for a `[model]` section that has no defaults
+/// of its own, since a deployment must name its own endpoint.
+impl Default for Budget {
+    fn default() -> Self {
+        Agent::default().budget()
+    }
+}
+
+/// Declared here for the same reason as `Budget`: `[agent]` is where these values live.
+impl Default for AgentConfig {
+    fn default() -> Self {
+        let agent = Agent::default();
+        AgentConfig {
+            max_steps: agent.max_steps,
+            max_model_retries: agent.max_model_retries,
+            tool_timeout: std::time::Duration::from_secs(agent.tool_timeout_secs),
+            confirmation_ttl: std::time::Duration::from_secs(agent.confirmation_ttl_secs),
+            temperature: agent.temperature,
+            history_turns: agent.history_turns,
+            memory_recall_limit: agent.memory_recall_limit,
+            retry_base_ms: agent.retry_base_ms,
+            retry_cap_ms: agent.retry_cap_ms,
+            max_span_value_chars: agent.max_span_value_chars,
+            retrieval_top_k: Retrieval::default().top_k,
+            budget: agent.budget(),
+            // `[model]` has no defaults — a deployment names its own endpoint — so these are
+            // the only values here not read from a settings struct.
+            max_tokens: 1024,
+            usd_per_m_prompt: 0.0,
+            usd_per_m_completion: 0.0,
+        }
+    }
+}
+
 /// Why configuration was rejected.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -624,10 +689,36 @@ pub enum ConfigError {
     Invalid(String),
 }
 
+/// Settings that moved to another section.
+///
+/// Nothing rejects an unknown `SPARKY_*` variable — the apps share one `.env`, so the engine
+/// sees the scraper's keys and vice versa. That makes a stale key indistinguishable from a
+/// foreign one, and a deployment would keep running with a setting it thought it had changed.
+/// These are named, so moving one is a boot failure that says where it went.
+const RENAMED: [(&str, &str); 2] = [
+    ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
+    ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
+];
+
 impl Config {
+    /// Fails on a variable that has moved, naming what replaced it. `is_set` reports whether
+    /// a variable is present, so this is testable without touching the process environment.
+    ///
+    /// # Errors
+    /// Returns [`ConfigError::Invalid`] when a renamed variable is still set.
+    pub fn reject_renamed(is_set: impl Fn(&str) -> bool) -> Result<(), ConfigError> {
+        match RENAMED.into_iter().find(|(old, _)| is_set(old)) {
+            Some((old, new)) => Err(ConfigError::Invalid(format!(
+                "{old} moved to {new}; set that instead"
+            ))),
+            None => Ok(()),
+        }
+    }
+
     /// Loads the TOML layer then `SPARKY_*` variables, `__` separating nesting:
     /// `SPARKY_POSTGRES__URL`. Environment values win over the file.
     pub fn load() -> Result<Self, ConfigError> {
+        Self::reject_renamed(|key| std::env::var_os(key).is_some())?;
         let path =
             std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());
         let cfg: Self = Figment::new()
@@ -672,8 +763,8 @@ impl Config {
                 self.retrieval.text_search_config
             ));
         }
-        if self.tools.query_source && self.tools.query_poll_ms == 0 {
-            return invalid("tools.query_poll_ms must be at least 1".into());
+        if self.tools.query_source && self.query.poll_ms == 0 {
+            return invalid("query.poll_ms must be at least 1".into());
         }
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());

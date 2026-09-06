@@ -105,6 +105,7 @@ impl Message {
             .iter()
             .map(|c| c.name.len() + c.arguments.to_string().len())
             .sum();
-        (self.content.len() + call_chars) / chars_per_token.max(1) + 4
+        crate::core::types::tokens::estimate(&self.content, chars_per_token)
+            + call_chars / chars_per_token.max(1)
     }
 }

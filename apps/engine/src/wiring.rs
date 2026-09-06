@@ -19,10 +19,10 @@ use crate::core::traits::query::SourceQueries;
 use crate::core::traits::tool::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::assemble::Budget;
 use crate::routes::Limits;
-use crate::routes::chat::{ChatState, RateLimiter};
+use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
+use crate::routes::rate_limit::RateLimiter;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
@@ -87,11 +87,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let deps = AgentDeps {
         model,
         tools,
-        policy: Arc::new(RiskPolicy::new(
-            cfg.policy.write_roles.clone(),
-            cfg.policy.allow_authenticated_reads,
-            cfg.policy.confirm_from,
-        )),
+        policy: Arc::new(RiskPolicy::from(&cfg.policy)),
         trace,
         retriever: Some(retriever),
         conversations: Some(conversations.clone()),
@@ -99,12 +95,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         confirmations: Some(confirmations.clone()),
     };
     let system_prompt = cfg.system_prompt(SYSTEM_PROMPT)?;
-    let agent = Agent::new(deps, agent_cfg, system_prompt).with_prompt_text(PromptText {
-        role_line: cfg.prompt.role_line.clone(),
-        role_line_no_roles: cfg.prompt.role_line_no_roles.clone(),
-        memory_header: cfg.prompt.memory_header.clone(),
-        evidence_header: cfg.prompt.evidence_header.clone(),
-    });
+    let agent =
+        Agent::new(deps, agent_cfg, system_prompt).with_prompt_text(PromptText::from(&cfg.prompt));
 
     let state = ChatState {
         confirmations: Some(confirmations),
@@ -191,13 +183,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         max_span_value_chars: cfg.agent.max_span_value_chars,
         usd_per_m_prompt: cfg.model.usd_per_m_prompt,
         usd_per_m_completion: cfg.model.usd_per_m_completion,
-        budget: Budget {
-            total: cfg.agent.prompt_budget_tokens,
-            evidence: cfg.agent.evidence_budget_tokens,
-            history: cfg.agent.history_budget_tokens,
-            memory: cfg.agent.memory_budget_tokens,
-            chars_per_token: cfg.agent.chars_per_token,
-        },
+        budget: cfg.agent.budget(),
     }
 }
 
@@ -205,7 +191,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
 fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
     Arc::new(PgSourceQueries::new(
         pool.clone(),
-        Duration::from_millis(cfg.tools.query_poll_ms),
+        Duration::from_millis(cfg.query.poll_ms),
     ))
 }
 
@@ -246,7 +232,7 @@ async fn build_tools(
             let tool: Arc<dyn Tool> = Arc::new(QuerySourceTool::new(
                 queries,
                 &sources,
-                cfg.tools.query_timeout_secs,
+                cfg.query.timeout_secs,
             ));
             if !disabled(&tool.definition().name) {
                 tracing::info!(count = sources.len(), "query sources registered");
@@ -256,13 +242,11 @@ async fn build_tools(
     }
     for server in cfg.mcp.resolved_servers() {
         let limits = McpLimits {
-            max_output_chars: cfg.mcp.max_output_chars,
-            max_schema_description_chars: cfg.mcp.max_schema_description_chars,
-            max_tool_description_chars: cfg.mcp.max_tool_description_chars,
             required_props_only: server
                 .required_props_only
                 .unwrap_or(cfg.mcp.required_props_only),
             tool_timeout_secs: server.tool_timeout_secs,
+            ..McpLimits::from(&cfg.mcp)
         };
         let remote = mcp::connect(&server.url, &server.tools, &limits)
             .await

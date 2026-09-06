@@ -7,12 +7,7 @@
 use crate::core::types::assemble::{Assembled, Budget, Sections};
 use crate::core::types::context::RequestContext;
 use crate::core::types::message::{Message, Role};
-
-/// Rough token count. `chars_per_token` is a setting because the right divisor depends on the
-/// tokenizer, and a wrong one silently over- or under-fills the window.
-fn estimate(text: &str, chars_per_token: usize) -> usize {
-    text.len() / chars_per_token.max(1) + 4
-}
+use crate::core::types::tokens::estimate;
 
 /// Builds the message list within `budget`.
 pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assembled {

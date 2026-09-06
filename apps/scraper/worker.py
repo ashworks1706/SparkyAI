@@ -15,7 +15,7 @@ from scraper import extract, fetch
 from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import Job, QueryError, QueryResult
-from scraper.queries import QUERY_SOURCES, build_url
+from scraper.query_sources import QUERY_SOURCES, url_for
 from scraper.store import postgres
 
 log = structlog.get_logger()
@@ -38,7 +38,7 @@ def run_job(job: Job) -> QueryResult:
         raise QueryError("params must be an object")
     params = {k: str(v) for k, v in raw.items() if v is not None}
 
-    url = build_url(source, params)
+    url = url_for(source, params)
     with telemetry.tracer().start_as_current_span(
         "scrape.query",
         attributes={

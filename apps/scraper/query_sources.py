@@ -1,4 +1,4 @@
-"""Live parameterized sources: the model supplies parameters, one fetch answers one caller.
+"""The registry of live parameterized sources, and the URL each one builds.
 
 Distinct from `sources/`, which are pages fetched on a schedule into the retrieval index. A
 query source answers a question the index cannot: a combinatorial space too large to enumerate,
@@ -122,7 +122,7 @@ QUERY_SOURCES: dict[str, QuerySource] = {
                 QueryParam("days", "Comma-separated weekday names, e.g. 'Monday,Wednesday'."),
                 QueryParam("open_only", "'true' to return only classes with open seats."),
             ),
-            build_url=_classlist_url,
+            to_url=_classlist_url,
             needs_js=True,
         ),
         QuerySource(
@@ -136,15 +136,19 @@ QUERY_SOURCES: dict[str, QuerySource] = {
                 QueryParam("citizenship", "e.g. 'us_citizen', 'international'."),
                 QueryParam("gpa", "Minimum GPA, e.g. '3.0'."),
             ),
-            build_url=_scholarship_url,
+            to_url=_scholarship_url,
             needs_js=True,
         ),
     )
 }
 
 
-def build_url(source: QuerySource, params: dict[str, str]) -> str:
-    """Validates required parameters, then builds the URL to fetch."""
+def url_for(source: QuerySource, params: dict[str, str]) -> str:
+    """Validates the parameters, then builds the URL to fetch.
+
+    Raises:
+        QueryError: a required parameter is missing, or one was passed that does not exist.
+    """
     missing = [p.name for p in source.params if p.required and not params.get(p.name, "").strip()]
     if missing:
         raise QueryError(f"{source.key} needs: {', '.join(missing)}")
@@ -154,4 +158,4 @@ def build_url(source: QuerySource, params: dict[str, str]) -> str:
             f"{source.key} has no parameter {', '.join(sorted(unknown))}; "
             f"it takes: {', '.join(p.name for p in source.params)}"
         )
-    return source.build_url(params)
+    return source.to_url(params)

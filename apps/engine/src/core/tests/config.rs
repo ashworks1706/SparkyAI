@@ -202,3 +202,26 @@ fn a_missing_system_prompt_file_fails_at_boot() {
     let cfg = ok("[prompt]\nsystem_file = \"/nonexistent/sparky-prompt.md\"\n");
     assert!(cfg.system_prompt("built-in").is_err());
 }
+
+#[test]
+fn a_setting_that_moved_sections_fails_the_boot_rather_than_being_ignored() {
+    // Unknown SPARKY_* variables cannot be rejected wholesale — the apps share one `.env`, so
+    // the engine sees the scraper's keys. A key that moved is named instead, because silently
+    // ignoring it leaves a deployment running with a setting it believes it changed.
+    let stale = "SPARKY_AGENT__TRACE_DIR";
+    match Config::reject_renamed(|key| key == stale) {
+        Ok(()) => unreachable!("a moved setting must not be ignored"),
+        Err(e) => {
+            let message = e.to_string();
+            assert!(message.contains(stale), "{message}");
+            assert!(
+                message.contains("SPARKY_TRACE__DIR"),
+                "it names its replacement: {message}"
+            );
+        }
+    }
+    assert!(
+        Config::reject_renamed(|_| false).is_ok(),
+        "nothing stale set"
+    );
+}

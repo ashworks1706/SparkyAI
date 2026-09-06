@@ -18,6 +18,9 @@ create table query_sources (
     updated_at   timestamptz not null default now()
 );
 
+-- `jobs.kind = 'source_query'` is the contract between the engine (Rust, QUERY_JOB_KIND) and
+-- the worker (Python, worker.KIND). Neither can see the other's constant, so it is named here.
+--
 -- The worker claims queued jobs and nothing else, so the index covers only those. Done and
 -- failed rows accumulate and would otherwise bloat a full (status, created_at) scan.
 create index jobs_queued_idx on jobs (created_at) where status = 'queued';

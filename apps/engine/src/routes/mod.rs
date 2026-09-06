@@ -9,23 +9,16 @@ use tower_http::trace::TraceLayer;
 pub mod chat;
 pub mod health;
 pub mod openai;
+pub mod rate_limit;
 
-/// Limits applied to the whole HTTP surface.
+/// Limits applied to the whole HTTP surface. Built from `[http]`; no `Default`, so the
+/// numbers live in configuration and nowhere else.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Largest request body accepted, in bytes.
     pub max_body_bytes: usize,
     /// Requests handled at once. Zero removes the limit.
     pub concurrency: usize,
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            max_body_bytes: 1 << 20,
-            concurrency: 0,
-        }
-    }
 }
 
 /// Cross-origin policy. `origins` holding a single `*` allows any origin, which is what the

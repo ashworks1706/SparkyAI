@@ -4,7 +4,8 @@ use crate::core::types::evidence::Evidence;
 use crate::core::types::memory::Memory;
 use crate::core::types::message::Message;
 
-/// Budgets for one assembled prompt, in estimated tokens.
+/// Budgets for one assembled prompt, in estimated tokens. `Default` is implemented in
+/// `core::config`, where the numbers are declared, so the two cannot drift apart.
 #[derive(Debug, Clone, Copy)]
 pub struct Budget {
     /// Whole prompt, everything included.
@@ -17,18 +18,6 @@ pub struct Budget {
     pub memory: usize,
     /// Characters per token the estimator assumes. Never zero.
     pub chars_per_token: usize,
-}
-
-impl Default for Budget {
-    fn default() -> Self {
-        Self {
-            total: 3_000,
-            evidence: 1_200,
-            history: 1_000,
-            memory: 300,
-            chars_per_token: 4,
-        }
-    }
 }
 
 /// The text assembly writes around the sections. Every field is configurable, so the wording
@@ -45,14 +34,23 @@ pub struct Templates<'a> {
     pub evidence_header: &'a str,
 }
 
+/// Default line naming the user, with `{user}` and `{roles}`.
+pub const ROLE_LINE: &str = "The user is `{user}`. Roles: {roles}.";
+/// Default line naming a user who holds no roles, with `{user}`.
+pub const ROLE_LINE_NO_ROLES: &str = "The user is `{user}`. They hold no special roles.";
+/// Default heading above recalled memories.
+pub const MEMORY_HEADER: &str = "What you remember about this user:";
+/// Default heading above retrieved evidence.
+pub const EVIDENCE_HEADER: &str = "Evidence from ASU sources. Answer only from this; cite \
+                                   sources by number. If it does not answer the question, say so.";
+
 impl Default for Templates<'_> {
     fn default() -> Self {
         Self {
-            role_line: "The user is `{user}`. Roles: {roles}.",
-            role_line_no_roles: "The user is `{user}`. They hold no special roles.",
-            memory_header: "What you remember about this user:",
-            evidence_header: "Evidence from ASU sources. Answer only from this; cite sources by \
-                              number. If it does not answer the question, say so.",
+            role_line: ROLE_LINE,
+            role_line_no_roles: ROLE_LINE_NO_ROLES,
+            memory_header: MEMORY_HEADER,
+            evidence_header: EVIDENCE_HEADER,
         }
     }
 }

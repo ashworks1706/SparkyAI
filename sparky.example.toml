@@ -81,8 +81,12 @@ confirm_from = "external_write"    # lowest risk class held for approval; see be
 disabled = []                  # names never registered, whatever their source
 knowledge_search = true        # the built-in retrieval tool, `search_knowledge_base`
 query_source = true            # live parameterized queries; off if no worker will run
-query_timeout_secs = 90        # end to end, overriding agent.tool_timeout_secs
-query_poll_ms = 400            # how often the engine checks whether the worker answered
+
+# How a live source query runs. [tools] decides whether it is offered; this decides how it
+# behaves. Needs `just worker`; without it every query times out.
+[query]
+timeout_secs = 90              # end to end, overriding agent.tool_timeout_secs
+poll_ms = 400                  # how often the engine checks whether the worker answered
 
 # ---------------------------------------------------------------- MCP servers
 # The environment cannot carry a list of tables, so servers live here. `mcp.playwright_url`

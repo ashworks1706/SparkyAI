@@ -49,7 +49,8 @@ fn db(e: sqlx::Error) -> StoreError {
     StoreError::Database(e.to_string())
 }
 
-/// How the two retrieval legs are run and fused.
+/// How the two retrieval legs are run and fused. Built from `[retrieval]`; there is no
+/// `Default`, so these values exist in configuration and nowhere else.
 #[derive(Debug, Clone)]
 pub struct RetrievalTuning {
     /// Candidates pulled from each leg before fusion.
@@ -64,19 +65,6 @@ pub struct RetrievalTuning {
     pub lexical: bool,
     /// Drop fused results below this score.
     pub min_score: f32,
-}
-
-impl Default for RetrievalTuning {
-    fn default() -> Self {
-        Self {
-            candidates: 20,
-            rrf_k: 60.0,
-            text_search_config: "english".into(),
-            dense: true,
-            lexical: true,
-            min_score: 0.0,
-        }
-    }
 }
 
 /// Hybrid retrieval over the `chunks` table.

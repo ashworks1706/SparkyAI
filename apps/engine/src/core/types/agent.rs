@@ -12,6 +12,9 @@ use crate::core::types::tool::ToolRun;
 use crate::core::types::trace::RunStatus;
 
 /// Knobs for the loop. All bounded; nothing runs forever.
+///
+/// `Default` is implemented in `core::config`, where every one of these values is declared, so
+/// a change to a setting cannot leave a second copy behind.
 #[derive(Debug, Clone, Copy)]
 pub struct AgentConfig {
     /// Maximum model calls per request.
@@ -44,28 +47,6 @@ pub struct AgentConfig {
     pub usd_per_m_completion: f64,
     /// Prompt budgets.
     pub budget: Budget,
-}
-
-impl Default for AgentConfig {
-    fn default() -> Self {
-        Self {
-            max_steps: 8,
-            max_model_retries: 2,
-            tool_timeout: Duration::from_secs(20),
-            confirmation_ttl: Duration::from_mins(10),
-            max_tokens: 1024,
-            temperature: 0.3,
-            retrieval_top_k: 6,
-            history_turns: 20,
-            memory_recall_limit: 10,
-            retry_base_ms: 250,
-            retry_cap_ms: 8_000,
-            max_span_value_chars: 32_000,
-            usd_per_m_prompt: 0.0,
-            usd_per_m_completion: 0.0,
-            budget: Budget::default(),
-        }
-    }
 }
 
 /// How a run ended and what it produced.

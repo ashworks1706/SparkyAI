@@ -58,7 +58,7 @@ def run(
 
 
 @app.command(name="worker")
-def worker_cmd(
+def run_worker(
     poll_secs: float = typer.Option(0.5, help="How often to look for a queued job."),
 ) -> None:
     """Answer live query jobs the engine queues. Publishes the source registry, then blocks."""

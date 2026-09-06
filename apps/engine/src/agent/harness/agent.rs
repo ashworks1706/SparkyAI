@@ -29,6 +29,7 @@ use crate::core::types::message::{Message, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::policy::{ConfirmationRequest, Decision, PendingAction, ProposedAction};
 use crate::core::types::retrieval::RetrievalQuery;
+use crate::core::types::tokens::estimate;
 use crate::core::types::tool::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
@@ -85,12 +86,17 @@ pub struct PromptText {
 
 impl Default for PromptText {
     fn default() -> Self {
-        let d = Templates::default();
+        Self::from(&crate::core::config::Prompt::default())
+    }
+}
+
+impl From<&crate::core::config::Prompt> for PromptText {
+    fn from(cfg: &crate::core::config::Prompt) -> Self {
         Self {
-            role_line: d.role_line.to_owned(),
-            role_line_no_roles: d.role_line_no_roles.to_owned(),
-            memory_header: d.memory_header.to_owned(),
-            evidence_header: d.evidence_header.to_owned(),
+            role_line: cfg.role_line.clone(),
+            role_line_no_roles: cfg.role_line_no_roles.clone(),
+            memory_header: cfg.memory_header.clone(),
+            evidence_header: cfg.evidence_header.clone(),
         }
     }
 }
@@ -434,6 +440,7 @@ impl Agent {
         // current input, which assembly appends itself.
         let mut prompt_history = inputs.history.clone();
         prompt_history.extend(run.new_turns.iter().skip(run.appended_by_assembly).cloned());
+        let cpt = self.cfg.budget.chars_per_token;
         // Tool schemas ride along with every request, so they come out of the same budget.
         let tool_tokens: usize = self
             .deps
@@ -441,9 +448,8 @@ impl Agent {
             .definitions()
             .iter()
             .map(|d| {
-                (d.name.len() + d.description.len() + d.parameters.to_string().len())
-                    / self.cfg.budget.chars_per_token.max(1)
-                    + 8
+                let schema = d.parameters.to_string();
+                estimate(&d.name, cpt) + estimate(&d.description, cpt) + estimate(&schema, cpt)
             })
             .sum();
         let mut budget = self.cfg.budget;
