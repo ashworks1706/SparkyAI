@@ -32,6 +32,20 @@ Only after Phase 4 yields clean interaction data.
 
 - [ ] Stable API, documented traits, published evals, university-adapter template
 
+## Ingestion depth
+
+Not sequenced yet. Retrieval answers from whatever the scraper wrote, so answer quality is
+capped here.
+
+- [ ] Crawl past the landing page: courses, clubs, jobs and scholarships each index one navigation page
+- [ ] Per-source extraction, so tables, dates and structured fields survive the shared HTML heuristic
+- [ ] Chunk on document structure instead of fixed character windows
+- [ ] Deduplicate across sources, not only against a source's own previous version
+- [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what
+- [ ] A quality floor per source: refuse a fetch that yields materially less than the last good one
+- [ ] Refresh on the interval each source declares; `last_fetch` only advances when content changed, so every source is due on every poll
+- [ ] A fixture per source with the fields it must yield, so an extractor change fails in CI rather than in an answer
+
 ## Out of scope until stated otherwise
 
 MyASU / authenticated integrations · GPA or coursework access · unrestricted browser autonomy · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.
