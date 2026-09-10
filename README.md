@@ -15,7 +15,10 @@
 
 An open-source agent for ASU students and their student organizations, it tracks official ASU sources — scholarships, events, jobs, courses, clubs, campus services — answers with dated citations, surfaces opportunities and deadlines that match you, and helps you act on them, asking before anything is done on your behalf.
 
-> SparkyAI is being revived. Originally developed in 2024 as a Discord-native multi-agent university copilot, the project is now undergoing a ground-up open-source rebuild. The original implementation and contributor history are preserved in this repository while SparkyAI evolves toward a more modular, low-level platform for agent tooling, knowledge retrieval, service automation, and model research. 
+> SparkyAI is being revived. Originally developed in 2024 as a Discord-native multi-agent university copilot, the project is now undergoing a ground-up open-source rebuild. The original implementation and contributor history are preserved in this repository while SparkyAI evolves toward a more modular, low-level platform for agent tooling, knowledge retrieval, service automation, and model research.
+> 
+> <img width="2546" height="1110" alt="image" src="https://github.com/user-attachments/assets/169a0f58-2890-4e1d-8673-649f3bb2aed1" />
+
 
 ---
 
