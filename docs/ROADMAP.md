@@ -15,7 +15,7 @@ Done. The remaining harness work is in phase 5.
 
 ## 5 — Memory and skills v0.5
 
-- [ ] Sandbox sessions: an id that resumes, rather than a fresh container per command
+- [x] ~~Sandbox sessions: an id that resumes, rather than a fresh container per command~~
 - [ ] Skills promoted from a trace, with review before one is offered
 - [ ] Train the fact detector on real turns; the gate is rules until there is labelled data
 - [ ] Give the agent memory across conversations, with user-visible control and deletion
