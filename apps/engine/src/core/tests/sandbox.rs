@@ -60,6 +60,7 @@ async fn an_empty_command_is_refused_before_a_container_starts() {
             &ctx(),
             &SandboxRequest {
                 command: "   ".into(),
+                session: None,
             },
         )
         .await;
@@ -78,6 +79,7 @@ async fn a_missing_runtime_is_reported_rather_than_hidden() {
             &ctx(),
             &SandboxRequest {
                 command: "echo hi".into(),
+                session: None,
             },
         )
         .await;
@@ -105,6 +107,7 @@ async fn a_non_zero_exit_is_reported_and_is_not_a_tool_failure() {
             exit_code: 2,
             stdout: String::new(),
             stderr: "no such file".into(),
+            session: None,
         })),
         RiskClass::PrepareWrite,
     );
@@ -125,6 +128,7 @@ async fn the_declared_risk_is_what_policy_gates_it_by() {
             exit_code: 0,
             stdout: String::new(),
             stderr: String::new(),
+            session: None,
         })),
         RiskClass::Destructive,
     );
@@ -139,6 +143,7 @@ async fn arguments_that_do_not_carry_a_command_are_a_correctable_refusal() {
             exit_code: 0,
             stdout: String::new(),
             stderr: String::new(),
+            session: None,
         })),
         RiskClass::PrepareWrite,
     );
@@ -146,5 +151,67 @@ async fn arguments_that_do_not_carry_a_command_are_a_correctable_refusal() {
     assert!(
         matches!(out, Err(ToolError::InvalidArguments(_))),
         "{out:?}"
+    );
+}
+
+#[test]
+fn a_session_container_is_scoped_to_the_caller() {
+    use crate::agent::tools::sandbox::ContainerSandbox;
+
+    let mine = RequestContext::new("guild", "me", Duration::from_secs(5));
+    let yours = RequestContext::new("guild", "you", Duration::from_secs(5));
+    let other_guild = RequestContext::new("elsewhere", "me", Duration::from_secs(5));
+
+    // Naming the same session from another account must not reach the container of the first.
+    assert_ne!(
+        ContainerSandbox::container_name(&mine, "work"),
+        ContainerSandbox::container_name(&yours, "work")
+    );
+    assert_ne!(
+        ContainerSandbox::container_name(&mine, "work"),
+        ContainerSandbox::container_name(&other_guild, "work")
+    );
+    // The same caller naming the same session reaches the same container, which is resuming.
+    assert_eq!(
+        ContainerSandbox::container_name(&mine, "work"),
+        ContainerSandbox::container_name(&mine, "work")
+    );
+}
+
+#[test]
+fn a_session_name_that_could_reach_another_container_is_refused() {
+    use crate::core::types::sandbox::session_name;
+
+    for bad in [
+        "",
+        "   ",
+        "has space",
+        "../escape",
+        "semi;colon",
+        "$(sub)",
+        &"x".repeat(49),
+    ] {
+        assert!(session_name(bad).is_err(), "{bad:?} was accepted");
+    }
+    for good in ["work", "run-1", "my_session", "A1"] {
+        assert!(session_name(good).is_ok(), "{good:?} was refused");
+    }
+}
+
+#[test]
+fn a_session_call_keeps_the_container_and_a_plain_call_does_not() {
+    use crate::agent::tools::sandbox::ContainerSandbox;
+
+    let s = ContainerSandbox::new(Limits::default());
+    // Without a session the container is removed when the command exits.
+    assert!(s.args().contains(&"--rm".to_owned()));
+    // The sealing flags are the same on both paths.
+    let seal = s.seal().join(" ");
+    assert!(seal.contains("--network none"), "{seal}");
+    assert!(seal.contains("--read-only"), "{seal}");
+    assert!(seal.contains("--cap-drop ALL"), "{seal}");
+    assert!(
+        !seal.contains("--rm"),
+        "a session container outlives one command"
     );
 }

@@ -9,6 +9,7 @@ use tower_http::trace::TraceLayer;
 pub mod chat;
 pub mod health;
 pub mod openai;
+pub mod profile;
 pub mod rate_limit;
 
 /// Limits applied to the whole HTTP surface. Built from [http]; no Default.
@@ -47,6 +48,7 @@ pub fn cors(origins: &[String]) -> Option<CorsLayer> {
 pub fn router(
     chat_state: chat::ChatState,
     health_state: health::HealthState,
+    profile_state: profile::ProfileState,
     limits: Limits,
     cors_origins: &[String],
 ) -> Router {
@@ -60,9 +62,13 @@ pub fn router(
         .route("/confirm", post(chat::confirm))
         .route("/v1/chat/completions", post(openai::completions))
         .with_state(chat_state);
+    let profile = Router::new()
+        .route("/profile/forget", post(profile::forget))
+        .with_state(profile_state);
     let mut router = Router::new()
         .merge(health)
         .merge(chat)
+        .merge(profile)
         .route("/v1/models", get(openai::models))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
         .layer(TraceLayer::new_for_http());

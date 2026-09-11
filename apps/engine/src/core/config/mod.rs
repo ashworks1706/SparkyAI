@@ -764,6 +764,8 @@ pub struct SandboxSettings {
     pub max_output_chars: usize,
     /// Risk class the tool declares, which is what Policy gates it by.
     pub risk: RiskClass,
+    /// How long a session container stays up with nothing running in it.
+    pub session_idle_secs: u64,
 }
 
 impl Default for SandboxSettings {
@@ -778,6 +780,7 @@ impl Default for SandboxSettings {
             timeout_secs: 20,
             max_output_chars: 4_000,
             risk: RiskClass::PrepareWrite,
+            session_idle_secs: 900,
         }
     }
 }

@@ -2,8 +2,13 @@
 //!
 //! The container runs with no network, a read-only root, a memory and process ceiling, and a
 //! non-root user. Nothing it does reaches the host, the database, or the model endpoint.
-//! Sessions are not kept: every call starts from the image.
+//!
+//! A call naming a session runs in a container that outlives it, so what an earlier command
+//! wrote under /tmp is still there. A call naming none starts a container that is removed when
+//! it exits. Sessions are per tenant and user, so one caller cannot resume the session of
+//! another by naming it.
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +20,7 @@ use tokio::process::Command;
 use crate::core::traits::sandbox::Sandbox;
 use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
-use crate::core::types::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
+use crate::core::types::sandbox::{SandboxError, SandboxOutput, SandboxRequest, session_name};
 use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// How the sandbox is started and what it may consume.
@@ -35,6 +40,8 @@ pub struct Limits {
     pub timeout: Duration,
     /// Longest stdout or stderr handed back.
     pub max_output_chars: usize,
+    /// How long a session container stays up with nothing running in it.
+    pub session_idle_secs: u64,
 }
 
 impl Default for Limits {
@@ -53,6 +60,7 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
             pids: cfg.pids,
             timeout: Duration::from_secs(cfg.timeout_secs),
             max_output_chars: cfg.max_output_chars,
+            session_idle_secs: cfg.session_idle_secs,
         }
     }
 }
@@ -69,12 +77,51 @@ impl ContainerSandbox {
         Self { limits }
     }
 
-    /// The arguments that seal the container. Every one of them is load bearing.
-    pub fn args(&self) -> Vec<String> {
+    /// The container name a session runs under, scoped so one caller cannot reach another.
+    pub fn container_name(ctx: &RequestContext, session: &str) -> String {
+        let mut hasher = DefaultHasher::new();
+        (&ctx.tenant_id, &ctx.user_id).hash(&mut hasher);
+        format!("sparky-sb-{:016x}-{session}", hasher.finish())
+    }
+
+    /// Starts a session container that idles until it is reaped.
+    async fn start_session(&self, name: &str) -> Result<(), SandboxError> {
+        let mut command = Command::new(&self.limits.runtime);
+        command
+            .arg("run")
+            .arg("--detach")
+            .arg("--name")
+            .arg(name)
+            .args(self.seal())
+            .arg(&self.limits.image)
+            .arg("sleep")
+            .arg(self.limits.session_idle_secs.to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let out = command.output().await.map_err(|e| {
+            SandboxError::Runtime(format!("{} did not start: {e}", self.limits.runtime))
+        })?;
+        if out.status.success() {
+            return Ok(());
+        }
+        let why = String::from_utf8_lossy(&out.stderr);
+        // A container under this name is already up, which is what resuming means.
+        if why.contains("already in use") {
+            return Ok(());
+        }
+        Err(SandboxError::Runtime(format!(
+            "could not start the session: {}",
+            why.trim()
+        )))
+    }
+
+    /// The arguments that seal a container. Every one of them is load bearing.
+    pub fn seal(&self) -> Vec<String> {
         let l = &self.limits;
         [
-            "run",
-            "--rm",
+            "--network",
             "--network",
             "none",
             "--read-only",
@@ -94,11 +141,18 @@ impl ContainerSandbox {
             "/tmp:rw,noexec,nosuid,size=64m",
             "--workdir",
             "/tmp",
-            &l.image,
         ]
         .into_iter()
         .map(str::to_owned)
         .collect()
+    }
+
+    /// The arguments for a call that keeps no session.
+    pub fn args(&self) -> Vec<String> {
+        let mut args = vec!["run".to_owned(), "--rm".to_owned()];
+        args.extend(self.seal());
+        args.push(self.limits.image.clone());
+        args
     }
 }
 
@@ -121,9 +175,23 @@ impl Sandbox for ContainerSandbox {
         if request.command.trim().is_empty() {
             return Err(SandboxError::Refused("the command is empty".into()));
         }
+        let session = request
+            .session
+            .as_deref()
+            .map(session_name)
+            .transpose()?
+            .map(|name| Self::container_name(ctx, &name));
         let mut command = Command::new(&self.limits.runtime);
+        match &session {
+            Some(name) => {
+                self.start_session(name).await?;
+                command.arg("exec").arg("--workdir").arg("/tmp").arg(name);
+            }
+            None => {
+                command.args(self.args());
+            }
+        }
         command
-            .args(self.args())
             .arg("sh")
             .arg("-c")
             .arg(&request.command)
@@ -145,6 +213,7 @@ impl Sandbox for ContainerSandbox {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: clip(&String::from_utf8_lossy(&output.stdout), max),
             stderr: clip(&String::from_utf8_lossy(&output.stderr), max),
+            session: request.session.clone(),
         })
     }
 }
@@ -174,7 +243,12 @@ impl Tool for SandboxTool {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "description": "The shell command to run." }
+                    "command": { "type": "string", "description": "The shell command to run." },
+                    "session": {
+                        "type": "string",
+                        "description": "Name a session to keep files under /tmp between calls. \
+                                        Reuse the same name to resume it."
+                    }
                 },
                 "required": ["command"]
             }),

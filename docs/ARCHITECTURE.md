@@ -304,6 +304,8 @@ What the model may do is one list, not several. `agent::harness::capability` ren
 | `skill` | fetched by `get_skill`, then followed | the steps it names |
 | `sandbox` | a command in an isolated environment | its own class |
 
+A sandbox call naming a session runs in a container that outlives it, so what an earlier command wrote under /tmp is still there. Session containers are named from the tenant and the user, so naming another caller's session reaches a container of one's own instead of theirs.
+
 A skill is a saved procedure, not code the model wrote: parameters, an ordered list of steps, and the domain it applies to. `get_skill` fetches one; the model follows it with the capabilities it already has. Skills are reviewed before they are offered, so a skill is never promoted from a trace without a person in the loop.
 
 ## Compaction
@@ -318,7 +320,7 @@ Flat memory rows answer what a user said. They do not answer how two facts relat
 
 Extraction never runs in the request path. After a turn is appended, the loop hands it to the profile writer and returns. A classifier decides whether it carries a fact, a record, or a preference; only then does the Graph Agent run. Both are prompted sub-agents in the engine, so the work is detached from the request rather than queued for the scraper worker, which cannot call a model. The task carries its own context and deadline.
 
-Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete.
+Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete. `POST /profile/forget` removes one label or everything a user carries; relations cascade from the node they run through.
 
 ## Tool risk classes
 

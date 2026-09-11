@@ -34,6 +34,7 @@ use crate::core::types::agent::AgentConfig;
 use crate::routes::Limits;
 use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
+use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
@@ -106,7 +107,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let profile_graph = profile_graph(&cfg, &pool, &embedder);
     let deps = AgentDeps {
         profile: profile_writer(&cfg, &model, profile_graph.clone()),
-        profile_graph,
+        profile_graph: profile_graph.clone(),
         compactor: compactor(&cfg, &model),
         guardrail: cfg.guardrail.enabled.then(|| {
             Arc::new(RuleGuardrail::new(Rules::from(&cfg.guardrail))) as Arc<dyn Guardrail>
@@ -137,7 +138,13 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
     tracing::info!(addr = %cfg.app.http_addr, "listening");
-    let router = crate::routes::router(state, health, limits, &cfg.http.cors_origins);
+    let profile_state = ProfileState {
+        graph: profile_graph,
+        default_tenant: cfg.discord.guild_id.to_string(),
+        service_token: cfg.engine.service_token.clone(),
+    };
+    let router =
+        crate::routes::router(state, health, profile_state, limits, &cfg.http.cors_origins);
     let grace = Duration::from_secs(cfg.http.shutdown_grace_secs);
     let (signalled, wait) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router).with_graceful_shutdown(async move {

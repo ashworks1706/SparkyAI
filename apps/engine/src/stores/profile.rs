@@ -244,4 +244,32 @@ impl ProfileGraph for PgProfileGraph {
         }
         Ok(out)
     }
+
+    async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError> {
+        // Edges cascade from the node, so removing the node removes what ran through it.
+        let done = sqlx::query(
+            "delete from profile_nodes n using users u
+             where n.user_id = u.id and n.tenant_id = $1 and u.discord_id = $2 and n.label = $3",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .bind(label)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(done.rows_affected())
+    }
+
+    async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError> {
+        let done = sqlx::query(
+            "delete from profile_nodes n using users u
+             where n.user_id = u.id and n.tenant_id = $1 and u.discord_id = $2",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(done.rows_affected())
+    }
 }

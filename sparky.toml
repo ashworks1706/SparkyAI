@@ -114,6 +114,7 @@ pids = 128
 timeout_secs = 20
 max_output_chars = 4000
 risk = "prepare_write"
+session_idle_secs = 900        # how long a named session stays up with nothing running
 
 # The gate every model response passes, on the capability branch and the answer branch.
 [guardrail]

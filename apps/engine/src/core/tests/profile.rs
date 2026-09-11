@@ -8,6 +8,7 @@ use crate::agent::harness::profile::{
 };
 use crate::agent::harness::task::{Task, TaskConfig};
 use crate::core::tests::support::{Scripted, ctx, text};
+use crate::core::types::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelResponse};
 use crate::core::types::profile::ProfileError;
 
@@ -172,4 +173,127 @@ fn a_recalled_node_reads_as_its_kind_and_label() {
     let memory = Memory::from(&node);
     assert_eq!(memory.kind, MemoryKind::Profile);
     assert_eq!(memory.content, "interest: robotics");
+}
+
+/// Records which forget the route asked for.
+#[derive(Default)]
+struct Forgetful {
+    calls: std::sync::Mutex<Vec<String>>,
+}
+
+#[async_trait::async_trait]
+impl crate::core::traits::profile::ProfileGraph for Forgetful {
+    async fn upsert(
+        &self,
+        _ctx: &RequestContext,
+        _facts: &[crate::core::types::profile::ProfileFact],
+    ) -> Result<(), crate::core::types::profile::ProfileError> {
+        Ok(())
+    }
+
+    async fn recall(
+        &self,
+        _ctx: &RequestContext,
+        _limit: usize,
+    ) -> Result<Vec<crate::core::types::profile::ProfileNode>, ProfileError> {
+        Ok(Vec::new())
+    }
+
+    async fn relations(
+        &self,
+        _ctx: &RequestContext,
+        _limit: usize,
+    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+        Ok(Vec::new())
+    }
+
+    async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(format!("forget {} for {}", label, ctx.user_id));
+        }
+        Ok(1)
+    }
+
+    async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError> {
+        if let Ok(mut calls) = self.calls.lock() {
+            calls.push(format!("forget_all for {}", ctx.user_id));
+        }
+        Ok(3)
+    }
+}
+
+#[tokio::test]
+async fn a_label_removes_one_thing_and_no_label_removes_everything() {
+    use axum::extract::State;
+    use axum::http::HeaderMap;
+    use secrecy::SecretString;
+
+    use crate::routes::profile::{ForgetRequest, ProfileState, forget};
+
+    let graph = std::sync::Arc::new(Forgetful::default());
+    let state = ProfileState {
+        graph: Some(graph.clone()),
+        default_tenant: "g".into(),
+        service_token: SecretString::from("t"),
+    };
+    let mut headers = HeaderMap::new();
+    let Ok(value) = "Bearer t".parse() else {
+        unreachable!("a header value")
+    };
+    headers.insert("authorization", value);
+
+    forget(
+        State(state.clone()),
+        headers.clone(),
+        axum::Json(ForgetRequest {
+            user_id: "u".into(),
+            tenant_id: None,
+            label: Some("robotics".into()),
+        }),
+    )
+    .await;
+    forget(
+        State(state),
+        headers,
+        axum::Json(ForgetRequest {
+            user_id: "u".into(),
+            tenant_id: None,
+            label: None,
+        }),
+    )
+    .await;
+
+    let calls = graph.calls.lock().map(|c| c.clone()).unwrap_or_default();
+    assert_eq!(calls, vec!["forget robotics for u", "forget_all for u"]);
+}
+
+#[tokio::test]
+async fn forgetting_without_the_token_is_refused() {
+    use axum::extract::State;
+    use axum::http::{HeaderMap, StatusCode};
+    use secrecy::SecretString;
+
+    use crate::routes::profile::{ForgetRequest, ProfileState, forget};
+
+    let graph = std::sync::Arc::new(Forgetful::default());
+    let state = ProfileState {
+        graph: Some(graph.clone()),
+        default_tenant: "g".into(),
+        service_token: SecretString::from("t"),
+    };
+    let response = forget(
+        State(state),
+        HeaderMap::new(),
+        axum::Json(ForgetRequest {
+            user_id: "u".into(),
+            tenant_id: None,
+            label: None,
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(
+        graph.calls.lock().is_ok_and(|c| c.is_empty()),
+        "nothing was deleted"
+    );
 }

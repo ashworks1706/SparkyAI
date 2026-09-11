@@ -27,4 +27,10 @@ pub trait ProfileGraph: Send + Sync {
         ctx: &RequestContext,
         limit: usize,
     ) -> Result<Vec<ProfileRelation>, ProfileError>;
+
+    /// Removes one node and every relation through it. Returns how many nodes went.
+    async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError>;
+
+    /// Removes everything this user carries. Returns how many nodes went.
+    async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError>;
 }
