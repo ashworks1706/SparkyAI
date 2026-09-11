@@ -9,16 +9,10 @@
 - [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what
 - [ ] First deployment
 
-## 4 — Harness shape v0.4
-
-Done. The remaining harness work is in phase 5.
-
 ## 5 — Memory and skills v0.5
 
-- [x] ~~Sandbox sessions: an id that resumes, rather than a fresh container per command~~
 - [ ] Skills promoted from a trace, with review before one is offered
 - [ ] Train the fact detector on real turns; the gate is rules until there is labelled data
-- [ ] Give the agent memory across conversations, with user-visible control and deletion
 - [ ] Personalized discovery and deadlines
 - [ ] Moderator ops: tickets, announcements, polls, escalation
 - [ ] Admin surface: tools, sources, instructions, limits, trace inspection, approvals, rollback
@@ -48,5 +42,3 @@ Only after Phase 5 yields clean interaction data.
 ## Out of scope until stated otherwise
 
 GPA or coursework access · unrestricted browser autonomy · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.
-
-MyASU moved into phase 8 on 2026-09-10; see `decisions/0001-myasu.md`. Phases renumbered the same day when the harness diagram split phase 4 into harness shape and memory.
