@@ -9,6 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::agent::tools::structured;
 use crate::core::traits::query::SourceQueries;
 use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
@@ -113,7 +114,7 @@ impl Tool for QuerySourceTool {
                 "Live result from {} ({}):\n\n{}",
                 outcome.source, outcome.url, outcome.text
             ),
-            data: serde_json::to_value(&outcome).ok(),
+            data: structured(&outcome),
             evidence: Vec::new(),
         })
     }

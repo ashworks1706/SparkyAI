@@ -9,6 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::agent::tools::structured;
 use crate::core::traits::skills::SkillStore;
 use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
@@ -139,7 +140,7 @@ impl Tool for GetSkillTool {
         })?;
         Ok(ToolOutput {
             content: render(&skill),
-            data: serde_json::to_value(&skill).ok(),
+            data: structured(&skill),
             evidence: Vec::new(),
         })
     }

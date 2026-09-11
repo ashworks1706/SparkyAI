@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio::process::Command;
 
+use crate::agent::tools::structured;
 use crate::core::traits::sandbox::Sandbox;
 use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
@@ -279,7 +280,7 @@ impl Tool for SandboxTool {
         }
         Ok(ToolOutput {
             content: text,
-            data: serde_json::to_value(&out).ok(),
+            data: structured(&out),
             evidence: Vec::new(),
         })
     }

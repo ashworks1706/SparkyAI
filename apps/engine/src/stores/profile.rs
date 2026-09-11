@@ -14,6 +14,7 @@ use crate::core::types::context::RequestContext;
 use crate::core::types::profile::{
     ProfileEntity, ProfileError, ProfileFact, ProfileNode, ProfileRelation,
 };
+use crate::stores::postgres::row_limit;
 use crate::stores::postgres::vector_literal;
 
 /// Maps a sqlx error to a ProfileError. Takes the error by value for use as a map_err function
@@ -188,7 +189,7 @@ impl ProfileGraph for PgProfileGraph {
         )
         .bind(&ctx.tenant_id)
         .bind(&ctx.user_id)
-        .bind(i64::try_from(limit).unwrap_or(i64::MAX))
+        .bind(row_limit(limit))
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;
@@ -223,7 +224,7 @@ impl ProfileGraph for PgProfileGraph {
         )
         .bind(&ctx.tenant_id)
         .bind(&ctx.user_id)
-        .bind(i64::try_from(limit).unwrap_or(i64::MAX))
+        .bind(row_limit(limit))
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;

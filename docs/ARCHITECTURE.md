@@ -111,11 +111,11 @@ Only the scraper touches the web. The engine and the scraper meet only in Postgr
 ```mermaid
 flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["agent::harness<br/>loop · task · guardrail · policy<br/>assemble · capability · compact · tools · trace"]
+    HARNESS["agent::harness<br/>agent/{loop,inputs,execute,conclude} · run · task<br/>guardrail · policy · assemble · capability<br/>compact · detect · profile · prompt · redact · retry · tool · trace"]
     MODEL["agent::model<br/>rig_openai"]
     TOOLS["agent::tools<br/>knowledge_search · query_source · mcp<br/>skills · sandbox"]
-    STORES["stores<br/>postgres"]
-    CORE["core<br/>config · types · traits · tests"]
+    STORES["stores<br/>postgres · retrieval · conversation<br/>memory · confirmation · queries · skills · profile"]
+    CORE["core<br/>config/{services,harness,retrieval}<br/>types · traits · tests"]
 
     ROUTES --> HARNESS
     ROUTES --> MODEL
@@ -128,7 +128,7 @@ flowchart TD
     STORES --> CORE
 ```
 
-`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
+`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
 
 ## Inside `scraper`
 

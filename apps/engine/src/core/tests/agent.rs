@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::agent::redact;
+use crate::agent::harness::redact::redact;
 use crate::agent::harness::tool::ToolSet;
 use crate::core::tests::support::{Boom, Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;

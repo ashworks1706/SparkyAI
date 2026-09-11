@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::agent::harness::agent::redact_text;
+use crate::agent::harness::redact::redact_text;
 use crate::core::tests::support::{agent, calls, text};
 use crate::core::traits::retrieval::Retriever;
 use crate::core::traits::tool::Tool;

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::app::parse_command;
+use crate::app::control::parse_command;
 use crate::core::config::repo_root;
 use crate::core::types::{Command, Group, LogLine, ServiceState, Status, Stream};
 use crate::logs::{LogBuffer, LogWriter};

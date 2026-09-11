@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 
+use crate::agent::tools::structured;
 use crate::core::traits::retrieval::Retriever;
 use crate::core::traits::tool::Tool;
 use crate::core::types::context::RequestContext;
@@ -88,7 +89,7 @@ impl Tool for KnowledgeSearch {
         }
         Ok(ToolOutput {
             content: text,
-            data: serde_json::to_value(&evidence).ok(),
+            data: structured(&evidence),
             evidence,
         })
     }
