@@ -1,4 +1,4 @@
-//! Bot unit tests for rendering, routing, roles, and component ids.
+//! Bot unit tests for rendering, routing, roles, component ids, analytics, and span export.
 
 use uuid::Uuid;
 
@@ -793,4 +793,155 @@ fn analytics_settings_reject_an_empty_queue() {
         ..Analytics::default()
     };
     assert!(bad.validate().is_err());
+}
+
+/// Requests a local server received: path, authorization header, body.
+type Seen = std::sync::Arc<std::sync::Mutex<Vec<(String, String, String)>>>;
+
+async fn record_request(
+    axum::extract::State(seen): axum::extract::State<Seen>,
+    uri: axum::http::Uri,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> axum::http::StatusCode {
+    let auth = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let body = String::from_utf8_lossy(&body).into_owned();
+    if let Ok(mut seen) = seen.lock() {
+        seen.push((uri.path().to_owned(), auth, body));
+    }
+    axum::http::StatusCode::OK
+}
+
+/// Serves on a thread of its own and returns the bound address.
+fn serve(seen: Seen) -> Option<std::net::SocketAddr> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        else {
+            return;
+        };
+        rt.block_on(async move {
+            let Ok(listener) = tokio::net::TcpListener::bind("127.0.0.1:0").await else {
+                return;
+            };
+            let _ = tx.send(listener.local_addr().ok());
+            let app = axum::Router::new()
+                .fallback(record_request)
+                .with_state(seen);
+            let _ = axum::serve(listener, app).await;
+        });
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(5))
+        .ok()
+        .flatten()
+}
+
+/// What the server received once n requests arrived, or at the deadline.
+fn wait_for(seen: &Seen, n: usize) -> Vec<(String, String, String)> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut got = Vec::new();
+    while std::time::Instant::now() < deadline {
+        got = seen.lock().map(|s| s.clone()).unwrap_or_default();
+        if got.len() >= n {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    got
+}
+
+#[test]
+fn analytics_batches_reach_the_batch_path_with_the_api_key() {
+    use crate::analytics::Analytics;
+    use crate::core::config::{Analytics as Settings, Telemetry};
+    use crate::core::types::AnalyticsEvent;
+    use secrecy::SecretString;
+
+    let seen = Seen::default();
+    let addr = serve(std::sync::Arc::clone(&seen));
+    assert!(addr.is_some());
+    let Some(addr) = addr else {
+        return;
+    };
+    let telemetry = Telemetry {
+        host: Some(format!("http://{addr}/")),
+        project_token: SecretString::from("phc_test".to_owned()),
+        ..Telemetry::default()
+    };
+    let settings = Settings {
+        flush_ms: 50,
+        ..Settings::default()
+    };
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build();
+    assert!(rt.is_ok());
+    let Ok(rt) = rt else {
+        return;
+    };
+    rt.block_on(async {
+        let (handle, flusher) = Analytics::start(&settings, &telemetry);
+        assert!(handle.record(AnalyticsEvent::new("discord_ask", &42_u64).with("place", "thread")));
+        assert!(flusher.is_some());
+        if let Some(flusher) = flusher {
+            flusher.finish(std::time::Duration::from_secs(5)).await;
+        }
+    });
+
+    let got = wait_for(&seen, 1);
+    assert_eq!(got.len(), 1, "{got:?}");
+    let Some((path, _, body)) = got.first() else {
+        return;
+    };
+    assert_eq!(path, "/batch/");
+    let wire: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
+    assert_eq!(wire["api_key"], "phc_test");
+    assert_eq!(wire["batch"][0]["event"], "discord_ask");
+    assert_eq!(wire["batch"][0]["distinct_id"], "42");
+    assert_eq!(wire["batch"][0]["properties"]["place"], "thread");
+}
+
+#[test]
+fn discord_spans_reach_both_paths_with_the_bearer_token() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::provider;
+    use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
+    use secrecy::SecretString;
+
+    let seen = Seen::default();
+    let addr = serve(std::sync::Arc::clone(&seen));
+    assert!(addr.is_some());
+    let Some(addr) = addr else {
+        return;
+    };
+    let cfg = Telemetry {
+        host: Some(format!("http://{addr}")),
+        project_token: SecretString::from("phc_test".to_owned()),
+        ..Telemetry::default()
+    };
+    let built = provider(&cfg, "discord-test", "test");
+    assert!(built.as_ref().is_ok_and(Option::is_some), "{built:?}");
+    let Ok(Some(provider)) = built else {
+        return;
+    };
+    let mut span = provider.tracer("discord-test").start("probe");
+    span.end();
+    let flushed = provider.force_flush();
+    assert!(flushed.is_ok(), "{flushed:?}");
+
+    let got = wait_for(&seen, 2);
+    let _ = provider.shutdown();
+    let mut paths: Vec<&str> = got.iter().map(|(p, _, _)| p.as_str()).collect();
+    paths.sort_unstable();
+    assert_eq!(paths, ["/i/v0/ai/otel", "/i/v1/traces"]);
+    assert!(
+        got.iter().all(|(_, auth, _)| auth == "Bearer phc_test"),
+        "{got:?}"
+    );
 }
