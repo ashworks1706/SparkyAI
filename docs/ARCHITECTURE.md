@@ -322,6 +322,8 @@ Extraction never runs in the request path. After a turn is appended, the loop ha
 
 The gate is rules, not a model call. It runs on every turn, so a greeting must cost nothing: `FactDetector` looks for a first-person marker next to a stative cue and rejects questions. Only a turn that passes reaches the Graph Agent, which is the prompted sub-agent that extracts. Generic embeddings are not the gate because they encode topic and style rather than whether a sentence is worth keeping, and they place `I like this` and `I do not like this` close together; a trained head could replace the rules through the same trait.
 
+A new fact is reconciled against what is already recorded for the same subject and relation before it is written. The reconciler is a prompted sub-agent: it sees the new statement and the ones it might replace, and names the ones the new statement makes false. Two statements that can both be true are both kept, which is the case a fact extractor that strips scope gets wrong. An answer that cannot be read withdraws nothing, since keeping a stale fact is recoverable and removing a true one is not.
+
 Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete. `POST /profile/forget` removes one label or everything a user carries; relations cascade from the node they run through.
 
 ## Tool risk classes
@@ -338,6 +340,14 @@ Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` be
 The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above; `policy.confirm_from` names the lowest class held for the caller's approval, so a deployment can hold drafts too while a new tool is being trusted. `Forbidden` is denied whatever the settings say. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
 
 A confirmation is bound to one exact action payload, is single-use and short-lived, states what happens / where / with what data / whether reversible, and is recorded in the trace. If the payload changes, confirm again. External writes are never auto-retried without an idempotency key.
+
+## Hierarchical index
+
+Ingestion clusters the chunks of one source, writes a model summary of each cluster as a new row, embeds it, and recurses, so the index holds both the detail of a page and the shape of it. A summary row lives in `chunks` beside the leaves, distinguished by `level` and pointing at what it covers through `parent_id`.
+
+Retrieval searches every level at once rather than walking down from the root, which is what the RAPTOR paper finds works better: a query lands on whatever granularity answers it. A summary and the chunks it covers can both score well and say the same thing twice, so after fusion a row whose summary already scored higher is dropped. A chunk that outranks its own summary keeps both, since the chunk is the answer and the summary is the context around it.
+
+The tree is off by default. It costs a model call per cluster per level, and a flat index answers a short page.
 
 ## Knowledge
 

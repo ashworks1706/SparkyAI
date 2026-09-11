@@ -103,6 +103,22 @@ class ChunkRow:
 
 
 @dataclass(frozen=True)
+class TreeNode:
+    """One summary node above the leaves, ready to write.
+
+    children are positions in the node list the tree was built from: 0 to leaves - 1 are the
+    leaf chunks in ordinal order, and everything after them is a summary node in build order.
+    A node always comes after the nodes it covers.
+    """
+
+    level: int
+    ordinal: int
+    content: str
+    embedding: Sequence[float]
+    children: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class RunResult:
     """Outcome of one source run."""
 
@@ -122,6 +138,10 @@ class FetchRejected(RuntimeError):
 
 class EmbedError(RuntimeError):
     """The embedding endpoint refused or returned the wrong shape."""
+
+
+class SummaryError(RuntimeError):
+    """The chat endpoint refused, or answered a cluster with no summary."""
 
 
 class PipelineError(RuntimeError):

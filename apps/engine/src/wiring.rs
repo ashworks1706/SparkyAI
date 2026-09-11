@@ -9,7 +9,7 @@ use crate::agent::harness::compact::{self, ChatCompactor};
 use crate::agent::harness::detect::{RuleDetector, Rules as DetectorRules};
 use crate::agent::harness::guardrail::{RuleGuardrail, Rules};
 use crate::agent::harness::policy::RiskPolicy;
-use crate::agent::harness::profile::{self, GraphAgent, ProfileWriter};
+use crate::agent::harness::profile::{self, GraphAgent, ProfileWriter, Reconciler};
 use crate::agent::harness::task::{Task, TaskConfig};
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
@@ -235,7 +235,25 @@ fn profile_writer(
             timeout: budget,
         },
     ));
-    Some(Arc::new(ProfileWriter::new(detector, agent, graph, budget)))
+    let reconciler = cfg.profile.reconcile.then(|| {
+        Reconciler::new(Task::new(
+            Arc::clone(model),
+            "profile.reconcile",
+            instructions(
+                cfg.profile.reconcile_instructions.as_ref(),
+                profile::RECONCILE_INSTRUCTIONS,
+            ),
+            TaskConfig {
+                // A list of numbers, or the word none.
+                max_tokens: 32,
+                temperature: 0.0,
+                timeout: budget,
+            },
+        ))
+    });
+    Some(Arc::new(ProfileWriter::new(
+        detector, agent, reconciler, graph, budget,
+    )))
 }
 
 /// The chat agent, when compaction is on. Shares the model the loop calls.

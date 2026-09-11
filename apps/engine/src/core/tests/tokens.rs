@@ -77,6 +77,7 @@ fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
         dense: true,
         lexical: false,
         min_score: 0.01,
+        collapse_tree: true,
         top_k: 9,
     };
     let tuning = RetrievalTuning::from(&settings);

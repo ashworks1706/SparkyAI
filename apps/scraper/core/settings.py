@@ -1,4 +1,5 @@
-"""Settings from sparky.toml and SPARKY_* env: postgres, object_store, embedding, scraper."""
+"""Settings from sparky.toml and SPARKY_* env: postgres, object_store, embedding, summary,
+scraper."""
 
 from __future__ import annotations
 
@@ -44,6 +45,20 @@ class Embedding(BaseModel):
     batch_size: int = 32
 
 
+class Summary(BaseModel):
+    """The chat endpoint a cluster summary is written by. Same server as embedding, chat model."""
+
+    base_url: str = "http://localhost:8000/v1"
+    api_key: SecretStr = SecretStr("")
+    name: str = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
+    max_tokens: int = 512
+    temperature: float = 0.2
+    timeout_secs: float = 120.0
+    # Qwen3-style reasoning before the summary. On, it spends the token budget and the answer
+    # comes back empty.
+    thinking: bool = False
+
+
 class Firecrawl(BaseModel):
     base_url: str = "http://localhost:3002"
     api_key: SecretStr = SecretStr("")
@@ -77,6 +92,15 @@ class Scraper(BaseModel):
     # The floor is skipped when the last version was shorter than this, where a swing of a few
     # hundred characters is ordinary.
     quality_floor_min_chars: int = 500
+    # The hierarchical index above the leaf chunks. Off by default: every cluster at every
+    # level costs one chat call plus one embedding call.
+    tree_enabled: bool = False
+    # Highest level built. Level 0 is the leaves, so 3 allows three levels of summary.
+    tree_max_level: int = 3
+    # How many rows of the level below one summary covers.
+    tree_cluster_size: int = 5
+    # A source with fewer leaves than this gets no tree.
+    tree_min_chunks: int = 12
 
     def chunker_version(self) -> str:
         """Records the settings the chunks were cut with."""
@@ -95,6 +119,7 @@ class Settings(BaseSettings):
     postgres: Postgres = Postgres()
     object_store: ObjectStore = ObjectStore()
     embedding: Embedding = Embedding()
+    summary: Summary = Summary()
     firecrawl: Firecrawl = Firecrawl()
     telemetry: Telemetry = Telemetry()
     scraper: Scraper = Scraper()

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
+import psycopg
 import structlog
 
-from scraper import chunk, embed, extract, fetch
+from scraper import chunk, embed, extract, fetch, tree
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, PipelineError, RunResult, Source
+from scraper.core.types import ChunkRow, PipelineError, RunResult, Source, SourceRow
 from scraper.store import object as objects
 from scraper.store import postgres
 
@@ -128,6 +131,44 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             fetched_at=fetched_at,
             chunks=[ChunkRow(i, t, v) for i, (t, v) in enumerate(zip(texts, vectors, strict=True))],
         )
+        _build_tree(
+            conn,
+            key=source.key,
+            row=row,
+            version_id=version_id,
+            fetched_at=fetched_at,
+            texts=texts,
+            vectors=vectors,
+        )
         conn.commit()
     log.info("indexed", source=source.key, chunks=written, hash=content_hash[:12])
     return RunResult(source.key, changed=True, chunks=written, content_hash=content_hash)
+
+
+def _build_tree(
+    conn: psycopg.Connection,
+    *,
+    key: str,
+    row: SourceRow,
+    version_id: uuid.UUID,
+    fetched_at: datetime,
+    texts: Sequence[str],
+    vectors: Sequence[Sequence[float]],
+) -> None:
+    """Rebuilds this source's summary levels over the leaves replace_chunks just wrote."""
+    cfg = settings()
+    if not cfg.scraper.tree_enabled:
+        return
+    nodes = tree.build_tree(texts, vectors, params=tree.TreeParams.from_settings(cfg.scraper))
+    if not nodes:
+        return
+    postgres.insert_tree(
+        conn,
+        tenant_id=cfg.scraper.tenant_id,
+        source=row,
+        version_id=version_id,
+        fetched_at=fetched_at,
+        leaves=postgres.leaf_ids(conn, version_id),
+        nodes=nodes,
+    )
+    log.info("tree", source=key, nodes=len(nodes), levels=nodes[-1].level)

@@ -65,6 +65,8 @@ pub struct RetrievalTuning {
     pub lexical: bool,
     /// Drop fused results below this score.
     pub min_score: f32,
+    /// Drop a chunk when the summary covering it is already in the result.
+    pub collapse_tree: bool,
 }
 
 impl From<&crate::core::config::Retrieval> for RetrievalTuning {
@@ -76,6 +78,7 @@ impl From<&crate::core::config::Retrieval> for RetrievalTuning {
             dense: cfg.dense,
             lexical: cfg.lexical,
             min_score: cfg.min_score,
+            collapse_tree: cfg.collapse_tree,
         }
     }
 }
@@ -101,6 +104,8 @@ impl PgRetriever {
 #[derive(Clone)]
 struct Candidate {
     chunk_id: Uuid,
+    /// The summary this row was folded into, when it has one.
+    parent_id: Option<Uuid>,
     source_id: Uuid,
     title: String,
     url: Option<String>,
@@ -111,6 +116,7 @@ struct Candidate {
 fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Error> {
     Ok(Candidate {
         chunk_id: row.try_get("chunk_id")?,
+        parent_id: row.try_get("parent_id")?,
         source_id: row.try_get("source_id")?,
         title: row.try_get("title")?,
         url: row.try_get("url")?,
@@ -121,10 +127,29 @@ fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Erro
 
 /// Public ASU content is written under tenant public and visible to every guild.
 const SELECT: &str =
-    "select c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, c.fetched_at
+    "select c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, c.fetched_at,
+            c.parent_id
     from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')
       and (cardinality($2::text[]) = 0 or c.category = any($2))";
+
+/// Drops a row whose summary is already in the result, keeping the higher ranked of the two.
+///
+/// Every level of the tree is searched at once, so a summary and the chunks it covers can both
+/// score well and say the same thing twice. Fused order is best first, so the first mention of
+/// a pair is the one kept.
+pub(crate) fn collapse(rows: &[(Uuid, Option<Uuid>)]) -> Vec<bool> {
+    let mut seen: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    rows.iter()
+        .map(|(id, parent)| {
+            if parent.is_some_and(|p| seen.contains(&p)) {
+                return false;
+            }
+            seen.insert(*id);
+            true
+        })
+        .collect()
+}
 
 /// Quotes a value as a PostgreSQL string literal.
 pub(crate) fn quote_literal(value: &str) -> String {
@@ -240,6 +265,20 @@ impl Retriever for PgRetriever {
             .filter(|(_, score)| *score >= self.tuning.min_score)
             .filter_map(|(id, score)| by_id.remove(&id).map(|c| (c, score)))
             .collect();
+        let ordered = if self.tuning.collapse_tree {
+            let rows: Vec<(Uuid, Option<Uuid>)> = ordered
+                .iter()
+                .map(|(c, _)| (c.chunk_id, c.parent_id))
+                .collect();
+            let keep = collapse(&rows);
+            ordered
+                .into_iter()
+                .zip(keep)
+                .filter_map(|(row, keep)| keep.then_some(row))
+                .collect()
+        } else {
+            ordered
+        };
 
         Ok(ordered
             .into_iter()

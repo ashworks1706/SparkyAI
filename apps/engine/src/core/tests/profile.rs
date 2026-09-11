@@ -164,6 +164,23 @@ impl crate::core::traits::profile::ProfileGraph for Forgetful {
         Ok(Vec::new())
     }
 
+    async fn matching(
+        &self,
+        _ctx: &RequestContext,
+        _subject: &str,
+        _relation: &str,
+    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+        Ok(Vec::new())
+    }
+
+    async fn drop_relation(
+        &self,
+        _ctx: &RequestContext,
+        _relation: &crate::core::types::profile::ProfileRelation,
+    ) -> Result<bool, ProfileError> {
+        Ok(false)
+    }
+
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError> {
         if let Ok(mut calls) = self.calls.lock() {
             calls.push(format!("forget {} for {}", label, ctx.user_id));
@@ -253,4 +270,225 @@ async fn forgetting_without_the_token_is_refused() {
         graph.calls.lock().is_ok_and(|c| c.is_empty()),
         "nothing was deleted"
     );
+}
+
+#[test]
+fn a_reconciler_answer_names_statements_to_withdraw() {
+    use crate::agent::harness::profile::parse_indices;
+
+    assert_eq!(parse_indices("2", 3), vec![1]);
+    assert_eq!(parse_indices("1, 3", 3), vec![0, 2]);
+    assert_eq!(
+        parse_indices("1,1,2", 3),
+        vec![0, 1],
+        "a repeat is one removal"
+    );
+}
+
+#[test]
+fn anything_unreadable_withdraws_nothing() {
+    use crate::agent::harness::profile::parse_indices;
+
+    // Keeping a stale fact is recoverable. Removing a true one is not, so a misparse keeps.
+    for answer in [
+        "none",
+        "None.",
+        "I think none of them apply",
+        "",
+        "   ",
+        "banana",
+    ] {
+        assert!(
+            parse_indices(answer, 3).is_empty(),
+            "{answer:?} withdrew something"
+        );
+    }
+    // An index outside the list is dropped rather than wrapped onto another statement.
+    assert!(parse_indices("9", 3).is_empty());
+    assert_eq!(parse_indices("0, 2", 3), vec![1], "numbering starts at one");
+}
+
+/// A graph that reports what is recorded and remembers what was withdrawn.
+#[derive(Default)]
+struct Recorded {
+    existing: Vec<crate::core::types::profile::ProfileRelation>,
+    dropped: std::sync::Mutex<Vec<String>>,
+    written: std::sync::Mutex<Vec<crate::core::types::profile::ProfileFact>>,
+}
+
+#[async_trait::async_trait]
+impl crate::core::traits::profile::ProfileGraph for Recorded {
+    async fn upsert(
+        &self,
+        _ctx: &RequestContext,
+        facts: &[crate::core::types::profile::ProfileFact],
+    ) -> Result<(), ProfileError> {
+        if let Ok(mut written) = self.written.lock() {
+            written.extend_from_slice(facts);
+        }
+        Ok(())
+    }
+
+    async fn recall(
+        &self,
+        _ctx: &RequestContext,
+        _limit: usize,
+    ) -> Result<Vec<crate::core::types::profile::ProfileNode>, ProfileError> {
+        Ok(Vec::new())
+    }
+
+    async fn relations(
+        &self,
+        _ctx: &RequestContext,
+        _limit: usize,
+    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+        Ok(self.existing.clone())
+    }
+
+    async fn matching(
+        &self,
+        _ctx: &RequestContext,
+        subject: &str,
+        relation: &str,
+    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+        Ok(self
+            .existing
+            .iter()
+            .filter(|e| {
+                e.subject.label.eq_ignore_ascii_case(subject)
+                    && e.relation.eq_ignore_ascii_case(relation)
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn drop_relation(
+        &self,
+        _ctx: &RequestContext,
+        relation: &crate::core::types::profile::ProfileRelation,
+    ) -> Result<bool, ProfileError> {
+        if let Ok(mut dropped) = self.dropped.lock() {
+            dropped.push(relation.to_string());
+        }
+        Ok(true)
+    }
+
+    async fn forget(&self, _ctx: &RequestContext, _label: &str) -> Result<u64, ProfileError> {
+        Ok(0)
+    }
+
+    async fn forget_all(&self, _ctx: &RequestContext) -> Result<u64, ProfileError> {
+        Ok(0)
+    }
+}
+
+fn relation(
+    subject: &str,
+    rel: &str,
+    object: &str,
+) -> crate::core::types::profile::ProfileRelation {
+    use crate::core::types::profile::{ProfileEntity, ProfileRelation};
+    ProfileRelation {
+        subject: ProfileEntity {
+            kind: "person".into(),
+            label: subject.into(),
+        },
+        relation: rel.into(),
+        object: ProfileEntity {
+            kind: "thing".into(),
+            label: object.into(),
+        },
+        confidence: 1.0,
+    }
+}
+
+/// Runs one turn through the writer and reports what the graph saw.
+async fn record(
+    existing: Vec<crate::core::types::profile::ProfileRelation>,
+    extraction: &str,
+    verdict: &str,
+    turn: &str,
+) -> (Vec<String>, usize) {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use crate::agent::harness::detect::RuleDetector;
+    use crate::agent::harness::profile::{GraphAgent, ProfileWriter, Reconciler};
+    use crate::agent::harness::task::{Task, TaskConfig};
+    use crate::core::tests::support::{Scripted, text};
+
+    let graph = Arc::new(Recorded {
+        existing,
+        ..Recorded::default()
+    });
+    let agent = GraphAgent::new(Task::new(
+        Arc::new(Scripted::new(vec![Ok(text(extraction))])),
+        "extract",
+        "extract",
+        TaskConfig::default(),
+    ));
+    let reconciler = Reconciler::new(Task::new(
+        Arc::new(Scripted::new(vec![Ok(text(verdict))])),
+        "reconcile",
+        "reconcile",
+        TaskConfig::default(),
+    ));
+    let writer = ProfileWriter::new(
+        Arc::new(RuleDetector::default()),
+        agent,
+        Some(reconciler),
+        graph.clone(),
+        Duration::from_secs(5),
+    );
+    writer.record("g".into(), "u".into(), turn.to_owned()).await;
+    let dropped = graph.dropped.lock().map(|d| d.clone()).unwrap_or_default();
+    let written = graph.written.lock().map_or(0, |w| w.len());
+    (dropped, written)
+}
+
+#[tokio::test]
+async fn a_changed_major_withdraws_the_old_one() {
+    // The bug this closes: without reconciliation both majors stay recorded and both reach
+    // the prompt, so the agent believes a student studies two things.
+    let (dropped, written) = record(
+        vec![relation("the user", "studies", "computer science")],
+        r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"studies",
+            "object":{"kind":"subject","label":"physics"},"confidence":0.9}]}"#,
+        "1",
+        "I switched my major to physics this semester",
+    )
+    .await;
+    assert_eq!(dropped, vec!["the user studies computer science"]);
+    assert_eq!(written, 1, "the new fact is still written");
+}
+
+#[tokio::test]
+async fn two_statements_that_can_both_be_true_are_both_kept() {
+    // mem0 reports that stripping scope turns compatible preferences into contradictions.
+    // The reconciler answering none is what keeps both.
+    let (dropped, written) = record(
+        vec![relation("the user", "prefers", "mornings for lectures")],
+        r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"prefers",
+            "object":{"kind":"time","label":"evenings for study"},"confidence":0.9}]}"#,
+        "none",
+        "I prefer studying in the evenings",
+    )
+    .await;
+    assert!(dropped.is_empty(), "nothing was withdrawn: {dropped:?}");
+    assert_eq!(written, 1);
+}
+
+#[tokio::test]
+async fn repeating_a_fact_withdraws_nothing() {
+    let (dropped, _) = record(
+        vec![relation("the user", "studies", "physics")],
+        r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"studies",
+            "object":{"kind":"subject","label":"physics"},"confidence":0.9}]}"#,
+        "1",
+        "I am studying physics this year",
+    )
+    .await;
+    // The repeated statement is filtered before the reconciler sees it, so a model that says
+    // to remove something has nothing to point at.
+    assert!(dropped.is_empty(), "{dropped:?}");
 }

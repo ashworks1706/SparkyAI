@@ -245,6 +245,73 @@ impl ProfileGraph for PgProfileGraph {
         Ok(out)
     }
 
+    async fn matching(
+        &self,
+        ctx: &RequestContext,
+        subject: &str,
+        relation: &str,
+    ) -> Result<Vec<ProfileRelation>, ProfileError> {
+        let rows = sqlx::query(
+            "select s.kind as subject_kind, s.label as subject_label, e.relation,
+                    o.kind as object_kind, o.label as object_label, e.confidence
+             from profile_edges e
+             join profile_nodes s on s.id = e.from_node
+             join profile_nodes o on o.id = e.to_node
+             join users u on u.id = s.user_id
+             where e.tenant_id = $1 and u.discord_id = $2
+               and lower(s.label) = lower($3) and lower(e.relation) = lower($4)
+             order by e.created_at",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .bind(subject)
+        .bind(relation)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(ProfileRelation {
+                subject: ProfileEntity {
+                    kind: row.try_get("subject_kind").map_err(db)?,
+                    label: row.try_get("subject_label").map_err(db)?,
+                },
+                relation: row.try_get("relation").map_err(db)?,
+                object: ProfileEntity {
+                    kind: row.try_get("object_kind").map_err(db)?,
+                    label: row.try_get("object_label").map_err(db)?,
+                },
+                confidence: row.try_get("confidence").map_err(db)?,
+            });
+        }
+        Ok(out)
+    }
+
+    async fn drop_relation(
+        &self,
+        ctx: &RequestContext,
+        relation: &ProfileRelation,
+    ) -> Result<bool, ProfileError> {
+        // The nodes stay. Only the statement joining them is withdrawn.
+        let done = sqlx::query(
+            "delete from profile_edges e
+             using profile_nodes s, profile_nodes o, users u
+             where e.from_node = s.id and e.to_node = o.id and s.user_id = u.id
+               and e.tenant_id = $1 and u.discord_id = $2
+               and lower(s.label) = lower($3) and lower(e.relation) = lower($4)
+               and lower(o.label) = lower($5)",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .bind(&relation.subject.label)
+        .bind(&relation.relation)
+        .bind(&relation.object.label)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(done.rows_affected() > 0)
+    }
+
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError> {
         // Edges cascade from the node, so removing the node removes what ran through it.
         let done = sqlx::query(

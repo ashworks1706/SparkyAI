@@ -12,6 +12,7 @@ dependencies = [
     "beautifulsoup4>=4.13",
     "lxml>=5",
     "playwright>=1.50",
+    "scikit-learn>=1.6",
     "structlog>=25",
     "tenacity>=9",
     "typer>=0.15",

@@ -510,6 +510,9 @@ pub struct Retrieval {
     pub lexical: bool,
     /// Drop fused results below this score. Zero keeps everything.
     pub min_score: f32,
+    /// Drop a chunk when the summary covering it is already in the result. Every level of the
+    /// tree is searched at once, so the two can otherwise say the same thing twice.
+    pub collapse_tree: bool,
 }
 
 impl Default for Retrieval {
@@ -522,6 +525,7 @@ impl Default for Retrieval {
             dense: true,
             lexical: true,
             min_score: 0.0,
+            collapse_tree: true,
         }
     }
 }
@@ -818,6 +822,11 @@ pub struct Profile {
     pub detector: Detector,
     /// Instructions for the graph agent. Empty uses the built-in default.
     pub graph_instructions: Option<String>,
+    /// Withdraw a recorded fact when a new one makes it false. Costs a model call only when a
+    /// new fact collides with one already recorded.
+    pub reconcile: bool,
+    /// Instructions for the reconciler. Empty uses the built-in default.
+    pub reconcile_instructions: Option<String>,
     /// Completion budget for the graph agent.
     pub max_tokens: u32,
     /// Wall-clock budget for classifying, extracting, and writing one turn.
@@ -830,6 +839,8 @@ impl Default for Profile {
             enabled: false,
             detector: Detector::default(),
             graph_instructions: None,
+            reconcile: true,
+            reconcile_instructions: None,
             max_tokens: 512,
             timeout_secs: 60,
         }

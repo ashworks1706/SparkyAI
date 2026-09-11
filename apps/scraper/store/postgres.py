@@ -1,4 +1,4 @@
-"""psycopg pool; migrations runner; writes sources, source_versions, and chunks."""
+"""psycopg pool; migrations runner; writes sources, source_versions, chunks, and the tree."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, Job, QuerySource, SourceRow, StoreError
+from scraper.core.types import ChunkRow, Job, QuerySource, SourceRow, StoreError, TreeNode
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -174,6 +174,61 @@ def replace_chunks(
             ],
         )
     return len(chunks)
+
+
+def leaf_ids(conn: psycopg.Connection, version_id: uuid.UUID) -> list[uuid.UUID]:
+    """Ids of one version's leaf chunks, in ordinal order."""
+    rows = conn.execute(
+        "select id from chunks where version_id = %s and level = 0 order by ordinal",
+        (version_id,),
+    ).fetchall()
+    return [r["id"] for r in rows]
+
+
+def insert_tree(
+    conn: psycopg.Connection,
+    *,
+    tenant_id: str,
+    source: SourceRow,
+    version_id: uuid.UUID,
+    fetched_at: datetime,
+    leaves: Sequence[uuid.UUID],
+    nodes: Sequence[TreeNode],
+) -> int:
+    """Writes the summary levels above the leaves and points every covered row at its parent.
+
+    nodes come parents-last, so a node's children already hold an id by the time it is written.
+    """
+    ids = list(leaves)
+    for node in nodes:
+        row = conn.execute(
+            """
+            insert into chunks
+                (tenant_id, source_id, version_id, category, ordinal, content, embedding,
+                 fetched_at, level)
+            values (%s, %s, %s, %s, %s, %s, %s::vector, %s, %s)
+            returning id
+            """,
+            (
+                tenant_id,
+                source.id,
+                version_id,
+                source.category,
+                node.ordinal,
+                node.content,
+                "[" + ",".join(repr(float(x)) for x in node.embedding) + "]",
+                fetched_at,
+                node.level,
+            ),
+        ).fetchone()
+        if row is None:
+            raise StoreError(f"insert of tree node {node.ordinal} returned no row")
+        conn.execute(
+            "update chunks set parent_id = %s where id = any(%s)",
+            (row["id"], [ids[position] for position in node.children]),
+        )
+        ids.append(row["id"])
+    return len(nodes)
 
 
 def status_rows(conn: psycopg.Connection) -> list[dict]:

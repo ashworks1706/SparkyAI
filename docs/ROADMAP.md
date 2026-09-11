@@ -4,6 +4,7 @@
 
 - [ ] Crawl past the landing page: courses, clubs, jobs and scholarships each index one navigation page
 - [ ] Chunk on document structure instead of fixed character windows
+- [ ] Measure whether the tree earns its model calls, once the eval suite exists
 - [ ] Deduplicate across sources, not only against a source's own previous version
 - [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what
 - [ ] First deployment

@@ -19,7 +19,8 @@ uv run scraper status
 | `extract.py` | HTML → text, for the `http` fetcher |
 | `chunk.py` | text → chunks |
 | `embed.py` | llama-server embed endpoint |
-| `pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index |
+| `tree.py` | the hierarchical index: cluster a level, summarize each cluster on the chat endpoint, embed the summary, recurse |
+| `pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index → tree |
 | `sources/` | one module per ASU source; a source is a row, not a folder |
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |
@@ -32,3 +33,10 @@ Pipeline per source: fetch → content hash (skip if unchanged) → raw snapshot
 
 The engine queries `chunks` with the same embedding model and dimension used here. Changing the
 model means re-embedding every chunk.
+
+`SPARKY_SCRAPER__TREE_ENABLED=true` adds the levels above the leaves. A run clusters its own
+chunks, summarizes each cluster with one call to `[summary]` (the chat model), embeds the
+summary, and repeats to `tree_max_level` or until a level splits into fewer than two clusters.
+Summaries land in `chunks` beside the leaves with `level > 0` and `parent_id` set on what they
+cover, so one retrieval searches every level at once. It costs a chat call and an embedding call
+per cluster per source.

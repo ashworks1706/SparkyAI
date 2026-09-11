@@ -28,6 +28,24 @@ pub trait ProfileGraph: Send + Sync {
         limit: usize,
     ) -> Result<Vec<ProfileRelation>, ProfileError>;
 
+    /// The relations already recorded for this subject and relation.
+    ///
+    /// Reconciliation compares a new fact against these rather than against everything, so two
+    /// statements about different things are never weighed against each other.
+    async fn matching(
+        &self,
+        ctx: &RequestContext,
+        subject: &str,
+        relation: &str,
+    ) -> Result<Vec<ProfileRelation>, ProfileError>;
+
+    /// Removes one relation. Returns whether it was there.
+    async fn drop_relation(
+        &self,
+        ctx: &RequestContext,
+        relation: &ProfileRelation,
+    ) -> Result<bool, ProfileError>;
+
     /// Removes one node and every relation through it. Returns how many nodes went.
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError>;
 
