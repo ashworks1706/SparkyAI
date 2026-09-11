@@ -15,7 +15,8 @@ PostHog runs from the hobby stack of the upstream repository, pinned to one comm
 the stack mounts (ClickHouse config, Kafka topics, GeoIP) into `.sparky/posthog` and starts it.
 The Caddy proxy is the `posthog` service; the rest are named `posthog-<upstream name>`. They
 reach each other over a `posthog` network by their upstream names. The upstream hobby file omits `capture-ai`, which serves `/i/v0/ai/*`; the
-vendored stack includes it. The UI and every ingestion path are behind one Caddy proxy on
+vendored stack includes it. Session replay, error tracking, screenshots (browserless), live
+events, and the Temporal admin UIs are left out: 28 services instead of 38. The UI and every ingestion path are behind one Caddy proxy on
 `http://localhost:8010`, loopback only. The stack wants about 16 GB of memory.
 
 After the first start, create a project in the UI and put its project token in `.env`.
@@ -87,3 +88,9 @@ Settings under `[analytics]`: `enabled`, `queue_capacity`, `max_batch`, `flush_m
 API keys), `posthog_page_rows` at a time. `$ai_input` holds the prompt messages and
 `$ai_output_choices` the reply. The event uuid is the example id; `$ai_session_id` and the
 distinct id carry through as before.
+
+## Revisit
+
+Prometheus and Grafana stay until PostHog Metrics is generally available in the self-hosted
+release (private alpha, cloud only, as of 2026-09-11). Then a metrics agent pushes the
+llama-server and GPU exporter metrics to PostHog, and Prometheus and Grafana are removed.
