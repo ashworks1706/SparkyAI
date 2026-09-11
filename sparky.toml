@@ -189,10 +189,21 @@ dir = ".sparky/traces"
 max_file_bytes = 0             # 0 removes the limit
 retention_hours = 0            # 0 keeps them forever
 
-# otlp_endpoint is per-machine and lives in .env.
+# Spans go to PostHog over OTLP/HTTP, to both paths. host is per-machine and project_token is
+# a secret; both live in .env. An empty project_token disables export.
 [telemetry]
 sample_ratio = 1.0
 export_timeout_secs = 10
+traces_path = "/i/v1/traces"
+ai_path = "/i/v0/ai/otel"
+provider_name = "llama.cpp"
+
+# Discord product events to PostHog, through the telemetry host and project token.
+[analytics]
+enabled = true
+queue_capacity = 1024
+max_batch = 100
+flush_ms = 2000
 
 # ---------------------------------------------------------------- the HTTP surface
 [http]
@@ -252,15 +263,17 @@ region = "us-east-1"
 
 # ---------------------------------------------------------------- the developer console
 [cli]
-phoenix_url = "http://localhost:6006"
+posthog_url = "http://localhost:8010"
 log_lines = 5000
 log_dir = ".sparky/logs"
 health_interval_secs = 5
 
 # ---------------------------------------------------------------- training and evals
-# engine_url, phoenix_url and engine_service_token are per-machine and live in .env.
+# engine_url, engine_service_token, posthog_host, posthog_project_id and posthog_api_key are
+# per-machine and live in .env.
 [training]
 state_dir = "../../.sparky"
 cases_dir = "evals/cases"
 baseline_path = "evals/baseline.json"
 request_timeout_secs = 180.0
+posthog_page_rows = 5000
