@@ -48,6 +48,11 @@ fn task_static(args: &[&str], hint: &str) -> Unit {
     task(&args, hint)
 }
 
+/// One ingestion run. Every source in apps/scraper/sources is offered by key.
+fn source_run(key: &str) -> Unit {
+    task_static(&["scraper", "run", key], "fetch, chunk, embed this source")
+}
+
 /// A recipe in the deploy section. The follows flag marks the ones that stream until stopped.
 fn deploy(args: &[&str], hint: &str, follows: bool) -> Unit {
     let mut unit = task_static(args, hint);
@@ -169,8 +174,16 @@ fn tasks() -> Vec<Unit> {
         task_static(&["setup"], "install every unit's deps"),
         task_static(&["migrate"], "apply scraper migrations"),
         task_static(
-            &["scraper", "run", "library_hours"],
-            "fetch, chunk, embed one source",
+            &["scraper", "status"],
+            "every source, its schedule and last run",
+        ),
+        task_static(
+            &["scraper", "schedule"],
+            "run every source that is due, forever",
+        ),
+        task_static(
+            &["scraper", "worker"],
+            "answer the engine's live source queries",
         ),
         task_static(&["check"], "fmt, lint, test every unit"),
         task_static(
@@ -184,6 +197,15 @@ fn tasks() -> Vec<Unit> {
         task_static(&["eval", "compare"], "fail on regression"),
         task_static(&["train", "sft", "--dry-run"], "validate config and data"),
         task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
+        source_run("library_hours"),
+        source_run("events"),
+        source_run("clubs"),
+        source_run("courses"),
+        source_run("scholarships"),
+        source_run("news"),
+        source_run("shuttles"),
+        source_run("jobs"),
+        source_run("sports"),
     ]
 }
 
