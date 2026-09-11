@@ -107,7 +107,7 @@ query_source = true
 # The classifier and the graph agent. Detached from the request that produced the turn.
 # Off until the graph is wanted; every turn otherwise costs two extra model calls.
 [profile]
-enabled = false
+enabled = true
 max_tokens = 512
 timeout_secs = 60
 # Withdraw a recorded fact when a new one makes it false. Costs a model call only when a new
