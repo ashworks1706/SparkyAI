@@ -2,6 +2,7 @@
 
 mod agent;
 mod assemble;
+mod compact;
 mod config;
 mod confirm;
 mod context;

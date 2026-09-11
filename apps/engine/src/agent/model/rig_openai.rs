@@ -61,11 +61,14 @@ impl RigChat {
 pub(crate) fn to_rig(
     messages: &[Message],
 ) -> Result<(Option<String>, Vec<RigMessage>), ModelError> {
-    let mut preamble: Vec<&str> = Vec::new();
+    let mut preamble: Vec<String> = Vec::new();
     let mut history = Vec::with_capacity(messages.len());
     for m in messages {
         match m.role {
-            Role::System => preamble.push(&m.content),
+            Role::System => preamble.push(m.content.clone()),
+            // No provider has a summary role. It reaches the model as operator context, which
+            // keeps it out of the transcript nobody said.
+            Role::Summary => preamble.push(format!("Summary of earlier turns: {}", m.content)),
             Role::User => history.push(RigMessage::user(&m.content)),
             Role::Assistant => {
                 let mut content = Vec::with_capacity(m.tool_calls.len() + 1);

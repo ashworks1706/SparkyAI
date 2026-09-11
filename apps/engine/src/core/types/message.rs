@@ -15,6 +15,8 @@ pub enum Role {
     Assistant,
     /// A tool result, answering one ToolCall.
     Tool,
+    /// One turn standing in for the turns it replaced.
+    Summary,
 }
 
 /// A tool invocation the model asked for.
@@ -55,6 +57,11 @@ impl Message {
     /// A user message.
     pub fn user(content: impl Into<String>) -> Self {
         Self::plain(Role::User, content)
+    }
+
+    /// A compacted turn standing in for the turns it replaced.
+    pub fn summary(content: impl Into<String>) -> Self {
+        Self::plain(Role::Summary, content)
     }
 
     /// An assistant message with text only.

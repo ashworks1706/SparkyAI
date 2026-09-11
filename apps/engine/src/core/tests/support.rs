@@ -168,6 +168,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         conversations: None,
         memory: None,
         confirmations: None,
+        compactor: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
 }
@@ -263,6 +264,7 @@ pub fn agent_with_store(
         conversations: Some(conversations),
         memory: None,
         confirmations: None,
+        compactor: None,
     };
     Agent::new(deps, cfg, "sys")
 }
@@ -283,6 +285,7 @@ pub fn agent_holding(
         conversations: Some(conversations),
         memory: None,
         confirmations: Some(confirmations),
+        compactor: None,
     };
     Agent::new(deps, AgentConfig::default(), "sys")
 }

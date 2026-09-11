@@ -94,6 +94,15 @@ disabled = []
 knowledge_search = true
 query_source = true
 
+# The chat agent. Replaces the turns that no longer fit with one turn that does. Off leaves
+# history trimmed by dropping the oldest turns.
+[compaction]
+enabled = true
+max_tokens = 512
+temperature = 0.0
+timeout_secs = 30
+# instructions = "You compact a conversation..."
+
 # Live source queries need just worker. Without it every query times out.
 [query]
 timeout_secs = 90

@@ -303,9 +303,15 @@ impl ConversationStore for PgConversations {
     }
 
     async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError> {
+        // A summary stands in for everything before it. Loading past one would carry the turns
+        // it replaced as well as the turn that replaced them.
         let rows = sqlx::query(
             "select m.content from messages m join conversations c on c.id = m.conversation_id
              where m.conversation_id = $1 and c.tenant_id = $2
+               and m.created_at >= coalesce(
+                 (select max(s.created_at) from messages s
+                  where s.conversation_id = $1 and s.role = 'summary'),
+                 m.created_at)
              order by m.created_at desc limit $3",
         )
         .bind(ctx.conversation_id)
@@ -354,6 +360,7 @@ fn role_str(m: &Message) -> &'static str {
         crate::core::types::message::Role::User => "user",
         crate::core::types::message::Role::Assistant => "assistant",
         crate::core::types::message::Role::Tool => "tool",
+        crate::core::types::message::Role::Summary => "summary",
     }
 }
 

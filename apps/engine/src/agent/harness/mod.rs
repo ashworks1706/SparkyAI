@@ -4,6 +4,8 @@
 
 pub mod agent;
 pub mod assemble;
+pub mod compact;
 pub mod policy;
+pub mod task;
 pub mod tool;
 pub mod trace;

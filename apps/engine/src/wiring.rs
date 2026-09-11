@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agent::harness::agent::{Agent, AgentDeps, PromptText};
+use crate::agent::harness::compact::{self, ChatCompactor};
 use crate::agent::harness::policy::RiskPolicy;
+use crate::agent::harness::task::{Task, TaskConfig};
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::agent::model::limit::Limited;
@@ -13,6 +15,7 @@ use crate::agent::tools::knowledge_search::KnowledgeSearch;
 use crate::agent::tools::mcp::{self, McpLimits};
 use crate::agent::tools::query_source::QuerySourceTool;
 use crate::core::config::Config;
+use crate::core::traits::compaction::Compactor;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::query::SourceQueries;
@@ -85,6 +88,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let agent_cfg = agent_config(&cfg);
 
     let deps = AgentDeps {
+        compactor: compactor(&cfg, &model),
         model,
         tools,
         policy: Arc::new(RiskPolicy::from(&cfg.policy)),
@@ -141,6 +145,31 @@ async fn expire(wait: tokio::sync::oneshot::Receiver<()>, grace: Duration) {
         std::future::pending::<()>().await;
     }
     tokio::time::sleep(grace).await;
+}
+
+/// The chat agent, when compaction is on. Shares the model the loop calls.
+fn compactor(cfg: &Config, model: &Arc<dyn ModelProvider>) -> Option<Arc<dyn Compactor>> {
+    if !cfg.compaction.enabled {
+        return None;
+    }
+    let instructions = cfg
+        .compaction
+        .instructions
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(compact::INSTRUCTIONS);
+    let task = Task::new(
+        Arc::clone(model),
+        "compaction",
+        instructions,
+        TaskConfig {
+            max_tokens: cfg.compaction.max_tokens,
+            temperature: cfg.compaction.temperature,
+            timeout: Duration::from_secs(cfg.compaction.timeout_secs),
+        },
+    );
+    Some(Arc::new(ChatCompactor::new(task)))
 }
 
 /// Where traces are recorded, or a sink that drops them when recording is off. Traces older

@@ -53,6 +53,9 @@ pub struct Config {
     /// How a live source query runs.
     #[serde(default)]
     pub query: Query,
+    /// How history that no longer fits is compacted.
+    #[serde(default)]
+    pub compaction: Compaction,
     /// JSONL trace recording.
     #[serde(default)]
     pub trace: Trace,
@@ -670,6 +673,34 @@ impl Default for AgentConfig {
     }
 }
 
+/// The chat agent. Replaces the turns that no longer fit with one turn that does.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Compaction {
+    /// Compact at all. Off leaves history trimmed by dropping the oldest turns.
+    pub enabled: bool,
+    /// Instructions for the chat agent. Empty uses the built-in default.
+    pub instructions: Option<String>,
+    /// Completion budget for the compacted turn.
+    pub max_tokens: u32,
+    /// Sampling temperature.
+    pub temperature: f32,
+    /// Wall-clock budget for the call.
+    pub timeout_secs: u64,
+}
+
+impl Default for Compaction {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            instructions: None,
+            max_tokens: 512,
+            temperature: 0.0,
+            timeout_secs: 30,
+        }
+    }
+}
+
 /// Why configuration was rejected.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -753,6 +784,9 @@ impl Config {
                 "retrieval.text_search_config must be a plain identifier, got {:?}",
                 self.retrieval.text_search_config
             ));
+        }
+        if self.compaction.enabled && self.compaction.max_tokens == 0 {
+            return invalid("compaction.max_tokens must be at least 1".into());
         }
         if self.tools.query_source && self.query.poll_ms == 0 {
             return invalid("query.poll_ms must be at least 1".into());

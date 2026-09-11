@@ -13,6 +13,7 @@ use tracing::field::Empty;
 
 use crate::agent::harness::assemble;
 use crate::agent::harness::tool::ToolSet;
+use crate::core::traits::compaction::Compactor;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::memory::MemoryStore;
@@ -51,6 +52,26 @@ pub struct AgentDeps {
     pub memory: Option<Arc<dyn MemoryStore>>,
     /// Where actions wait for approval by the caller, when configured.
     pub confirmations: Option<Arc<dyn ConfirmationStore>>,
+    /// Compacts history that no longer fits, when configured.
+    pub compactor: Option<Arc<dyn Compactor>>,
+}
+
+/// How many leading turns have to go for the rest to fit budget.
+///
+/// Counts from the newest backwards, the way assembly spends the budget, and never returns
+/// every turn: compacting the whole history leaves the current exchange with no context.
+fn overflowing(turns: &[Message], budget: usize, chars_per_token: usize) -> usize {
+    let mut spent = 0;
+    let mut kept = 0;
+    for m in turns.iter().rev() {
+        let cost = m.estimated_tokens(chars_per_token);
+        if spent + cost > budget {
+            break;
+        }
+        spent += cost;
+        kept += 1;
+    }
+    turns.len().saturating_sub(kept.max(1))
 }
 
 /// Why authorize_all stopped.
@@ -353,13 +374,53 @@ impl Agent {
     }
 
     async fn history(&self, ctx: &RequestContext) -> Result<Vec<Message>, AgentError> {
-        match &self.deps.conversations {
-            Some(store) => store
-                .load(ctx, self.cfg.history_turns)
-                .await
-                .map_err(|error| AgentError::Store(error.to_string())),
-            None => Ok(Vec::new()),
+        let Some(store) = &self.deps.conversations else {
+            return Ok(Vec::new());
+        };
+        let loaded = store
+            .load(ctx, self.cfg.history_turns)
+            .await
+            .map_err(|error| AgentError::Store(error.to_string()))?;
+        Ok(self.compacted(ctx, loaded).await)
+    }
+
+    /// Replaces the turns that do not fit the history budget with one compacted turn, and keeps
+    /// it so the next request starts from it.
+    ///
+    /// A compaction that fails leaves the history trimmed the way it always was.
+    async fn compacted(&self, ctx: &RequestContext, turns: Vec<Message>) -> Vec<Message> {
+        let Some(compactor) = &self.deps.compactor else {
+            return turns;
+        };
+        let cpt = self.cfg.budget.chars_per_token;
+        let overflow = overflowing(&turns, self.cfg.budget.history, cpt);
+        if overflow == 0 {
+            return turns;
         }
+        let (replaced, kept) = turns.split_at(overflow);
+        self.deps.trace.emit(
+            ctx,
+            TraceEvent::Compaction {
+                turns: replaced.len(),
+            },
+        );
+        let summary = match compactor.compact(ctx, replaced).await {
+            Ok(summary) => summary,
+            Err(error) => {
+                tracing::warn!(error = %error, "compaction failed; history is trimmed instead");
+                return turns;
+            }
+        };
+        if let Some(store) = &self.deps.conversations
+            && let Err(error) = store.append(ctx, std::slice::from_ref(&summary)).await
+        {
+            // The prompt still gets the summary. Only the saving of it failed.
+            tracing::warn!(error = %error, "compacted turn was not stored");
+        }
+        let mut out = Vec::with_capacity(kept.len() + 1);
+        out.push(summary);
+        out.extend_from_slice(kept);
+        out
     }
 
     async fn load(&self, ctx: &RequestContext, input: &str) -> Result<Inputs, AgentError> {

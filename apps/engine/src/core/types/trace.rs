@@ -67,6 +67,11 @@ pub enum TraceEvent {
         /// Verdict.
         decision: Decision,
     },
+    /// History that no longer fits is being replaced by one turn.
+    Compaction {
+        /// Turns being replaced.
+        turns: usize,
+    },
     /// A tool is about to run.
     ToolStarted {
         /// Loop step.
@@ -124,6 +129,7 @@ impl TraceEvent {
             Self::ModelCall { .. } => "model_call",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
+            Self::Compaction { .. } => "compaction",
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
             Self::Retrieval { .. } => "retrieval",
@@ -143,6 +149,7 @@ impl TraceEvent {
                 "query_source" => "checking a live ASU page".to_owned(),
                 other => format!("running {other}"),
             }),
+            Self::Compaction { turns } => Some(format!("summarising {turns} earlier turns")),
             Self::Retrieval {
                 query, chunk_ids, ..
             } => Some(format!("found {} passages for {query:?}", chunk_ids.len())),
