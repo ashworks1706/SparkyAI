@@ -50,7 +50,7 @@ PostHog holds one `$ai_generation` per model call: the full prompt, the full rep
 just posthog       # fetch pinned upstream files into .sparky/posthog, then start the posthog profile
 ```
 
-The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` (about 40 containers). It wants about 16 GB of memory. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config, Kafka topics, Temporal and livestream config) and downloads GeoIP into `.sparky/posthog/share`; set `SPARKY_POSTHOG_DIR` to an absolute path to keep them elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
+The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` (28 containers; session replay, error tracking, screenshots, and live events are left out). It wants about 16 GB of memory. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config, Kafka topics, Temporal and livestream config) and downloads GeoIP into `.sparky/posthog/share`; set `SPARKY_POSTHOG_DIR` to an absolute path to keep them elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
 
 The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces), `/i/v0/ai/otel` (OTLP to LLM analytics), `/batch/` (events). The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
 
