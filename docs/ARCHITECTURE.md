@@ -23,7 +23,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Vector store | pgvector | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
-| Observability | OpenTelemetry → Phoenix; logs under `.sparky/` | every app; `deploy/compose.yml` `phoenix` |
+| Observability | OpenTelemetry and product events → PostHog, self-hosted; logs under `.sparky/` | every app; `deploy/compose.yml` profile `posthog`; `docs/decisions/0003-posthog.md` |
 | Config | `sparky.toml` (committed), then `SPARKY_*` env vars from `.env`, which win | `sparky.toml`, `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -57,13 +57,14 @@ apps/
     src/engine/     HTTP client of the engine and SSE frame parsing
     src/render/     how a turn is shown: the turn card, reply text, buttons and their custom ids
     src/access/     who may ask or write (roles, permissions) and where a turn is answered
+    src/analytics/  product events to PostHog: a bounded queue flushed in the background
   cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them.
     src/core/       config · types · tests
     src/app/        console state, key map, control, and rendering
     src/units/      the unit catalog, its process runner, log buffers, and health probes
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
     core/{settings,types,tests} · ingest (fetch, extract, chunk, embed, tree, pipeline) · query (live query registry and worker) · sources · store · migrations/ (the schema)
-  training/       Python. datasets from Phoenix llm spans, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
+  training/       Python. datasets from PostHog LLM generations, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, this file, decisions/
@@ -76,7 +77,7 @@ Every app has a `core/`: config or settings, telemetry, data types, interfaces, 
 
 Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
 
-Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP`, `scraper → PostgreSQL / llama-server embed`. The scraper never serves a request; it and the engine meet only in the database.
+Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP`, `scraper → PostgreSQL / llama-server embed`, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database.
 
 ## System context
 
@@ -107,9 +108,9 @@ flowchart LR
     ING --> S3[(Object storage)]
     ING --> EMB
 
-    APP --> PX[Phoenix]
-    BOT --> PX
-    ING --> PX
+    APP -->|OTLP| PX[PostHog]
+    BOT -->|OTLP · events| PX
+    ING -->|OTLP| PX
 ```
 
 Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
@@ -232,7 +233,7 @@ sequenceDiagram
     participant E as engine
     participant PG as PostgreSQL
     participant M as llama-server
-    participant PX as Phoenix
+    participant PX as PostHog
 
     U->>B: /ask question
     B->>E: POST /chat/stream with roles and traceparent
@@ -251,7 +252,7 @@ sequenceDiagram
     E-->>B: answer, citations, request_id
     B-->>U: reply
     E->>PX: spans
-    B->>PX: spans
+    B->>PX: spans and product events
 ```
 
 1. `discord` receives the slash command or @mention and POSTs it to `engine` with the Discord identity, roles, native permissions, the channel or thread it answers in, and the visibility of that answer. Web and admin clients hit the same endpoints.
@@ -469,18 +470,18 @@ One trace per request covering every model call, retrieval, memory access, tool 
 
 ```mermaid
 flowchart TD
-    A["discord.ask<br/>bot · session id = conversation"] --> B["http.chat<br/>engine · joined by traceparent"]
-    B --> C["agent.run · CHAIN"]
+    A["discord.ask<br/>bot · $ai_session_id = conversation"] --> B["http.chat<br/>engine · joined by traceparent"]
+    B --> C["agent.run · invoke_agent"]
     C --> D["retrieve<br/>chunks returned"]
-    C --> E["llm<br/>full prompt and reply as JSON"]
-    C --> F["tool<br/>redacted args and result"]
-    E -.->|one span is one training example| G["apps/training · data export"]
+    C --> E["llm · chat<br/>$ai_generation: full prompt and reply"]
+    C --> F["tool · execute_tool<br/>redacted args and result"]
+    E -.->|one generation is one training example| G["apps/training · data export"]
 ```
 
 Two forms of it:
 
 - **JSONL** (`.sparky/traces/<request_id>.jsonl`): complete local replay records.
-- **Phoenix spans**: cross-process traces joined with W3C `traceparent`. Model spans contain the prompt, reply, model, usage, and invocation parameters used by training export. Retrieval, tool, policy, and scraper spans carry their structured results.
+- **PostHog spans**: cross-process traces joined with W3C `traceparent`, exported over OTLP/HTTP to both the traces path and the AI path. Spans carry `gen_ai.*` attributes; each model call becomes an `$ai_generation` with the prompt, reply, model, and usage, tied to the user (`posthog.distinct_id`) and the conversation (`$ai_session_id`). Training export reads these. Retrieval, tool, policy, and scraper spans carry their structured results. The attribute contract is `docs/decisions/0003-posthog.md`.
 
 Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
 
@@ -499,11 +500,11 @@ flowchart LR
     EM --> P
     GX --> P
     P --> G["grafana :3000<br/>SparkyAI inference<br/>throughput · queue · batching"]
-    EN["engine"] -->|OTLP traces| PX["phoenix :6006<br/>prompt · reply · tokens · latency"]
+    EN["engine"] -->|OTLP traces| PX["posthog :8010<br/>prompt · reply · tokens · latency"]
     EN -->|HTTP inference| CH
 ```
 
-Phoenix holds spans, Prometheus holds time series. A slow request reads as the `llm` span's latency in Phoenix against `llamacpp:requests_deferred` in Grafana for the same minute.
+PostHog holds spans and events, Prometheus holds time series. A slow request reads as the `llm` generation's latency in PostHog against `llamacpp:requests_deferred` in Grafana for the same minute.
 
 Dashboard panels and the metric names behind them: `deploy/README.md`.
 
