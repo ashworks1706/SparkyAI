@@ -1,8 +1,8 @@
-"""Pull llm generations from PostHog and turn each into a TrainingExample.
+"""Pull llm spans from PostHog and turn each into a TrainingExample.
 
-The engine records full prompts as JSON on the llm span; PostHog stores it as an $ai_generation
-event. Events are read through the HogQL query API, paged by a (timestamp, uuid) keyset cursor.
-The JSONL trace holds events, not prompts, and is read by evals.
+The engine records the full prompt and the reply as JSON attributes on the llm span. Spans are
+read from posthog.trace_spans through the HogQL query API, paged by a (timestamp, uuid) keyset
+cursor. The JSONL trace holds events, not prompts, and is read by evals.
 """
 
 from __future__ import annotations
@@ -17,11 +17,14 @@ import httpx
 from training.core.settings import Training, settings
 from training.core.types import ExportError, Message, TrainingExample
 
-_SELECT = (
-    "SELECT uuid, timestamp, distinct_id, properties FROM events"
-    " WHERE event = '$ai_generation'"
-    " AND JSONExtractString(properties, 'sparky.span') = 'llm'"
-)
+_INPUT = "gen_ai.input.messages"
+_OUTPUT = "gen_ai.output.messages"
+_MODEL = "gen_ai.request.model"
+_SESSION = "$ai_session_id"
+_USER = "posthog.distinct_id"
+_TOOLS = "sparky.tools"
+
+_SELECT = "SELECT uuid, timestamp, attributes FROM posthog.trace_spans WHERE name = 'llm'"
 _ORDER = " ORDER BY timestamp ASC, uuid ASC LIMIT {limit}"
 _AFTER = (
     " AND (timestamp > toDateTime('{ts}', 'UTC')"
@@ -43,7 +46,7 @@ def _cursor_timestamp(raw: str) -> str:
     try:
         ts = datetime.fromisoformat(raw)
     except ValueError as e:
-        raise ExportError(f"bad event timestamp {raw!r}: {e}") from e
+        raise ExportError(f"bad span timestamp {raw!r}: {e}") from e
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=UTC)
     return ts.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
@@ -53,7 +56,7 @@ def _cursor_uuid(raw: str) -> str:
     try:
         return str(uuid.UUID(raw))
     except ValueError as e:
-        raise ExportError(f"bad event uuid {raw!r}: {e}") from e
+        raise ExportError(f"bad span uuid {raw!r}: {e}") from e
 
 
 def _json_value(value: Any, what: str, row_id: str) -> Any:
@@ -63,7 +66,7 @@ def _json_value(value: Any, what: str, row_id: str) -> Any:
     try:
         return json.loads(value)
     except json.JSONDecodeError as e:
-        raise ExportError(f"event {row_id}: {what} is not JSON: {e}") from e
+        raise ExportError(f"span {row_id}: {what} is not JSON: {e}") from e
 
 
 def _text_of(items: list[Any], key: str, row_id: str) -> str:
@@ -75,7 +78,7 @@ def _text_of(items: list[Any], key: str, row_id: str) -> str:
             or item.get("type") != "text"
             or not isinstance(item.get(key), str)
         ):
-            raise ExportError(f"event {row_id}: unsupported message part {item!r:.200}")
+            raise ExportError(f"span {row_id}: unsupported message part {item!r:.200}")
         texts.append(item[key])
     return "".join(texts)
 
@@ -83,12 +86,12 @@ def _text_of(items: list[Any], key: str, row_id: str) -> str:
 def _message(raw: Any, row_id: str) -> Message:
     """One message in the engine Message shape, a parts shape, or a text content list."""
     if not isinstance(raw, dict):
-        raise ExportError(f"event {row_id}: message is not an object: {raw!r:.200}")
+        raise ExportError(f"span {row_id}: message is not an object: {raw!r:.200}")
     data = dict(raw)
     if "parts" in data:
         parts = data.pop("parts")
         if not isinstance(parts, list) or "content" in data:
-            raise ExportError(f"event {row_id}: bad parts message {raw!r:.200}")
+            raise ExportError(f"span {row_id}: bad parts message {raw!r:.200}")
         data["content"] = _text_of(parts, "content", row_id)
     elif isinstance(data.get("content"), list):
         data["content"] = _text_of(data["content"], "text", row_id)
@@ -97,13 +100,13 @@ def _message(raw: Any, row_id: str) -> Message:
     try:
         return Message.model_validate(data)
     except ValueError as e:
-        raise ExportError(f"event {row_id}: bad message: {e}") from e
+        raise ExportError(f"span {row_id}: bad message: {e}") from e
 
 
 def _messages(value: Any, what: str, row_id: str) -> list[Message]:
     parsed = _json_value(value, what, row_id)
     if not isinstance(parsed, list):
-        raise ExportError(f"event {row_id}: {what} is not a list")
+        raise ExportError(f"span {row_id}: {what} is not a list")
     return [_message(m, row_id) for m in parsed]
 
 
@@ -111,41 +114,42 @@ def _tool_count(value: Any, row_id: str) -> int:
     """sparky.tools as a count: a list of tool definitions, its JSON, or an integer."""
     if value is None:
         return 0
-    parsed = _json_value(value, "sparky.tools", row_id)
+    parsed = _json_value(value, _TOOLS, row_id)
     if isinstance(parsed, list):
         return len(parsed)
     if isinstance(parsed, int) and not isinstance(parsed, bool):
         return parsed
-    raise ExportError(f"event {row_id}: bad sparky.tools {value!r:.200}")
+    raise ExportError(f"span {row_id}: bad {_TOOLS} {value!r:.200}")
 
 
 def row_to_example(row: dict[str, Any]) -> TrainingExample | None:
     """One HogQL result row to an example. Rows that are not llm, or that ended before a reply
     was recorded, are skipped. A malformed llm row raises."""
     row_id = str(row.get("uuid"))
-    props = _json_value(row.get("properties"), "properties", row_id)
-    if not isinstance(props, dict):
-        raise ExportError(f"event {row_id}: properties is not an object")
-    if props.get("sparky.span") != "llm":
+    attrs = _json_value(row.get("attributes"), "attributes", row_id)
+    if not isinstance(attrs, dict):
+        raise ExportError(f"span {row_id}: attributes is not an object")
+    span = attrs.get("sparky.span")
+    if span is not None and span != "llm":
         return None
-    inp = props.get("$ai_input")
-    out = props.get("$ai_output_choices")
+    inp = attrs.get(_INPUT)
+    out = attrs.get(_OUTPUT)
     if inp in (None, "", []) or out in (None, "", []):
         return None
-    messages = _messages(inp, "$ai_input", row_id)
-    choices = _messages(out, "$ai_output_choices", row_id)
+    messages = _messages(inp, _INPUT, row_id)
+    choices = _messages(out, _OUTPUT, row_id)
     if not choices:
         return None
-    session = props.get("$ai_session_id")
-    user = row.get("distinct_id")
+    session = attrs.get(_SESSION)
+    user = attrs.get(_USER)
     return TrainingExample(
         id=row_id,
         messages=messages,
         response=choices[0],
-        model=props.get("$ai_model"),
+        model=attrs.get(_MODEL),
         session_id=str(session) if session else None,
         user_id=str(user) if user else None,
-        tool_count=_tool_count(props.get("sparky.tools"), row_id),
+        tool_count=_tool_count(attrs.get(_TOOLS), row_id),
     )
 
 
@@ -174,7 +178,7 @@ def _page(client: httpx.Client, url: str, key: str, query: str) -> list[dict[str
 def fetch_rows(
     cfg: Training | None = None, transport: httpx.BaseTransport | None = None
 ) -> list[dict[str, Any]]:
-    """Every llm $ai_generation row, paged through the PostHog HogQL query API."""
+    """Every llm span row, paged through the PostHog HogQL query API."""
     cfg = cfg or settings().training
     key = cfg.posthog_api_key.get_secret_value()
     if not cfg.posthog_host.strip() or not cfg.posthog_project_id.strip() or not key:

@@ -44,7 +44,9 @@ authenticated with `Authorization: Bearer <project_token>`: `host + traces_path`
 `host + ai_path`. Every exported span goes to both. The traces endpoint keeps every span as a
 distributed trace. The AI endpoint keeps spans with `gen_ai.*` attributes: a span with
 `gen_ai.operation.name = chat` becomes an `$ai_generation` event, other spans become `$ai_span`,
-and the root becomes `$ai_trace`. W3C `traceparent` still joins discord, engine, and scraper.
+and the root becomes `$ai_trace`. Self-hosted, those AI events stop in a Kafka lane nothing
+consumes; the traces endpoint is the readable path. See Training export. W3C `traceparent` still
+joins discord, engine, and scraper.
 
 ## Span attributes
 
@@ -83,11 +85,17 @@ Settings under `[analytics]`: `enabled`, `queue_capacity`, `max_batch`, `flush_m
 
 ## Training export
 
-`apps/training` reads `$ai_generation` events where `properties.sparky.span = 'llm'` through
-`POST /api/projects/<id>/query/` with HogQL, paged by timestamp (OFFSET is refused for personal
-API keys), `posthog_page_rows` at a time. `$ai_input` holds the prompt messages and
-`$ai_output_choices` the reply. The event uuid is the example id; `$ai_session_id` and the
-distinct id carry through as before.
+`apps/training` reads `llm` spans from `posthog.trace_spans` through
+`POST /api/projects/<id>/query/` with HogQL, paged by a (timestamp, uuid) keyset cursor (OFFSET is
+refused for personal API keys), `posthog_page_rows` at a time. `gen_ai.input.messages` holds the
+prompt messages and `gen_ai.output.messages` the reply. The span uuid is the example id and
+`$ai_session_id` the session; `posthog.distinct_id` is read into the example and then cleared by
+`redact_example` before the raw JSONL is written.
+
+The AI events are unreadable in a self-hosted stack. `capture-ai` accepts them and produces to the
+`events_plugin_ingestion_ai` Kafka lane, and no service in the stack consumes that lane, so
+`$ai_generation` never reaches ClickHouse and the LLM analytics views stay empty. Checked on
+2026-09-11 against the pinned commit and upstream master, which define the same services.
 
 ## Revisit
 

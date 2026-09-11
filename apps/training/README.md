@@ -20,7 +20,7 @@ just train sft
 
 | Module | Holds |
 |---|---|
-| `datasets/export.py` | PostHog `$ai_generation` events from the engine's `llm` span → `TrainingExample` (full prompt + reply), read through the HogQL query API. |
+| `datasets/export.py` | The engine's `llm` spans from PostHog `trace_spans` → `TrainingExample` (full prompt + reply), read through the HogQL query API. |
 | `datasets/redact.py` | Regex PII removal: emails, phones, Discord and ASU ids, bot tokens. |
 | `datasets/verify.py` | Schema, non-empty replies, named tool calls, dedupe by content hash. |
 | `evals/runner.py` | Posts each golden case to `/chat`, reads the engine's JSONL trace for that request. |
