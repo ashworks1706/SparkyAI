@@ -9,11 +9,11 @@ use tokio::sync::mpsc;
 use crate::agent::harness::trace::Fanout;
 use crate::core::tests::support::{MemorySink, ctx};
 use crate::core::traits::trace::TraceSink;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{FinishReason, Usage};
-use crate::core::types::policy::Decision;
+use crate::core::types::safety::policy::Decision;
+use crate::core::types::trace::progress::Progress;
 use crate::core::types::trace::{RunStatus, TraceEvent};
-use crate::core::types::wire::Progress;
 
 #[test]
 fn events_the_caller_should_see_carry_their_own_wording() {
@@ -55,10 +55,66 @@ fn events_the_caller_should_see_carry_their_own_wording() {
         chunk_ids: vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         duration_ms: 12,
     };
+    assert_eq!(retrieval.progress().as_deref(), Some("reading 2 sources"));
+}
+
+#[test]
+fn a_model_call_a_finished_tool_and_recalled_memory_each_get_a_line() {
     assert_eq!(
-        retrieval.progress().as_deref(),
-        Some("found 2 passages for \"hayden hours\"")
+        TraceEvent::ModelStarted { step: 1 }.progress().as_deref(),
+        Some("thinking")
     );
+
+    let tool = |name: &str, result: Result<String, String>| TraceEvent::ToolCall {
+        step: 1,
+        call_id: "c1".into(),
+        tool: name.into(),
+        arguments: json!({}),
+        result,
+        duration_ms: 3,
+    };
+    assert_eq!(
+        tool("search_knowledge_base", Ok("three passages".into()))
+            .progress()
+            .as_deref(),
+        Some("knowledge base search finished"),
+        "the line names the tool, never the result"
+    );
+    assert_eq!(
+        tool("query_source", Err("upstream said 500".into()))
+            .progress()
+            .as_deref(),
+        Some("live ASU page check failed"),
+        "the line never carries the error text"
+    );
+    assert_eq!(
+        tool("some_new_mcp_tool", Ok(String::new()))
+            .progress()
+            .as_deref(),
+        Some("some_new_mcp_tool finished")
+    );
+
+    assert_eq!(
+        TraceEvent::MemoryRecalled { count: 3 }
+            .progress()
+            .as_deref(),
+        Some("remembering 3 things about you")
+    );
+    assert_eq!(
+        TraceEvent::MemoryRecalled { count: 1 }
+            .progress()
+            .as_deref(),
+        Some("remembering 1 thing about you")
+    );
+    assert!(TraceEvent::MemoryRecalled { count: 0 }.progress().is_none());
+
+    let one = TraceEvent::Retrieval {
+        step: 1,
+        query: "q".into(),
+        chunk_ids: vec![uuid::Uuid::new_v4()],
+        duration_ms: 1,
+    };
+    assert_eq!(one.progress().as_deref(), Some("reading 1 source"));
 }
 
 #[test]

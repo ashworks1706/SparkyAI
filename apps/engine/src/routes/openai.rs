@@ -11,16 +11,18 @@ use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::model::ModelError;
-use crate::core::types::openai::{
+use crate::core::types::conversation::Visibility;
+use crate::core::types::http::openai::{
     ChatMessage, Choice, CompletionRequest, CompletionResponse, CompletionUsage, ModelCard,
     ModelList,
 };
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::model::ModelError;
+use crate::core::types::store::StoreError;
 use crate::core::types::trace::RunStatus;
-use crate::routes::chat::{ChatState, authorized, too_many};
+use crate::routes::chat::{ChatState, NO_SUCH_CONVERSATION, authorized, too_many};
 
 /// The name the engine answers as. It names the agent, not any one model.
 pub const MODEL: &str = "sparky";
@@ -71,8 +73,8 @@ pub fn transcript(answer: &Answer) -> String {
     }
     if !answer.evidence.is_empty() {
         out.push_str("\n\nSources");
-        for (i, e) in answer.evidence.iter().enumerate() {
-            let _ = write!(out, "\n{}. {}", i + 1, Evidence::citation(e));
+        for (i, line) in Evidence::citations(&answer.evidence).iter().enumerate() {
+            let _ = write!(out, "\n{}. {line}", i + 1);
         }
     }
     out
@@ -131,17 +133,24 @@ pub async fn completions(
         return too_many(user);
     }
     let ctx = RequestContext::new(state.default_tenant.clone(), user, state.request_budget)
-        .with_conversation(conversation_for(user, &opener));
+        .with_conversation(conversation_for(user, &opener))
+        .with_visibility(Visibility::Private);
 
-    if let Some(store) = &state.conversations
-        && let Err(e) = store.ensure(&ctx, "openai").await
-    {
-        tracing::error!(error = %e, "conversation store unavailable");
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "conversation store unavailable",
-        )
-            .into_response();
+    if let Some(store) = &state.conversations {
+        match store.ensure(&ctx, "openai").await {
+            Ok(()) => {}
+            Err(StoreError::NotOwned) => {
+                return (StatusCode::NOT_FOUND, NO_SUCH_CONVERSATION).into_response();
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "conversation store unavailable");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "conversation store unavailable",
+                )
+                    .into_response();
+            }
+        }
     }
 
     let answer = match state.agent.run(&ctx, &input).await {

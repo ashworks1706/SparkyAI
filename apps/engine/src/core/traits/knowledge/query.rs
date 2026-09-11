@@ -2,8 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::query::{QueryError, QueryOutcome, QueryRequest, QuerySourceInfo};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::query::{
+    QueryError, QueryOutcome, QueryRequest, QuerySourceInfo,
+};
 
 /// Runs a parameterized source query and reports what the scraper published.
 ///

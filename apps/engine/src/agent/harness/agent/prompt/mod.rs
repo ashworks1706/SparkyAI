@@ -1,6 +1,9 @@
 //! The configurable wording assembly writes around the prompt sections.
 
-use crate::core::types::assemble::Templates;
+pub mod assemble;
+pub mod capability;
+
+use crate::core::types::agent::assemble::Templates;
 
 /// The configurable wording assembly writes around the sections.
 #[derive(Debug, Clone)]

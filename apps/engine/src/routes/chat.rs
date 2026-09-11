@@ -22,14 +22,15 @@ use tracing::Instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::agent::harness::agent::Agent;
-use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
+use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::AgentError;
-use crate::core::types::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::ModelError;
-use crate::core::types::wire::Progress;
+use crate::core::types::store::StoreError;
+use crate::core::types::trace::progress::Progress;
 use crate::routes::rate_limit::RateLimiter;
 use uuid::Uuid;
 
@@ -51,6 +52,9 @@ pub struct ChatState {
     /// Per-user request limit.
     pub rate_limit: RateLimiter,
 }
+
+/// What a caller hears about a conversation that is not theirs, whether or not it exists.
+pub const NO_SUCH_CONVERSATION: &str = "no such conversation";
 
 /// The 429 returned when a caller is over the limit.
 pub fn too_many(user: &str) -> Response {
@@ -179,35 +183,32 @@ async fn run_turn(
     let tenant = req
         .tenant_id
         .unwrap_or_else(|| state.default_tenant.clone());
-    let mut ctx =
-        RequestContext::new(tenant, req.user_id, state.request_budget).with_roles(req.roles);
-    if let Some(id) = req.conversation_id {
-        ctx = ctx.with_conversation(id);
-    }
+    let ctx = RequestContext::new(tenant, req.user_id, state.request_budget)
+        .with_roles(req.roles)
+        .with_visibility(req.visibility);
+    let mut ctx = open(
+        &state,
+        ctx,
+        req.conversation_id,
+        req.continue_channel,
+        &req.channel_id,
+    )
+    .await?;
     if let Some(tx) = watcher {
         ctx = ctx.listening_to(tx);
     }
     let id = ctx.request_id;
-    if let Some(store) = &state.conversations
-        && let Err(e) = store.ensure(&ctx, &req.channel_id).await
-    {
-        tracing::error!(error = %e, "conversation store unavailable");
-        return Err(Failure::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            id,
-            "conversation store unavailable",
-        ));
-    }
     match state.agent.run(&ctx, &req.message).await {
         Ok(answer) => Ok(ChatResponse {
             request_id: id,
             conversation_id: ctx.conversation_id,
-            citations: answer.evidence.iter().map(Evidence::citation).collect(),
+            citations: Evidence::citations(&answer.evidence),
             text: answer.text,
             confirmation: answer.confirmation,
             status: answer.status,
             steps: answer.steps,
             tools: answer.tool_runs,
+            memories: answer.memories,
             tokens: answer.usage.total(),
             cost_usd: answer.cost_usd,
         }),
@@ -238,6 +239,59 @@ async fn run_turn(
     }
 }
 
+/// Picks the conversation a turn continues and ensures the caller owns it. A given id is
+/// continued; otherwise continue_channel picks the newest open conversation of the caller in
+/// the channel at the request visibility; otherwise the turn starts a new one.
+async fn open(
+    state: &ChatState,
+    mut ctx: RequestContext,
+    conversation_id: Option<Uuid>,
+    continue_channel: bool,
+    channel_id: &str,
+) -> Result<RequestContext, Failure> {
+    let Some(store) = &state.conversations else {
+        if let Some(id) = conversation_id {
+            ctx = ctx.with_conversation(id);
+        }
+        return Ok(ctx);
+    };
+    if let Some(id) = conversation_id {
+        ctx = ctx.with_conversation(id);
+    } else if continue_channel {
+        match store.latest(&ctx, channel_id).await {
+            Ok(Some(id)) => ctx = ctx.with_conversation(id),
+            Ok(None) => {}
+            Err(e) => {
+                tracing::error!(error = %e, "conversation store unavailable");
+                return Err(Failure::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ctx.request_id,
+                    "conversation store unavailable",
+                ));
+            }
+        }
+    }
+    match store.ensure(&ctx, channel_id).await {
+        Ok(()) => Ok(ctx),
+        Err(StoreError::NotOwned) => {
+            tracing::warn!(user = %ctx.user_id, "conversation held by another caller");
+            Err(Failure::new(
+                StatusCode::NOT_FOUND,
+                ctx.request_id,
+                NO_SUCH_CONVERSATION,
+            ))
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "conversation store unavailable");
+            Err(Failure::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                ctx.request_id,
+                "conversation store unavailable",
+            ))
+        }
+    }
+}
+
 /// Answers a held action. Approving runs it and lets the agent finish; denying drops it.
 ///
 /// A token is single use and belongs to the caller who was asked, both enforced by the store.
@@ -260,7 +314,26 @@ pub async fn confirm(
         .tenant_id
         .unwrap_or_else(|| state.default_tenant.clone());
     let ctx = RequestContext::new(tenant, req.user_id, state.request_budget)
-        .with_conversation(req.conversation_id);
+        .with_conversation(req.conversation_id)
+        .with_visibility(req.visibility);
+    if let Some(conversations) = &state.conversations {
+        match conversations.owns(&ctx).await {
+            Ok(true) => {}
+            Ok(false) => {
+                return Failure::new(StatusCode::NOT_FOUND, ctx.request_id, NO_SUCH_CONVERSATION)
+                    .into_response();
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "conversation store failed");
+                return Failure::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    ctx.request_id,
+                    "a store is unavailable",
+                )
+                .into_response();
+            }
+        }
+    }
 
     let claimed = match store.claim(&ctx, req.token, req.approve).await {
         Ok(claimed) => claimed,
@@ -296,12 +369,13 @@ pub async fn confirm(
         Ok(answer) => Json(ChatResponse {
             request_id: ctx.request_id,
             conversation_id: ctx.conversation_id,
-            citations: answer.evidence.iter().map(Evidence::citation).collect(),
+            citations: Evidence::citations(&answer.evidence),
             text: answer.text,
             confirmation: answer.confirmation,
             status: answer.status,
             steps: answer.steps,
             tools: answer.tool_runs,
+            memories: answer.memories,
             tokens: answer.usage.total(),
             cost_usd: answer.cost_usd,
         })
@@ -328,13 +402,13 @@ pub async fn confirm(
 }
 
 /// A turn that could not produce an answer.
-struct Failure {
+pub(crate) struct Failure {
     status: StatusCode,
     body: ErrorBody,
 }
 
 impl Failure {
-    fn new(status: StatusCode, request_id: Uuid, error: &str) -> Self {
+    pub(crate) fn new(status: StatusCode, request_id: Uuid, error: &str) -> Self {
         Self {
             status,
             body: ErrorBody {

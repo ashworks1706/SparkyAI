@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
 
 /// Finds evidence for a query, scoped to the request tenant.
 #[async_trait]

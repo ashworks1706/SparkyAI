@@ -3,34 +3,34 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::agent::harness::agent::prompt::capability;
+use crate::agent::harness::agent::task::{Task, TaskConfig};
 use crate::agent::harness::agent::{Agent, AgentDeps, PromptText};
-use crate::agent::harness::capability;
 use crate::agent::harness::compact::{self, ChatCompactor};
-use crate::agent::harness::detect::{RuleDetector, Rules as DetectorRules};
-use crate::agent::harness::guardrail::{RuleGuardrail, Rules};
-use crate::agent::harness::policy::RiskPolicy;
-use crate::agent::harness::profile::{self, GraphAgent, ProfileWriter, Reconciler};
-use crate::agent::harness::task::{Task, TaskConfig};
-use crate::agent::harness::tool::ToolSet;
+use crate::agent::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
+use crate::agent::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
+use crate::agent::harness::safety::guardrail::{RuleGuardrail, Rules};
+use crate::agent::harness::safety::policy::RiskPolicy;
+use crate::agent::harness::tools::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::agent::model::limit::Limited;
 use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
-use crate::agent::tools::knowledge_search::KnowledgeSearch;
+use crate::agent::tools::knowledge::query::QuerySourceTool;
+use crate::agent::tools::knowledge::search::KnowledgeSearch;
+use crate::agent::tools::knowledge::skills::GetSkillTool;
 use crate::agent::tools::mcp::{self, McpLimits};
-use crate::agent::tools::query_source::QuerySourceTool;
 use crate::agent::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
-use crate::agent::tools::skills::GetSkillTool;
 use crate::core::config::Config;
-use crate::core::traits::compaction::Compactor;
-use crate::core::traits::confirmation::ConfirmationStore;
-use crate::core::traits::detector::FactDetector;
-use crate::core::traits::guardrail::Guardrail;
+use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::traits::knowledge::query::SourceQueries;
+use crate::core::traits::knowledge::retrieval::Embedder;
+use crate::core::traits::knowledge::skills::SkillStore;
+use crate::core::traits::memory::detector::FactDetector;
+use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
-use crate::core::traits::profile::ProfileGraph;
-use crate::core::traits::query::SourceQueries;
-use crate::core::traits::retrieval::Embedder;
-use crate::core::traits::skills::SkillStore;
-use crate::core::traits::tool::Tool;
+use crate::core::traits::safety::confirmation::ConfirmationStore;
+use crate::core::traits::safety::guardrail::Guardrail;
+use crate::core::traits::tools::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::routes::Limits;
@@ -38,11 +38,11 @@ use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
 use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
+use crate::stores::knowledge::skills::PgSkills;
+use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
-use crate::stores::profile::PgProfileGraph;
-use crate::stores::skills::PgSkills;
 
 /// Default system prompt, used when neither prompt.system_file nor prompt.system is set.
 /// Versioned by content; changes show up in traces via the prompt hash.
@@ -147,13 +147,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
     tracing::info!(addr = %cfg.app.http_addr, "listening");
-    let profile_state = ProfileState {
-        graph: profile_graph,
-        default_tenant: cfg.discord.guild_id.to_string(),
-        service_token: cfg.engine.service_token.clone(),
-    };
-    let router =
-        crate::routes::router(state, health, profile_state, limits, &cfg.http.cors_origins);
+    let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
+    let router = crate::routes::router(state, health, profile, limits, &cfg.http.cors_origins);
     let grace = Duration::from_secs(cfg.http.shutdown_grace_secs);
     let (signalled, wait) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router).with_graceful_shutdown(async move {
@@ -193,6 +188,22 @@ fn chat_state(
         default_tenant: cfg.discord.guild_id.to_string(),
         service_token: cfg.engine.service_token.clone(),
         rate_limit: RateLimiter::new(cfg.http.rate_limit_per_min),
+    }
+}
+
+/// What the profile routes need, gathered from the settings that describe it.
+fn profile_state(
+    cfg: &Config,
+    graph: Option<Arc<dyn ProfileGraph>>,
+    rate_limit: RateLimiter,
+) -> ProfileState {
+    ProfileState {
+        graph,
+        list_limit: cfg.profile.list_limit,
+        request_budget: Duration::from_secs(cfg.profile.request_timeout_secs),
+        rate_limit,
+        default_tenant: cfg.discord.guild_id.to_string(),
+        service_token: cfg.engine.service_token.clone(),
     }
 }
 
@@ -259,7 +270,12 @@ fn profile_writer(
         ))
     });
     Some(Arc::new(ProfileWriter::new(
-        detector, agent, reconciler, graph, budget,
+        detector,
+        agent,
+        reconciler,
+        graph,
+        budget,
+        cfg.profile.min_confidence,
     )))
 }
 
@@ -321,6 +337,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         retrieval_top_k: cfg.retrieval.top_k,
         history_turns: cfg.agent.history_turns,
         memory_recall_limit: cfg.agent.memory_recall_limit,
+        recall_in_public: cfg.agent.recall_in_public,
         retry_base_ms: cfg.agent.retry_base_ms,
         retry_cap_ms: cfg.agent.retry_cap_ms,
         max_span_value_chars: cfg.agent.max_span_value_chars,

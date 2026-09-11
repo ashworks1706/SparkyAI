@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::core::types::tool::RiskClass;
+use crate::core::types::tools::RiskClass;
 
 /// A tool call the model wants to make, before it runs.
 #[derive(Debug, Clone, Serialize, Deserialize)]

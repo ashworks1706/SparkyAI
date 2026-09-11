@@ -4,12 +4,12 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::Message;
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::Memory;
-use crate::core::types::message::Message;
 use crate::core::types::model::Usage;
-use crate::core::types::tool::ToolRun;
+use crate::core::types::tools::ToolRun;
 
 /// What one request loaded before its first model call.
 pub(super) struct Inputs {
@@ -33,6 +33,8 @@ pub(super) struct Run<'a> {
     pub(super) tool_runs: Vec<ToolRun>,
     /// Evidence chunks that fit the prompt on the most recent step.
     pub(super) evidence_in_prompt: usize,
+    /// Content of the memories that fit the prompt on the most recent step.
+    pub(super) memories_in_prompt: Vec<String>,
     /// Evidence the tools found, in the order they found it.
     pub(super) tool_evidence: Vec<Evidence>,
     /// Set after a step of nothing but repeats. The next model call gets no tools.

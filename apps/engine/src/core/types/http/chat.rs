@@ -3,8 +3,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::core::types::policy::ConfirmationRequest;
-use crate::core::types::tool::ToolRun;
+use crate::core::types::conversation::Visibility;
+use crate::core::types::safety::policy::ConfirmationRequest;
+use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::RunStatus;
 
 /// Request body.
@@ -24,6 +25,13 @@ pub struct ChatRequest {
     /// Continue this conversation; omit to start one.
     #[serde(default)]
     pub conversation_id: Option<Uuid>,
+    /// Who can read the exchange. Public withholds personal memory.
+    #[serde(default)]
+    pub visibility: Visibility,
+    /// Without a conversation_id, continue the newest open conversation of the caller in this
+    /// channel at this visibility instead of starting one.
+    #[serde(default)]
+    pub continue_channel: bool,
     /// The message.
     pub message: String,
 }
@@ -51,6 +59,8 @@ pub struct ChatResponse {
     pub steps: u32,
     /// Tools that ran, in order.
     pub tools: Vec<ToolRun>,
+    /// Content of each memory the prompt carried. Empty for a public request.
+    pub memories: Vec<String>,
     /// Total tokens.
     pub tokens: u32,
     /// Estimated cost in USD.
@@ -83,4 +93,7 @@ pub struct ConfirmRequest {
     pub tenant_id: Option<String>,
     /// The conversation the held action belongs to.
     pub conversation_id: Uuid,
+    /// Who can read the exchange the answer lands in.
+    #[serde(default)]
+    pub visibility: Visibility,
 }

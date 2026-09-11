@@ -1,7 +1,17 @@
-//! Wire types mirrored from the engine /chat contract, plus the client error.
+//! Wire types mirrored from the engine HTTP contract, plus the client error.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// Who may read a turn. Public turns get no personal memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Visibility {
+    /// Everyone in the channel reads it.
+    Public,
+    /// Only the asker reads it.
+    Private,
+}
 
 /// What the bot sends. Mirrors engine::core::types::chat::ChatRequest.
 #[derive(Debug, Serialize)]
@@ -10,7 +20,7 @@ pub struct ChatRequest {
     pub user_id: String,
     /// Guild id.
     pub tenant_id: String,
-    /// Channel id.
+    /// Channel or thread id the turn is anchored to.
     pub channel_id: String,
     /// Role names the member holds.
     pub roles: Vec<String>,
@@ -19,6 +29,10 @@ pub struct ChatRequest {
     pub conversation_id: Option<Uuid>,
     /// The question.
     pub message: String,
+    /// Who may read the turn.
+    pub visibility: Visibility,
+    /// Continue the latest open conversation of this user in channel_id with this visibility.
+    pub continue_channel: bool,
 }
 
 /// An action the engine is holding until the caller who asked answers it.
@@ -52,6 +66,9 @@ pub struct ChatResponse {
     /// Tools the agent ran, in order.
     #[serde(default)]
     pub tools: Vec<ToolRun>,
+    /// Remembered things the answer drew on, one line each.
+    #[serde(default)]
+    pub memories: Vec<String>,
 }
 
 /// One tool the agent ran.
@@ -122,4 +139,90 @@ pub struct ConfirmRequest {
     pub tenant_id: String,
     /// The conversation the held action belongs to.
     pub conversation_id: Uuid,
+    /// Who may read the turn the action belongs to.
+    pub visibility: Visibility,
+}
+
+/// Body of POST /conversation/reset, ending the open conversations of a user in one channel.
+#[derive(Debug, Serialize)]
+pub struct ResetRequest {
+    /// Discord user id.
+    #[serde(rename = "user_id")]
+    pub user: String,
+    /// Guild id.
+    #[serde(rename = "tenant_id")]
+    pub tenant: String,
+    /// Channel or thread id.
+    #[serde(rename = "channel_id")]
+    pub channel: String,
+}
+
+/// Reply to POST /conversation/reset.
+#[derive(Debug, Deserialize)]
+pub struct ResetResponse {
+    /// Conversations ended.
+    pub ended: u64,
+}
+
+/// Body of POST /profile/list.
+#[derive(Debug, Serialize)]
+pub struct ProfileRequest {
+    /// Discord user id.
+    pub user_id: String,
+    /// Guild id.
+    pub tenant_id: String,
+}
+
+/// What the engine remembers about one user.
+#[derive(Debug, Default, Deserialize)]
+pub struct ProfileList {
+    /// Things remembered.
+    #[serde(default)]
+    pub nodes: Vec<ProfileNode>,
+    /// How those things relate.
+    #[serde(default)]
+    pub relations: Vec<ProfileRelation>,
+}
+
+/// One remembered thing.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProfileNode {
+    /// Category, such as course or club.
+    pub kind: String,
+    /// Name of the thing.
+    pub label: String,
+    /// Belief from 0 to 1.
+    pub confidence: f64,
+}
+
+/// One remembered relation between two things.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProfileRelation {
+    /// Label of the first thing.
+    pub subject: String,
+    /// How they relate.
+    pub relation: String,
+    /// Label of the second thing.
+    pub object: String,
+    /// Belief from 0 to 1.
+    pub confidence: f64,
+}
+
+/// Body of POST /profile/forget. No label removes everything.
+#[derive(Debug, Serialize)]
+pub struct ForgetRequest {
+    /// Discord user id.
+    pub user_id: String,
+    /// Guild id.
+    pub tenant_id: String,
+    /// The one thing to forget.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// Reply to POST /profile/forget.
+#[derive(Debug, Deserialize)]
+pub struct ForgetResponse {
+    /// Items removed.
+    pub removed: u64,
 }

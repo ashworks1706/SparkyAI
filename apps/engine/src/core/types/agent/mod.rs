@@ -1,14 +1,17 @@
 //! AgentConfig, Answer, AgentError.
 
+pub mod assemble;
+pub mod context;
+
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::assemble::Budget;
-use crate::core::types::evidence::Evidence;
+use crate::core::types::agent::assemble::Budget;
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::{ModelError, Usage};
-use crate::core::types::policy::ConfirmationRequest;
-use crate::core::types::tool::ToolRun;
+use crate::core::types::safety::policy::ConfirmationRequest;
+use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::RunStatus;
 
 /// Knobs for the loop. All bounded; nothing runs forever.
@@ -34,6 +37,8 @@ pub struct AgentConfig {
     pub history_turns: usize,
     /// Memories recalled per request.
     pub memory_recall_limit: usize,
+    /// Recall memory and the profile graph for a public request.
+    pub recall_in_public: bool,
     /// First retry wait, doubled per attempt.
     pub retry_base_ms: u64,
     /// Longest retry wait.
@@ -63,6 +68,9 @@ pub struct Answer {
     pub steps: u32,
     /// Tools that ran, in order.
     pub tool_runs: Vec<ToolRun>,
+    /// Content of each memory the prompt carried.
+    #[serde(default)]
+    pub memories: Vec<String>,
     /// Tokens across every call.
     pub usage: Usage,
     /// Estimated cost in USD.

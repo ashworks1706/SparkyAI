@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::guardrail::{Stage, Verdict};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::guardrail::{Stage, Verdict};
 
 /// The gate every model response passes, on the capability branch and the answer branch.
 ///

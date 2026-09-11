@@ -4,10 +4,10 @@
 //! When over budget, evidence and history are trimmed first. The system prompt and the
 //! current turn are never dropped.
 
-use crate::core::types::assemble::{Assembled, Budget, Sections};
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::{Message, Role};
-use crate::core::types::tokens::estimate;
+use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::model::tokens::estimate;
 
 /// Builds the message list within budget.
 pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assembled {
@@ -43,19 +43,10 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         }
     }
 
-    if !s.memory.is_empty() {
-        let mut block = format!("{}\n", s.templates.memory_header.trim());
-        let mut spent = estimate(&block, cpt);
-        for m in s.memory {
-            let line = format!("- ({}) {}\n", m.kind.as_str(), m.content.trim());
-            let cost = estimate(&line, cpt);
-            if spent + cost > budget.memory {
-                break;
-            }
-            block.push_str(&line);
-            spent += cost;
-        }
+    let mut memory_used = 0;
+    if let Some((block, spent, count)) = memory_block(s, budget.memory, cpt) {
         used += spent;
+        memory_used = count;
         messages.push(Message::system(block));
     }
 
@@ -118,5 +109,28 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages,
         estimated_tokens: used,
         evidence_used,
+        memory_used,
     }
+}
+
+/// The memory section: the header and every memory that fits budget, with the tokens it
+/// spends and how many memories it holds. None when there is no memory.
+fn memory_block(s: &Sections<'_>, budget: usize, cpt: usize) -> Option<(String, usize, usize)> {
+    if s.memory.is_empty() {
+        return None;
+    }
+    let mut block = format!("{}\n", s.templates.memory_header.trim());
+    let mut spent = estimate(&block, cpt);
+    let mut count = 0;
+    for m in s.memory {
+        let line = format!("- ({}) {}\n", m.kind.as_str(), m.content.trim());
+        let cost = estimate(&line, cpt);
+        if spent + cost > budget {
+            break;
+        }
+        block.push_str(&line);
+        spent += cost;
+        count += 1;
+    }
+    Some((block, spent, count))
 }

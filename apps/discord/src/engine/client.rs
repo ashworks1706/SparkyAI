@@ -1,18 +1,21 @@
-//! Typed HTTP client for the engine /chat endpoint. Service token auth.
+//! Typed HTTP client for the engine endpoints the bot calls. Service token auth.
 
 use std::time::Duration;
 
 use opentelemetry::trace::TraceContextExt;
 use secrecy::{ExposeSecret, SecretString};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::types::{
-    ChatRequest, ChatResponse, ConfirmRequest, EngineError, ErrorFrame, Progress, Update,
+    ChatRequest, ChatResponse, ConfirmRequest, EngineError, ErrorFrame, ForgetRequest,
+    ForgetResponse, ProfileList, ProfileRequest, Progress, ResetRequest, ResetResponse, Update,
 };
-use crate::sse::drain_frames;
+use crate::engine::sse::drain_frames;
 
 /// HTTP client bound to one engine.
 #[derive(Debug, Clone)]
@@ -45,11 +48,40 @@ impl EngineClient {
 
     /// Answers a held action. The engine runs it and carries on, or drops it.
     pub async fn confirm(&self, req: &ConfirmRequest) -> Result<ChatResponse, EngineError> {
-        let response = self
+        self.post("/confirm", req).await
+    }
+
+    /// Ends the open conversations of a user in one channel.
+    pub async fn reset(&self, req: &ResetRequest) -> Result<ResetResponse, EngineError> {
+        self.post("/conversation/reset", req).await
+    }
+
+    /// Lists what the engine remembers about a user. 503 when the profile graph is off.
+    pub async fn profile_list(&self, req: &ProfileRequest) -> Result<ProfileList, EngineError> {
+        self.post("/profile/list", req).await
+    }
+
+    /// Forgets one remembered thing, or everything without a label. 503 when the profile
+    /// graph is off.
+    pub async fn forget(&self, req: &ForgetRequest) -> Result<ForgetResponse, EngineError> {
+        self.post("/profile/forget", req).await
+    }
+
+    /// Posts a JSON body and reads a JSON reply.
+    async fn post<B: Serialize, R: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<R, EngineError> {
+        let mut request = self
             .http
-            .post(format!("{}/confirm", self.base_url))
+            .post(format!("{}{path}", self.base_url))
             .bearer_auth(self.token.expose_secret())
-            .json(req)
+            .json(body);
+        if let Some(traceparent) = current_traceparent() {
+            request = request.header("traceparent", traceparent);
+        }
+        let response = request
             .send()
             .await
             .map_err(|e| EngineError::Transport(e.to_string()))?;

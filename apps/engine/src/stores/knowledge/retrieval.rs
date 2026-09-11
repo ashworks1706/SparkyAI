@@ -9,13 +9,13 @@ use sqlx::Row;
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use crate::core::traits::retrieval::{Embedder, Retriever};
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
 use crate::stores::postgres::{quote_literal, vector_literal};
 
-/// How the two retrieval legs are run and fused. Built from [retrieval]; there is no Default.
+/// How the two retrieval legs are run and fused. Built from the retrieval section; there is no Default.
 #[derive(Debug, Clone)]
 pub struct RetrievalTuning {
     /// Candidates pulled from each leg before fusion.
@@ -68,7 +68,7 @@ impl PgRetriever {
     /// The categories the scraper has published, sorted. Empty when nothing is indexed.
     ///
     /// # Errors
-    /// Returns [`RetrievalError::Store`] when the query fails.
+    /// Returns [RetrievalError::Store] when the query fails.
     pub async fn categories(&self) -> Result<Vec<String>, RetrievalError> {
         sqlx::query_scalar("select distinct category from sources order by category")
             .fetch_all(&self.pool)

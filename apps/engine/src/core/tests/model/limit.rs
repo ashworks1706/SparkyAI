@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use crate::agent::model::limit::Limited;
 use crate::core::tests::support::{ctx, text};
 use crate::core::traits::model::ModelProvider;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
 
 /// Records how many calls were ever in flight at once.

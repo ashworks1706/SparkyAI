@@ -1,4 +1,6 @@
-//! RetrievalQuery, RetrievalError.
+//! RetrievalQuery, RetrievalError, SearchArgs.
+
+use serde::Deserialize;
 
 /// A retrieval request.
 #[derive(Debug, Clone)]
@@ -31,4 +33,14 @@ pub enum RetrievalError {
     /// The query could not be embedded.
     #[error("embedding: {0}")]
     Embedding(String),
+}
+
+/// Arguments the model passes to search_knowledge_base.
+#[derive(Deserialize)]
+pub struct SearchArgs {
+    /// What to look for.
+    pub query: String,
+    /// Optional source categories to restrict to.
+    #[serde(default)]
+    pub categories: Vec<String>,
 }

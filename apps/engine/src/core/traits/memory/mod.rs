@@ -1,8 +1,11 @@
 //! MemoryStore trait. Recall is always scoped to tenant and user.
 
+pub mod detector;
+pub mod profile;
+
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::store::StoreError;
 

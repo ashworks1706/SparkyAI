@@ -112,7 +112,7 @@ impl Message {
             .iter()
             .map(|c| c.name.len() + c.arguments.to_string().len())
             .sum();
-        crate::core::types::tokens::estimate(&self.content, chars_per_token)
+        crate::core::types::model::tokens::estimate(&self.content, chars_per_token)
             + call_chars / chars_per_token.max(1)
     }
 }

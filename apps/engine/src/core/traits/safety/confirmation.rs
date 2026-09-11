@@ -5,8 +5,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::policy::PendingAction;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::policy::PendingAction;
 use crate::core::types::store::StoreError;
 
 /// Holds actions waiting on caller approval.

@@ -2,9 +2,9 @@
 
 use crate::core::config::{Agent, Retrieval};
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::assemble::Budget;
-use crate::core::types::message::Message;
-use crate::core::types::tokens::estimate;
+use crate::core::types::agent::assemble::Budget;
+use crate::core::types::conversation::message::Message;
+use crate::core::types::model::tokens::estimate;
 use crate::stores::postgres::RetrievalTuning;
 
 #[test]
@@ -22,7 +22,7 @@ fn assembly_and_a_message_price_the_same_text_the_same_way() {
 #[test]
 fn tool_call_arguments_are_counted_on_top_of_the_content() {
     let mut with_call = Message::assistant("");
-    with_call.tool_calls = vec![crate::core::types::message::ToolCall {
+    with_call.tool_calls = vec![crate::core::types::conversation::message::ToolCall {
         id: "1".into(),
         name: "search_knowledge_base".into(),
         arguments: serde_json::json!({"query": "library hours"}),
@@ -45,6 +45,7 @@ fn the_loop_config_carries_the_agent_settings_unchanged() {
     assert!((cfg.temperature - settings.temperature).abs() < f32::EPSILON);
     assert_eq!(cfg.history_turns, settings.history_turns);
     assert_eq!(cfg.memory_recall_limit, settings.memory_recall_limit);
+    assert_eq!(cfg.recall_in_public, settings.recall_in_public);
     assert_eq!(cfg.retry_base_ms, settings.retry_base_ms);
     assert_eq!(cfg.retry_cap_ms, settings.retry_cap_ms);
     assert_eq!(cfg.max_span_value_chars, settings.max_span_value_chars);

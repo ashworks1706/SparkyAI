@@ -10,11 +10,11 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::agent::tools::structured;
-use crate::core::traits::skills::SkillStore;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::skill::{Skill, SkillError};
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::traits::knowledge::skills::SkillStore;
+use crate::core::traits::tools::Tool;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::skill::{Skill, SkillError};
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Fetches one skill per call.
 pub struct GetSkillTool {

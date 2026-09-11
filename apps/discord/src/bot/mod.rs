@@ -1,26 +1,30 @@
-//! serenity client setup and event handler.
+//! serenity client setup, the guards every question passes, and event dispatch.
 
-use secrecy::ExposeSecret;
+mod account;
+mod ask;
+mod commands;
+mod confirm;
+mod destination;
+mod mention;
+mod turn;
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use secrecy::ExposeSecret;
 use serenity::all::{
-    ChannelId, Client, CommandInteraction, ComponentInteraction, Context,
-    CreateInteractionResponse, CreateInteractionResponseFollowup, CreateInteractionResponseMessage,
-    EditInteractionResponse, EventHandler, GatewayIntents, GuildId, Interaction, Message,
-    Permissions, Ready, ResolvedValue, UserId,
+    AutoArchiveDuration, ChannelId, Client, CommandInteraction, Context, CreateInteractionResponse,
+    CreateInteractionResponseMessage, CreateThread, EventHandler, GatewayIntents, GuildId,
+    Interaction, Message, Ready, ResolvedValue, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
-use tracing::Instrument;
-use tracing::field::Empty;
-use uuid::Uuid;
 
-use crate::commands;
-use crate::components;
+use crate::access::route;
 use crate::core::config::Config;
-use crate::core::types::{ChatRequest, ChatResponse, ConfirmRequest, EngineError, Update};
-use crate::engine_client::EngineClient;
-use crate::reply;
+use crate::engine::client::EngineClient;
+use crate::render::components::CustomId;
 
 /// Per-process bot state and the serenity event handler.
 struct Handler {
@@ -36,10 +40,12 @@ struct Handler {
     cooldown: Duration,
     /// Role name the engine policy reads to allow write-side tools.
     write_capability: String,
-    /// Conversation each user is continuing. Lost on restart, and cleared by /reset.
-    conversations: Mutex<std::collections::HashMap<UserId, Uuid>>,
+    /// How long a thread the bot opens stays active without messages.
+    thread_archive: AutoArchiveDuration,
+    /// The bot user, set once the gateway is ready.
+    me: OnceLock<UserId>,
     /// When each user last asked, for the cooldown.
-    last_ask: Mutex<std::collections::HashMap<UserId, Instant>>,
+    last_ask: Mutex<HashMap<UserId, Instant>>,
 }
 
 /// Connects to Discord and runs until shutdown.
@@ -70,8 +76,9 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         max_message_chars: cfg.bot.max_message_chars,
         cooldown: Duration::from_secs(cfg.bot.cooldown_secs),
         write_capability: cfg.bot.write_capability.clone(),
-        conversations: Mutex::new(std::collections::HashMap::new()),
-        last_ask: Mutex::new(std::collections::HashMap::new()),
+        thread_archive: archive_after(cfg.bot.thread_auto_archive_minutes),
+        me: OnceLock::new(),
+        last_ask: Mutex::new(HashMap::new()),
     };
     let intents = GatewayIntents::non_privileged();
     let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
@@ -81,32 +88,20 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-impl Handler {
-    /// Role names the member holds, resolved against the guild. A lookup failure is an
-    /// error, not an empty list.
-    async fn role_names(
-        &self,
-        ctx: &Context,
-        cmd: &CommandInteraction,
-    ) -> Result<Vec<String>, serenity::Error> {
-        let Some(member) = &cmd.member else {
-            return Ok(Vec::new());
-        };
-        let roles = self.guild_id.roles(&ctx.http).await?;
-        let names = member
-            .roles
-            .iter()
-            .filter_map(|id| roles.get(id).map(|r| r.name.clone()));
-        Ok(authorized_roles(
-            names,
-            member.permissions,
-            &self.write_capability,
-        ))
+/// The Discord duration for a validated number of minutes.
+fn archive_after(minutes: u16) -> AutoArchiveDuration {
+    match minutes {
+        60 => AutoArchiveDuration::OneHour,
+        4_320 => AutoArchiveDuration::ThreeDays,
+        10_080 => AutoArchiveDuration::OneWeek,
+        _ => AutoArchiveDuration::OneDay,
     }
+}
 
-    /// Whether the bot answers in this channel at all.
-    fn serves(&self, channel: ChannelId) -> bool {
-        self.channels.is_empty() || self.channels.contains(&channel)
+impl Handler {
+    /// Whether the bot answers in this channel, or in the channel a thread hangs off.
+    fn serves(&self, channel: ChannelId, parent: Option<ChannelId>) -> bool {
+        route::serves(&self.channels, channel, parent)
     }
 
     /// Counts one question from user and says whether it may run.
@@ -125,308 +120,60 @@ impl Handler {
         true
     }
 
-    /// Why the bot will not take this question, if it will not.
-    async fn refusal(&self, cmd: &CommandInteraction) -> Option<String> {
-        if !self.serves(cmd.channel_id) {
-            return Some("I do not answer in this channel.".into());
-        }
-        if !self.within_cooldown(cmd.user.id).await {
-            return Some(format!(
-                "Give me {} seconds between questions.",
-                self.cooldown.as_secs()
-            ));
-        }
-        None
+    /// What to tell a user who asked again inside the cooldown.
+    fn cooldown_text(&self) -> String {
+        format!(
+            "Give me {} seconds between questions.",
+            self.cooldown.as_secs()
+        )
     }
 
-    /// Builds the request for one /ask, or answers the user and returns None on an empty
-    /// question, a DM, or roles that would not resolve.
-    async fn request_for(&self, ctx: &Context, cmd: &CommandInteraction) -> Option<ChatRequest> {
-        let question = cmd
-            .data
-            .options()
-            .into_iter()
-            .find(|o| o.name == commands::QUESTION)
-            .and_then(|o| match o.value {
-                ResolvedValue::String(s) => Some(s.to_owned()),
-                _ => None,
-            })
-            .unwrap_or_default();
-        if question.trim().is_empty() {
-            self.followup(ctx, cmd, "Ask me something.".into()).await;
-            return None;
-        }
-        let Some(guild_id) = cmd.guild_id else {
-            self.followup(ctx, cmd, "Ask me in the server, not in a DM.".into())
-                .await;
-            return None;
-        };
-        let roles = match self.role_names(ctx, cmd).await {
-            Ok(roles) => roles,
-            Err(e) => {
-                tracing::error!(error = %e, user = %cmd.user.id, "role lookup failed");
-                self.followup(
-                    ctx,
-                    cmd,
-                    "I could not verify your roles, so I did not run that.".into(),
-                )
-                .await;
-                return None;
-            }
-        };
-        Some(ChatRequest {
-            user_id: cmd.user.id.to_string(),
-            tenant_id: guild_id.to_string(),
-            channel_id: cmd.channel_id.to_string(),
-            roles,
-            conversation_id: self.conversations.lock().await.get(&cmd.user.id).copied(),
-            message: question,
+    /// The builder for a thread opened from a question.
+    fn thread_for(&self, question: &str) -> CreateThread<'static> {
+        CreateThread::new(route::thread_name(question)).auto_archive_duration(self.thread_archive)
+    }
+}
+
+/// Answers a command at once with a line only the caller sees.
+async fn tell(ctx: &Context, cmd: &CommandInteraction, text: impl Into<String>) {
+    let msg = CreateInteractionResponseMessage::new()
+        .content(text)
+        .ephemeral(true);
+    if let Err(e) = cmd
+        .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
+        .await
+    {
+        tracing::warn!(error = %e, "ephemeral response failed");
+    }
+}
+
+/// The string value of a command option, if given.
+fn option_str(cmd: &CommandInteraction, name: &str) -> Option<String> {
+    cmd.data
+        .options()
+        .into_iter()
+        .find(|o| o.name == name)
+        .and_then(|o| match o.value {
+            ResolvedValue::String(s) => Some(s.to_owned()),
+            _ => None,
         })
-    }
-
-    async fn ask(&self, ctx: &Context, cmd: &CommandInteraction) {
-        if let Some(reason) = self.refusal(cmd).await {
-            let msg = CreateInteractionResponseMessage::new()
-                .content(reason)
-                .ephemeral(true);
-            if let Err(e) = cmd
-                .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
-                .await
-            {
-                tracing::warn!(error = %e, "refusal response failed");
-            }
-            return;
-        }
-        if let Err(e) = cmd.defer(&ctx.http).await {
-            tracing::warn!(error = %e, "defer failed");
-            return;
-        }
-        let Some(req) = self.request_for(ctx, cmd).await else {
-            return;
-        };
-        let span = tracing::info_span!(
-            "discord.ask",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %cmd.user.id,
-            "session.id" = Empty,
-            "input.value" = %req.message,
-            "output.value" = Empty,
-        );
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let streaming = self.engine.chat_stream(&req, tx).instrument(span.clone());
-        let (outcome, note) = tokio::join!(streaming, self.watch(ctx, cmd, &mut rx)).1;
-        if let Some(note) = note
-            && let Err(e) = cmd.delete_followup(&ctx.http, note.id).await
-        {
-            // The progress line stays above the answer and says what happened.
-            tracing::warn!(error = %e, "could not clear the progress message");
-        }
-        let Some(outcome) = outcome else {
-            tracing::error!(user = %cmd.user.id, "stream ended with no outcome");
-            self.followup(
-                ctx,
-                cmd,
-                reply::failure(&EngineError::Transport("no answer".into())),
-            )
-            .await;
-            return;
-        };
-        match outcome {
-            Ok(resp) => {
-                span.record("session.id", resp.conversation_id.to_string().as_str());
-                span.record(
-                    "output.value",
-                    resp.text.chars().take(2_000).collect::<String>().as_str(),
-                );
-                tracing::info!(
-                    request_id = %resp.request_id,
-                    status = %resp.status,
-                    user = %cmd.user.id,
-                    "answered"
-                );
-                self.conversations
-                    .lock()
-                    .await
-                    .insert(cmd.user.id, resp.conversation_id);
-                self.answer(ctx, cmd, &resp).await;
-            }
-            Err(e) => {
-                tracing::error!(error = %e, user = %cmd.user.id, "engine call failed");
-                self.followup(ctx, cmd, reply::failure(&e)).await;
-            }
-        }
-    }
-
-    /// Sends the answer, with the buttons it asks for on the message that asks.
-    async fn answer(&self, ctx: &Context, cmd: &CommandInteraction, resp: &ChatResponse) {
-        let rows = components::rows_for(resp);
-        let messages = reply::render(resp, self.max_message_chars);
-        let last = messages.len().saturating_sub(1);
-        for (i, message) in messages.into_iter().enumerate() {
-            let builder = CreateInteractionResponseFollowup::new().content(message);
-            let builder = if i == last && !rows.is_empty() {
-                builder.components(components::to_action_rows(&rows))
-            } else {
-                builder
-            };
-            if let Err(e) = cmd.create_followup(&ctx.http, builder).await {
-                tracing::warn!(error = %e, "followup failed");
-            }
-        }
-    }
-
-    /// Relays progress while the turn runs, and returns the outcome plus the progress message
-    /// still on screen, if any.
-    async fn watch(
-        &self,
-        ctx: &Context,
-        cmd: &CommandInteraction,
-        rx: &mut tokio::sync::mpsc::UnboundedReceiver<Update>,
-    ) -> (Option<Result<ChatResponse, EngineError>>, Option<Message>) {
-        let mut outcome = None;
-        let mut note: Option<Message> = None;
-        let mut last_edit: Option<Instant> = None;
-        while let Some(update) = rx.recv().await {
-            match update {
-                Update::Progress(text) => {
-                    // A burst of steps collapses into one edit.
-                    if last_edit.is_some_and(|at| at.elapsed() < self.edit_every) {
-                        continue;
-                    }
-                    last_edit = Some(Instant::now());
-                    note = self.progress(ctx, cmd, note, &text).await;
-                }
-                Update::Answer(answer) => outcome = Some(Ok(*answer)),
-                Update::Failed(e) => outcome = Some(Err(e)),
-            }
-        }
-        (outcome, note)
-    }
-
-    /// Shows what the agent is doing, as one message edited in place. Returns the message for
-    /// the next step to edit.
-    async fn progress(
-        &self,
-        ctx: &Context,
-        cmd: &CommandInteraction,
-        existing: Option<Message>,
-        text: &str,
-    ) -> Option<Message> {
-        let body = format!("_{text}…_");
-        let builder = CreateInteractionResponseFollowup::new().content(body);
-        if let Some(message) = existing {
-            match cmd.edit_followup(&ctx.http, message.id, builder).await {
-                Ok(updated) => Some(updated),
-                Err(e) => {
-                    tracing::warn!(error = %e, "progress edit failed");
-                    // Keep the message we have.
-                    Some(message)
-                }
-            }
-        } else {
-            match cmd.create_followup(&ctx.http, builder).await {
-                Ok(posted) => Some(posted),
-                Err(e) => {
-                    tracing::warn!(error = %e, "progress message failed");
-                    None
-                }
-            }
-        }
-    }
-
-    async fn followup(&self, ctx: &Context, cmd: &CommandInteraction, content: String) {
-        let builder = CreateInteractionResponseFollowup::new().content(content);
-        if let Err(e) = cmd.create_followup(&ctx.http, builder).await {
-            tracing::warn!(error = %e, "followup failed");
-        }
-    }
-
-    async fn reset(&self, ctx: &Context, cmd: &CommandInteraction) {
-        self.conversations.lock().await.remove(&cmd.user.id);
-        let msg = CreateInteractionResponseMessage::new()
-            .content("Fresh start. Ask away.")
-            .ephemeral(true);
-        if let Err(e) = cmd
-            .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
-            .await
-        {
-            tracing::warn!(error = %e, "reset response failed");
-        }
-    }
 }
 
-/// Whether the Discord permissions of a member let them ask for write-side tools.
-pub(crate) fn can_write(permissions: Permissions) -> bool {
-    permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
-}
-
-/// Guild role names plus capability when the member Discord permissions grant it.
-/// A guild role named like the capability is dropped. Only the permission bits confer
-/// write access.
-pub(crate) fn authorized_roles(
-    names: impl IntoIterator<Item = String>,
-    permissions: Option<Permissions>,
-    capability: &str,
-) -> Vec<String> {
-    let mut roles: Vec<String> = names.into_iter().filter(|n| n != capability).collect();
-    if permissions.is_some_and(can_write) {
-        roles.push(capability.to_owned());
-    }
-    roles
-}
-
-impl Handler {
-    /// Answers a pressed button. The engine only accepts the caller it asked, so a bystander
-    /// pressing Approve changes nothing.
-    async fn pressed(&self, ctx: &Context, press: &ComponentInteraction) {
-        let Some(id) = components::CustomId::parse(&press.data.custom_id) else {
-            tracing::debug!(custom_id = %press.data.custom_id, "component is not ours");
-            return;
-        };
-        if let Err(e) = press.defer(&ctx.http).await {
-            tracing::warn!(error = %e, "defer failed");
-            return;
-        }
-        let Some(guild_id) = press.guild_id else {
-            return;
-        };
-        let approve = id.action == components::Action::Approve;
-        let req = ConfirmRequest {
-            token: id.token,
-            approve,
-            user_id: press.user.id.to_string(),
-            tenant_id: guild_id.to_string(),
-            conversation_id: id.conversation,
-        };
-        let span = tracing::info_span!(
-            "discord.confirm",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %press.user.id,
-            "sparky.approved" = approve,
-        );
-        let outcome = self.engine.confirm(&req).instrument(span).await;
-        let body = match outcome {
-            Ok(resp) => reply::render(&resp, self.max_message_chars).join("\n"),
-            Err(e) => {
-                tracing::error!(error = %e, user = %press.user.id, "confirm failed");
-                reply::failure(&e)
-            }
-        };
-        // The buttons are spent either way. Clearing them stops a second press.
-        let edit = EditInteractionResponse::new().components(Vec::new());
-        if let Err(e) = press.edit_response(&ctx.http, edit).await {
-            tracing::warn!(error = %e, "could not clear the buttons");
-        }
-        let followup = CreateInteractionResponseFollowup::new().content(body);
-        if let Err(e) = press.create_followup(&ctx.http, followup).await {
-            tracing::warn!(error = %e, "confirm followup failed");
-        }
-    }
+/// The boolean value of a command option. Absent is false.
+fn option_bool(cmd: &CommandInteraction, name: &str) -> bool {
+    cmd.data
+        .options()
+        .into_iter()
+        .find(|o| o.name == name)
+        .is_some_and(|o| matches!(o.value, ResolvedValue::Boolean(true)))
 }
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
+        if self.me.set(ready.user.id).is_err() {
+            tracing::debug!("gateway ready again after a reconnect");
+        }
         tracing::info!(user = %ready.user.name, guild = %self.guild_id, "connected");
         match self.guild_id.set_commands(&ctx.http, commands::all()).await {
             Ok(cmds) => tracing::info!(count = cmds.len(), "commands registered"),
@@ -434,17 +181,36 @@ impl EventHandler for Handler {
         }
     }
 
+    async fn message(&self, ctx: Context, msg: Message) {
+        self.mentioned(&ctx, &msg).await;
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::Component(press) = &interaction {
-            self.pressed(&ctx, press).await;
-            return;
-        }
-        if let Interaction::Command(cmd) = interaction {
-            match cmd.data.name.as_str() {
+        match interaction {
+            Interaction::Component(press) => match CustomId::parse(&press.data.custom_id) {
+                Some(CustomId::Confirm {
+                    action,
+                    token,
+                    conversation,
+                }) => {
+                    self.confirm(&ctx, &press, action, token, conversation)
+                        .await;
+                }
+                Some(id @ (CustomId::ForgetAll { .. } | CustomId::KeepAll { .. })) => {
+                    self.forget_pressed(&ctx, &press, id).await;
+                }
+                None => {
+                    tracing::debug!(custom_id = %press.data.custom_id, "component is not ours");
+                }
+            },
+            Interaction::Command(cmd) => match cmd.data.name.as_str() {
                 commands::ASK => self.ask(&ctx, &cmd).await,
                 commands::RESET => self.reset(&ctx, &cmd).await,
+                commands::MEMORY => self.memory(&ctx, &cmd).await,
+                commands::FORGET => self.forget(&ctx, &cmd).await,
                 other => tracing::warn!(command = other, "unknown command"),
-            }
+            },
+            _ => {}
         }
     }
 }

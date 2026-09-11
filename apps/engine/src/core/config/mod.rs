@@ -13,7 +13,7 @@ use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
 
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::assemble::Budget;
+use crate::core::types::agent::assemble::Budget;
 
 pub use self::harness::*;
 pub use self::retrieval::*;
@@ -81,14 +81,14 @@ pub struct Config {
     pub mcp: Mcp,
 }
 
-/// Default budgets. Every field comes from [agent].
+/// Default budgets. Every field comes from the agent section.
 impl Default for Budget {
     fn default() -> Self {
         Agent::default().budget()
     }
 }
 
-/// Default loop settings. Every field comes from [agent].
+/// Default loop settings. Every field comes from the agent section.
 impl Default for AgentConfig {
     fn default() -> Self {
         let agent = Agent::default();
@@ -100,6 +100,7 @@ impl Default for AgentConfig {
             temperature: agent.temperature,
             history_turns: agent.history_turns,
             memory_recall_limit: agent.memory_recall_limit,
+            recall_in_public: agent.recall_in_public,
             retry_base_ms: agent.retry_base_ms,
             retry_cap_ms: agent.retry_cap_ms,
             max_span_value_chars: agent.max_span_value_chars,
@@ -182,6 +183,15 @@ impl Config {
         }
         if self.agent.prompt_budget_tokens == 0 {
             return invalid("agent.prompt_budget_tokens must be at least 1".into());
+        }
+        if !(0.0..=1.0).contains(&self.profile.min_confidence) {
+            return invalid("profile.min_confidence must be between 0 and 1".into());
+        }
+        if self.profile.list_limit == 0 {
+            return invalid("profile.list_limit must be at least 1".into());
+        }
+        if self.profile.request_timeout_secs == 0 {
+            return invalid("profile.request_timeout_secs must be at least 1".into());
         }
         if self.agent.max_steps == 0 {
             return invalid("agent.max_steps must be at least 1".into());

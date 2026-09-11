@@ -3,7 +3,7 @@
 use serde_json::json;
 
 use crate::agent::tools::mcp::{compact_schema, required_only, risk_for};
-use crate::core::types::tool::RiskClass;
+use crate::core::types::tools::RiskClass;
 
 #[test]
 fn reads_and_inspection_run_freely() {

@@ -8,10 +8,10 @@ use sqlx::Row;
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use crate::core::traits::profile::ProfileGraph;
-use crate::core::traits::retrieval::Embedder;
-use crate::core::types::context::RequestContext;
-use crate::core::types::profile::{
+use crate::core::traits::knowledge::retrieval::Embedder;
+use crate::core::traits::memory::profile::ProfileGraph;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::memory::profile::{
     ProfileEntity, ProfileError, ProfileFact, ProfileNode, ProfileRelation,
 };
 use crate::stores::postgres::row_limit;
@@ -329,15 +329,26 @@ impl ProfileGraph for PgProfileGraph {
     }
 
     async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError> {
-        let done = sqlx::query(
+        let mut tx = self.pool.begin().await.map_err(db)?;
+        let nodes = sqlx::query(
             "delete from profile_nodes n using users u
              where n.user_id = u.id and n.tenant_id = $1 and u.discord_id = $2",
         )
         .bind(&ctx.tenant_id)
         .bind(&ctx.user_id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(db)?;
-        Ok(done.rows_affected())
+        let memories = sqlx::query(
+            "delete from memories m using users u
+             where m.user_id = u.id and m.tenant_id = $1 and u.discord_id = $2",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+        tx.commit().await.map_err(db)?;
+        Ok(nodes.rows_affected() + memories.rows_affected())
     }
 }

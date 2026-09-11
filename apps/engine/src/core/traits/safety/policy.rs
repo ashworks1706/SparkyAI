@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::policy::{Decision, ProposedAction};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::policy::{Decision, ProposedAction};
 
 /// Decides whether a proposed action runs.
 #[async_trait]

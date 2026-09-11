@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::policy::{RiskPolicy, payload_hash};
-use crate::core::traits::policy::Policy;
-use crate::core::types::context::RequestContext;
-use crate::core::types::policy::{Decision, ProposedAction};
-use crate::core::types::tool::RiskClass;
+use crate::agent::harness::safety::policy::{RiskPolicy, payload_hash};
+use crate::core::traits::safety::policy::Policy;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::policy::{Decision, ProposedAction};
+use crate::core::types::tools::RiskClass;
 
 fn ctx(roles: &[&str]) -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -74,7 +74,7 @@ async fn the_role_that_may_write_is_configuration() {
     let p = RiskPolicy::new(
         vec!["officers".into()],
         false,
-        crate::core::types::tool::RiskClass::ExternalWrite,
+        crate::core::types::tools::RiskClass::ExternalWrite,
     );
     assert!(matches!(
         p.authorize(&ctx(&["MANAGE_GUILD"]), &action(RiskClass::ExternalWrite))

@@ -8,9 +8,9 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::core::traits::trace::TraceSink;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::trace::progress::Progress;
 use crate::core::types::trace::{TraceEvent, TraceRecord};
-use crate::core::types::wire::Progress;
 
 fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     TraceRecord {
@@ -21,7 +21,7 @@ fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     }
 }
 
-/// Appends one JSON line per event to <dir>/<request_id>.jsonl.
+/// Appends one JSON line per event to a file named for the request id, under the trace dir.
 #[derive(Debug)]
 pub struct JsonlSink {
     dir: PathBuf,

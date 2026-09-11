@@ -1,5 +1,7 @@
 //! MemoryKind, Memory, MemoryQuery.
 
+pub mod profile;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

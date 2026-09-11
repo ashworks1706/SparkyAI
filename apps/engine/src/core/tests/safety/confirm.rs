@@ -4,14 +4,14 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::agent::harness::tool::ToolSet;
+use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{
     Echo, Held, Recording, Scripted, agent_holding, calls, ctx, text,
 };
-use crate::core::types::tool::RiskClass;
+use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::RunStatus;
 
-fn moderator() -> crate::core::types::context::RequestContext {
+fn moderator() -> crate::core::types::agent::context::RequestContext {
     ctx().with_roles(vec!["MANAGE_GUILD".into()])
 }
 
@@ -36,7 +36,7 @@ async fn a_write_is_held_with_what_it_takes_to_run_it_later() {
 
 #[tokio::test]
 async fn only_the_caller_who_was_asked_can_claim_it() {
-    use crate::core::traits::confirmation::ConfirmationStore;
+    use crate::core::traits::safety::confirmation::ConfirmationStore;
 
     let held = Arc::new(Held::default());
     let agent = agent_holding(
@@ -54,7 +54,7 @@ async fn only_the_caller_who_was_asked_can_claim_it() {
         .map(|c| c.token)
         .unwrap_or_default();
 
-    let someone_else = crate::core::types::context::RequestContext::new(
+    let someone_else = crate::core::types::agent::context::RequestContext::new(
         "g",
         "another-member",
         std::time::Duration::from_secs(5),
@@ -87,7 +87,7 @@ async fn only_the_caller_who_was_asked_can_claim_it() {
 
 #[tokio::test]
 async fn approving_runs_the_action_and_carries_on_to_an_answer() {
-    use crate::core::types::policy::{PendingAction, ProposedAction};
+    use crate::core::types::safety::policy::{PendingAction, ProposedAction};
 
     let agent = agent_holding(
         Scripted::new(vec![Ok(text("Done — the message is posted."))]),

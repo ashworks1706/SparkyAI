@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
-use crate::agent::harness::profile::{GRAPH_INSTRUCTIONS, GraphAgent};
-use crate::agent::harness::task::{Task, TaskConfig};
+use crate::agent::harness::agent::task::{Task, TaskConfig};
+use crate::agent::harness::memory::profile::{GRAPH_INSTRUCTIONS, GraphAgent};
 use crate::core::tests::support::{Scripted, ctx, text};
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::memory::profile::ProfileError;
 use crate::core::types::model::{ModelError, ModelResponse};
-use crate::core::types::profile::ProfileError;
 
 fn graph_agent(replies: Vec<Result<ModelResponse, ModelError>>) -> GraphAgent {
     GraphAgent::new(Task::new(
@@ -90,8 +90,8 @@ async fn a_failed_model_call_is_reported_as_a_model_error() {
 
 #[test]
 fn a_relation_reads_as_a_sentence_in_the_prompt() {
+    use crate::core::types::memory::profile::{ProfileEntity, ProfileRelation};
     use crate::core::types::memory::{Memory, MemoryKind};
-    use crate::core::types::profile::{ProfileEntity, ProfileRelation};
 
     let relation = ProfileRelation {
         subject: ProfileEntity {
@@ -116,8 +116,8 @@ fn a_relation_reads_as_a_sentence_in_the_prompt() {
 
 #[test]
 fn a_recalled_node_reads_as_its_kind_and_label() {
+    use crate::core::types::memory::profile::ProfileNode;
     use crate::core::types::memory::{Memory, MemoryKind};
-    use crate::core::types::profile::ProfileNode;
 
     let node = ProfileNode {
         id: uuid::Uuid::new_v4(),
@@ -139,12 +139,12 @@ struct Forgetful {
 }
 
 #[async_trait::async_trait]
-impl crate::core::traits::profile::ProfileGraph for Forgetful {
+impl crate::core::traits::memory::profile::ProfileGraph for Forgetful {
     async fn upsert(
         &self,
         _ctx: &RequestContext,
-        _facts: &[crate::core::types::profile::ProfileFact],
-    ) -> Result<(), crate::core::types::profile::ProfileError> {
+        _facts: &[crate::core::types::memory::profile::ProfileFact],
+    ) -> Result<(), crate::core::types::memory::profile::ProfileError> {
         Ok(())
     }
 
@@ -152,7 +152,7 @@ impl crate::core::traits::profile::ProfileGraph for Forgetful {
         &self,
         _ctx: &RequestContext,
         _limit: usize,
-    ) -> Result<Vec<crate::core::types::profile::ProfileNode>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileNode>, ProfileError> {
         Ok(Vec::new())
     }
 
@@ -160,7 +160,7 @@ impl crate::core::traits::profile::ProfileGraph for Forgetful {
         &self,
         _ctx: &RequestContext,
         _limit: usize,
-    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileRelation>, ProfileError> {
         Ok(Vec::new())
     }
 
@@ -169,14 +169,14 @@ impl crate::core::traits::profile::ProfileGraph for Forgetful {
         _ctx: &RequestContext,
         _subject: &str,
         _relation: &str,
-    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileRelation>, ProfileError> {
         Ok(Vec::new())
     }
 
     async fn drop_relation(
         &self,
         _ctx: &RequestContext,
-        _relation: &crate::core::types::profile::ProfileRelation,
+        _relation: &crate::core::types::memory::profile::ProfileRelation,
     ) -> Result<bool, ProfileError> {
         Ok(false)
     }
@@ -202,11 +202,15 @@ async fn a_label_removes_one_thing_and_no_label_removes_everything() {
     use axum::http::HeaderMap;
     use secrecy::SecretString;
 
-    use crate::routes::profile::{ForgetRequest, ProfileState, forget};
+    use crate::core::types::memory::profile::ForgetRequest;
+    use crate::routes::profile::{ProfileState, forget};
 
     let graph = std::sync::Arc::new(Forgetful::default());
     let state = ProfileState {
         graph: Some(graph.clone()),
+        list_limit: 50,
+        request_budget: std::time::Duration::from_secs(30),
+        rate_limit: crate::routes::rate_limit::RateLimiter::new(0),
         default_tenant: "g".into(),
         service_token: SecretString::from("t"),
     };
@@ -247,11 +251,15 @@ async fn forgetting_without_the_token_is_refused() {
     use axum::http::{HeaderMap, StatusCode};
     use secrecy::SecretString;
 
-    use crate::routes::profile::{ForgetRequest, ProfileState, forget};
+    use crate::core::types::memory::profile::ForgetRequest;
+    use crate::routes::profile::{ProfileState, forget};
 
     let graph = std::sync::Arc::new(Forgetful::default());
     let state = ProfileState {
         graph: Some(graph.clone()),
+        list_limit: 50,
+        request_budget: std::time::Duration::from_secs(30),
+        rate_limit: crate::routes::rate_limit::RateLimiter::new(0),
         default_tenant: "g".into(),
         service_token: SecretString::from("t"),
     };
@@ -274,7 +282,7 @@ async fn forgetting_without_the_token_is_refused() {
 
 #[test]
 fn a_reconciler_answer_names_statements_to_withdraw() {
-    use crate::agent::harness::profile::parse_indices;
+    use crate::agent::harness::memory::profile::parse_indices;
 
     assert_eq!(parse_indices("2", 3), vec![1]);
     assert_eq!(parse_indices("1, 3", 3), vec![0, 2]);
@@ -287,7 +295,7 @@ fn a_reconciler_answer_names_statements_to_withdraw() {
 
 #[test]
 fn anything_unreadable_withdraws_nothing() {
-    use crate::agent::harness::profile::parse_indices;
+    use crate::agent::harness::memory::profile::parse_indices;
 
     // Keeping a stale fact is recoverable. Removing a true one is not, so a misparse keeps.
     for answer in [
@@ -311,17 +319,17 @@ fn anything_unreadable_withdraws_nothing() {
 /// A graph that reports what is recorded and remembers what was withdrawn.
 #[derive(Default)]
 struct Recorded {
-    existing: Vec<crate::core::types::profile::ProfileRelation>,
+    existing: Vec<crate::core::types::memory::profile::ProfileRelation>,
     dropped: std::sync::Mutex<Vec<String>>,
-    written: std::sync::Mutex<Vec<crate::core::types::profile::ProfileFact>>,
+    written: std::sync::Mutex<Vec<crate::core::types::memory::profile::ProfileFact>>,
 }
 
 #[async_trait::async_trait]
-impl crate::core::traits::profile::ProfileGraph for Recorded {
+impl crate::core::traits::memory::profile::ProfileGraph for Recorded {
     async fn upsert(
         &self,
         _ctx: &RequestContext,
-        facts: &[crate::core::types::profile::ProfileFact],
+        facts: &[crate::core::types::memory::profile::ProfileFact],
     ) -> Result<(), ProfileError> {
         if let Ok(mut written) = self.written.lock() {
             written.extend_from_slice(facts);
@@ -333,7 +341,7 @@ impl crate::core::traits::profile::ProfileGraph for Recorded {
         &self,
         _ctx: &RequestContext,
         _limit: usize,
-    ) -> Result<Vec<crate::core::types::profile::ProfileNode>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileNode>, ProfileError> {
         Ok(Vec::new())
     }
 
@@ -341,7 +349,7 @@ impl crate::core::traits::profile::ProfileGraph for Recorded {
         &self,
         _ctx: &RequestContext,
         _limit: usize,
-    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileRelation>, ProfileError> {
         Ok(self.existing.clone())
     }
 
@@ -350,7 +358,7 @@ impl crate::core::traits::profile::ProfileGraph for Recorded {
         _ctx: &RequestContext,
         subject: &str,
         relation: &str,
-    ) -> Result<Vec<crate::core::types::profile::ProfileRelation>, ProfileError> {
+    ) -> Result<Vec<crate::core::types::memory::profile::ProfileRelation>, ProfileError> {
         Ok(self
             .existing
             .iter()
@@ -365,7 +373,7 @@ impl crate::core::traits::profile::ProfileGraph for Recorded {
     async fn drop_relation(
         &self,
         _ctx: &RequestContext,
-        relation: &crate::core::types::profile::ProfileRelation,
+        relation: &crate::core::types::memory::profile::ProfileRelation,
     ) -> Result<bool, ProfileError> {
         if let Ok(mut dropped) = self.dropped.lock() {
             dropped.push(relation.to_string());
@@ -386,8 +394,8 @@ fn relation(
     subject: &str,
     rel: &str,
     object: &str,
-) -> crate::core::types::profile::ProfileRelation {
-    use crate::core::types::profile::{ProfileEntity, ProfileRelation};
+) -> crate::core::types::memory::profile::ProfileRelation {
+    use crate::core::types::memory::profile::{ProfileEntity, ProfileRelation};
     ProfileRelation {
         subject: ProfileEntity {
             kind: "person".into(),
@@ -404,7 +412,7 @@ fn relation(
 
 /// Runs one turn through the writer and reports what the graph saw.
 async fn record(
-    existing: Vec<crate::core::types::profile::ProfileRelation>,
+    existing: Vec<crate::core::types::memory::profile::ProfileRelation>,
     extraction: &str,
     verdict: &str,
     turn: &str,
@@ -412,9 +420,9 @@ async fn record(
     use std::sync::Arc;
     use std::time::Duration;
 
-    use crate::agent::harness::detect::RuleDetector;
-    use crate::agent::harness::profile::{GraphAgent, ProfileWriter, Reconciler};
-    use crate::agent::harness::task::{Task, TaskConfig};
+    use crate::agent::harness::agent::task::{Task, TaskConfig};
+    use crate::agent::harness::memory::detect::RuleDetector;
+    use crate::agent::harness::memory::profile::{GraphAgent, ProfileWriter, Reconciler};
     use crate::core::tests::support::{Scripted, text};
 
     let graph = Arc::new(Recorded {
@@ -439,11 +447,48 @@ async fn record(
         Some(reconciler),
         graph.clone(),
         Duration::from_secs(5),
+        0.5,
     );
     writer.record("g".into(), "u".into(), turn.to_owned()).await;
     let dropped = graph.dropped.lock().map(|d| d.clone()).unwrap_or_default();
     let written = graph.written.lock().map_or(0, |w| w.len());
     (dropped, written)
+}
+
+#[test]
+fn a_fact_with_an_empty_label_or_low_confidence_is_not_keepable() {
+    use crate::agent::harness::memory::profile::keepable;
+    use crate::core::types::memory::profile::{ProfileEntity, ProfileFact};
+
+    let fact = |object: &str, confidence: f32| ProfileFact {
+        subject: ProfileEntity {
+            kind: "person".into(),
+            label: "the user".into(),
+        },
+        relation: "studies".into(),
+        object: ProfileEntity {
+            kind: "topic".into(),
+            label: object.into(),
+        },
+        confidence,
+    };
+    assert!(keepable(&fact("physics", 0.9), 0.5));
+    assert!(!keepable(&fact("", 0.9), 0.5));
+    assert!(!keepable(&fact("  ", 0.9), 0.5));
+    assert!(!keepable(&fact("physics", 0.2), 0.5));
+}
+
+#[tokio::test]
+async fn an_extraction_that_echoes_the_empty_template_writes_nothing() {
+    let (_, written) = record(
+        Vec::new(),
+        r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"studies",
+            "object":{"kind":"","label":""},"confidence":0.0}]}"#,
+        "none",
+        "I study here every day",
+    )
+    .await;
+    assert_eq!(written, 0);
 }
 
 #[tokio::test]
@@ -491,4 +536,93 @@ async fn repeating_a_fact_withdraws_nothing() {
     // The repeated statement is filtered before the reconciler sees it, so a model that says
     // to remove something has nothing to point at.
     assert!(dropped.is_empty(), "{dropped:?}");
+}
+
+#[tokio::test]
+async fn a_list_shows_nodes_and_relations_by_label() {
+    use axum::extract::State;
+    use axum::http::{HeaderMap, StatusCode};
+    use secrecy::SecretString;
+
+    use crate::core::tests::support::Known;
+    use crate::core::types::memory::profile::ListRequest;
+    use crate::routes::profile::{ProfileState, list};
+
+    let mut headers = HeaderMap::new();
+    let Ok(value) = "Bearer t".parse() else {
+        unreachable!("a header value")
+    };
+    headers.insert("authorization", value);
+    let request = || {
+        axum::Json(ListRequest {
+            user_id: "u".into(),
+            tenant_id: None,
+        })
+    };
+    let state = ProfileState {
+        graph: Some(Arc::new(Known::default())),
+        list_limit: 50,
+        request_budget: std::time::Duration::from_secs(30),
+        rate_limit: crate::routes::rate_limit::RateLimiter::new(0),
+        default_tenant: "g".into(),
+        service_token: SecretString::from("t"),
+    };
+
+    let response = list(State(state.clone()), headers.clone(), request()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let Ok(bytes) = axum::body::to_bytes(response.into_body(), usize::MAX).await else {
+        unreachable!("a readable body")
+    };
+    let Ok(listed) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        unreachable!("a json body")
+    };
+    assert_eq!(listed["nodes"][0]["kind"], "course");
+    assert_eq!(listed["nodes"][0]["label"], "CSE 310");
+    assert!(listed["nodes"][0]["confidence"].is_number());
+    assert_eq!(listed["relations"][0]["subject"], "the user");
+    assert_eq!(listed["relations"][0]["relation"], "studies");
+    assert_eq!(listed["relations"][0]["object"], "CSE 310");
+    assert!(listed["relations"][0]["confidence"].is_number());
+
+    let disabled = ProfileState {
+        graph: None,
+        ..state
+    };
+    let response = list(State(disabled), headers, request()).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn listing_past_the_rate_limit_is_refused() {
+    use axum::extract::State;
+    use axum::http::{HeaderMap, StatusCode};
+    use secrecy::SecretString;
+
+    use crate::core::tests::support::Known;
+    use crate::core::types::memory::profile::ListRequest;
+    use crate::routes::profile::{ProfileState, list};
+
+    let mut headers = HeaderMap::new();
+    let Ok(value) = "Bearer t".parse() else {
+        unreachable!("a header value")
+    };
+    headers.insert("authorization", value);
+    let state = ProfileState {
+        graph: Some(Arc::new(Known::default())),
+        list_limit: 50,
+        request_budget: std::time::Duration::from_secs(30),
+        rate_limit: crate::routes::rate_limit::RateLimiter::new(1),
+        default_tenant: "g".into(),
+        service_token: SecretString::from("t"),
+    };
+    let request = || {
+        axum::Json(ListRequest {
+            user_id: "u".into(),
+            tenant_id: None,
+        })
+    };
+    let first = list(State(state.clone()), headers.clone(), request()).await;
+    assert_eq!(first.status(), StatusCode::OK);
+    let second = list(State(state), headers, request()).await;
+    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
 }

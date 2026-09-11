@@ -1,10 +1,12 @@
 //! Tool trait.
 
+pub mod sandbox;
+
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::tool::{ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::{ToolDefinition, ToolError, ToolOutput};
 
 /// A callable capability.
 #[async_trait]

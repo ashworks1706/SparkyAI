@@ -1,6 +1,6 @@
 //! The OpenAI-compatible surface: what an off-the-shelf chat client sends and expects back.
 
-use crate::core::types::openai::ChatMessage;
+use crate::core::types::http::openai::ChatMessage;
 use crate::routes::openai::{conversation_for, last_user_message, transcript};
 
 fn msg(role: &str, content: &str) -> ChatMessage {
@@ -45,9 +45,9 @@ fn one_chat_keeps_one_conversation_and_two_chats_do_not_share() {
 #[test]
 fn tools_and_citations_ride_along_in_the_content() {
     use crate::core::types::agent::Answer;
-    use crate::core::types::evidence::Evidence;
+    use crate::core::types::knowledge::evidence::Evidence;
     use crate::core::types::model::Usage;
-    use crate::core::types::tool::ToolRun;
+    use crate::core::types::tools::ToolRun;
     use crate::core::types::trace::RunStatus;
 
     let answer = Answer {
@@ -68,6 +68,7 @@ fn tools_and_citations_ride_along_in_the_content() {
             tool: "search_knowledge_base".into(),
             ok: true,
         }],
+        memories: Vec::new(),
         usage: Usage::default(),
         cost_usd: 0.0,
     };
@@ -92,6 +93,7 @@ fn a_bare_answer_carries_no_footers() {
         status: RunStatus::Answered,
         steps: 1,
         tool_runs: Vec::new(),
+        memories: Vec::new(),
         usage: Usage::default(),
         cost_usd: 0.0,
     };

@@ -1,9 +1,11 @@
 //! ToolDefinition, RiskClass, ToolOutput, ToolError.
 
+pub mod sandbox;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::core::types::evidence::Evidence;
+use crate::core::types::knowledge::evidence::Evidence;
 
 /// What a tool can do to the world. Drives Policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

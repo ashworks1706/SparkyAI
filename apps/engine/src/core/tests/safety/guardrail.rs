@@ -3,12 +3,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::guardrail::{RuleGuardrail, Rules};
+use crate::agent::harness::safety::guardrail::{RuleGuardrail, Rules};
 use crate::core::config;
 use crate::core::tests::support::{Scripted, calls, text};
-use crate::core::traits::guardrail::Guardrail;
-use crate::core::types::context::RequestContext;
-use crate::core::types::guardrail::{Stage, Verdict};
+use crate::core::traits::safety::guardrail::Guardrail;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::guardrail::{Stage, Verdict};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -94,8 +94,8 @@ fn the_default_rules_come_from_configuration() {
 #[tokio::test]
 async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
     use crate::core::types::trace::{RunStatus, TraceEvent};
@@ -135,11 +135,11 @@ async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
 #[tokio::test]
 async fn a_blocked_capability_branch_stops_before_the_tool_runs() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::{Echo, MemorySink};
     use crate::core::types::agent::AgentConfig;
-    use crate::core::types::tool::RiskClass;
+    use crate::core::types::tools::RiskClass;
     use crate::core::types::trace::{RunStatus, TraceEvent};
 
     let sink = Arc::new(MemorySink::new());

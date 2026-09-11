@@ -8,16 +8,16 @@ use chrono::Utc;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::agent::harness::redact::redact_text;
+use crate::agent::harness::safety::redact::redact_text;
 use crate::core::tests::support::{agent, calls, text};
-use crate::core::traits::retrieval::Retriever;
-use crate::core::traits::tool::Tool;
+use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::traits::tools::Tool;
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::assemble::Budget;
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::agent::assemble::Budget;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -76,8 +76,8 @@ impl Tool for Finder {
 #[tokio::test]
 async fn a_chunk_that_did_not_fit_the_prompt_is_not_cited() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::{MemorySink, Scripted};
 
     let flood: Vec<Evidence> = (0..20)
@@ -119,8 +119,8 @@ async fn a_chunk_that_did_not_fit_the_prompt_is_not_cited() {
 #[tokio::test]
 async fn a_chunk_a_tool_found_is_cited() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::{MemorySink, Scripted};
 
     let found = evidence("from the tool", 10);
@@ -158,7 +158,7 @@ async fn a_chunk_a_tool_found_is_cited() {
 async fn nothing_retrieved_cites_nothing() {
     let (a, _sink) = agent(
         crate::core::tests::support::Scripted::new(vec![Ok(text("hello"))]),
-        crate::agent::harness::tool::ToolSet::new(),
+        crate::agent::harness::tools::ToolSet::new(),
         AgentConfig::default(),
     );
     let Ok(answer) = a.run(&ctx(), "hi").await else {
@@ -189,4 +189,37 @@ fn a_key_with_no_value_after_it_is_left_as_it_reads() {
     // A sentence mentioning the word token is not a secret.
     let page = "You will need a token to continue";
     assert_eq!(redact_text(page), page);
+}
+
+#[test]
+fn citations_list_each_source_once_best_first() {
+    use crate::core::types::knowledge::evidence::Evidence;
+
+    let chunk = |source: Uuid, title: &str, url: Option<&str>| Evidence {
+        source_id: source,
+        chunk_id: Uuid::new_v4(),
+        title: title.into(),
+        content: String::new(),
+        url: url.map(str::to_owned),
+        fetched_at: Utc::now(),
+        score: 1.0,
+    };
+    let hours = Uuid::new_v4();
+    let events = Uuid::new_v4();
+    let note = Uuid::new_v4();
+    let evidence = vec![
+        chunk(hours, "library_hours", Some("https://lib.asu.edu/hours")),
+        chunk(events, "events", Some("https://asu.edu/events")),
+        chunk(hours, "library_hours", Some("https://lib.asu.edu/hours")),
+        chunk(note, "note", None),
+        chunk(hours, "library_hours", Some("https://lib.asu.edu/hours")),
+        chunk(note, "note", None),
+    ];
+
+    let lines = Evidence::citations(&evidence);
+
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert!(lines[0].starts_with("library_hours"));
+    assert!(lines[1].starts_with("events"));
+    assert!(lines[2].starts_with("note"));
 }

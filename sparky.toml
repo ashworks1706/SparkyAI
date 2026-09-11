@@ -23,6 +23,8 @@ model_queue_wait_secs = 30
 temperature = 0.3
 history_turns = 20
 memory_recall_limit = 10
+# Recall memory and the profile graph where others can read the answer.
+recall_in_public = false
 
 # Prompt budgets in estimated tokens. A section budget above the total is rejected at boot.
 # chars_per_token is what makes an estimate an estimate. Lower it for a tokenizer that splits
@@ -117,6 +119,9 @@ timeout_secs = 60
 # Withdraw a recorded fact when a new one makes it false. Costs a model call only when a new
 # fact collides with one already recorded for the same subject and relation.
 reconcile = true
+min_confidence = 0.5           # extracted facts below this, or with an empty label, are dropped
+list_limit = 50               # nodes and relations POST /profile/list returns, each
+request_timeout_secs = 30      # budget for one /profile/list or /profile/forget call
 
 # The gate on extraction. It runs on every turn, so it is rules rather than a model call.
 # Empty lists use the built-in ones. A turn passes when a first-person marker sits next to a
@@ -204,6 +209,7 @@ max_message_chars = 2000       # the Discord hard limit
 edit_every_ms = 1500
 cooldown_secs = 0
 write_capability = "MANAGE_GUILD"
+thread_auto_archive_minutes = 1440   # 60, 1440, 4320, or 10080; threads the bot opens for answers
 
 # ---------------------------------------------------------------- postgres
 # url carries the password and lives in .env.

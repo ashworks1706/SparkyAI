@@ -7,13 +7,13 @@ use async_trait::async_trait;
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::agent::tools::knowledge_search::KnowledgeSearch;
-use crate::core::traits::retrieval::Retriever;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::retrieval::{RetrievalError, RetrievalQuery};
-use crate::core::types::tool::ToolError;
+use crate::agent::tools::knowledge::search::KnowledgeSearch;
+use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::traits::tools::Tool;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::types::tools::ToolError;
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))

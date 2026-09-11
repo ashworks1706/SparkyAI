@@ -1,13 +1,15 @@
 //! TraceEvent, RunStatus, TraceRecord.
 
+pub mod progress;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::core::types::guardrail::Stage;
 use crate::core::types::model::{FinishReason, Usage};
-use crate::core::types::policy::Decision;
+use crate::core::types::safety::guardrail::Stage;
+use crate::core::types::safety::policy::Decision;
 
 /// One thing that happened during a request. Never carries secrets or raw credentials.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,11 @@ pub enum TraceEvent {
         estimated_tokens: usize,
         /// Evidence chunk ids included.
         evidence_ids: Vec<Uuid>,
+    },
+    /// A model call is about to start. Once per step, whatever the retries.
+    ModelStarted {
+        /// Loop step.
+        step: u32,
     },
     /// One completion returned.
     ModelCall {
@@ -104,6 +111,11 @@ pub enum TraceEvent {
         /// Wall time.
         duration_ms: u64,
     },
+    /// Memory and the profile graph were read for the prompt.
+    MemoryRecalled {
+        /// Memories recalled.
+        count: usize,
+    },
     /// Retrieval ran.
     Retrieval {
         /// Loop step.
@@ -136,6 +148,7 @@ impl TraceEvent {
         match self {
             Self::RequestStarted { .. } => "request_started",
             Self::ContextAssembled { .. } => "context_assembled",
+            Self::ModelStarted { .. } => "model_started",
             Self::ModelCall { .. } => "model_call",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
@@ -143,6 +156,7 @@ impl TraceEvent {
             Self::Compaction { .. } => "compaction",
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
+            Self::MemoryRecalled { .. } => "memory_recalled",
             Self::Retrieval { .. } => "retrieval",
             Self::Completed { .. } => "completed",
         }
@@ -153,20 +167,30 @@ impl TraceEvent {
     /// The match is exhaustive: a new event must decide whether it is shown.
     pub fn progress(&self) -> Option<String> {
         match self {
-            Self::ToolStarted { tool, .. } => Some(match tool.as_str() {
-                "search_knowledge_base" => "searching the knowledge base".to_owned(),
-                "browser_navigate" => "opening the page".to_owned(),
-                "browser_snapshot" => "reading the page".to_owned(),
-                "query_source" => "checking a live ASU page".to_owned(),
-                other => format!("running {other}"),
+            Self::ModelStarted { .. } => Some("thinking".to_owned()),
+            Self::ToolStarted { tool, .. } => Some(match friendly(tool) {
+                Some((started, _)) => started.to_owned(),
+                None => format!("running {tool}"),
             }),
+            Self::ToolCall { tool, result, .. } => {
+                let name = friendly(tool).map_or(tool.as_str(), |(_, name)| name);
+                let outcome = if result.is_ok() { "finished" } else { "failed" };
+                Some(format!("{name} {outcome}"))
+            }
+            Self::MemoryRecalled { count: 0 } => None,
+            Self::MemoryRecalled { count } => Some(format!(
+                "remembering {count} {} about you",
+                plural(*count, "thing", "things")
+            )),
             Self::GuardrailBlocked { stage, .. } => {
                 Some(format!("the {} was not allowed", stage.as_str()))
             }
             Self::Compaction { turns } => Some(format!("summarising {turns} earlier turns")),
-            Self::Retrieval {
-                query, chunk_ids, ..
-            } => Some(format!("found {} passages for {query:?}", chunk_ids.len())),
+            Self::Retrieval { chunk_ids, .. } => Some(format!(
+                "reading {} {}",
+                chunk_ids.len(),
+                plural(chunk_ids.len(), "source", "sources")
+            )),
             Self::PolicyDecision { tool, decision, .. } => match decision {
                 Decision::Deny { .. } => Some(format!("{tool} was not allowed")),
                 Decision::Confirm(_) => Some(format!("{tool} needs your approval")),
@@ -179,10 +203,26 @@ impl TraceEvent {
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }
             | Self::ModelError { .. }
-            | Self::ToolCall { .. }
             | Self::Completed { .. } => None,
         }
     }
+}
+
+/// What a tool is shown as: the line while it runs, and its name once it is done. None for a
+/// tool with no wording, which is shown by its own name.
+fn friendly(tool: &str) -> Option<(&'static str, &'static str)> {
+    match tool {
+        "search_knowledge_base" => Some(("searching the knowledge base", "knowledge base search")),
+        "browser_navigate" => Some(("opening the page", "page load")),
+        "browser_snapshot" => Some(("reading the page", "page read")),
+        "query_source" => Some(("checking a live ASU page", "live ASU page check")),
+        _ => None,
+    }
+}
+
+/// The singular form for a count of one, the plural otherwise.
+fn plural(count: usize, one: &'static str, many: &'static str) -> &'static str {
+    if count == 1 { one } else { many }
 }
 
 /// How a run ended.

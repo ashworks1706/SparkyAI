@@ -5,7 +5,7 @@
 
 use std::fmt::Write as _;
 
-use crate::core::types::tool::{RiskClass, ToolDefinition};
+use crate::core::types::tools::{RiskClass, ToolDefinition};
 
 /// How a capability is carried out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

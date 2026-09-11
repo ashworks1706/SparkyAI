@@ -1,7 +1,9 @@
 //! The capabilities section: what the model is told it can do, and how each entry is kinded.
 
-use crate::agent::harness::capability::{Capability, Kind, from_definitions, kind_of, render};
-use crate::core::types::tool::{RiskClass, ToolDefinition};
+use crate::agent::harness::agent::prompt::capability::{
+    Capability, Kind, from_definitions, kind_of, render,
+};
+use crate::core::types::tools::{RiskClass, ToolDefinition};
 
 fn definition(name: &str, risk: RiskClass) -> ToolDefinition {
     ToolDefinition {
@@ -60,9 +62,9 @@ fn nothing_offered_writes_no_section() {
 
 #[test]
 fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
-    use crate::agent::harness::assemble::assemble;
+    use crate::agent::harness::agent::prompt::assemble::assemble;
     use crate::core::tests::support::ctx;
-    use crate::core::types::assemble::{Budget, Sections};
+    use crate::core::types::agent::assemble::{Budget, Sections};
 
     let caps = vec![Capability {
         name: "search_knowledge_base".into(),

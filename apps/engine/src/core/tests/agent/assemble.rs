@@ -3,12 +3,12 @@
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::agent::harness::assemble::assemble;
+use crate::agent::harness::agent::prompt::assemble::assemble;
 use crate::core::tests::support::ctx;
-use crate::core::types::assemble::{Budget, Sections, Templates};
-use crate::core::types::evidence::Evidence;
+use crate::core::types::agent::assemble::{Budget, Sections, Templates};
+use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryKind};
-use crate::core::types::message::{Message, Role};
 
 fn evidence(n: usize) -> Vec<Evidence> {
     (0..n)

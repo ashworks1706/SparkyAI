@@ -1,8 +1,8 @@
 //! Budget, Sections, and Assembled are the inputs and output of context assembly.
 
-use crate::core::types::evidence::Evidence;
+use crate::core::types::conversation::message::Message;
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::Memory;
-use crate::core::types::message::Message;
 
 /// Budgets for one assembled prompt, in estimated tokens. Default is implemented in
 /// core::config.
@@ -92,4 +92,6 @@ pub struct Assembled {
     pub estimated_tokens: usize,
     /// Evidence chunks that made it in.
     pub evidence_used: usize,
+    /// Memories that made it in, counted from the first.
+    pub memory_used: usize,
 }

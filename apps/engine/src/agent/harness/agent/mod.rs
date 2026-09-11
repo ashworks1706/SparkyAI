@@ -4,6 +4,10 @@
 mod conclude;
 mod execute;
 mod inputs;
+pub mod prompt;
+mod retry;
+mod run;
+pub mod task;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,35 +17,35 @@ use tracing::Instrument;
 use tracing::field::Empty;
 
 use self::execute::HeldError;
-use crate::agent::harness::assemble;
-use crate::agent::harness::profile::ProfileWriter;
-use crate::agent::harness::redact::json;
-use crate::agent::harness::run::{Inputs, Run};
-use crate::agent::harness::tool::ToolSet;
-use crate::core::traits::compaction::Compactor;
-use crate::core::traits::confirmation::ConfirmationStore;
+use crate::agent::harness::agent::prompt::assemble;
+use crate::agent::harness::agent::run::{Inputs, Run};
+use crate::agent::harness::memory::profile::ProfileWriter;
+use crate::agent::harness::safety::redact::json;
+use crate::agent::harness::tools::ToolSet;
 use crate::core::traits::conversation::ConversationStore;
-use crate::core::traits::guardrail::Guardrail;
+use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::memory::MemoryStore;
+use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
-use crate::core::traits::policy::Policy;
-use crate::core::traits::profile::ProfileGraph;
-use crate::core::traits::retrieval::Retriever;
+use crate::core::traits::safety::confirmation::ConfirmationStore;
+use crate::core::traits::safety::guardrail::Guardrail;
+use crate::core::traits::safety::policy::Policy;
 use crate::core::traits::trace::TraceSink;
+use crate::core::types::agent::assemble::Sections;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
-use crate::core::types::assemble::Sections;
-use crate::core::types::context::RequestContext;
-use crate::core::types::guardrail::{Stage, Verdict};
-use crate::core::types::message::{Message, ToolCall};
+use crate::core::types::conversation::message::{Message, ToolCall};
+use crate::core::types::model::tokens::estimate;
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
-use crate::core::types::policy::{ConfirmationRequest, PendingAction};
-use crate::core::types::tokens::estimate;
-use crate::core::types::tool::ToolRun;
+use crate::core::types::safety::guardrail::{Stage, Verdict};
+use crate::core::types::safety::policy::{ConfirmationRequest, PendingAction};
+use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
-pub use crate::agent::harness::prompt::PromptText;
-use crate::agent::harness::redact::truncate;
-pub use crate::agent::harness::retry::backoff;
+pub use crate::agent::harness::agent::prompt::PromptText;
+pub use crate::agent::harness::agent::retry::backoff;
+use crate::agent::harness::safety::redact::truncate;
 
 /// The dependencies the loop drives. Every one is a trait with a test double.
 pub struct AgentDeps {
@@ -204,6 +208,7 @@ impl Agent {
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
             evidence_in_prompt: 0,
+            memories_in_prompt: Vec::new(),
             tool_evidence: Vec::new(),
             force_answer: false,
             appended_by_assembly: 0,
@@ -242,6 +247,7 @@ impl Agent {
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
             evidence_in_prompt: 0,
+            memories_in_prompt: Vec::new(),
             tool_evidence: Vec::new(),
             force_answer: false,
             appended_by_assembly: 1,
@@ -367,6 +373,12 @@ impl Agent {
             budget,
         );
         run.evidence_in_prompt = assembled.evidence_used;
+        run.memories_in_prompt = inputs
+            .memory
+            .iter()
+            .take(assembled.memory_used)
+            .map(|m| m.content.clone())
+            .collect();
         self.deps.trace.emit(
             ctx,
             TraceEvent::ContextAssembled {
@@ -462,6 +474,7 @@ impl Agent {
         answer_only: bool,
     ) -> Result<ModelResponse, ModelError> {
         let deps = &self.deps;
+        deps.trace.emit(ctx, TraceEvent::ModelStarted { step });
         let mut attempt = 0u32;
         loop {
             let request = ModelRequest {

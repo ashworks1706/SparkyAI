@@ -3,12 +3,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::agent::harness::agent::task::{Task, TaskConfig};
 use crate::agent::harness::compact::{ChatCompactor, transcript};
-use crate::agent::harness::task::{Task, TaskConfig};
 use crate::core::tests::support::{Scripted, text};
-use crate::core::traits::compaction::Compactor;
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::{Message, Role, ToolCall};
+use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::{Message, Role, ToolCall};
 use crate::core::types::model::ModelError;
 
 fn ctx() -> RequestContext {
@@ -94,6 +94,29 @@ impl crate::core::traits::conversation::ConversationStore for Loaded {
         Ok(())
     }
 
+    async fn owns(
+        &self,
+        _ctx: &RequestContext,
+    ) -> Result<bool, crate::core::types::store::StoreError> {
+        Ok(true)
+    }
+
+    async fn latest(
+        &self,
+        _ctx: &RequestContext,
+        _channel_id: &str,
+    ) -> Result<Option<uuid::Uuid>, crate::core::types::store::StoreError> {
+        Ok(None)
+    }
+
+    async fn end(
+        &self,
+        _ctx: &RequestContext,
+        _channel_id: &str,
+    ) -> Result<u64, crate::core::types::store::StoreError> {
+        Ok(0)
+    }
+
     async fn load(
         &self,
         _ctx: &RequestContext,
@@ -117,11 +140,11 @@ impl crate::core::traits::conversation::ConversationStore for Loaded {
 #[tokio::test]
 async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
-    use crate::core::types::assemble::Budget;
+    use crate::core::types::agent::assemble::Budget;
 
     let store = Arc::new(Loaded::default());
     if let Ok(mut turns) = store.turns.lock() {
@@ -178,11 +201,11 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
 #[tokio::test]
 async fn a_failed_compaction_leaves_the_run_working() {
     use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::policy::RiskPolicy;
-    use crate::agent::harness::tool::ToolSet;
+    use crate::agent::harness::safety::policy::RiskPolicy;
+    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
-    use crate::core::types::assemble::Budget;
+    use crate::core::types::agent::assemble::Budget;
 
     let store = Arc::new(Loaded::default());
     if let Ok(mut turns) = store.turns.lock() {

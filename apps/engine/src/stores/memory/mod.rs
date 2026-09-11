@@ -1,11 +1,13 @@
 //! Memories table.
 
+pub mod profile;
+
 use async_trait::async_trait;
 use sqlx::Row;
 use sqlx::postgres::PgPool;
 
 use crate::core::traits::memory::MemoryStore;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::{Memory, MemoryKind, MemoryQuery};
 use crate::core::types::store::StoreError;
 use crate::stores::postgres::{db, row_limit};

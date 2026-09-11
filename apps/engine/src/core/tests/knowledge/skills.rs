@@ -6,12 +6,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::json;
 
-use crate::agent::tools::skills::{GetSkillTool, describe};
+use crate::agent::tools::knowledge::skills::{GetSkillTool, describe};
 use crate::core::tests::support::ctx;
-use crate::core::traits::skills::SkillStore;
-use crate::core::traits::tool::Tool;
-use crate::core::types::skill::{Skill, SkillError, SkillParam, SkillStep};
-use crate::core::types::tool::{RiskClass, ToolError};
+use crate::core::traits::knowledge::skills::SkillStore;
+use crate::core::traits::tools::Tool;
+use crate::core::types::knowledge::skill::{Skill, SkillError, SkillParam, SkillStep};
+use crate::core::types::tools::{RiskClass, ToolError};
 
 /// A skill store holding reviewed and unreviewed skills, offering only the reviewed ones.
 struct FakeSkills {

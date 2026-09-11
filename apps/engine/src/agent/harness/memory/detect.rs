@@ -4,7 +4,7 @@
 //! remembering, and they place I like this and I do not like this close together, so a cosine
 //! gate cannot separate them. A trained head could, which is what the trait is for.
 
-use crate::core::traits::detector::FactDetector;
+use crate::core::traits::memory::detector::FactDetector;
 
 /// Markers that a sentence is about the person writing it.
 pub const SUBJECTS: [&str; 8] = [

@@ -1,12 +1,14 @@
 //! Trace sinks: JSONL round trip.
 
+mod progress;
+
 use std::time::Duration;
 
 use uuid::Uuid;
 
 use crate::agent::harness::trace::JsonlSink;
 use crate::core::traits::trace::TraceSink;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::Usage;
 use crate::core::types::trace::{RunStatus, TraceEvent, TraceRecord};
 
@@ -70,7 +72,7 @@ fn traceparent_parses_into_a_remote_parent() {
 #[test]
 fn kind_matches_the_name_each_event_serialises_under() {
     use crate::core::types::model::{FinishReason, Usage};
-    use crate::core::types::policy::Decision;
+    use crate::core::types::safety::policy::Decision;
 
     let events = [
         TraceEvent::RequestStarted {

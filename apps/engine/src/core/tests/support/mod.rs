@@ -1,160 +1,33 @@
-//! Test doubles shared across the suite.
+//! Test doubles shared across the suite, one file per domain. Agent builders live here.
 
-use std::sync::{Arc, Mutex};
+mod conversation;
+mod knowledge;
+mod memory;
+mod model;
+mod safety;
+mod tools;
+mod trace;
+
+use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
-use serde_json::{Value, json};
-
 use crate::agent::harness::agent::{Agent, AgentDeps};
-use crate::agent::harness::policy::RiskPolicy;
-use crate::agent::harness::tool::ToolSet;
-use crate::core::traits::confirmation::ConfirmationStore;
+use crate::agent::harness::safety::policy::RiskPolicy;
+use crate::agent::harness::tools::ToolSet;
 use crate::core::traits::conversation::ConversationStore;
-use crate::core::traits::model::ModelProvider;
-use crate::core::traits::query::SourceQueries;
-use crate::core::traits::tool::Tool;
-use crate::core::traits::trace::TraceSink;
+use crate::core::traits::memory::MemoryStore;
+use crate::core::traits::memory::profile::ProfileGraph;
+use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::{Message, ToolCall};
-use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
-use crate::core::types::policy::PendingAction;
-use crate::core::types::query::{QueryError, QueryOutcome, QueryRequest, QuerySourceInfo};
-use crate::core::types::store::StoreError;
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::core::types::trace::{TraceEvent, TraceRecord};
+use crate::core::types::agent::context::RequestContext;
 
-/// Replays canned responses in order.
-pub struct Scripted(Mutex<Vec<Result<ModelResponse, ModelError>>>);
-
-impl Scripted {
-    pub fn new(items: Vec<Result<ModelResponse, ModelError>>) -> Self {
-        let mut reversed = items;
-        reversed.reverse();
-        Self(Mutex::new(reversed))
-    }
-}
-
-#[async_trait]
-impl ModelProvider for Scripted {
-    async fn generate(
-        &self,
-        _ctx: &RequestContext,
-        _req: ModelRequest,
-    ) -> Result<ModelResponse, ModelError> {
-        self.0
-            .lock()
-            .ok()
-            .and_then(|mut items| items.pop())
-            .unwrap_or_else(|| Err(ModelError::Malformed("script exhausted".into())))
-    }
-}
-
-pub fn text(content: &str) -> ModelResponse {
-    ModelResponse {
-        content: content.into(),
-        tool_calls: vec![],
-        finish_reason: FinishReason::Stop,
-        usage: Usage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-        },
-        model: "test".into(),
-    }
-}
-
-pub fn calls(items: Vec<(&str, &str, Value)>) -> ModelResponse {
-    ModelResponse {
-        content: String::new(),
-        tool_calls: items
-            .into_iter()
-            .map(|(id, name, arguments)| ToolCall {
-                id: id.into(),
-                name: name.into(),
-                arguments,
-            })
-            .collect(),
-        finish_reason: FinishReason::ToolCalls,
-        usage: Usage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-        },
-        model: "test".into(),
-    }
-}
-
-/// Returns its arguments as text.
-pub struct Echo(pub RiskClass);
-
-#[async_trait]
-impl Tool for Echo {
-    fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: "echo".into(),
-            description: "echoes".into(),
-            parameters: json!({"type": "object"}),
-            risk: self.0,
-            sequential: false,
-            timeout_secs: None,
-        }
-    }
-    async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        Ok(ToolOutput::text(args.to_string()))
-    }
-}
-
-/// Sleeps past any reasonable tool timeout.
-pub struct Slow;
-
-#[async_trait]
-impl Tool for Slow {
-    fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: "slow".into(),
-            description: "sleeps".into(),
-            parameters: json!({"type": "object"}),
-            risk: RiskClass::ReadPublic,
-            sequential: false,
-            timeout_secs: None,
-        }
-    }
-    async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        Ok(ToolOutput::text("late"))
-    }
-}
-
-/// Keeps every trace record for tests to inspect.
-#[derive(Default)]
-pub struct MemorySink {
-    records: Mutex<Vec<TraceRecord>>,
-}
-
-impl MemorySink {
-    pub fn new() -> Self {
-        Self {
-            records: Mutex::new(Vec::new()),
-        }
-    }
-
-    pub fn records(&self) -> Vec<TraceRecord> {
-        self.records.lock().map(|r| r.clone()).unwrap_or_default()
-    }
-}
-
-impl TraceSink for MemorySink {
-    fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
-        if let Ok(mut records) = self.records.lock() {
-            records.push(TraceRecord {
-                request_id: ctx.request_id,
-                conversation_id: ctx.conversation_id,
-                at: chrono::Utc::now(),
-                event,
-            });
-        }
-    }
-}
+pub use self::conversation::{Recording, Rooms};
+pub use self::knowledge::FakeQueries;
+pub use self::memory::{Known, Recalling};
+pub use self::model::{Scripted, calls, text};
+pub use self::safety::Held;
+pub use self::tools::{Boom, Echo, Ordered, Slow};
+pub use self::trace::MemorySink;
 
 /// An agent over a scripted model, with an in-memory trace to inspect.
 pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<MemorySink>) {
@@ -174,82 +47,6 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         profile_graph: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
-}
-
-/// A conversation store that remembers what the loop asked it to keep.
-#[derive(Default)]
-pub struct Recording {
-    turns: Mutex<Vec<Message>>,
-}
-
-impl Recording {
-    pub fn appended(&self) -> Vec<Message> {
-        self.turns.lock().map(|t| t.clone()).unwrap_or_default()
-    }
-}
-
-#[async_trait]
-impl ConversationStore for Recording {
-    async fn ensure(&self, _ctx: &RequestContext, _channel_id: &str) -> Result<(), StoreError> {
-        Ok(())
-    }
-
-    async fn load(&self, _ctx: &RequestContext, _limit: usize) -> Result<Vec<Message>, StoreError> {
-        Ok(Vec::new())
-    }
-
-    async fn append(&self, _ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError> {
-        if let Ok(mut kept) = self.turns.lock() {
-            kept.extend_from_slice(turns);
-        }
-        Ok(())
-    }
-}
-
-/// Holds one action, the way the database does: single use, and only for who was asked.
-#[derive(Default)]
-pub struct Held {
-    held: Mutex<Option<(uuid::Uuid, String, PendingAction)>>,
-}
-
-impl Held {
-    pub fn holds(&self) -> bool {
-        self.held.lock().is_ok_and(|h| h.is_some())
-    }
-}
-
-#[async_trait]
-impl ConfirmationStore for Held {
-    async fn hold(
-        &self,
-        ctx: &RequestContext,
-        token: uuid::Uuid,
-        pending: &PendingAction,
-        _payload_hash: &str,
-        _ttl: Duration,
-    ) -> Result<(), StoreError> {
-        if let Ok(mut slot) = self.held.lock() {
-            *slot = Some((token, ctx.user_id.clone(), pending.clone()));
-        }
-        Ok(())
-    }
-
-    async fn claim(
-        &self,
-        ctx: &RequestContext,
-        token: uuid::Uuid,
-        _approved: bool,
-    ) -> Result<Option<PendingAction>, StoreError> {
-        let Ok(mut slot) = self.held.lock() else {
-            return Ok(None);
-        };
-        match slot.as_ref() {
-            Some((held, asked, _)) if *held == token && *asked == ctx.user_id => {
-                Ok(slot.take().map(|(_, _, pending)| pending))
-            }
-            _ => Ok(None),
-        }
-    }
 }
 
 pub fn agent_with_store(
@@ -303,107 +100,26 @@ pub fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
 }
 
-/// Sequential tool: records call order by sleeping longer for smaller inputs.
-pub struct Ordered(pub RiskClass);
-
-#[async_trait]
-impl Tool for Ordered {
-    fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: "ordered".into(),
-            description: "stateful".into(),
-            parameters: json!({"type": "object"}),
-            risk: self.0,
-            sequential: true,
-            timeout_secs: None,
-        }
-    }
-    async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        let n = args["n"].as_u64().unwrap_or(0);
-        tokio::time::sleep(Duration::from_millis(40 * (4 - n))).await;
-        Ok(ToolOutput::text(n.to_string()))
-    }
-}
-
-/// Always fails.
-pub struct Boom;
-
-#[async_trait]
-impl Tool for Boom {
-    fn definition(&self) -> ToolDefinition {
-        ToolDefinition {
-            name: "boom".into(),
-            description: "always fails".into(),
-            parameters: serde_json::json!({"type": "object"}),
-            risk: RiskClass::ReadPublic,
-            sequential: false,
-            timeout_secs: None,
-        }
-    }
-
-    async fn call(
-        &self,
-        _ctx: &RequestContext,
-        _args: serde_json::Value,
-    ) -> Result<ToolOutput, ToolError> {
-        Err(ToolError::Failed("nope".into()))
-    }
-}
-
-/// A SourceQueries double: a fixed registry and a canned outcome per source.
-pub struct FakeQueries {
-    sources: Vec<QuerySourceInfo>,
-    answers: std::collections::HashMap<String, Result<QueryOutcome, String>>,
-}
-
-impl FakeQueries {
-    /// Offers sources and rejects anything not given an answer.
-    pub fn new(sources: Vec<QuerySourceInfo>) -> Self {
-        Self {
-            sources,
-            answers: std::collections::HashMap::new(),
-        }
-    }
-
-    /// Answers source with this page text.
-    pub fn answering(mut self, source: &str, text: &str) -> Self {
-        self.answers.insert(
-            source.to_owned(),
-            Ok(QueryOutcome {
-                source: source.to_owned(),
-                url: format!("https://example.test/{source}"),
-                text: text.to_owned(),
-            }),
-        );
-        self
-    }
-
-    /// Rejects source with this reason.
-    pub fn rejecting(mut self, source: &str, reason: &str) -> Self {
-        self.answers
-            .insert(source.to_owned(), Err(reason.to_owned()));
-        self
-    }
-}
-
-#[async_trait]
-impl SourceQueries for FakeQueries {
-    async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError> {
-        Ok(self.sources.clone())
-    }
-
-    async fn run(
-        &self,
-        _ctx: &RequestContext,
-        request: &QueryRequest,
-    ) -> Result<QueryOutcome, QueryError> {
-        match self.answers.get(&request.source) {
-            Some(Ok(outcome)) => Ok(outcome.clone()),
-            Some(Err(reason)) => Err(QueryError::Rejected(reason.clone())),
-            None => Err(QueryError::Rejected(format!(
-                "unknown source {:?}",
-                request.source
-            ))),
-        }
-    }
+/// An agent that recalls memory and reads the profile graph.
+pub fn agent_recalling(
+    model: Scripted,
+    cfg: AgentConfig,
+    memory: Arc<dyn MemoryStore>,
+    graph: Arc<dyn ProfileGraph>,
+) -> Agent {
+    let deps = AgentDeps {
+        model: Arc::new(model),
+        tools: ToolSet::new(),
+        policy: Arc::new(RiskPolicy::default()),
+        trace: Arc::new(MemorySink::default()),
+        retriever: None,
+        conversations: None,
+        memory: Some(memory),
+        confirmations: None,
+        compactor: None,
+        guardrail: None,
+        profile: None,
+        profile_graph: Some(graph),
+    };
+    Agent::new(deps, cfg, "sys")
 }

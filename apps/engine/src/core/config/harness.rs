@@ -2,8 +2,8 @@
 
 use serde::Deserialize;
 
-use crate::core::types::assemble::{self, Budget};
-use crate::core::types::tool::RiskClass;
+use crate::core::types::agent::assemble::{self, Budget};
+use crate::core::types::tools::RiskClass;
 
 /// Agent loop limits. Every field has a default so a bare .env still boots.
 #[derive(Debug, Deserialize)]
@@ -29,6 +29,8 @@ pub struct Agent {
     pub history_turns: usize,
     /// Memories recalled per request.
     pub memory_recall_limit: usize,
+    /// Recall memory and the profile graph for a public request.
+    pub recall_in_public: bool,
     /// Whole-prompt token budget.
     pub prompt_budget_tokens: usize,
     /// Cap on the evidence section.
@@ -62,6 +64,7 @@ impl Default for Agent {
             temperature: 0.3,
             history_turns: 20,
             memory_recall_limit: 10,
+            recall_in_public: false,
             prompt_budget_tokens: 3_000,
             evidence_budget_tokens: 1_200,
             history_budget_tokens: 1_000,
@@ -173,7 +176,7 @@ impl Default for Tools {
     }
 }
 
-/// How a live source query runs. [tools] decides whether it is offered at all.
+/// How a live source query runs. The tools section decides whether it is offered at all.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Query {
@@ -330,6 +333,12 @@ pub struct Profile {
     pub max_tokens: u32,
     /// Wall-clock budget for classifying, extracting, and writing one turn.
     pub timeout_secs: u64,
+    /// Lowest extraction confidence written to the graph, 0 to 1.
+    pub min_confidence: f32,
+    /// Nodes and relations POST /profile/list returns, each.
+    pub list_limit: usize,
+    /// Wall-clock budget for one /profile/list or /profile/forget call.
+    pub request_timeout_secs: u64,
 }
 
 impl Default for Profile {
@@ -342,6 +351,9 @@ impl Default for Profile {
             reconcile_instructions: None,
             max_tokens: 512,
             timeout_secs: 60,
+            min_confidence: 0.5,
+            list_limit: 50,
+            request_timeout_secs: 30,
         }
     }
 }

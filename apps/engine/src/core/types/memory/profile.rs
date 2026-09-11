@@ -1,4 +1,5 @@
 //! ProfileEntity, ProfileNode, ProfileRelation, ProfileFact, ProfileError: the profile graph.
+//! ForgetRequest, ForgetResponse, ListRequest, ListResponse: the /profile wire shapes.
 //!
 //! A fact is what extraction produces from one turn. Storing it writes a node per entity and an
 //! edge for the relation between them, so recall can start from a relation.
@@ -118,4 +119,88 @@ impl From<&ProfileRelation> for crate::core::types::memory::Memory {
             expires_at: None,
         }
     }
+}
+
+/// POST /profile/forget: who to forget, and optionally what.
+#[derive(Debug, Deserialize)]
+pub struct ForgetRequest {
+    /// The user whose graph this is.
+    pub user_id: String,
+    /// Guild the request belongs to.
+    #[serde(default)]
+    pub tenant_id: Option<String>,
+    /// One label to remove. Absent removes everything this user carries.
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// How much a forget removed.
+#[derive(Debug, Serialize)]
+pub struct ForgetResponse {
+    /// Nodes removed. Relations through them go with them.
+    pub removed: u64,
+}
+
+/// POST /profile/list: whose graph to show.
+#[derive(Debug, Deserialize)]
+pub struct ListRequest {
+    /// The user whose graph this is.
+    pub user_id: String,
+    /// Guild the request belongs to.
+    #[serde(default)]
+    pub tenant_id: Option<String>,
+}
+
+/// One node as the list shows it.
+#[derive(Debug, Serialize)]
+pub struct ListedNode {
+    /// What sort of thing it is.
+    pub kind: String,
+    /// How it is named.
+    pub label: String,
+    /// Confidence, 0 to 1.
+    pub confidence: f32,
+}
+
+impl From<ProfileNode> for ListedNode {
+    fn from(node: ProfileNode) -> Self {
+        Self {
+            kind: node.kind,
+            label: node.label,
+            confidence: node.confidence,
+        }
+    }
+}
+
+/// One relation as the list shows it, each end by label.
+#[derive(Debug, Serialize)]
+pub struct ListedRelation {
+    /// Label of the entity the relation starts at.
+    pub subject: String,
+    /// What it asserts.
+    pub relation: String,
+    /// Label of the entity it points to.
+    pub object: String,
+    /// Confidence, 0 to 1.
+    pub confidence: f32,
+}
+
+impl From<ProfileRelation> for ListedRelation {
+    fn from(relation: ProfileRelation) -> Self {
+        Self {
+            subject: relation.subject.label,
+            relation: relation.relation,
+            object: relation.object.label,
+            confidence: relation.confidence,
+        }
+    }
+}
+
+/// What the graph holds about the caller.
+#[derive(Debug, Serialize)]
+pub struct ListResponse {
+    /// Nodes, most confident and most recently confirmed first.
+    pub nodes: Vec<ListedNode>,
+    /// Relations, most confident first.
+    pub relations: Vec<ListedRelation>,
 }

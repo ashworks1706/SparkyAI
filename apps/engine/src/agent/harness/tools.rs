@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::core::traits::tool::Tool;
-use crate::core::types::tool::ToolDefinition;
+use crate::core::traits::tools::Tool;
+use crate::core::types::tools::ToolDefinition;
 
 /// The tools available to one agent, keyed by name.
 #[derive(Default, Clone)]

@@ -41,7 +41,15 @@ pub struct Bot {
     /// The role name the engine policy reads to allow write-side tools. Must match
     /// SPARKY_POLICY__WRITE_ROLES on the engine.
     pub write_capability: String,
+    /// Minutes of silence before a thread the bot opens archives. One of THREAD_ARCHIVE_MINUTES.
+    pub thread_auto_archive_minutes: u16,
 }
+
+/// Smallest bot.max_message_chars accepted.
+pub const MIN_MESSAGE_CHARS: usize = 200;
+
+/// Auto archive durations Discord accepts, in minutes.
+pub const THREAD_ARCHIVE_MINUTES: [u16; 4] = [60, 1_440, 4_320, 10_080];
 
 impl Default for Bot {
     fn default() -> Self {
@@ -51,6 +59,7 @@ impl Default for Bot {
             edit_every_ms: 1_500,
             cooldown_secs: 0,
             write_capability: WRITE_CAPABILITY.to_owned(),
+            thread_auto_archive_minutes: 1_440,
         }
     }
 }
@@ -143,10 +152,16 @@ impl Config {
                 cfg.telemetry.sample_ratio
             );
         }
-        if cfg.bot.max_message_chars == 0 || cfg.bot.max_message_chars > 2_000 {
+        if !(MIN_MESSAGE_CHARS..=2_000).contains(&cfg.bot.max_message_chars) {
             anyhow::bail!(
-                "bot.max_message_chars must be between 1 and 2000, got {}",
+                "bot.max_message_chars must be between {MIN_MESSAGE_CHARS} and 2000, got {}",
                 cfg.bot.max_message_chars
+            );
+        }
+        if !THREAD_ARCHIVE_MINUTES.contains(&cfg.bot.thread_auto_archive_minutes) {
+            anyhow::bail!(
+                "bot.thread_auto_archive_minutes must be one of {THREAD_ARCHIVE_MINUTES:?}, got {}",
+                cfg.bot.thread_auto_archive_minutes
             );
         }
         Ok(cfg)

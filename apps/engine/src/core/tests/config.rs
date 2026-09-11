@@ -223,3 +223,9 @@ fn a_setting_that_moved_sections_fails_the_boot_rather_than_being_ignored() {
         "nothing stale set"
     );
 }
+
+#[test]
+fn a_profile_list_limit_of_zero_is_rejected() {
+    assert!(err("[profile]\nlist_limit = 0").contains("profile.list_limit"));
+    assert_eq!(ok("").profile.list_limit, 50);
+}

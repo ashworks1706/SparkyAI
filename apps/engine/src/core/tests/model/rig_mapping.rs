@@ -5,7 +5,7 @@ use ::rig_core::message::Message as RigMessage;
 use serde_json::json;
 
 use crate::agent::model::rig_openai::{from_rig, to_rig};
-use crate::core::types::message::{Message, ToolCall};
+use crate::core::types::conversation::message::{Message, ToolCall};
 
 fn rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) {
     to_rig(messages).unwrap_or_else(|e| unreachable!("{e}"))

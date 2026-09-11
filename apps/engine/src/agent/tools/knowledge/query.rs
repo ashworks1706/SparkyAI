@@ -10,11 +10,11 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::agent::tools::structured;
-use crate::core::traits::query::SourceQueries;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::query::{QueryError, QueryRequest, QuerySourceInfo};
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::traits::knowledge::query::SourceQueries;
+use crate::core::traits::tools::Tool;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::query::{QueryError, QueryRequest, QuerySourceInfo};
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Runs one live source query per call.
 pub struct QuerySourceTool {

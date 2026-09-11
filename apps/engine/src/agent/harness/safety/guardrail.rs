@@ -5,9 +5,9 @@
 
 use async_trait::async_trait;
 
-use crate::core::traits::guardrail::Guardrail;
-use crate::core::types::context::RequestContext;
-use crate::core::types::guardrail::{Stage, Verdict};
+use crate::core::traits::safety::guardrail::Guardrail;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::guardrail::{Stage, Verdict};
 
 /// What the default guardrail refuses.
 #[derive(Debug, Clone)]

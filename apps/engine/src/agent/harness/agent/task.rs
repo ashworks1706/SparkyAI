@@ -10,8 +10,8 @@ use tracing::Instrument;
 use tracing::field::Empty;
 
 use crate::core::traits::model::ModelProvider;
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::Message;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::Message;
 use crate::core::types::model::{ModelError, ModelRequest};
 
 /// What a task sends with every call.
@@ -63,7 +63,7 @@ impl Task {
     /// Runs the instructions over input and returns the text.
     ///
     /// # Errors
-    /// Returns [`ModelError`] when the call fails or answers with nothing.
+    /// Returns [ModelError] when the call fails or answers with nothing.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<String, ModelError> {
         let span = tracing::info_span!(
             "task",

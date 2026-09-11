@@ -1,7 +1,7 @@
 //! Buttons the bot puts on its own messages, and the custom_id that identifies them.
 //!
 //! A component is described here as a ButtonSpec and turned into serenity builders at the edge.
-//! Adding a button is a new Action, a row that includes it, and an arm in the bot dispatch.
+//! Adding a button is a CustomId variant, a row that includes it, and an arm in the bot dispatch.
 
 use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
 use uuid::Uuid;
@@ -10,8 +10,12 @@ use crate::core::types::ChatResponse;
 
 /// Marks a custom_id as belonging to this bot. A component from anywhere else is ignored.
 const PREFIX: &str = "sparky";
+/// Tag of the button that erases everything remembered.
+const FORGET_ALL: &str = "forget_all";
+/// Tag of the button that closes the forget prompt.
+const KEEP_ALL: &str = "keep_all";
 
-/// What a button does when someone presses it.
+/// What a confirmation button does when someone presses it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     /// Run the held action and let the agent carry on.
@@ -37,25 +41,47 @@ impl Action {
     }
 }
 
-/// Everything a pressed button has to tell the bot. Discord caps custom_id at 100 bytes. The
-/// two ids are written without dashes.
+/// Everything a pressed button has to tell the bot. Discord caps custom_id at 100 bytes. Uuids
+/// are written without dashes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CustomId {
-    /// What to do.
-    pub action: Action,
-    /// The confirmation being answered.
-    pub token: Uuid,
-    /// The conversation it belongs to.
-    pub conversation: Uuid,
+pub enum CustomId {
+    /// Answers a held action.
+    Confirm {
+        /// What to do.
+        action: Action,
+        /// The confirmation being answered.
+        token: Uuid,
+        /// The conversation it belongs to.
+        conversation: Uuid,
+    },
+    /// Erases everything remembered about the user who asked.
+    ForgetAll {
+        /// Discord id of the user who asked.
+        user: u64,
+    },
+    /// Closes the forget prompt without erasing anything.
+    KeepAll {
+        /// Discord id of the user who asked.
+        user: u64,
+    },
 }
 
 impl CustomId {
-    /// Builds an id for one button.
+    /// Builds an id for one confirmation button.
     pub fn new(action: Action, token: Uuid, conversation: Uuid) -> Self {
-        Self {
+        Self::Confirm {
             action,
             token,
             conversation,
+        }
+    }
+
+    /// Whether presser may press this button. Forget buttons belong to the user who asked;
+    /// the engine checks the caller of a confirmation itself.
+    pub fn may_press(&self, presser: u64) -> bool {
+        match self {
+            Self::Confirm { .. } => true,
+            Self::ForgetAll { user } | Self::KeepAll { user } => *user == presser,
         }
     }
 
@@ -65,29 +91,43 @@ impl CustomId {
         if parts.next()? != PREFIX {
             return None;
         }
-        let action = Action::parse(parts.next()?)?;
-        let token = Uuid::parse_str(parts.next()?).ok()?;
-        let conversation = Uuid::parse_str(parts.next()?).ok()?;
+        let id = match parts.next()? {
+            FORGET_ALL => Self::ForgetAll {
+                user: parts.next()?.parse().ok()?,
+            },
+            KEEP_ALL => Self::KeepAll {
+                user: parts.next()?.parse().ok()?,
+            },
+            other => Self::Confirm {
+                action: Action::parse(other)?,
+                token: Uuid::parse_str(parts.next()?).ok()?,
+                conversation: Uuid::parse_str(parts.next()?).ok()?,
+            },
+        };
         if parts.next().is_some() {
             return None;
         }
-        Some(Self {
-            action,
-            token,
-            conversation,
-        })
+        Some(id)
     }
 }
 
 impl std::fmt::Display for CustomId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{PREFIX}:{}:{}:{}",
-            self.action.as_str(),
-            self.token.simple(),
-            self.conversation.simple()
-        )
+        match self {
+            Self::Confirm {
+                action,
+                token,
+                conversation,
+            } => write!(
+                f,
+                "{PREFIX}:{}:{}:{}",
+                action.as_str(),
+                token.simple(),
+                conversation.simple()
+            ),
+            Self::ForgetAll { user } => write!(f, "{PREFIX}:{FORGET_ALL}:{user}"),
+            Self::KeepAll { user } => write!(f, "{PREFIX}:{KEEP_ALL}:{user}"),
+        }
     }
 }
 
@@ -110,16 +150,32 @@ pub fn rows_for(resp: &ChatResponse) -> Vec<Vec<ButtonSpec>> {
     let row = vec![
         ButtonSpec {
             id: CustomId::new(Action::Approve, confirmation.token, resp.conversation_id),
-            label: "Approve",
+            label: "Yes, do it",
             danger: true,
         },
         ButtonSpec {
             id: CustomId::new(Action::Deny, confirmation.token, resp.conversation_id),
-            label: "Cancel",
+            label: "No",
             danger: false,
         },
     ];
     vec![row]
+}
+
+/// The buttons under the forget everything prompt, bound to the user who asked.
+pub fn forget_rows(user: u64) -> Vec<Vec<ButtonSpec>> {
+    vec![vec![
+        ButtonSpec {
+            id: CustomId::ForgetAll { user },
+            label: "Forget everything",
+            danger: true,
+        },
+        ButtonSpec {
+            id: CustomId::KeepAll { user },
+            label: "Cancel",
+            danger: false,
+        },
+    ]]
 }
 
 /// Turns described rows into what serenity sends.

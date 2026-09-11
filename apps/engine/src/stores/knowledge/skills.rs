@@ -5,8 +5,8 @@ use serde_json::Value;
 use sqlx::Row;
 use sqlx::postgres::PgPool;
 
-use crate::core::traits::skills::SkillStore;
-use crate::core::types::skill::{Skill, SkillError, SkillParam, SkillStep};
+use crate::core::traits::knowledge::skills::SkillStore;
+use crate::core::types::knowledge::skill::{Skill, SkillError, SkillParam, SkillStep};
 
 /// Reads offered skills from PostgreSQL.
 pub struct PgSkills {

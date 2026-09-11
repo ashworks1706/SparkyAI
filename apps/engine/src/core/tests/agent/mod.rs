@@ -1,17 +1,22 @@
 //! The loop: answers, tool feedback, parallelism, policy, limits, retries, cost, redaction.
 
+mod assemble;
+mod capability;
+mod citation;
+mod context;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::redact::redact;
-use crate::agent::harness::tool::ToolSet;
+use crate::agent::harness::safety::redact::redact;
+use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{Boom, Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
-use crate::core::types::policy::Decision;
-use crate::core::types::tool::RiskClass;
+use crate::core::types::safety::policy::Decision;
+use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
 #[tokio::test]
@@ -393,4 +398,26 @@ async fn a_run_that_hits_the_step_limit_still_answers_and_keeps_its_turns() {
         !store.appended().is_empty(),
         "the turns are kept even though the loop gave up"
     );
+}
+
+#[tokio::test]
+async fn a_model_call_is_announced_once_per_step_whatever_the_retries() {
+    let (agent, sink) = agent(
+        Scripted::new(vec![
+            Err(ModelError::Transport("boom".into())),
+            Ok(text("recovered")),
+        ]),
+        ToolSet::new(),
+        AgentConfig::default(),
+    );
+    assert!(agent.run(&ctx(), "go").await.is_ok());
+    let started: Vec<u32> = sink
+        .records()
+        .iter()
+        .filter_map(|record| match record.event {
+            TraceEvent::ModelStarted { step } => Some(step),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(started, vec![1]);
 }

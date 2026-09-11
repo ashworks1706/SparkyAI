@@ -2,8 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::profile::{ProfileError, ProfileFact, ProfileNode, ProfileRelation};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::memory::profile::{
+    ProfileError, ProfileFact, ProfileNode, ProfileRelation,
+};
 
 /// The entity graph for one user in one tenant.
 ///
@@ -49,6 +51,7 @@ pub trait ProfileGraph: Send + Sync {
     /// Removes one node and every relation through it. Returns how many nodes went.
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError>;
 
-    /// Removes everything this user carries. Returns how many nodes went.
+    /// Removes everything this user carries: every node and every memories row. Returns how
+    /// many rows went.
     async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError>;
 }

@@ -11,12 +11,12 @@ use crate::core::types::store::StoreError;
 
 pub use crate::stores::confirmation::PgConfirmations;
 pub use crate::stores::conversation::PgConversations;
-pub use crate::stores::memory::PgMemory;
-pub use crate::stores::queries::PgSourceQueries;
-pub use crate::stores::retrieval::{PgRetriever, RetrievalTuning};
+pub use crate::stores::knowledge::query::PgSourceQueries;
+pub use crate::stores::knowledge::retrieval::{PgRetriever, RetrievalTuning};
 /// Fusion helpers the core tests exercise directly.
 #[cfg(test)]
-pub(crate) use crate::stores::retrieval::{collapse, rrf};
+pub(crate) use crate::stores::knowledge::retrieval::{collapse, rrf};
+pub use crate::stores::memory::PgMemory;
 
 /// Opens the pool. Fails fast if the database is unreachable.
 pub async fn connect(

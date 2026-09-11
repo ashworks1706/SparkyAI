@@ -6,7 +6,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::core::types::wire::Progress;
+use crate::core::types::conversation::Visibility;
+use crate::core::types::trace::progress::Progress;
 
 /// Per-request state. Created at the edge (Discord, HTTP) and threaded through every model
 /// call, tool call, and trace event. Never global.
@@ -22,6 +23,8 @@ pub struct RequestContext {
     pub roles: Vec<String>,
     /// Conversation this request continues.
     pub conversation_id: Uuid,
+    /// Who can read the exchange this request belongs to.
+    pub visibility: Visibility,
     /// Hard stop for the whole request.
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
@@ -39,6 +42,7 @@ impl RequestContext {
             user_id: user_id.into(),
             roles: Vec::new(),
             conversation_id: Uuid::new_v4(),
+            visibility: Visibility::Public,
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
             progress: None,
@@ -54,6 +58,12 @@ impl RequestContext {
     /// Continues an existing conversation.
     pub fn with_conversation(mut self, conversation_id: Uuid) -> Self {
         self.conversation_id = conversation_id;
+        self
+    }
+
+    /// Sets who can read the exchange.
+    pub fn with_visibility(mut self, visibility: Visibility) -> Self {
+        self.visibility = visibility;
         self
     }
 

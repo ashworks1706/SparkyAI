@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use crate::agent::tools::sandbox::{ContainerSandbox, Limits, SandboxTool};
 use crate::core::config::SandboxSettings;
-use crate::core::traits::sandbox::Sandbox;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
-use crate::core::types::tool::{RiskClass, ToolError};
+use crate::core::traits::tools::Tool;
+use crate::core::traits::tools::sandbox::Sandbox;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
+use crate::core::types::tools::{RiskClass, ToolError};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -194,7 +194,7 @@ fn a_session_container_is_scoped_to_the_caller() {
 
 #[test]
 fn a_session_name_that_could_reach_another_container_is_refused() {
-    use crate::core::types::sandbox::session_name;
+    use crate::core::types::tools::sandbox::session_name;
 
     for bad in [
         "",
@@ -231,7 +231,7 @@ fn a_session_call_keeps_the_container_and_a_plain_call_does_not() {
 }
 
 /// Live check against the container runtime. Run it with
-/// `cargo test -p engine -- --ignored sandbox_runs`.
+/// cargo test -p engine -- --ignored sandbox_runs.
 #[tokio::test]
 #[ignore = "needs a container runtime"]
 async fn a_real_container_computes_and_stays_sealed() {

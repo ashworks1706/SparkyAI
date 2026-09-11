@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::skill::{Skill, SkillError};
+use crate::core::types::knowledge::skill::{Skill, SkillError};
 
 /// Reads the skills the model may follow.
 ///

@@ -7,12 +7,12 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 
 use crate::agent::tools::structured;
-use crate::core::traits::retrieval::Retriever;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::retrieval::RetrievalQuery;
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::core::types::wire::SearchArgs;
+use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::traits::tools::Tool;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::retrieval::RetrievalQuery;
+use crate::core::types::knowledge::retrieval::SearchArgs;
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Runs a targeted search over the indexed knowledge base.
 pub struct KnowledgeSearch {

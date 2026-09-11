@@ -8,9 +8,9 @@ use sqlx::Row;
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use crate::core::traits::query::SourceQueries;
-use crate::core::types::context::RequestContext;
-use crate::core::types::query::{
+use crate::core::traits::knowledge::query::SourceQueries;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryParam, QueryRequest, QuerySourceInfo,
 };
 

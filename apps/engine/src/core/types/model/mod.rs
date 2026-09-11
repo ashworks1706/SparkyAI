@@ -1,9 +1,11 @@
 //! ModelRequest, ModelResponse, Usage, FinishReason, ModelError.
 
+pub mod tokens;
+
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::message::{Message, ToolCall};
-use crate::core::types::tool::ToolDefinition;
+use crate::core::types::conversation::message::{Message, ToolCall};
+use crate::core::types::tools::ToolDefinition;
 
 /// One completion request. Provider JSON stays inside the adapter.
 #[derive(Debug, Clone)]

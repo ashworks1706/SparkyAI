@@ -1,10 +1,8 @@
 //! Built-in tools and MCP-backed tools. Each declares a RiskClass.
 
-pub mod knowledge_search;
+pub mod knowledge;
 pub mod mcp;
-pub mod query_source;
 pub mod sandbox;
-pub mod skills;
 
 /// The structured payload a tool hands back beside its text.
 ///

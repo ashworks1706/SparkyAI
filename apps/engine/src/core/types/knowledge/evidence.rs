@@ -40,4 +40,18 @@ impl Evidence {
             ),
         }
     }
+
+    /// One citation line per source, best first. Chunks sharing a url, or a source id when
+    /// there is no url, collapse into the first of them.
+    pub fn citations(evidence: &[Evidence]) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        evidence
+            .iter()
+            .filter(|e| {
+                let key = e.url.clone().unwrap_or_else(|| e.source_id.to_string());
+                seen.insert(key)
+            })
+            .map(Evidence::citation)
+            .collect()
+    }
 }

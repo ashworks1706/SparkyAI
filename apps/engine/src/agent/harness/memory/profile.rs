@@ -9,11 +9,11 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::task::Task;
-use crate::core::traits::detector::FactDetector;
-use crate::core::traits::profile::ProfileGraph;
-use crate::core::types::context::RequestContext;
-use crate::core::types::profile::{ProfileError, ProfileFact, ProfileRelation};
+use crate::agent::harness::agent::task::Task;
+use crate::core::traits::memory::detector::FactDetector;
+use crate::core::traits::memory::profile::ProfileGraph;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::memory::profile::{ProfileError, ProfileFact, ProfileRelation};
 
 /// Default instructions for the graph agent.
 pub const GRAPH_INSTRUCTIONS: &str = "You extract what a message states about the person who \
@@ -59,8 +59,8 @@ impl GraphAgent {
     /// Extracts the facts turn states.
     ///
     /// # Errors
-    /// Returns [`ProfileError::Model`] when the model call fails, and
-    /// [`ProfileError::Malformed`] when the answer is not the extraction shape. An answer that
+    /// Returns [ProfileError::Model] when the model call fails, and
+    /// [ProfileError::Malformed] when the answer is not the extraction shape. An answer that
     /// cannot be read is never an empty extraction.
     pub async fn extract(
         &self,
@@ -97,16 +97,27 @@ pub struct ProfileWriter {
     reconciler: Option<Reconciler>,
     graph: Arc<dyn ProfileGraph>,
     budget: Duration,
+    min_confidence: f32,
+}
+
+/// Whether an extracted fact names both entities and the relation, at or above floor.
+pub fn keepable(fact: &ProfileFact, floor: f32) -> bool {
+    !fact.subject.label.trim().is_empty()
+        && !fact.object.label.trim().is_empty()
+        && !fact.relation.trim().is_empty()
+        && fact.confidence >= floor
 }
 
 impl ProfileWriter {
-    /// Builds the writer over its two prompted sub-agents and the graph.
+    /// Builds the writer over its two prompted sub-agents and the graph. Facts below
+    /// min_confidence are dropped before they are written.
     pub fn new(
         detector: Arc<dyn FactDetector>,
         agent: GraphAgent,
         reconciler: Option<Reconciler>,
         graph: Arc<dyn ProfileGraph>,
         budget: Duration,
+        min_confidence: f32,
     ) -> Self {
         Self {
             detector,
@@ -114,6 +125,7 @@ impl ProfileWriter {
             reconciler,
             graph,
             budget,
+            min_confidence,
         }
     }
 
@@ -170,8 +182,11 @@ impl ProfileWriter {
             return;
         }
         let ctx = RequestContext::new(tenant_id, user_id, self.budget);
-        let facts = match self.agent.extract(&ctx, &turn).await {
-            Ok(facts) => facts,
+        let facts: Vec<ProfileFact> = match self.agent.extract(&ctx, &turn).await {
+            Ok(facts) => facts
+                .into_iter()
+                .filter(|f| keepable(f, self.min_confidence))
+                .collect(),
             Err(error) => {
                 tracing::warn!(error = %error, "profile extraction failed");
                 return;
@@ -215,7 +230,7 @@ impl Reconciler {
     /// The statements the new fact replaces, by index into existing.
     ///
     /// # Errors
-    /// Returns [`ProfileError::Model`] when the call fails.
+    /// Returns [ProfileError::Model] when the call fails.
     pub async fn superseded(
         &self,
         ctx: &RequestContext,

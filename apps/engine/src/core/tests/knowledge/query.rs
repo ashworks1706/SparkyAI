@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::agent::tools::query_source::{QuerySourceTool, describe};
+use crate::agent::tools::knowledge::query::{QuerySourceTool, describe};
 use crate::core::tests::support::{FakeQueries, ctx};
-use crate::core::traits::tool::Tool;
-use crate::core::types::query::{QueryParam, QuerySourceInfo};
-use crate::core::types::tool::{RiskClass, ToolError};
+use crate::core::traits::tools::Tool;
+use crate::core::types::knowledge::query::{QueryParam, QuerySourceInfo};
+use crate::core::types::tools::{RiskClass, ToolError};
 
 fn class_search() -> QuerySourceInfo {
     QuerySourceInfo {

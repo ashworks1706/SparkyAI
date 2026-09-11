@@ -4,10 +4,10 @@ use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::core::traits::policy::Policy;
-use crate::core::types::context::RequestContext;
-use crate::core::types::policy::{ConfirmationRequest, Decision, ProposedAction};
-use crate::core::types::tool::RiskClass;
+use crate::core::traits::safety::policy::Policy;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::policy::{ConfirmationRequest, Decision, ProposedAction};
+use crate::core::types::tools::RiskClass;
 
 /// Stable hash of the canonical JSON of arguments. A changed payload needs a new confirmation.
 pub fn payload_hash(arguments: &Value) -> String {
@@ -19,7 +19,7 @@ pub fn payload_hash(arguments: &Value) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-/// What the policy allows, denies, and holds. Comes from the [policy] configuration section.
+/// What the policy allows, denies, and holds. Comes from the policy configuration section.
 #[derive(Debug, Clone)]
 pub struct RiskPolicy {
     write_roles: Vec<String>,

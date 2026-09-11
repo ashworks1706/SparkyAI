@@ -1,4 +1,5 @@
-//! What one request loads before its first model call: history, memory, evidence.
+//! What one request loads before its first model call: history, memory, evidence. A public
+//! request loads no memory unless the settings allow it.
 
 use std::time::Instant;
 
@@ -6,13 +7,14 @@ use tracing::Instrument;
 use tracing::field::Empty;
 
 use super::{Agent, ms};
-use crate::agent::harness::redact::{json, truncate};
-use crate::agent::harness::run::Inputs;
+use crate::agent::harness::agent::run::Inputs;
+use crate::agent::harness::safety::redact::{json, truncate};
 use crate::core::types::agent::AgentError;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::Visibility;
+use crate::core::types::conversation::message::Message;
+use crate::core::types::knowledge::retrieval::RetrievalQuery;
 use crate::core::types::memory::{Memory, MemoryQuery};
-use crate::core::types::message::Message;
-use crate::core::types::retrieval::RetrievalQuery;
 use crate::core::types::trace::TraceEvent;
 
 /// Counts from the newest backwards, the way assembly spends the budget, and never returns
@@ -87,20 +89,30 @@ impl Agent {
     ) -> Result<Inputs, AgentError> {
         let deps = &self.deps;
         let history = self.history(ctx).await?;
-        let memory = match &deps.memory {
-            Some(store) => store
-                .recall(
-                    ctx,
-                    &MemoryQuery {
-                        kinds: Vec::new(),
-                        limit: self.cfg.memory_recall_limit,
-                    },
-                )
-                .await
-                .map_err(|error| AgentError::Store(error.to_string()))?,
-            None => Vec::new(),
+        let memory = if ctx.visibility == Visibility::Public && !self.cfg.recall_in_public {
+            Vec::new()
+        } else {
+            let recalled = match &deps.memory {
+                Some(store) => store
+                    .recall(
+                        ctx,
+                        &MemoryQuery {
+                            kinds: Vec::new(),
+                            limit: self.cfg.memory_recall_limit,
+                        },
+                    )
+                    .await
+                    .map_err(|error| AgentError::Store(error.to_string()))?,
+                None => Vec::new(),
+            };
+            self.with_profile(ctx, recalled).await
         };
-        let memory = self.with_profile(ctx, memory).await;
+        deps.trace.emit(
+            ctx,
+            TraceEvent::MemoryRecalled {
+                count: memory.len(),
+            },
+        );
         let evidence = match &deps.retriever {
             Some(retriever) => {
                 let started = Instant::now();

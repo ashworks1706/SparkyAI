@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
-use crate::core::types::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
 
 /// Runs a command in an isolated environment.
 #[async_trait]

@@ -1,18 +1,8 @@
-//! Wire shapes: tool argument schemas and the live progress event.
+//! Progress: the live progress event on the wire.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::core::types::trace::TraceEvent;
-
-/// Arguments the model passes to search_knowledge_base.
-#[derive(Deserialize)]
-pub struct SearchArgs {
-    /// What to look for.
-    pub query: String,
-    /// Optional source categories to restrict to.
-    #[serde(default)]
-    pub categories: Vec<String>,
-}
 
 /// One line of progress for whoever is watching a run.
 ///

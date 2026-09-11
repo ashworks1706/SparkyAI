@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 
 #[test]
 fn contexts_are_distinct_per_request() {
