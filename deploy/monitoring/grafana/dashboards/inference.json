@@ -1,22 +1,34 @@
 {
   "uid": "sparky-inference",
   "title": "SparkyAI inference",
-  "tags": ["sparky", "llama.cpp"],
+  "tags": [
+    "sparky",
+    "llama.cpp"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "10s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "job",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "sparky-prometheus"
+        },
         "query": "label_values(llamacpp:n_decode_total, job)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       }
     ]
   },
@@ -26,10 +38,24 @@
       "type": "timeseries",
       "title": "Generation throughput",
       "description": "Tokens the server actually produced per wall-clock second.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "fieldConfig": {
-        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 10 } },
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
         "overrides": []
       },
       "targets": [
@@ -45,10 +71,24 @@
       "type": "timeseries",
       "title": "Prompt throughput",
       "description": "Prompt tokens evaluated per second, excluding tokens served from the prompt cache.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
       "fieldConfig": {
-        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 10 } },
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
         "overrides": []
       },
       "targets": [
@@ -69,14 +109,25 @@
       "type": "timeseries",
       "title": "Queue",
       "description": "Deferred above zero means requests are waiting for a slot. This is the saturation signal.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
           "decimals": 0,
-          "custom": { "fillOpacity": 20, "lineInterpolation": "stepAfter" }
+          "custom": {
+            "fillOpacity": 20,
+            "lineInterpolation": "stepAfter"
+          }
         },
         "overrides": []
       },
@@ -98,10 +149,24 @@
       "type": "timeseries",
       "title": "Batching efficiency",
       "description": "Average busy slots per decode. Near 1 with a non-empty queue means --parallel is too low.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
       "fieldConfig": {
-        "defaults": { "unit": "short", "min": 0, "custom": { "fillOpacity": 10 } },
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
         "overrides": []
       },
       "targets": [
@@ -122,10 +187,24 @@
       "type": "timeseries",
       "title": "Server-reported speed",
       "description": "llama-server's own running average for the last requests, independent of load.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
       "fieldConfig": {
-        "defaults": { "unit": "none", "min": 0, "custom": { "fillOpacity": 0 } },
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 0
+          }
+        },
         "overrides": []
       },
       "targets": [
@@ -146,10 +225,25 @@
       "type": "timeseries",
       "title": "Prompt cache hit rate",
       "description": "Share of prompt tokens reused from cache. A long stable system prompt should keep this high.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 12, "y": 16 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 12,
+        "y": 16
+      },
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 10 } },
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
         "overrides": []
       },
       "targets": [
@@ -164,19 +258,141 @@
       "id": 7,
       "type": "stat",
       "title": "Context ceiling",
-      "description": "llamacpp:n_tokens_max — the largest context the server will accept, per slot.",
-      "datasource": { "type": "prometheus", "uid": "sparky-prometheus" },
-      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 16 },
+      "description": "llamacpp:n_tokens_max \u2014 the largest context the server will accept, per slot.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 16
+      },
       "fieldConfig": {
-        "defaults": { "unit": "short", "decimals": 0 },
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
         "overrides": []
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "targets": [
         {
           "refId": "A",
           "expr": "llamacpp:n_tokens_max{job=~\"$job\"}",
           "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "GPU utilisation",
+      "description": "Fraction of time the GPU was executing a kernel. Sustained low utilisation under load means the bottleneck is elsewhere.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          },
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nvidia_smi_utilization_gpu_ratio * on(uuid) group_left(name) nvidia_smi_gpu_info",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "VRAM",
+      "description": "Memory used against total. A model that does not fit spills to host memory and generation throughput collapses.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nvidia_smi_memory_used_bytes * on(uuid) group_left(name) nvidia_smi_gpu_info",
+          "legendFormat": "{{name}} used"
+        },
+        {
+          "refId": "B",
+          "expr": "nvidia_smi_memory_total_bytes * on(uuid) group_left(name) nvidia_smi_gpu_info",
+          "legendFormat": "{{name}} total"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "GPU temperature",
+      "description": "Die temperature. nvidia_smi_temperature_gpu_tlimit is the remaining margin to the throttle limit, not a temperature, so it is not plotted here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sparky-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nvidia_smi_temperature_gpu * on(uuid) group_left(name) nvidia_smi_gpu_info",
+          "legendFormat": "{{name}}"
         }
       ]
     }

@@ -251,9 +251,16 @@ services:
   gpu-exporter:
     image: utkuozdemir/nvidia_gpu_exporter:1.3.2
     profiles: [gpu-metrics]
-    devices: ["/dev/nvidiactl:/dev/nvidiactl", "/dev/nvidia0:/dev/nvidia0"]
-    volumes: ["/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro"]
+    # The exporter shells out to nvidia-smi. The nvidia container runtime injects the binary
+    # and the driver libraries; the utility capability is the one that carries nvidia-smi.
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility
     ports: ["127.0.0.1:9835:9835"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - { driver: nvidia, count: 1, capabilities: [gpu, utility] }
     restart: unless-stopped
 
 volumes:
