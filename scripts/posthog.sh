@@ -18,7 +18,6 @@ paths=(
   docker/clickhouse
   docker/temporal/dynamicconfig
   docker/kafka/topics.txt
-  docker/livestream/configs-hobby.yml
 )
 
 mkdir -p "$dir" "$share"
