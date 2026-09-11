@@ -9,13 +9,15 @@ use std::time::Duration;
 use tracing::Instrument;
 use tracing::field::Empty;
 
+use crate::agent::harness::safety::redact::{json, truncate};
 use crate::core::traits::model::ModelProvider;
+use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::model::{ModelError, ModelRequest};
 
 /// What a task sends with every call.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct TaskConfig {
     /// Completion budget.
     pub max_tokens: u32,
@@ -23,15 +25,25 @@ pub struct TaskConfig {
     pub temperature: f32,
     /// Wall-clock budget for the call.
     pub timeout: Duration,
+    /// gen_ai.provider.name on the span.
+    pub provider_name: Arc<str>,
+    /// Model name as requested, for gen_ai.request.model.
+    pub model_name: Arc<str>,
+    /// Longest value recorded on the span.
+    pub max_span_value_chars: usize,
 }
 
 impl Default for TaskConfig {
     fn default() -> Self {
+        let agent = AgentConfig::default();
         Self {
             max_tokens: 512,
             // A task rewrites or classifies. Sampling wide serves neither.
             temperature: 0.0,
             timeout: Duration::from_secs(30),
+            provider_name: agent.provider_name,
+            model_name: agent.model_name,
+            max_span_value_chars: agent.max_span_value_chars,
         }
     }
 }
@@ -65,13 +77,6 @@ impl Task {
     /// # Errors
     /// Returns [ModelError] when the call fails or answers with nothing.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<String, ModelError> {
-        let span = tracing::info_span!(
-            "task",
-            "openinference.span.kind" = "LLM",
-            "sparky.task" = self.name,
-            "input.value" = %input,
-            "output.value" = Empty,
-        );
         let request = ModelRequest {
             messages: vec![
                 Message::system(self.instructions.as_ref()),
@@ -81,11 +86,45 @@ impl Task {
             max_tokens: self.cfg.max_tokens,
             temperature: self.cfg.temperature,
         };
+        let limit = self.cfg.max_span_value_chars;
+        let span = tracing::info_span!(
+            "task",
+            "gen_ai.operation.name" = "chat",
+            "gen_ai.provider.name" = %self.cfg.provider_name,
+            "gen_ai.request.model" = %self.cfg.model_name,
+            "gen_ai.response.model" = Empty,
+            "gen_ai.request.max_tokens" = request.max_tokens,
+            "gen_ai.request.temperature" = f64::from(request.temperature),
+            "gen_ai.usage.input_tokens" = Empty,
+            "gen_ai.usage.output_tokens" = Empty,
+            "gen_ai.input.messages" = %truncate(&json(&request.messages), limit),
+            "gen_ai.output.messages" = Empty,
+            "sparky.span" = "task",
+            "sparky.task" = self.name,
+            "sparky.tools" = "[]",
+            "sparky.step" = 0,
+            "sparky.attempt" = 0,
+            "$ai_session_id" = %ctx.conversation_id,
+            "posthog.distinct_id" = %ctx.user_id,
+        );
         let budget = self.cfg.timeout.min(ctx.remaining());
         let call = self.model.generate(ctx, request).instrument(span.clone());
         let response = tokio::time::timeout(budget, call)
             .await
             .map_err(|_| ModelError::Transport(format!("{} timed out", self.name)))??;
+        span.record("gen_ai.response.model", response.model.as_str());
+        span.record(
+            "gen_ai.usage.input_tokens",
+            i64::from(response.usage.prompt_tokens),
+        );
+        span.record(
+            "gen_ai.usage.output_tokens",
+            i64::from(response.usage.completion_tokens),
+        );
+        span.record(
+            "gen_ai.output.messages",
+            truncate(&json(&[response.as_message()]), limit).as_str(),
+        );
         let text = response.content.trim().to_owned();
         if text.is_empty() {
             return Err(ModelError::Malformed(format!(
@@ -93,7 +132,6 @@ impl Task {
                 self.name
             )));
         }
-        span.record("output.value", text.as_str());
         Ok(text)
     }
 }

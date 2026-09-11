@@ -251,6 +251,7 @@ fn profile_writer(
             max_tokens: cfg.profile.max_tokens,
             temperature: 0.0,
             timeout: budget,
+            ..task_config(cfg)
         },
     ));
     let reconciler = cfg.profile.reconcile.then(|| {
@@ -266,6 +267,7 @@ fn profile_writer(
                 max_tokens: 32,
                 temperature: 0.0,
                 timeout: budget,
+                ..task_config(cfg)
             },
         ))
     });
@@ -299,6 +301,7 @@ fn compactor(cfg: &Config, model: &Arc<dyn ModelProvider>) -> Option<Arc<dyn Com
             max_tokens: cfg.compaction.max_tokens,
             temperature: cfg.compaction.temperature,
             timeout: Duration::from_secs(cfg.compaction.timeout_secs),
+            ..task_config(cfg)
         },
     );
     Some(Arc::new(ChatCompactor::new(task)))
@@ -325,9 +328,21 @@ fn trace_sink(cfg: &Config) -> anyhow::Result<Arc<dyn TraceSink>> {
     Ok(Arc::new(sink))
 }
 
+/// A task config carrying the span settings, with the call settings at their defaults.
+fn task_config(cfg: &Config) -> TaskConfig {
+    TaskConfig {
+        provider_name: cfg.telemetry.provider_name.as_str().into(),
+        model_name: cfg.model.name.as_str().into(),
+        max_span_value_chars: cfg.agent.max_span_value_chars,
+        ..TaskConfig::default()
+    }
+}
+
 /// The loop limits and budgets, gathered from the sections that own them.
 fn agent_config(cfg: &Config) -> AgentConfig {
     AgentConfig {
+        provider_name: cfg.telemetry.provider_name.as_str().into(),
+        model_name: cfg.model.name.as_str().into(),
         max_steps: cfg.agent.max_steps,
         max_model_retries: cfg.agent.max_model_retries,
         tool_timeout: Duration::from_secs(cfg.agent.tool_timeout_secs),

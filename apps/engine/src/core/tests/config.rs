@@ -106,6 +106,32 @@ fn a_sample_ratio_outside_zero_to_one_is_rejected() {
 }
 
 #[test]
+fn a_telemetry_path_without_a_leading_slash_is_rejected() {
+    let e = err("[telemetry]\ntraces_path = \"i/v1/traces\"\n");
+    assert!(e.contains("traces_path"), "{e}");
+    let e = err("[telemetry]\nai_path = \"i/v0/ai/otel\"\n");
+    assert!(e.contains("ai_path"), "{e}");
+}
+
+#[test]
+fn an_empty_provider_name_is_rejected() {
+    let e = err("[telemetry]\nprovider_name = \" \"\n");
+    assert!(e.contains("provider_name"), "{e}");
+}
+
+#[test]
+fn telemetry_defaults_point_at_the_local_posthog() {
+    use secrecy::ExposeSecret;
+
+    let cfg = ok("");
+    assert_eq!(cfg.telemetry.host.as_deref(), Some("http://localhost:8010"));
+    assert!(cfg.telemetry.project_token.expose_secret().is_empty());
+    assert_eq!(cfg.telemetry.traces_path, "/i/v1/traces");
+    assert_eq!(cfg.telemetry.ai_path, "/i/v0/ai/otel");
+    assert_eq!(cfg.telemetry.provider_name, "llama.cpp");
+}
+
+#[test]
 fn the_legacy_playwright_url_becomes_a_named_server() {
     let cfg = ok("[mcp]\nplaywright_url = \"http://localhost:8931/mcp\"\n");
     let servers = cfg.mcp.resolved_servers();

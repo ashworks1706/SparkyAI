@@ -197,12 +197,20 @@ pub struct Embedding {
     pub dim: u32,
 }
 
-/// Trace export. Defaults to the local Phoenix collector; an empty endpoint disables it.
+/// Trace export to PostHog. An empty host or project token disables it.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {
-    /// OTLP/gRPC endpoint. Phoenix locally; unset or empty disables trace export.
-    pub otlp_endpoint: Option<String>,
+    /// PostHog base URL; unset or empty disables trace export.
+    pub host: Option<String>,
+    /// PostHog project token; empty disables trace export.
+    pub project_token: SecretString,
+    /// Path of the OTLP traces endpoint, joined to host.
+    pub traces_path: String,
+    /// Path of the OTLP AI endpoint, joined to host.
+    pub ai_path: String,
+    /// gen_ai.provider.name on model spans.
+    pub provider_name: String,
     /// service.name on exported spans. Defaults to the name of the binary.
     pub service_name: Option<String>,
     /// Fraction of traces exported, 0.0 to 1.0.
@@ -217,7 +225,11 @@ pub struct Telemetry {
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
-            otlp_endpoint: Some("http://localhost:4317".into()),
+            host: Some("http://localhost:8010".into()),
+            project_token: SecretString::from(""),
+            traces_path: "/i/v1/traces".into(),
+            ai_path: "/i/v0/ai/otel".into(),
+            provider_name: "llama.cpp".into(),
             service_name: None,
             sample_ratio: 1.0,
             export_timeout_secs: 10,

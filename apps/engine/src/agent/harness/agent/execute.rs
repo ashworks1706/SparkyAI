@@ -191,13 +191,14 @@ impl Agent {
         let limit = declared.min(ctx.remaining());
         let span = tracing::info_span!(
             "tool",
-            "openinference.span.kind" = "TOOL",
-            "tool.name" = %call.name,
-            "tool.call_id" = %call.id,
-            "input.value" = %redact(&call.arguments),
-            "input.mime_type" = "application/json",
-            "output.value" = Empty,
+            "gen_ai.operation.name" = "execute_tool",
+            "gen_ai.tool.name" = %call.name,
+            "gen_ai.tool.call.id" = %call.id,
+            "gen_ai.tool.call.arguments" = %redact(&call.arguments),
+            "gen_ai.tool.call.result" = Empty,
             "sparky.step" = step,
+            "$ai_session_id" = %ctx.conversation_id,
+            "posthog.distinct_id" = %ctx.user_id,
         );
         let result = tokio::select! {
             () = ctx.cancel.cancelled() => Err(ToolError::Cancelled),
@@ -234,10 +235,16 @@ impl Agent {
         );
         match &content {
             Ok(text) => {
-                span.record("output.value", truncate(&redact_text(text), 4_000).as_str());
+                span.record(
+                    "gen_ai.tool.call.result",
+                    truncate(&redact_text(text), 4_000).as_str(),
+                );
             }
             Err(error) => {
-                span.record("output.value", format!("error: {error}").as_str());
+                span.record(
+                    "gen_ai.tool.call.result",
+                    format!("error: {error}").as_str(),
+                );
             }
         }
         (content, found)

@@ -10,15 +10,21 @@ mod routes;
 mod stores;
 mod wiring;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+/// Starts telemetry outside the tokio runtime, serves, then drops the runtime before telemetry.
+fn main() -> anyhow::Result<()> {
     if let Err(e) = dotenvy::dotenv()
         && !e.not_found()
     {
         return Err(anyhow::anyhow!(".env: {e}"));
     }
     let cfg = core::config::Config::load()?;
-    let _guard = core::telemetry::init(&cfg.telemetry, "engine", &cfg.app.env, &cfg.app.log_level)?;
+    let guard = core::telemetry::init(&cfg.telemetry, "engine", &cfg.app.env, &cfg.app.log_level)?;
     tracing::info!(env = %cfg.app.env, "engine starting");
-    wiring::serve(cfg).await
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let served = runtime.block_on(wiring::serve(cfg));
+    drop(runtime);
+    drop(guard);
+    served
 }

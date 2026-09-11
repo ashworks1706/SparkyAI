@@ -93,6 +93,8 @@ impl Default for AgentConfig {
     fn default() -> Self {
         let agent = Agent::default();
         AgentConfig {
+            provider_name: Telemetry::default().provider_name.into(),
+            model_name: std::sync::Arc::from(""),
             max_steps: agent.max_steps,
             max_model_retries: agent.max_model_retries,
             tool_timeout: std::time::Duration::from_secs(agent.tool_timeout_secs),
@@ -201,6 +203,17 @@ impl Config {
                 "telemetry.sample_ratio must be between 0 and 1, got {}",
                 self.telemetry.sample_ratio
             ));
+        }
+        for (name, path) in [
+            ("traces_path", &self.telemetry.traces_path),
+            ("ai_path", &self.telemetry.ai_path),
+        ] {
+            if !path.starts_with('/') {
+                return invalid(format!("telemetry.{name} must start with /, got {path:?}"));
+            }
+        }
+        if self.telemetry.provider_name.trim().is_empty() {
+            return invalid("telemetry.provider_name is empty".into());
         }
         if self.retrieval.text_search_config.is_empty()
             || !self

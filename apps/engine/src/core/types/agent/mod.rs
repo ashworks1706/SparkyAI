@@ -17,8 +17,12 @@ use crate::core::types::trace::RunStatus;
 /// Knobs for the loop. All bounded; nothing runs forever.
 ///
 /// Default is implemented in core::config.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AgentConfig {
+    /// gen_ai.provider.name on model spans.
+    pub provider_name: std::sync::Arc<str>,
+    /// Model name as requested, for gen_ai.request.model.
+    pub model_name: std::sync::Arc<str>,
     /// Maximum model calls per request.
     pub max_steps: u32,
     /// Retries on a retryable model error, per step.
