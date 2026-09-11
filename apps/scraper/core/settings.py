@@ -71,6 +71,12 @@ class Scraper(BaseModel):
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"
+    # Quality floor: a run whose extracted text is below this fraction of the last indexed
+    # version is refused rather than written over the index.
+    quality_floor_ratio: float = 0.5
+    # The floor is skipped when the last version was shorter than this, where a swing of a few
+    # hundred characters is ordinary.
+    quality_floor_min_chars: int = 500
 
     def chunker_version(self) -> str:
         """Records the settings the chunks were cut with."""

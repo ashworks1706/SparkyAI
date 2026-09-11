@@ -196,6 +196,10 @@ chunk_chars = 1200
 chunk_overlap_chars = 200
 query_max_chars = 12000
 parser_version = "bs4-text-v1"
+# A fetch yielding less than this fraction of the last good run is refused. Pages churn by
+# single digits between runs; an extractor break returns a nav shell.
+quality_floor_ratio = 0.5
+quality_floor_min_chars = 500     # below this, ordinary variation crosses any ratio
 
 # base_url is per-machine and lives in .env.
 [firecrawl]

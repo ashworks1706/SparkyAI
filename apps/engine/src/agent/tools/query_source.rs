@@ -114,6 +114,7 @@ impl Tool for QuerySourceTool {
                 outcome.source, outcome.url, outcome.text
             ),
             data: serde_json::to_value(&outcome).ok(),
+            evidence: Vec::new(),
         })
     }
 }

@@ -11,7 +11,9 @@ use uuid::Uuid;
 use crate::core::traits::profile::ProfileGraph;
 use crate::core::traits::retrieval::Embedder;
 use crate::core::types::context::RequestContext;
-use crate::core::types::profile::{ProfileEntity, ProfileError, ProfileFact, ProfileNode};
+use crate::core::types::profile::{
+    ProfileEntity, ProfileError, ProfileFact, ProfileNode, ProfileRelation,
+};
 use crate::stores::postgres::vector_literal;
 
 /// Maps a sqlx error to a ProfileError. Takes the error by value for use as a map_err function
@@ -199,6 +201,45 @@ impl ProfileGraph for PgProfileGraph {
                 confidence: row.try_get("confidence").map_err(db)?,
                 created_at: row.try_get("created_at").map_err(db)?,
                 updated_at: row.try_get("updated_at").map_err(db)?,
+            });
+        }
+        Ok(out)
+    }
+
+    async fn relations(
+        &self,
+        ctx: &RequestContext,
+        limit: usize,
+    ) -> Result<Vec<ProfileRelation>, ProfileError> {
+        let rows = sqlx::query(
+            "select s.kind as subject_kind, s.label as subject_label, e.relation,
+                    o.kind as object_kind, o.label as object_label, e.confidence
+             from profile_edges e
+             join profile_nodes s on s.id = e.from_node
+             join profile_nodes o on o.id = e.to_node
+             join users u on u.id = s.user_id
+             where e.tenant_id = $1 and u.discord_id = $2
+             order by e.confidence desc, e.created_at desc limit $3",
+        )
+        .bind(&ctx.tenant_id)
+        .bind(&ctx.user_id)
+        .bind(i64::try_from(limit).unwrap_or(i64::MAX))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(ProfileRelation {
+                subject: ProfileEntity {
+                    kind: row.try_get("subject_kind").map_err(db)?,
+                    label: row.try_get("subject_label").map_err(db)?,
+                },
+                relation: row.try_get("relation").map_err(db)?,
+                object: ProfileEntity {
+                    kind: row.try_get("object_kind").map_err(db)?,
+                    label: row.try_get("object_label").map_err(db)?,
+                },
+                confidence: row.try_get("confidence").map_err(db)?,
             });
         }
         Ok(out)

@@ -129,3 +129,47 @@ async fn a_failed_model_call_is_reported_as_a_model_error() {
         unreachable!("the script is exhausted")
     };
 }
+
+#[test]
+fn a_relation_reads_as_a_sentence_in_the_prompt() {
+    use crate::core::types::memory::{Memory, MemoryKind};
+    use crate::core::types::profile::{ProfileEntity, ProfileRelation};
+
+    let relation = ProfileRelation {
+        subject: ProfileEntity {
+            kind: "person".into(),
+            label: "the student".into(),
+        },
+        relation: "studies".into(),
+        object: ProfileEntity {
+            kind: "subject".into(),
+            label: "computer science".into(),
+        },
+        confidence: 0.9,
+    };
+    assert_eq!(relation.to_string(), "the student studies computer science");
+
+    // A node says what a user is connected to. Only the relation says how.
+    let memory = Memory::from(&relation);
+    assert_eq!(memory.kind, MemoryKind::Semantic);
+    assert_eq!(memory.content, "the student studies computer science");
+    assert!((memory.confidence - 0.9).abs() < f32::EPSILON);
+}
+
+#[test]
+fn a_recalled_node_reads_as_its_kind_and_label() {
+    use crate::core::types::memory::{Memory, MemoryKind};
+    use crate::core::types::profile::ProfileNode;
+
+    let node = ProfileNode {
+        id: uuid::Uuid::new_v4(),
+        kind: "interest".into(),
+        label: "robotics".into(),
+        confidence: 1.0,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    let memory = Memory::from(&node);
+    assert_eq!(memory.kind, MemoryKind::Profile);
+    assert_eq!(memory.content, "interest: robotics");
+}

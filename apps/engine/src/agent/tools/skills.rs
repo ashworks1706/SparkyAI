@@ -140,6 +140,7 @@ impl Tool for GetSkillTool {
         Ok(ToolOutput {
             content: render(&skill),
             data: serde_json::to_value(&skill).ok(),
+            evidence: Vec::new(),
         })
     }
 }

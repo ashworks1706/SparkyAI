@@ -1,4 +1,4 @@
-//! ProfileEntity, ProfileNode, ProfileFact, ProfileError: the user profile graph.
+//! ProfileEntity, ProfileNode, ProfileRelation, ProfileFact, ProfileError: the profile graph.
 //!
 //! A fact is what extraction produces from one turn. Storing it writes a node per entity and an
 //! edge for the relation between them, so recall can start from a relation.
@@ -78,6 +78,43 @@ impl From<&ProfileNode> for crate::core::types::memory::Memory {
             content: format!("{}: {}", node.kind, node.label),
             confidence: node.confidence,
             created_at: node.created_at,
+            expires_at: None,
+        }
+    }
+}
+
+/// One recalled relation, with both ends resolved.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileRelation {
+    /// Where the relation starts.
+    pub subject: ProfileEntity,
+    /// What it asserts.
+    pub relation: String,
+    /// Where it ends.
+    pub object: ProfileEntity,
+    /// How sure the extraction was.
+    pub confidence: f32,
+}
+
+impl std::fmt::Display for ProfileRelation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.subject.label, self.relation, self.object.label
+        )
+    }
+}
+
+impl From<&ProfileRelation> for crate::core::types::memory::Memory {
+    /// A recalled relation reaches the prompt through the memory section.
+    fn from(relation: &ProfileRelation) -> Self {
+        Self {
+            id: uuid::Uuid::nil(),
+            kind: crate::core::types::memory::MemoryKind::Semantic,
+            content: relation.to_string(),
+            confidence: relation.confidence,
+            created_at: chrono::Utc::now(),
             expires_at: None,
         }
     }

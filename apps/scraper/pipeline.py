@@ -35,16 +35,36 @@ def run_source(source: Source, *, force: bool = False) -> RunResult:
         return result
 
 
+def check_quality_floor(
+    key: str, text_chars: int, previous_chars: int | None, *, ratio: float, min_chars: int
+) -> None:
+    """Raises when this run extracted materially less than the last indexed version did."""
+    if previous_chars is None or previous_chars < min_chars:
+        return
+    floor = int(previous_chars * ratio)
+    if text_chars < floor:
+        raise PipelineError(
+            f"{key}: extraction produced {text_chars} chars against {previous_chars} in the "
+            f"last indexed version, under the floor of {floor}; refusing to replace the index. "
+            "Re-run with --force to accept it"
+        )
+
+
 def _run_source(source: Source, *, force: bool) -> RunResult:
     cfg = settings()
+    # The attempt is committed before the fetch so a source that fails, or comes back byte for
+    # byte the same, still backs off to its interval instead of being retried on every poll.
+    with postgres.connection() as conn:
+        row = postgres.upsert_source(
+            conn, source.key, source.url, source.category, source.fetch_every_hours
+        )
+        conn.commit()
+
     fetched = fetch.fetch(source.url, needs_js=source.needs_js)
     content_hash = hashlib.sha256(fetched.body).hexdigest()
     fetched_at = datetime.now(UTC)
 
     with postgres.connection() as conn:
-        row = postgres.upsert_source(
-            conn, source.key, source.url, source.category, source.fetch_every_hours
-        )
         previous = postgres.latest_version(conn, row.id)
         if previous and previous["content_hash"] == content_hash and not force:
             log.info("unchanged", source=source.key)
@@ -76,6 +96,14 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
                 f"{source.key}: extraction produced no text from {len(fetched.body)} bytes; "
                 "refusing to replace the index with nothing"
             )
+        if not force:
+            check_quality_floor(
+                source.key,
+                len(text),
+                previous["text_chars"] if previous else None,
+                ratio=cfg.scraper.quality_floor_ratio,
+                min_chars=cfg.scraper.quality_floor_min_chars,
+            )
         # Each embedded text is prefixed with the page title.
         texts = [f"{title}\n{p}" for p in pieces]
         vectors = embed.embed_texts(texts)
@@ -89,6 +117,8 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
             chunker_version=cfg.scraper.chunker_version(),
             embedding_model=cfg.embedding.name,
             previous_id=previous["id"] if previous else None,
+            text_chars=len(text),
+            chunk_count=len(pieces),
         )
         written = postgres.replace_chunks(
             conn,

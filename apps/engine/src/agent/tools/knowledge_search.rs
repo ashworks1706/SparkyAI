@@ -89,6 +89,7 @@ impl Tool for KnowledgeSearch {
         Ok(ToolOutput {
             content: text,
             data: serde_json::to_value(&evidence).ok(),
+            evidence,
         })
     }
 }

@@ -266,6 +266,7 @@ impl Tool for McpTool {
         Ok(ToolOutput {
             content: text,
             data: result.structured_content,
+            evidence: Vec::new(),
         })
     }
 }

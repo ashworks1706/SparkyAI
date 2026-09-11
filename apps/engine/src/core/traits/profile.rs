@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 
 use crate::core::types::context::RequestContext;
-use crate::core::types::profile::{ProfileError, ProfileFact, ProfileNode};
+use crate::core::types::profile::{ProfileError, ProfileFact, ProfileNode, ProfileRelation};
 
 /// The entity graph for one user in one tenant.
 ///
@@ -20,4 +20,11 @@ pub trait ProfileGraph: Send + Sync {
         ctx: &RequestContext,
         limit: usize,
     ) -> Result<Vec<ProfileNode>, ProfileError>;
+
+    /// The relations this user carries, most confident first.
+    async fn relations(
+        &self,
+        ctx: &RequestContext,
+        limit: usize,
+    ) -> Result<Vec<ProfileRelation>, ProfileError>;
 }

@@ -67,13 +67,17 @@ def migrate(conn: psycopg.Connection) -> list[str]:
 def upsert_source(
     conn: psycopg.Connection, key: str, url: str, category: str, fetch_every_hours: int
 ) -> SourceRow:
-    """Creates or refreshes the sources row for a registered source."""
+    """Creates or refreshes the sources row and stamps this run as an attempt.
+
+    fetch_every is seeded from the registered source and then left alone; the column is what
+    the scheduler reads, so an operator can change the interval in place.
+    """
     row = conn.execute(
         """
-        insert into sources (key, url, category, fetch_every)
-        values (%s, %s, %s, make_interval(hours => %s))
+        insert into sources (key, url, category, fetch_every, last_attempt_at)
+        values (%s, %s, %s, make_interval(hours => %s), now())
         on conflict (key) do update
-            set url = excluded.url, category = excluded.category, fetch_every = excluded.fetch_every
+            set url = excluded.url, category = excluded.category, last_attempt_at = now()
         returning id, key, url, category
         """,
         (key, url, category, fetch_every_hours),
@@ -84,10 +88,11 @@ def upsert_source(
 
 
 def latest_version(conn: psycopg.Connection, source_id: uuid.UUID) -> dict | None:
-    """Most recent source_versions row, or None."""
+    """Most recent source_versions row, or None. Only runs that passed the quality floor are
+    written, so this is the last good version."""
     return conn.execute(
         """
-        select id, content_hash, fetched_at from source_versions
+        select id, content_hash, fetched_at, text_chars, chunk_count from source_versions
         where source_id = %s order by fetched_at desc limit 1
         """,
         (source_id,),
@@ -104,13 +109,17 @@ def insert_version(
     chunker_version: str,
     embedding_model: str,
     previous_id: uuid.UUID | None,
+    text_chars: int,
+    chunk_count: int,
 ) -> uuid.UUID:
+    """Records one indexed version. text_chars and chunk_count are what the next run's quality
+    floor compares against."""
     row = conn.execute(
         """
         insert into source_versions
             (source_id, content_hash, snapshot_key, parser_version, chunker_version,
-             embedding_model, previous_id)
-        values (%s, %s, %s, %s, %s, %s, %s)
+             embedding_model, previous_id, text_chars, chunk_count)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -121,6 +130,8 @@ def insert_version(
             chunker_version,
             embedding_model,
             previous_id,
+            text_chars,
+            chunk_count,
         ),
     ).fetchone()
     if row is None:
@@ -166,10 +177,15 @@ def replace_chunks(
 
 
 def status_rows(conn: psycopg.Connection) -> list[dict]:
-    """Per-source: last fetch, version count, chunk count."""
+    """Per-source: the schedule, the last attempt, the last change, and the counts.
+
+    last_attempt is when a run last touched the source; last_fetch is when one last produced a
+    new version. The two differ whenever the page came back unchanged.
+    """
     return conn.execute(
         """
-        select s.key, s.category, s.enabled,
+        select s.key, s.category, s.enabled, s.fetch_every,
+               s.last_attempt_at as last_attempt,
                (select max(fetched_at) from source_versions v where v.source_id = s.id)
                    as last_fetch,
                (select count(*) from source_versions v where v.source_id = s.id) as versions,

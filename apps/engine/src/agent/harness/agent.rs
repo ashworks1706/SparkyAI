@@ -66,6 +66,20 @@ pub struct AgentDeps {
     pub profile_graph: Option<Arc<dyn ProfileGraph>>,
 }
 
+/// What an answer may cite: the chunks that fit the prompt, then what the tools found.
+///
+/// Retrieval hands the loop more than the budget holds. Citing a chunk the model never saw
+/// attributes an answer to a passage that took no part in it.
+fn cited(retrieved: Vec<Evidence>, run: &Run<'_>) -> Vec<Evidence> {
+    let mut out: Vec<Evidence> = retrieved.into_iter().take(run.evidence_in_prompt).collect();
+    for found in &run.tool_evidence {
+        if !out.iter().any(|e| e.chunk_id == found.chunk_id) {
+            out.push(found.clone());
+        }
+    }
+    out
+}
+
 /// The outcome of a step that asked for no capabilities.
 fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
     if !response.content.trim().is_empty() {
@@ -190,6 +204,10 @@ struct Run<'a> {
     seen_calls: HashSet<String>,
     /// Tools that ran, in order, for the answer and the client.
     tool_runs: Vec<ToolRun>,
+    /// Evidence chunks that fit the prompt on the most recent step.
+    evidence_in_prompt: usize,
+    /// Evidence the tools found, in the order they found it.
+    tool_evidence: Vec<Evidence>,
     /// Set after a step of nothing but repeats. The next model call gets no tools.
     force_answer: bool,
     /// Leading new_turns entries that assembly appends itself, which the prompt must not
@@ -293,6 +311,8 @@ impl Agent {
             new_turns: Vec::new(),
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
+            evidence_in_prompt: 0,
+            tool_evidence: Vec::new(),
             force_answer: false,
             appended_by_assembly: 0,
         };
@@ -301,7 +321,8 @@ impl Agent {
             name: pending.action.tool,
             arguments: pending.action.arguments,
         };
-        let result = self.run_tool(ctx, 0, &call).await;
+        let (result, found) = self.run_tool(ctx, 0, &call).await;
+        run.tool_evidence.extend(found);
         run.tool_runs.push(ToolRun {
             tool: call.name.clone(),
             ok: result.is_ok(),
@@ -328,6 +349,8 @@ impl Agent {
             new_turns: vec![Message::user(input)],
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
+            evidence_in_prompt: 0,
+            tool_evidence: Vec::new(),
             force_answer: false,
             appended_by_assembly: 1,
         };
@@ -571,6 +594,7 @@ impl Agent {
             },
             budget,
         );
+        run.evidence_in_prompt = assembled.evidence_used;
         self.deps.trace.emit(
             ctx,
             TraceEvent::ContextAssembled {
@@ -707,7 +731,7 @@ impl Agent {
                 .get(&call.name)
                 .is_some_and(|t| t.definition().sequential)
         });
-        let results: Vec<Result<String, ToolError>> = if stateful {
+        let results: Vec<(Result<String, ToolError>, Vec<Evidence>)> = if stateful {
             let mut out = Vec::with_capacity(fresh.len());
             for call in &fresh {
                 out.push(self.run_tool(ctx, step, call).await);
@@ -716,7 +740,8 @@ impl Agent {
         } else {
             join_all(fresh.iter().map(|call| self.run_tool(ctx, step, call))).await
         };
-        for (call, result) in fresh.iter().zip(results) {
+        for (call, (result, found)) in fresh.iter().zip(results) {
+            run.tool_evidence.extend(found);
             run.tool_runs.push(ToolRun {
                 tool: call.name.clone(),
                 ok: result.is_ok(),
@@ -903,10 +928,11 @@ impl Agent {
         ctx: &RequestContext,
         step: u32,
         call: &ToolCall,
-    ) -> Result<String, ToolError> {
+    ) -> (Result<String, ToolError>, Vec<Evidence>) {
         let deps = &self.deps;
         let Some(tool) = deps.tools.get(&call.name) else {
-            return Err(ToolError::Failed(format!("no tool named `{}`", call.name)));
+            let missing = ToolError::Failed(format!("no tool named {}", call.name));
+            return (Err(missing), Vec::new());
         };
         deps.trace.emit(
             ctx,
@@ -938,11 +964,17 @@ impl Agent {
                 outcome.unwrap_or(Err(ToolError::Timeout))
             }
         };
+        let mut found = Vec::new();
         let (content, traced) = match result {
-            Ok(output) => (
-                Ok(output.content.clone()),
-                Ok(truncate(&output.content, 2_000)),
-            ),
+            Ok(output) => {
+                found = output.evidence;
+                (
+                    Ok(output.content.clone()),
+                    // Tool output can carry a page the user authenticated to reach, so it is
+                    // redacted the way arguments already are before it reaches the trace.
+                    Ok(truncate(&redact_text(&output.content), 2_000)),
+                )
+            }
             Err(error) => {
                 let message = error.to_string();
                 (Err(error), Err(message))
@@ -960,10 +992,14 @@ impl Agent {
             },
         );
         match &content {
-            Ok(text) => span.record("output.value", truncate(text, 4_000).as_str()),
-            Err(error) => span.record("output.value", format!("error: {error}").as_str()),
-        };
-        content
+            Ok(text) => {
+                span.record("output.value", truncate(&redact_text(text), 4_000).as_str());
+            }
+            Err(error) => {
+                span.record("output.value", format!("error: {error}").as_str());
+            }
+        }
+        (content, found)
     }
 
     /// Keeps the turns, records the outcome, and builds the answer. Every exit from the loop
@@ -978,6 +1014,7 @@ impl Agent {
     ) -> Result<Answer, AgentError> {
         self.persist(run.ctx, &run.new_turns).await?;
         self.record_profile(run);
+        let evidence = cited(evidence, run);
         let text = if text.trim().is_empty() {
             status.explain().unwrap_or_default().to_owned()
         } else {
@@ -992,9 +1029,15 @@ impl Agent {
         let Some(graph) = &self.deps.profile_graph else {
             return memory;
         };
-        match graph.recall(ctx, self.cfg.memory_recall_limit).await {
+        let limit = self.cfg.memory_recall_limit;
+        match graph.recall(ctx, limit).await {
             Ok(nodes) => memory.extend(nodes.iter().map(Memory::from)),
             Err(error) => tracing::warn!(error = %error, "profile graph recall failed"),
+        }
+        // A node says what the user is connected to. A relation says how.
+        match graph.relations(ctx, limit).await {
+            Ok(relations) => memory.extend(relations.iter().map(Memory::from)),
+            Err(error) => tracing::warn!(error = %error, "profile relation recall failed"),
         }
         memory
     }
@@ -1084,16 +1127,50 @@ pub(crate) fn truncate(text: &str, max: usize) -> String {
     }
 }
 
+/// Masks values that follow a secret-looking key in free text.
+///
+/// Tool output is prose, not JSON, so the structured redaction cannot reach it. A page the user
+/// authenticated to reach can carry a token in its text.
+pub(crate) fn redact_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.lines() {
+        let lower = line.to_ascii_lowercase();
+        let secret = SECRET_KEYS
+            .iter()
+            .filter_map(|needle| lower.find(needle).map(|at| at + needle.len()))
+            .min();
+        match secret.and_then(|after| {
+            line[after..]
+                .find([':', '='])
+                .map(|sep| after + sep + 1)
+                .filter(|cut| !line[*cut..].trim().is_empty())
+        }) {
+            Some(cut) => {
+                out.push_str(&line[..cut]);
+                out.push_str(" [redacted]");
+            }
+            None => out.push_str(line),
+        }
+        out.push('\n');
+    }
+    if !text.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
+
+/// Key fragments that mark a value as a secret, in arguments and in text alike.
+const SECRET_KEYS: [&str; 6] = [
+    "password",
+    "token",
+    "secret",
+    "cookie",
+    "authorization",
+    "api_key",
+];
+
 /// Drops argument values whose key looks like a secret before they reach the trace.
 pub(crate) fn redact(value: &Value) -> Value {
-    const SECRET_KEYS: [&str; 6] = [
-        "password",
-        "token",
-        "secret",
-        "cookie",
-        "authorization",
-        "api_key",
-    ];
     match value {
         Value::Object(map) => Value::Object(
             map.iter()

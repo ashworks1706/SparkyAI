@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import structlog
 import typer
@@ -31,7 +31,9 @@ def run(
     source: str | None = typer.Argument(None, help="Source key, e.g. library_hours."),
     all_sources: bool = typer.Option(False, "--all", help="Run every registered source."),
     force: bool = typer.Option(
-        False, "--force", help="Re-index even if the page hash is unchanged."
+        False,
+        "--force",
+        help="Re-index even if the page hash is unchanged or the page shrank below the floor.",
     ),
 ) -> None:
     """Fetch, extract, chunk, embed, and index one source or every source."""
@@ -65,40 +67,60 @@ def run_worker(
     worker.serve(poll_secs=poll_secs)
 
 
+def is_due(row: dict | None, now: datetime) -> bool:
+    """Whether a source should run, from its sources row. A source with no row yet has never
+    been attempted and is due; the first run creates the row from the registered source."""
+    if row is None:
+        return True
+    if not row["enabled"]:
+        return False
+    last = row["last_attempt"]
+    if last is None:
+        return True
+    return now - last >= row["fetch_every"]
+
+
 @app.command()
 def schedule(poll_secs: int = typer.Option(300, help="How often to check what is due.")) -> None:
-    """Runs each source when its fetch_every interval has elapsed. Blocks forever."""
+    """Runs each source when its fetch_every interval has elapsed since the last attempt,
+    changed content or not. Blocks forever."""
     while True:
         with postgres.connection() as conn:
             rows = {r["key"]: r for r in postgres.status_rows(conn)}
         now = datetime.now(UTC)
         for key, src in SOURCES.items():
-            row = rows.get(key, {})
-            if row and not row.get("enabled", True):
-                continue
-            last = row.get("last_fetch")
-            due = last is None or now - last >= timedelta(hours=src.fetch_every_hours)
-            if not due:
+            if not is_due(rows.get(key), now):
                 continue
             try:
                 pipeline.run_source(src)
-            except Exception as e:  # a failed run is retried on the next poll
+            except Exception as e:  # the attempt is recorded, so the retry waits out the interval
                 log.error("scheduled run failed", source=key, error=str(e))
         time.sleep(poll_secs)
 
 
 @app.command()
 def status() -> None:
-    """Last fetch time, version count, and chunk count per source."""
+    """Last attempt, last change, version count, and chunk count per source."""
     with postgres.connection() as conn:
         rows = postgres.status_rows(conn)
     if not rows:
         typer.echo("no sources yet; run `scraper run --all`")
         return
-    typer.echo(f"{'source':<16}{'category':<14}{'last fetch':<22}{'versions':>9}{'chunks':>8}")
+    typer.echo(
+        f"{'source':<16}{'category':<14}{'last attempt':<22}{'last change':<22}"
+        f"{'versions':>9}{'chunks':>8}"
+    )
     for r in rows:
-        last = r["last_fetch"].strftime("%Y-%m-%d %H:%M UTC") if r["last_fetch"] else "-"
-        typer.echo(f"{r['key']:<16}{r['category']:<14}{last:<22}{r['versions']:>9}{r['chunks']:>8}")
+        attempt = _stamp(r["last_attempt"])
+        change = _stamp(r["last_fetch"])
+        typer.echo(
+            f"{r['key']:<16}{r['category']:<14}{attempt:<22}{change:<22}"
+            f"{r['versions']:>9}{r['chunks']:>8}"
+        )
+
+
+def _stamp(at: datetime | None) -> str:
+    return at.strftime("%Y-%m-%d %H:%M UTC") if at else "-"
 
 
 @app.command()

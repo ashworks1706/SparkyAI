@@ -3,6 +3,7 @@
 mod agent;
 mod assemble;
 mod capability;
+mod citation;
 mod compact;
 mod config;
 mod confirm;

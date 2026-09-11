@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::core::types::evidence::Evidence;
+
 /// What a tool can do to the world. Drives Policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -42,13 +44,16 @@ pub struct ToolDefinition {
 }
 
 /// What a tool returns.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolOutput {
     /// Text handed back to the model.
     pub content: String,
     /// Structured payload for the trace and the client, when the tool has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
+    /// Indexed evidence this call found. Cited alongside what retrieval supplied.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<Evidence>,
 }
 
 impl ToolOutput {
@@ -57,6 +62,7 @@ impl ToolOutput {
         Self {
             content: content.into(),
             data: None,
+            evidence: Vec::new(),
         }
     }
 }

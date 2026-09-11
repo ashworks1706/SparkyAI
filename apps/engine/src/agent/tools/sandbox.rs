@@ -206,6 +206,7 @@ impl Tool for SandboxTool {
         Ok(ToolOutput {
             content: text,
             data: serde_json::to_value(&out).ok(),
+            evidence: Vec::new(),
         })
     }
 }
