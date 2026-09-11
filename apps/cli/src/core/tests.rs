@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::app::control::parse_command;
-use crate::core::config::repo_root;
-use crate::core::types::{Command, Group, LogLine, ServiceState, Status, Stream};
+use crate::core::config::{Cli, repo_root};
+use crate::core::types::{Command, Group, Kind, LogLine, ServiceState, Status, Stream};
 use crate::units::catalog;
 use crate::units::logs::{LogBuffer, LogWriter};
 use crate::units::runner::{parse_ps, sanitize_line};
@@ -53,6 +53,29 @@ fn catalog_ids_are_unique_and_grouped() {
             .iter()
             .all(|u| u.service().is_some() || !u.args.is_empty())
     );
+}
+
+#[test]
+fn posthog_is_an_infra_service_behind_its_profile() {
+    let units = catalog();
+    let posthog = units.iter().find(|u| u.id == "posthog-proxy");
+    assert!(posthog.is_some_and(|u| u.group == Group::Infra
+        && u.url.as_deref() == Some("http://localhost:8010")
+        && u.kind
+            == Kind::Service {
+                service: "posthog-proxy".into(),
+                profile: Some("posthog".into()),
+            }));
+    assert!(
+        units
+            .iter()
+            .all(|u| !u.id.contains("phoenix") && !u.hint.to_lowercase().contains("phoenix"))
+    );
+}
+
+#[test]
+fn cli_defaults_point_at_local_posthog() {
+    assert_eq!(Cli::default().posthog_url, "http://localhost:8010");
 }
 
 #[test]

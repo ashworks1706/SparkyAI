@@ -1,4 +1,4 @@
-//! Periodic probes of the engine, the chat model server, and Phoenix.
+//! Periodic probes of the engine, the chat model server, and PostHog.
 
 use std::time::Duration;
 
@@ -12,7 +12,7 @@ use crate::core::types::{Event, Health, Probe};
 pub struct Targets {
     engine: String,
     model: String,
-    phoenix: String,
+    posthog: String,
     every: Duration,
 }
 
@@ -22,7 +22,7 @@ impl Targets {
         Self {
             engine: format!("{}/health/ready", cfg.engine.base_url.trim_end_matches('/')),
             model: format!("{}/models", cfg.model.base_url.trim_end_matches('/')),
-            phoenix: cfg.cli.phoenix_url.clone(),
+            posthog: format!("{}/_health", cfg.cli.posthog_url.trim_end_matches('/')),
             every: Duration::from_secs(cfg.cli.health_interval_secs.max(1)),
         }
     }
@@ -38,16 +38,16 @@ pub async fn poll(targets: Targets, tx: UnboundedSender<Event>) {
         return;
     };
     loop {
-        let (engine, model, phoenix) = tokio::join!(
+        let (engine, model, posthog) = tokio::join!(
             probe(&http, &targets.engine),
             probe(&http, &targets.model),
-            probe(&http, &targets.phoenix)
+            probe(&http, &targets.posthog)
         );
         if tx
             .send(Event::Health(Health {
                 engine,
                 model,
-                phoenix,
+                posthog,
             }))
             .is_err()
         {

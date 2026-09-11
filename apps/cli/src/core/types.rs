@@ -7,7 +7,7 @@ use chrono::{DateTime, Local};
 /// Sidebar section a unit belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Group {
-    /// Datastores and Phoenix.
+    /// Datastores, PostHog, and metrics.
     Infra,
     /// llama-server chat and embed.
     Models,
@@ -231,8 +231,8 @@ pub struct Health {
     pub engine: Probe,
     /// The llama-server chat /models endpoint.
     pub model: Probe,
-    /// Phoenix UI.
-    pub phoenix: Probe,
+    /// PostHog /_health endpoint.
+    pub posthog: Probe,
 }
 
 impl Default for Health {
@@ -240,7 +240,7 @@ impl Default for Health {
         Self {
             engine: Probe::Unknown,
             model: Probe::Unknown,
-            phoenix: Probe::Unknown,
+            posthog: Probe::Unknown,
         }
     }
 }
