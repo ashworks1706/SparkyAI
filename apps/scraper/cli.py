@@ -8,8 +8,9 @@ from datetime import UTC, datetime
 import structlog
 import typer
 
-from scraper import pipeline, worker
 from scraper.core import telemetry
+from scraper.ingest import pipeline
+from scraper.query import worker
 from scraper.sources import SOURCES
 from scraper.store import postgres
 

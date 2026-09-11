@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import blocks, labeled, page_text, plain
+from scraper.ingest.extract import blocks, labeled, page_text, plain
 
 _CATEGORY_LABELS = ("category", "type", "interest")
 _CATEGORY_CHARS = 60

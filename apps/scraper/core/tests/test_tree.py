@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from scraper.core.settings import Scraper
 from scraper.core.types import SummaryError
-from scraper.tree import (
+from scraper.ingest.tree import (
     MIN_CLUSTERS,
     TreeParams,
     build_tree,

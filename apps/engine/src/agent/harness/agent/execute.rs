@@ -9,14 +9,16 @@ use tracing::field::Empty;
 use std::time::Duration;
 
 use super::{Agent, StepOutcome, ms};
-use crate::agent::harness::redact::{redact, redact_text, truncate};
-use crate::agent::harness::run::Run;
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::message::{Message, ToolCall};
+use crate::agent::harness::agent::run::Run;
+use crate::agent::harness::safety::redact::{redact, redact_text, truncate};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::{Message, ToolCall};
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::ModelError;
-use crate::core::types::policy::{ConfirmationRequest, Decision, PendingAction, ProposedAction};
-use crate::core::types::tool::{ToolError, ToolRun};
+use crate::core::types::safety::policy::{
+    ConfirmationRequest, Decision, PendingAction, ProposedAction,
+};
+use crate::core::types::tools::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
 /// Why authorize_all stopped.

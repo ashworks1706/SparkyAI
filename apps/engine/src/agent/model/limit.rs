@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use tokio::sync::Semaphore;
 
 use crate::core::traits::model::ModelProvider;
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
 
 /// Admits slots model calls at once and queues the rest for up to max_wait.

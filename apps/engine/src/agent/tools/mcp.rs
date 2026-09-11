@@ -10,9 +10,9 @@ use rmcp::service::{Peer, RoleClient};
 use rmcp::transport::StreamableHttpClientTransport;
 use serde_json::Value;
 
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::traits::tools::Tool;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Limits applied to the tools of one MCP server. Schemas and results count against the
 /// context window on every step.

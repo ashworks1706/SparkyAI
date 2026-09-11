@@ -1,10 +1,10 @@
-//! Bot unit tests for reply chunking and rendering.
+//! Bot unit tests for rendering, routing, roles, and component ids.
 
 use uuid::Uuid;
 
-use crate::bot::can_write;
+use crate::access::roles::can_write;
 use crate::core::types::ChatResponse;
-use crate::reply::{MAX_MESSAGE, chunk, render};
+use crate::render::reply::{MAX_MESSAGE, chunk};
 use serenity::all::Permissions;
 
 fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
@@ -16,7 +16,13 @@ fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
         confirmation: None,
         status: status.into(),
         tools: Vec::new(),
+        memories: Vec::new(),
     }
+}
+
+/// The final render of resp with no head and no steps, as one string.
+fn render(resp: &ChatResponse, limit: usize) -> Vec<String> {
+    crate::render::card::answer(&[], resp, limit)
 }
 
 #[test]
@@ -57,7 +63,7 @@ fn empty_answer_explains_the_status() {
 
 #[test]
 fn no_traceparent_without_an_active_span() {
-    use crate::engine_client::current_traceparent;
+    use crate::engine::client::current_traceparent;
 
     assert!(current_traceparent().is_none());
 }
@@ -71,7 +77,7 @@ fn discord_management_permissions_grant_write_access() {
 
 #[test]
 fn a_guild_role_cannot_impersonate_the_write_capability() {
-    use crate::bot::authorized_roles;
+    use crate::access::roles::authorized_roles;
     use crate::core::config::WRITE_CAPABILITY;
 
     let named = vec!["students".to_owned(), WRITE_CAPABILITY.to_owned()];
@@ -96,7 +102,7 @@ fn a_guild_role_cannot_impersonate_the_write_capability() {
 #[test]
 fn capacity_and_outage_read_differently_to_the_user() {
     use crate::core::types::EngineError;
-    use crate::reply::failure;
+    use crate::render::reply::failure;
 
     let busy = failure(&EngineError::Status {
         status: 503,
@@ -112,6 +118,12 @@ fn capacity_and_outage_read_differently_to_the_user() {
         body: String::new(),
     });
     assert!(broken.contains("unavailable"), "{broken}");
+
+    let gone = failure(&EngineError::Status {
+        status: 404,
+        body: "no such conversation".into(),
+    });
+    assert!(gone.contains("Ask again"), "{gone}");
 }
 
 #[test]
@@ -141,8 +153,240 @@ fn tools_the_agent_ran_are_listed_under_the_answer() {
 }
 
 #[test]
+fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
+    use crate::render::card::{Steps, THINKING, thinking};
+
+    let mut steps = Steps::default();
+    assert!(steps.push("thinking"));
+    assert!(!steps.push("thinking"), "an immediate repeat is dropped");
+    assert!(steps.push("searching the knowledge base"));
+    assert!(steps.push("thinking"), "a repeat later on is kept");
+    assert!(!steps.push("   "));
+    assert_eq!(steps.lines().len(), 3);
+
+    assert_eq!(thinking(&[], 2_000), THINKING);
+    let shown = thinking(steps.lines(), 2_000);
+    assert_eq!(
+        shown,
+        format!("{THINKING}\n-# • thinking\n-# • searching the knowledge base\n-# • thinking")
+    );
+
+    let many: Vec<String> = (0..200).map(|i| format!("step number {i}")).collect();
+    let folded = thinking(&many, 500);
+    assert!(folded.len() <= 500);
+    assert!(folded.starts_with(THINKING));
+    assert!(folded.contains("earlier steps"), "{folded}");
+    assert!(folded.ends_with("step number 199"), "the newest step stays");
+}
+
+#[test]
+fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
+    use crate::core::types::ToolRun;
+    use crate::render::card::{THINKING, answer};
+
+    let mut resp = response(
+        "Hayden closes at 2am.",
+        vec!["Hayden hours".into()],
+        "answered",
+    );
+    resp.tools = vec![ToolRun {
+        tool: "search".into(),
+        ok: true,
+    }];
+    resp.memories = vec!["You study CSE.".into()];
+    let steps = vec!["thinking".to_owned(), "reading 1 source".to_owned()];
+
+    let out = answer(&steps, &resp, 2_000);
+    assert_eq!(out.len(), 1);
+    let card = &out[0];
+    assert!(!card.contains(THINKING), "the header goes once answered");
+    let order = [
+        "-# • thinking",
+        "-# • reading 1 source",
+        "Hayden closes at 2am.",
+        "**Sources**\n1. Hayden hours",
+        "**Tools** `search`",
+        "**Memory used**\n- You study CSE.",
+    ];
+    let positions: Vec<usize> = order
+        .iter()
+        .map(|part| card.find(part).unwrap_or(usize::MAX))
+        .collect();
+    assert!(positions.iter().all(|&p| p != usize::MAX), "{card}");
+    assert!(positions.windows(2).all(|w| w[0] < w[1]), "{card}");
+
+    let bare = answer(&[], &response("hi", vec![], "answered"), 2_000);
+    assert_eq!(bare, vec!["hi".to_owned()], "no footers without content");
+}
+
+#[test]
+fn an_oversized_card_folds_steps_then_trims_footers_then_continues() {
+    use crate::render::card::answer;
+
+    let steps: Vec<String> = (0..40)
+        .map(|i| format!("step {i} {}", "s".repeat(20)))
+        .collect();
+    let resp = response("short answer", vec![], "answered");
+    let folded = answer(&steps, &resp, 500);
+    assert_eq!(folded.len(), 1);
+    assert!(folded[0].starts_with("-# 40 steps"), "{}", folded[0]);
+    assert!(!folded[0].contains("-# •"));
+
+    let sources: Vec<String> = (0..40)
+        .map(|i| format!("source {i} {}", "u".repeat(30)))
+        .collect();
+    let resp = response("short answer", sources, "answered");
+    let trimmed = answer(&steps, &resp, 500);
+    assert_eq!(trimmed.len(), 1, "{trimmed:?}");
+    assert!(trimmed[0].contains("3. source 2"));
+    assert!(!trimmed[0].contains("4. source 3"));
+    assert!(trimmed[0].contains("and 37 more"));
+
+    let resp = response(&"word ".repeat(300), vec!["one".into()], "answered");
+    let spilled = answer(&steps, &resp, 500);
+    assert!(spilled.len() > 1, "only a long answer continues");
+    assert!(spilled.iter().all(|m| m.len() <= 500));
+    assert!(spilled[0].starts_with("-# 40 steps"));
+}
+
+#[test]
+fn an_accepted_approval_keeps_the_steps_and_replaces_prompt_and_footers() {
+    use crate::core::types::Confirmation;
+    use crate::render::card::{answer, failed, resumed, steps_of};
+    use crate::render::components::rows_for;
+
+    let mut asked = response("", vec!["old source".into()], "awaiting_confirmation");
+    asked.confirmation = Some(Confirmation {
+        token: Uuid::new_v4(),
+        tool: "browser_click".into(),
+        summary: "Click Register.".into(),
+    });
+    let steps = vec!["thinking".to_owned(), "search finished".to_owned()];
+    let card = answer(&steps, &asked, 2_000);
+    assert_eq!(card.len(), 1);
+    assert!(card[0].contains("`browser_click` needs your approval:** Click Register."));
+    assert!(!card[0].contains("no answer"), "{}", card[0]);
+    let labels: Vec<&str> = rows_for(&asked)[0].iter().map(|b| b.label).collect();
+    assert_eq!(labels, vec!["Yes, do it", "No"]);
+    assert_eq!(steps_of(&card[0]), (0, steps.clone()));
+
+    let done = response("Registered.", vec!["new source".into()], "answered");
+    let out = resumed(&card[0], true, &done, 2_000);
+    assert_eq!(
+        out,
+        vec![
+            "-# • thinking\n-# • search finished\n-# • approved\n\nRegistered.\n\n**Sources**\n1. new source"
+                .to_owned()
+        ]
+    );
+    let declined = resumed(&card[0], false, &done, 2_000);
+    assert!(declined[0].contains("-# • declined"));
+    assert!(!declined[0].contains("needs your approval"));
+    assert!(!declined[0].contains("old source"));
+
+    let broke = failed(&["thinking".to_owned()], "Sparky is unavailable.", 2_000);
+    assert_eq!(broke, "-# • thinking\n\nSparky is unavailable.");
+}
+
+#[test]
+fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
+    use crate::core::types::Confirmation;
+    use crate::render::card::{answer, resumed, steps_of};
+
+    let steps: Vec<String> = (0..60)
+        .map(|i| format!("step {i} {}", "s".repeat(20)))
+        .collect();
+    let mut asked = response(&"a".repeat(400), vec![], "awaiting_confirmation");
+    asked.confirmation = Some(Confirmation {
+        token: Uuid::new_v4(),
+        tool: "browser_click".into(),
+        summary: "Click Register.".into(),
+    });
+    let card = answer(&steps, &asked, 2_000);
+    assert_eq!(card.len(), 1);
+    assert!(card[0].len() <= 2_000);
+    assert!(card[0].starts_with("-# 60 steps"), "{}", card[0]);
+    assert_eq!(steps_of(&card[0]).0, 60);
+
+    let done = response(&"word ".repeat(380), vec!["one".into()], "answered");
+    let out = resumed(&card[0], true, &done, 2_000);
+    assert!(out.iter().all(|m| m.len() <= 2_000));
+    assert!(
+        out[0].starts_with("-# 60 steps\n-# • approved\n\nword"),
+        "{}",
+        out[0]
+    );
+
+    let longer = response(&"word ".repeat(398), vec!["one".into()], "answered");
+    let out = resumed(&card[0], true, &longer, 2_000);
+    assert!(out.iter().all(|m| m.len() <= 2_000));
+    assert!(out[0].starts_with("-# 61 steps\n\nword"), "{}", out[0]);
+    assert!(!out[0].contains("needs your approval"));
+}
+
+#[test]
+fn a_refused_press_is_told_privately_and_other_failures_read_as_outages() {
+    use crate::core::types::EngineError;
+    use crate::render::reply::{NOT_YOURS, UNAVAILABLE, confirm_failure, confirm_refused, failure};
+
+    let status = |status| EngineError::Status {
+        status,
+        body: String::new(),
+    };
+    assert!(confirm_refused(&status(404)));
+    assert!(confirm_refused(&status(409)));
+    assert!(!confirm_refused(&status(502)));
+    assert!(!confirm_refused(&EngineError::Transport("down".into())));
+    assert_eq!(confirm_failure(&status(404)), NOT_YOURS);
+    assert_eq!(confirm_failure(&status(500)), UNAVAILABLE);
+    assert_eq!(failure(&status(409)), "That approval is no longer open.");
+}
+
+#[test]
+fn the_pacer_holds_a_change_for_the_next_slot_and_never_drops_it() {
+    use std::time::{Duration, Instant};
+
+    use crate::render::card::Pacer;
+
+    let every = Duration::from_millis(1_500);
+    let start = Instant::now();
+    let mut pacer = Pacer::new(every, start);
+    assert_eq!(pacer.wait(start), None, "nothing waits");
+
+    pacer.mark(false);
+    assert_eq!(
+        pacer.wait(start),
+        None,
+        "an unchanged step waits for nothing"
+    );
+
+    pacer.mark(true);
+    let later = start + Duration::from_millis(500);
+    assert_eq!(pacer.wait(later), Some(Duration::from_secs(1)));
+    let late = start + Duration::from_secs(2);
+    assert_eq!(
+        pacer.wait(late),
+        Some(Duration::ZERO),
+        "overdue edits go now"
+    );
+
+    pacer.flushed(late);
+    assert_eq!(pacer.wait(late), None);
+    pacer.mark(true);
+    assert_eq!(pacer.wait(late), Some(every));
+}
+
+#[test]
+fn chunking_always_advances_even_at_tiny_limits() {
+    let parts = chunk("ééé", 1);
+    assert_eq!(parts, vec!["é", "é", "é"]);
+    let parts = chunk("a é b", 2);
+    assert_eq!(parts.concat().replace(' ', ""), "aéb");
+}
+
+#[test]
 fn sse_frames_come_out_whole_even_when_the_bytes_arrive_split() {
-    use crate::sse::drain_frames;
+    use crate::engine::sse::drain_frames;
 
     let mut buf = String::new();
 
@@ -167,7 +411,7 @@ fn sse_frames_come_out_whole_even_when_the_bytes_arrive_split() {
 
 #[test]
 fn a_frame_without_an_event_name_still_carries_its_data() {
-    use crate::sse::drain_frames;
+    use crate::engine::sse::drain_frames;
 
     let mut buf = String::from("data: {\"a\":1}\n\n");
     assert_eq!(
@@ -180,7 +424,7 @@ fn a_frame_without_an_event_name_still_carries_its_data() {
 fn a_component_id_survives_the_round_trip_and_rejects_anything_else() {
     use uuid::Uuid;
 
-    use crate::components::{Action, CustomId};
+    use crate::render::components::{Action, CustomId};
 
     let token = Uuid::new_v4();
     let convo = Uuid::new_v4();
@@ -202,8 +446,8 @@ fn a_component_id_survives_the_round_trip_and_rejects_anything_else() {
 fn a_confirmation_offers_the_two_answers_and_a_plain_answer_offers_none() {
     use uuid::Uuid;
 
-    use crate::components::rows_for;
     use crate::core::types::Confirmation;
+    use crate::render::components::rows_for;
 
     let resp = response("", vec![], "awaiting_confirmation");
     assert!(rows_for(&resp).is_empty(), "no confirmation, no buttons");
@@ -217,4 +461,247 @@ fn a_confirmation_offers_the_two_answers_and_a_plain_answer_offers_none() {
     let rows = rows_for(&asked);
     assert_eq!(rows.len(), 1, "one row of answers");
     assert_eq!(rows[0].len(), 2, "approve and deny");
+}
+
+#[test]
+fn forget_ids_carry_the_asker_and_survive_the_round_trip() {
+    use crate::render::components::{CustomId, forget_rows};
+
+    let user = 123_456_789_012_345_678_u64;
+    for id in [CustomId::ForgetAll { user }, CustomId::KeepAll { user }] {
+        let wire = id.to_string();
+        assert!(wire.len() <= 100, "{wire}");
+        assert_eq!(CustomId::parse(&wire), Some(id));
+    }
+    assert_eq!(CustomId::parse("sparky:forget_all:not-a-number"), None);
+    assert_eq!(CustomId::parse("sparky:forget_all:1:extra"), None);
+    assert_eq!(CustomId::parse("sparky:forget_all"), None);
+
+    let rows = forget_rows(user);
+    assert_eq!(rows[0][0].id, CustomId::ForgetAll { user });
+    assert!(rows[0][0].danger);
+    assert_eq!(rows[0][1].id, CustomId::KeepAll { user });
+
+    assert!(CustomId::ForgetAll { user }.may_press(user));
+    assert!(!CustomId::ForgetAll { user }.may_press(user + 1));
+    assert!(!CustomId::KeepAll { user }.may_press(7));
+    let confirm = CustomId::new(
+        crate::render::components::Action::Deny,
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+    );
+    assert!(
+        confirm.may_press(7),
+        "the engine checks confirmation callers"
+    );
+
+    let lost = crate::render::reply::memory_failure(&crate::core::types::EngineError::Status {
+        status: 404,
+        body: String::new(),
+    });
+    assert_eq!(lost, crate::render::reply::UNAVAILABLE);
+}
+
+#[test]
+fn mentions_of_the_bot_are_stripped_and_others_kept() {
+    use crate::access::route::strip_mentions;
+    use serenity::all::UserId;
+
+    let me = UserId::new(42);
+    assert_eq!(
+        strip_mentions("<@42> when does Hayden close?", me),
+        "when does Hayden close?"
+    );
+    assert_eq!(strip_mentions("hey <@!42> ask <@7>", me), "hey   ask <@7>");
+    assert_eq!(strip_mentions("  <@42> <@!42> ", me), "");
+}
+
+#[test]
+fn permissions_are_the_union_of_everyone_and_held_roles() {
+    use std::collections::HashMap;
+
+    use crate::access::roles::member_permissions;
+    use serenity::all::RoleId;
+
+    let everyone = RoleId::new(1);
+    let mods = RoleId::new(2);
+    let admins = RoleId::new(3);
+    let bits = HashMap::from([
+        (everyone, Permissions::SEND_MESSAGES),
+        (mods, Permissions::MANAGE_MESSAGES),
+        (admins, Permissions::MANAGE_GUILD),
+    ]);
+
+    let plain = member_permissions(everyone, &[], &bits, false);
+    assert_eq!(plain, Permissions::SEND_MESSAGES);
+    assert!(!can_write(plain));
+
+    let moderator = member_permissions(everyone, &[mods], &bits, false);
+    assert!(moderator.contains(Permissions::SEND_MESSAGES | Permissions::MANAGE_MESSAGES));
+    assert!(!can_write(moderator));
+
+    let admin = member_permissions(everyone, &[mods, admins, RoleId::new(99)], &bits, false);
+    assert!(
+        can_write(admin),
+        "a held role grants write; an unknown role adds nothing"
+    );
+
+    let owner = member_permissions(everyone, &[], &bits, true);
+    assert!(can_write(owner), "the guild owner writes without any role");
+}
+
+#[test]
+fn only_threads_inherit_the_allowlist_of_their_parent() {
+    use crate::access::route::{serves, thread_parent};
+    use serenity::all::{ChannelId, ChannelType};
+
+    let category = ChannelId::new(10);
+    let channel = ChannelId::new(11);
+    let allow = [category];
+
+    let text_parent = thread_parent(Some(ChannelType::Text), Some(category));
+    assert_eq!(text_parent, None, "a category is not a thread parent");
+    assert!(!serves(&allow, channel, text_parent));
+
+    let thread_parent_id = thread_parent(Some(ChannelType::PublicThread), Some(category));
+    assert_eq!(thread_parent_id, Some(category));
+    assert!(serves(&allow, ChannelId::new(12), thread_parent_id));
+
+    assert!(serves(&[], channel, None), "an empty allowlist admits all");
+    assert!(serves(&[channel], channel, None));
+    assert_eq!(thread_parent(None, Some(category)), None);
+}
+
+#[test]
+fn an_ephemeral_press_confirms_privately_and_stays_ephemeral() {
+    use crate::access::route::press_visibility;
+    use crate::core::types::Visibility;
+    use serenity::all::MessageFlags;
+
+    assert_eq!(
+        press_visibility(Some(MessageFlags::EPHEMERAL)),
+        (Visibility::Private, true)
+    );
+    assert_eq!(
+        press_visibility(Some(MessageFlags::empty())),
+        (Visibility::Public, false)
+    );
+    assert_eq!(press_visibility(None), (Visibility::Public, false));
+}
+
+#[test]
+fn thread_names_fit_discord_and_are_never_empty() {
+    use crate::access::route::{THREAD_NAME_MAX, thread_name};
+
+    assert_eq!(
+        thread_name("  when does\n Hayden close? "),
+        "when does Hayden close?"
+    );
+    assert_eq!(thread_name("   "), "Question");
+    let long = thread_name(&"é".repeat(300));
+    assert_eq!(long.chars().count(), THREAD_NAME_MAX);
+    assert!(long.ends_with("..."));
+}
+
+#[test]
+fn the_asked_header_stays_within_the_limit() {
+    use crate::access::route::asked_header;
+
+    assert_eq!(asked_header("Ash", "hi", 2_000), "**Ash asked:** hi");
+    let long = asked_header("Ash", &"x".repeat(5_000), 2_000);
+    assert_eq!(long.chars().count(), 2_000);
+    assert!(long.ends_with("..."));
+}
+
+#[test]
+fn each_place_sets_visibility_and_continuation() {
+    use crate::access::route::{AskMode, Place, ask_mode, chat_request};
+    use crate::core::types::Visibility;
+    use serenity::all::{ChannelId, ChannelType, GuildId, UserId};
+
+    let at = ChannelId::new(5);
+    let make = |place| chat_request(place, UserId::new(1), GuildId::new(2), vec![], "q".into());
+
+    let private = make(Place::Private(at));
+    assert_eq!(private.visibility, Visibility::Private);
+    assert!(private.continue_channel);
+
+    let thread = make(Place::Thread(at));
+    assert_eq!(thread.visibility, Visibility::Public);
+    assert!(thread.continue_channel);
+    assert_eq!(thread.channel_id, "5");
+    assert!(thread.conversation_id.is_none());
+
+    let inline = make(Place::Inline(at));
+    assert_eq!(inline.visibility, Visibility::Public);
+    assert!(!inline.continue_channel);
+
+    let wire = serde_json::to_value(&private).unwrap_or_default();
+    assert_eq!(wire["visibility"], "private");
+    assert_eq!(wire["continue_channel"], true);
+
+    assert_eq!(
+        ask_mode(true, Some(ChannelType::PublicThread)),
+        AskMode::Private
+    );
+    assert_eq!(
+        ask_mode(false, Some(ChannelType::PrivateThread)),
+        AskMode::InThread
+    );
+    assert_eq!(
+        ask_mode(false, Some(ChannelType::NewsThread)),
+        AskMode::InThread
+    );
+    assert_eq!(ask_mode(false, Some(ChannelType::Text)), AskMode::NewThread);
+    assert_eq!(ask_mode(false, None), AskMode::NewThread);
+}
+
+#[test]
+fn memory_renders_things_and_relations_or_says_it_is_empty() {
+    use crate::core::types::{EngineError, ProfileList, ProfileNode, ProfileRelation};
+    use crate::render::reply::{NOTHING_REMEMBERED, forgot, memory_failure, render_profile};
+
+    assert_eq!(
+        render_profile(&ProfileList::default(), 2_000),
+        vec![NOTHING_REMEMBERED.to_owned()]
+    );
+
+    let profile = ProfileList {
+        nodes: vec![ProfileNode {
+            kind: "course".into(),
+            label: "CSE 310".into(),
+            confidence: 0.87,
+        }],
+        relations: vec![ProfileRelation {
+            subject: "me".into(),
+            relation: "enrolled_in".into(),
+            object: "CSE 310".into(),
+            confidence: 0.5,
+        }],
+    };
+    let out = render_profile(&profile, 2_000).join("\n");
+    assert!(out.contains("- CSE 310 (course, 87%)"), "{out}");
+    assert!(out.contains("- me enrolled in CSE 310 (50%)"), "{out}");
+
+    let many = ProfileList {
+        nodes: (0..200)
+            .map(|i| ProfileNode {
+                kind: "club".into(),
+                label: format!("club number {i}"),
+                confidence: 1.0,
+            })
+            .collect(),
+        relations: vec![],
+    };
+    let parts = render_profile(&many, 500);
+    assert!(parts.len() > 1);
+    assert!(parts.iter().all(|p| p.len() <= 500));
+
+    assert_eq!(forgot(0, true), "I had nothing under that name.");
+    assert_eq!(forgot(3, false), "Forgot 3 things.");
+    let off = memory_failure(&EngineError::Status {
+        status: 503,
+        body: String::new(),
+    });
+    assert_eq!(off, "Memory is turned off here.");
 }

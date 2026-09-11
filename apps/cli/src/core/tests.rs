@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use crate::app::control::parse_command;
 use crate::core::config::repo_root;
 use crate::core::types::{Command, Group, LogLine, ServiceState, Status, Stream};
-use crate::logs::{LogBuffer, LogWriter};
-use crate::runner::{parse_ps, sanitize_line};
 use crate::units::catalog;
+use crate::units::logs::{LogBuffer, LogWriter};
+use crate::units::runner::{parse_ps, sanitize_line};
 
 #[test]
 fn commands_parse_into_actions() {

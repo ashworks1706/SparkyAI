@@ -1,12 +1,13 @@
 //! Keeping the turns, recording the outcome, and building the answer.
 
 use super::{Agent, ms};
-use crate::agent::harness::run::{Run, cited};
+use crate::agent::harness::agent::run::{Run, cited};
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
-use crate::core::types::context::RequestContext;
-use crate::core::types::evidence::Evidence;
-use crate::core::types::message::{Message, Role};
-use crate::core::types::policy::ConfirmationRequest;
+use crate::core::types::conversation::Visibility;
+use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 
 impl Agent {
@@ -84,6 +85,12 @@ impl Agent {
             status,
             steps: run.steps,
             tool_runs: run.tool_runs.clone(),
+            // A public answer never names a memory, whatever the prompt carried.
+            memories: if run.ctx.visibility == Visibility::Public {
+                Vec::new()
+            } else {
+                run.memories_in_prompt.clone()
+            },
             usage: run.usage,
             cost_usd,
         }

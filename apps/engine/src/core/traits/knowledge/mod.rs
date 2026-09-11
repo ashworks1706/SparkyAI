@@ -1,0 +1,5 @@
+//! Knowledge interfaces: retrieval, live source queries, and saved skills.
+
+pub mod query;
+pub mod retrieval;
+pub mod skills;

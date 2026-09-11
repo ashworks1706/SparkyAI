@@ -48,13 +48,21 @@ apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
     src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
-    src/stores/     postgres: Retriever, ConversationStore, MemoryStore
-    src/routes/     chat (JSON and SSE), openai (/v1), health
+    src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs, skills), memory (memories, profile graph)
+    src/routes/     chat (JSON and SSE), conversation, profile, openai (/v1), health
     src/wiring.rs
-  discord/        Rust bin. serenity bot; HTTP client of engine. Never links it. core/{config,telemetry,types,tests}.
-  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them. core/{config,types,tests}.
+  discord/        Rust bin. serenity bot; HTTP client of engine. Never links it.
+    src/core/       config · telemetry · types · tests
+    src/bot/        client, event dispatch, slash commands and their handlers, the streamed turn
+    src/engine/     HTTP client of the engine and SSE frame parsing
+    src/render/     how a turn is shown: the turn card, reply text, buttons and their custom ids
+    src/access/     who may ask or write (roles, permissions) and where a turn is answered
+  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them.
+    src/core/       config · types · tests
+    src/app/        console state, key map, control, and rendering
+    src/units/      the unit catalog, its process runner, log buffers, and health probes
   scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
-    core/{settings,types,tests} · sources · store · migrations/ (the schema)
+    core/{settings,types,tests} · ingest (fetch, extract, chunk, embed, tree, pipeline) · query (live query registry and worker) · sources · store · migrations/ (the schema)
   training/       Python. datasets from Phoenix llm spans, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
@@ -111,11 +119,11 @@ Only the scraper touches the web. The engine and the scraper meet only in Postgr
 ```mermaid
 flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["agent::harness<br/>agent/{loop,inputs,execute,conclude} · run · task<br/>guardrail · policy · assemble · capability<br/>compact · detect · profile · prompt · redact · retry · tool · trace"]
-    MODEL["agent::model<br/>rig_openai"]
-    TOOLS["agent::tools<br/>knowledge_search · query_source · mcp<br/>skills · sandbox"]
-    STORES["stores<br/>postgres · retrieval · conversation<br/>memory · confirmation · queries · skills · profile"]
-    CORE["core<br/>config/{services,harness,retrieval}<br/>types · traits · tests"]
+    HARNESS["agent::harness<br/>agent/{loop,inputs,execute,conclude,run,task,retry}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
+    MODEL["agent::model<br/>rig_openai · limit"]
+    TOOLS["agent::tools<br/>knowledge/{search,query,skills} · mcp · sandbox"]
+    STORES["stores<br/>postgres · conversation · confirmation<br/>knowledge/{retrieval,query,skills} · memory/{memories,profile}"]
+    CORE["core<br/>config/{services,harness,retrieval}<br/>types · traits · tests, each split by domain"]
 
     ROUTES --> HARNESS
     ROUTES --> MODEL
@@ -128,11 +136,11 @@ flowchart TD
     STORES --> CORE
 ```
 
-`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
+`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Folders nest by domain, and the same names repeat across `core/types`, `core/traits`, `core/tests`, `agent/harness`, `agent/tools`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat instead of a one-file folder. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
 
 ## Inside `scraper`
 
-`store/` is the only place it opens a connection. `migrations/` is the schema contract with `engine`: the scraper writes `chunks`, the engine reads them, and `embed.py` must use the model and dimension the engine queries with. Changing the embedding model means re-embedding every chunk.
+`store/` is the only place it opens a connection. `migrations/` is the schema contract with `engine`: the scraper writes `chunks`, the engine reads them, and `ingest/embed.py` must use the model and dimension the engine queries with. Changing the embedding model means re-embedding every chunk.
 
 ## Types
 
@@ -143,6 +151,8 @@ pub struct RequestContext {
     pub user_id: String,
     pub roles: Vec<String>,
     pub conversation_id: Uuid,
+    /// Public when anyone but the caller can read the answer.
+    pub visibility: Visibility,
     pub deadline: Instant,
     pub cancel: CancellationToken,
     /// Live progress goes here while a caller is watching; `None` for a plain request.
@@ -244,8 +254,8 @@ sequenceDiagram
     B->>PX: spans
 ```
 
-1. `discord` receives the slash command and POSTs it to `engine` with the Discord identity, roles, and native permissions. Web and admin clients hit the same endpoints.
-2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`.
+1. `discord` receives the slash command or @mention and POSTs it to `engine` with the Discord identity, roles, native permissions, the channel or thread it answers in, and the visibility of that answer. Web and admin clients hit the same endpoints.
+2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`. A named conversation must belong to the caller; `continue_channel` continues the caller's latest open conversation in that channel at that visibility.
 3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
 4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.
 5. Run the agent loop below.
@@ -394,7 +404,20 @@ Both queries filter by tenant and category. Reciprocal rank fusion combines dens
 | Profile | approved preferences, interests, goals |
 | Task | state to continue a multi-step job |
 
-A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. Users can view and delete their memory (Phase 5). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
+A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. A public request recalls no memory and no profile graph unless `agent.recall_in_public` is set; only an answer no one else can read is private. Users view and delete what the profile graph holds with `/memory` and `/forget` (`POST /profile/list`, `POST /profile/forget`). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
+
+## Discord surface
+
+| Entry | Where the answer goes | Visibility |
+|---|---|---|
+| `/ask` in a text channel | a thread opened from the question | public |
+| @mention in a text channel | a thread opened from the message | public |
+| `/ask` or @mention in a thread | that thread | public |
+| `/ask private:true` | an ephemeral reply | private |
+
+A turn is one message, edited in place: it opens as a thinking line, gains one line per progress event, and ends with the answer followed by sources, tools, and the memories that went into the prompt (`ChatResponse.memories`). The model's text between tool calls is never shown. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
+
+A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state; `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`. Details: `decisions/0002-discord-threads-and-visibility.md`.
 
 ## Storage
 

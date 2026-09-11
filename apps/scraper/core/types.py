@@ -12,7 +12,7 @@ class Source:
     """A registered public ASU source. A row in sources, never a folder.
 
     extractor, when set, turns the fetched page into clean text in place of the shared
-    heuristic in extract.py.
+    heuristic in ingest/extract.py.
     """
 
     key: str

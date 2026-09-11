@@ -12,13 +12,13 @@ use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericE
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::core::traits::knowledge::retrieval::Embedder;
 use crate::core::traits::model::ModelProvider;
-use crate::core::traits::retrieval::Embedder;
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::{Message, Role, ToolCall};
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::{Message, Role, ToolCall};
+use crate::core::types::knowledge::retrieval::RetrievalError;
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
-use crate::core::types::retrieval::RetrievalError;
-use crate::core::types::tool::ToolDefinition;
+use crate::core::types::tools::ToolDefinition;
 
 /// Builds a Rig client for one OpenAI-compatible base URL (ending in /v1).
 pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClient, String> {

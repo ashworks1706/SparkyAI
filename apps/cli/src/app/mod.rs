@@ -2,6 +2,7 @@
 
 pub mod control;
 mod keys;
+pub mod ui;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -13,9 +14,9 @@ use crate::core::config::Config;
 use crate::core::types::{
     Event, Focus, Health, Kind, LogLine, Mode, ServiceState, Status, Stream, Unit,
 };
-use crate::logs::{LogBuffer, LogWriter};
-use crate::runner::Runner;
 use crate::units;
+use crate::units::logs::{LogBuffer, LogWriter};
+use crate::units::runner::Runner;
 
 /// A catalog entry plus what the console knows about it right now.
 pub struct UnitState {

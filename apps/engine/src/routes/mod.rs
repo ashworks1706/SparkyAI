@@ -1,4 +1,4 @@
-//! Router assembly: /chat, the OpenAI-compatible surface, and /health.
+//! Router assembly: /chat, /conversation, /profile, the OpenAI-compatible surface, and /health.
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -7,12 +7,13 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 pub mod chat;
+pub mod conversation;
 pub mod health;
 pub mod openai;
 pub mod profile;
 pub mod rate_limit;
 
-/// Limits applied to the whole HTTP surface. Built from [http]; no Default.
+/// Limits applied to the whole HTTP surface. Built from the http section; no Default.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Largest request body accepted, in bytes.
@@ -60,10 +61,12 @@ pub fn router(
         .route("/chat", post(chat::chat))
         .route("/chat/stream", post(chat::stream))
         .route("/confirm", post(chat::confirm))
+        .route("/conversation/reset", post(conversation::reset))
         .route("/v1/chat/completions", post(openai::completions))
         .with_state(chat_state);
     let profile = Router::new()
         .route("/profile/forget", post(profile::forget))
+        .route("/profile/list", post(profile::list))
         .with_state(profile_state);
     let mut router = Router::new()
         .merge(health)

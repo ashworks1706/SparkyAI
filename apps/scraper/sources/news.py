@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import blocks, labeled, page_text, plain
+from scraper.ingest.extract import blocks, labeled, page_text, plain
 
 _MONTHS = (
     "January|February|March|April|May|June|July|August|September|October|November|December"

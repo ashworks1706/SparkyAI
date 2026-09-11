@@ -1,0 +1,216 @@
+//! serenity client setup, the guards every question passes, and event dispatch.
+
+mod account;
+mod ask;
+mod commands;
+mod confirm;
+mod destination;
+mod mention;
+mod turn;
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+use secrecy::ExposeSecret;
+use serenity::all::{
+    AutoArchiveDuration, ChannelId, Client, CommandInteraction, Context, CreateInteractionResponse,
+    CreateInteractionResponseMessage, CreateThread, EventHandler, GatewayIntents, GuildId,
+    Interaction, Message, Ready, ResolvedValue, UserId,
+};
+use serenity::async_trait;
+use tokio::sync::Mutex;
+
+use crate::access::route;
+use crate::core::config::Config;
+use crate::engine::client::EngineClient;
+use crate::render::components::CustomId;
+
+/// Per-process bot state and the serenity event handler.
+struct Handler {
+    engine: EngineClient,
+    guild_id: GuildId,
+    /// Channels the bot answers in. Empty answers everywhere it can see.
+    channels: Vec<ChannelId>,
+    /// Shortest gap between edits of the progress message.
+    edit_every: Duration,
+    /// Longest message posted before a reply is split.
+    max_message_chars: usize,
+    /// Shortest gap between the questions of one user. Zero removes the limit.
+    cooldown: Duration,
+    /// Role name the engine policy reads to allow write-side tools.
+    write_capability: String,
+    /// How long a thread the bot opens stays active without messages.
+    thread_archive: AutoArchiveDuration,
+    /// The bot user, set once the gateway is ready.
+    me: OnceLock<UserId>,
+    /// When each user last asked, for the cooldown.
+    last_ask: Mutex<HashMap<UserId, Instant>>,
+}
+
+/// Connects to Discord and runs until shutdown.
+pub async fn run(cfg: Config) -> anyhow::Result<()> {
+    if cfg.discord.guild_id == 0 {
+        anyhow::bail!("SPARKY_DISCORD__GUILD_ID is unset; set it to the guild the bot serves");
+    }
+    if cfg.discord.token.expose_secret().trim().is_empty() {
+        anyhow::bail!("SPARKY_DISCORD__TOKEN is unset; create a bot at discord.com/developers");
+    }
+    let engine = EngineClient::new(
+        &cfg.engine.base_url,
+        cfg.engine.service_token.clone(),
+        Duration::from_secs(cfg.engine.connect_timeout_secs),
+        Duration::from_secs(cfg.engine.request_timeout_secs),
+    )?;
+    let handler = Handler {
+        engine,
+        guild_id: GuildId::new(cfg.discord.guild_id),
+        channels: cfg
+            .bot
+            .channels
+            .iter()
+            .copied()
+            .map(ChannelId::new)
+            .collect(),
+        edit_every: Duration::from_millis(cfg.bot.edit_every_ms),
+        max_message_chars: cfg.bot.max_message_chars,
+        cooldown: Duration::from_secs(cfg.bot.cooldown_secs),
+        write_capability: cfg.bot.write_capability.clone(),
+        thread_archive: archive_after(cfg.bot.thread_auto_archive_minutes),
+        me: OnceLock::new(),
+        last_ask: Mutex::new(HashMap::new()),
+    };
+    let intents = GatewayIntents::non_privileged();
+    let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
+        .event_handler(handler)
+        .await?;
+    client.start().await?;
+    Ok(())
+}
+
+/// The Discord duration for a validated number of minutes.
+fn archive_after(minutes: u16) -> AutoArchiveDuration {
+    match minutes {
+        60 => AutoArchiveDuration::OneHour,
+        4_320 => AutoArchiveDuration::ThreeDays,
+        10_080 => AutoArchiveDuration::OneWeek,
+        _ => AutoArchiveDuration::OneDay,
+    }
+}
+
+impl Handler {
+    /// Whether the bot answers in this channel, or in the channel a thread hangs off.
+    fn serves(&self, channel: ChannelId, parent: Option<ChannelId>) -> bool {
+        route::serves(&self.channels, channel, parent)
+    }
+
+    /// Counts one question from user and says whether it may run.
+    async fn within_cooldown(&self, user: UserId) -> bool {
+        if self.cooldown.is_zero() {
+            return true;
+        }
+        let mut last = self.last_ask.lock().await;
+        if last
+            .get(&user)
+            .is_some_and(|at| at.elapsed() < self.cooldown)
+        {
+            return false;
+        }
+        last.insert(user, Instant::now());
+        true
+    }
+
+    /// What to tell a user who asked again inside the cooldown.
+    fn cooldown_text(&self) -> String {
+        format!(
+            "Give me {} seconds between questions.",
+            self.cooldown.as_secs()
+        )
+    }
+
+    /// The builder for a thread opened from a question.
+    fn thread_for(&self, question: &str) -> CreateThread<'static> {
+        CreateThread::new(route::thread_name(question)).auto_archive_duration(self.thread_archive)
+    }
+}
+
+/// Answers a command at once with a line only the caller sees.
+async fn tell(ctx: &Context, cmd: &CommandInteraction, text: impl Into<String>) {
+    let msg = CreateInteractionResponseMessage::new()
+        .content(text)
+        .ephemeral(true);
+    if let Err(e) = cmd
+        .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
+        .await
+    {
+        tracing::warn!(error = %e, "ephemeral response failed");
+    }
+}
+
+/// The string value of a command option, if given.
+fn option_str(cmd: &CommandInteraction, name: &str) -> Option<String> {
+    cmd.data
+        .options()
+        .into_iter()
+        .find(|o| o.name == name)
+        .and_then(|o| match o.value {
+            ResolvedValue::String(s) => Some(s.to_owned()),
+            _ => None,
+        })
+}
+
+/// The boolean value of a command option. Absent is false.
+fn option_bool(cmd: &CommandInteraction, name: &str) -> bool {
+    cmd.data
+        .options()
+        .into_iter()
+        .find(|o| o.name == name)
+        .is_some_and(|o| matches!(o.value, ResolvedValue::Boolean(true)))
+}
+
+#[async_trait]
+impl EventHandler for Handler {
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        if self.me.set(ready.user.id).is_err() {
+            tracing::debug!("gateway ready again after a reconnect");
+        }
+        tracing::info!(user = %ready.user.name, guild = %self.guild_id, "connected");
+        match self.guild_id.set_commands(&ctx.http, commands::all()).await {
+            Ok(cmds) => tracing::info!(count = cmds.len(), "commands registered"),
+            Err(e) => tracing::error!(error = %e, "command registration failed"),
+        }
+    }
+
+    async fn message(&self, ctx: Context, msg: Message) {
+        self.mentioned(&ctx, &msg).await;
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        match interaction {
+            Interaction::Component(press) => match CustomId::parse(&press.data.custom_id) {
+                Some(CustomId::Confirm {
+                    action,
+                    token,
+                    conversation,
+                }) => {
+                    self.confirm(&ctx, &press, action, token, conversation)
+                        .await;
+                }
+                Some(id @ (CustomId::ForgetAll { .. } | CustomId::KeepAll { .. })) => {
+                    self.forget_pressed(&ctx, &press, id).await;
+                }
+                None => {
+                    tracing::debug!(custom_id = %press.data.custom_id, "component is not ours");
+                }
+            },
+            Interaction::Command(cmd) => match cmd.data.name.as_str() {
+                commands::ASK => self.ask(&ctx, &cmd).await,
+                commands::RESET => self.reset(&ctx, &cmd).await,
+                commands::MEMORY => self.memory(&ctx, &cmd).await,
+                commands::FORGET => self.forget(&ctx, &cmd).await,
+                other => tracing::warn!(command = other, "unknown command"),
+            },
+            _ => {}
+        }
+    }
+}

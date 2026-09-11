@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::core::types::context::RequestContext;
+use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
 
 /// A chat model behind an OpenAI-compatible endpoint, or a test double.

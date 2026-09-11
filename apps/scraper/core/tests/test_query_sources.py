@@ -6,8 +6,8 @@ import uuid
 
 import pytest
 from scraper.core.types import Job, QueryError
-from scraper.query_sources import QUERY_SOURCES, term_code, url_for
-from scraper.worker import run_job
+from scraper.query.registry import QUERY_SOURCES, term_code, url_for
+from scraper.query.worker import run_job
 
 
 def test_term_codes_are_derived_rather_than_tabulated():

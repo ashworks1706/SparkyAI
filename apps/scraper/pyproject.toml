@@ -35,6 +35,8 @@ package-dir = { "scraper" = "." }
 packages = [
     "scraper",
     "scraper.core",
+    "scraper.ingest",
+    "scraper.query",
     "scraper.sources",
     "scraper.store",
 ]

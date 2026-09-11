@@ -1,6 +1,6 @@
 import pytest
 from scraper.core.types import FetchError, FetchRejected
-from scraper.fetch import parse_firecrawl
+from scraper.ingest.fetch import parse_firecrawl
 
 URL = "https://lib.asu.edu/hours"
 

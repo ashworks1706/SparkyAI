@@ -18,11 +18,13 @@ use serde_json::{Value, json};
 use tokio::process::Command;
 
 use crate::agent::tools::structured;
-use crate::core::traits::sandbox::Sandbox;
-use crate::core::traits::tool::Tool;
-use crate::core::types::context::RequestContext;
-use crate::core::types::sandbox::{SandboxError, SandboxOutput, SandboxRequest, session_name};
-use crate::core::types::tool::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::traits::tools::Tool;
+use crate::core::traits::tools::sandbox::Sandbox;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::sandbox::{
+    SandboxError, SandboxOutput, SandboxRequest, session_name,
+};
+use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// How the sandbox is started and what it may consume.
 #[derive(Debug, Clone)]

@@ -1,7 +1,7 @@
 import pytest
 from scraper.core.settings import Scraper
 from scraper.core.types import PipelineError
-from scraper.pipeline import check_quality_floor
+from scraper.ingest.pipeline import check_quality_floor
 
 RATIO = Scraper().quality_floor_ratio
 MIN_CHARS = Scraper().quality_floor_min_chars

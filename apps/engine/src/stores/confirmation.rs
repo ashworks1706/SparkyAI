@@ -8,9 +8,9 @@ use sqlx::Row;
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
-use crate::core::traits::confirmation::ConfirmationStore;
-use crate::core::types::context::RequestContext;
-use crate::core::types::policy::PendingAction;
+use crate::core::traits::safety::confirmation::ConfirmationStore;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::policy::PendingAction;
 use crate::core::types::store::StoreError;
 use crate::stores::postgres::db;
 

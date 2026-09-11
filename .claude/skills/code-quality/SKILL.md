@@ -106,14 +106,20 @@ as more of the same kind of thing gets added, not just the one that exists now.
   for peers in the same layer.
 
 **Structure**
-- Group by feature/domain where that aids scale, so a new contributor can *guess*
-  where a file lives without a map.
-- Keep folders shallow and predictable — but also watch the opposite failure: a
-  folder that has accreted dozens of sibling files is a signal to group by
-  sub-domain. Only do so when a *natural* grouping exists; don't invent arbitrary
-  buckets to hit a file count.
-- Restructure only when the current layout actively causes friction. Reshuffling
-  for aesthetics costs churn and buys nothing — leave a working layout alone.
+- Nest by domain. A folder is named for what its code is about (conversation,
+  memory, knowledge, safety, tools, trace), so a new contributor can *guess*
+  where a file lives and a stack trace path says which part of the system failed.
+- No flat folders. A folder past about seven sibling files that has a natural
+  grouping is split into domain subfolders. Never invent a bucket to hit a count,
+  and never make a folder that holds one file.
+- Use one vocabulary across parallel trees. The same domain name appears in
+  `core/types/<domain>`, `core/traits/<domain>`, `core/tests/<domain>`,
+  `stores/<domain>`, and `agent/harness/<domain>`, so finding one piece of a
+  domain finds the rest.
+- Domain means a concern of the system, never an ASU topic (library, events are
+  rows or registry entries) and never a language.
+- Vendor-generated trees keep the generator's layout (`apps/web/src/components/ui`
+  is shadcn), so regeneration keeps working.
 
 ## 2. Upcycling — modularize & reuse
 
@@ -155,7 +161,8 @@ keeping any bespoke helper, check whether an installed dependency covers it.
   cruft. Migrate the callers, then delete the hand-rolled version.
 - **Follow the convention the project already chose.** `tracing` not
   `println!`; `thiserror` enums not `anyhow` in library crates; `SecretString`
-  for secrets; config through each app's `config.rs` only. One concept, one
+  for secrets; settings through each app's `core/config` (Rust) or
+  `core/settings.py` (Python) only. One concept, one
   tool.
 - **Prefer the standard library.** A hand-rolled helper *or* a stale dependency
   doing what `std` already does can be deleted outright — the best reuse adds
@@ -226,7 +233,7 @@ answer is not.
   works, a `ready()` that returns 200 without checking anything — in production
   paths these lie to the user and hide missing wiring. Remove them or make them
   fail loudly.
-- Keep legitimate test fixtures and the `mock` model provider. The target is
+- Keep legitimate test fixtures and the doubles in `core/tests/support`. The target is
   fakes *masquerading as real behavior in shipped code*, not honest test
   scaffolding.
 
@@ -264,13 +271,47 @@ answer is not.
   confirmed, justified by what they delete, and adopted incrementally.
 - **Confirm wide-blast changes.** Renames or moves that touch many callers, any
   folder restructure, any file-renaming sweep, and any migration onto a
-  different library get confirmed with the user first.
+  different library get confirmed with the user first, unless the request that
+  started the pass already asked for that restructure. A move is `git mv` plus
+  path updates, never a rewrite, so history follows the file.
 - **Readable by a new engineer.** The end state a stranger can navigate beats a
   clever one only the author understands. If a rename or restructure doesn't move
   toward that, don't do it.
-- **Respect crate boundaries.** A cleanup never moves code across the
-  `app → adapters → harness` direction or makes adapters import each other;
-  `scripts/check-deps.sh` will reject it anyway.
+- **Respect the layering.** Inside `apps/engine`, `core` imports nothing else in
+  the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores`
+  import only `core`, never each other; `routes` and `wiring` compose them.
+  `engine`, `discord`, and `cli` never depend on each other, and
+  `scripts/check-deps.sh` rejects a change that makes them.
+
+## Repo standards a pass enforces
+
+These come from `AGENTS.md`; a pass that leaves one broken is not done.
+
+- **Comments** are plain ASCII and monotone in every language: no backticks,
+  quotation marks around terms, em dashes, arrows, or other non-ASCII. They say
+  what the code does in present tense. No justification of a decision, no
+  argument against an alternative, no openers (Note that, Simply, Basically), no
+  closing summary. The why goes in the commit message or `docs/decisions/`.
+- **Public items** carry a one-line doc comment saying what, not how.
+- **The core split**: data (serde derives, values crossing a module, wire shapes,
+  errors) lives in `core/types`; interfaces live in `core/traits` with a test
+  double in `core/tests/support`; objects (state plus the methods that own it)
+  live beside their `impl` with private fields.
+- **Settings**: every tunable is in `sparky.toml` at its default in the same
+  change, read through the app's config (`core/config` in Rust, `core/settings.py`
+  in Python). A bad combination is rejected in `Config::validate`, never clamped
+  at runtime. Secrets are `SecretString` and never logged.
+- **Live progress** is a `TraceEvent`: a new variant gets a line in
+  `TraceEvent::progress` or `None`, and clients render the engine's text, never
+  their own copy of the enum.
+- **Lints**: no `unwrap`, `expect`, `panic`, `todo!`, `unimplemented!`, `dbg!`,
+  `println!`, or wildcard imports; `thiserror` enums per crate and no `anyhow`
+  in library code; `tracing` macros with structured fields.
+- **Dependencies** are declared in `[workspace.dependencies]` and referenced
+  with `.workspace = true`.
+- **Docs follow the tree.** A moved or renamed module updates
+  `docs/ARCHITECTURE.md` (Layout and the Inside sections) and, for Python, the
+  subpackage list in `pyproject.toml` in the same change.
 
 ## Done means
 

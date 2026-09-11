@@ -1,13 +1,11 @@
 //! SparkyAI Discord bot: slash commands to HTTP calls to the engine to replies with citations.
 //! A client of the engine. Never links it.
 
+mod access;
 mod bot;
-mod commands;
-mod components;
 mod core;
-mod engine_client;
-mod reply;
-mod sse;
+mod engine;
+mod render;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

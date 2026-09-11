@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import is_divider, page_text, plain, table_cells
+from scraper.ingest.extract import is_divider, page_text, plain, table_cells
 
 _NUMBER = re.compile(r"^[A-Z]{2,4}\s?\d{3}[A-Z]?$")
 _IN_LINE = re.compile(

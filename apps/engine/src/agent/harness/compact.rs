@@ -4,10 +4,10 @@ use std::fmt::Write as _;
 
 use async_trait::async_trait;
 
-use crate::agent::harness::task::Task;
-use crate::core::traits::compaction::Compactor;
-use crate::core::types::context::RequestContext;
-use crate::core::types::message::{Message, Role};
+use crate::agent::harness::agent::task::Task;
+use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::model::ModelError;
 
 /// Default instructions for the chat agent.

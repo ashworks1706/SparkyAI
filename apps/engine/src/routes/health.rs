@@ -6,7 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use sqlx::postgres::PgPool;
 
-use crate::core::types::health::Readiness;
+use crate::core::types::http::health::Readiness;
 
 /// What readiness checks.
 #[derive(Clone)]
