@@ -78,6 +78,7 @@ fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
             system: "sys",
             capabilities: &text,
             input: "hi",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget::default(),
@@ -92,6 +93,7 @@ fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
             system: "sys",
             capabilities: &text,
             input: "hi",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget {

@@ -10,6 +10,7 @@ mod confirm;
 mod context;
 mod detect;
 mod guardrail;
+mod knowledge;
 mod limit;
 mod mcp;
 mod openai;

@@ -25,7 +25,12 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
             .replace("{user}", &ctx.user_id)
             .replace("{roles}", &ctx.roles.join(", "))
     };
-    let system = format!("{}\n\n{role_line}", s.system.trim());
+    let mut system = format!("{}\n\n{role_line}", s.system.trim());
+    if !s.date.is_empty() {
+        let date_line = s.templates.date_line.replace("{date}", s.date);
+        system.push('\n');
+        system.push_str(&date_line);
+    }
     used += estimate(&system, cpt);
     messages.push(Message::system(system));
 

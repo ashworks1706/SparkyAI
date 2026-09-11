@@ -170,6 +170,13 @@ impl Config {
         if !self.retrieval.dense && !self.retrieval.lexical {
             return invalid("retrieval.dense and retrieval.lexical are both off".into());
         }
+        // Rendering the date in an offset no clock keeps would name the wrong day.
+        if !(-14..=14).contains(&self.prompt.utc_offset_hours) {
+            return invalid(format!(
+                "prompt.utc_offset_hours must be between -14 and 14, got {}",
+                self.prompt.utc_offset_hours
+            ));
+        }
         if self.agent.chars_per_token == 0 {
             return invalid("agent.chars_per_token must be at least 1".into());
         }

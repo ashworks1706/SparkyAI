@@ -31,6 +31,7 @@ fn system_comes_first_and_input_last() {
         &Sections {
             system: "You are Sparky.",
             input: "hi",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget::default(),
@@ -48,6 +49,7 @@ fn evidence_is_trimmed_to_its_budget() {
             system: "s",
             evidence: &ev,
             input: "q",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget {
@@ -70,6 +72,7 @@ fn history_keeps_the_newest_turns() {
             system: "s",
             history: &history,
             input: "q",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget {
@@ -95,6 +98,7 @@ fn history_never_starts_with_a_tool_result() {
             system: "s",
             history: &history,
             input: "q",
+            date: "Friday 11 September 2026",
             ..Sections::default()
         },
         Budget {
@@ -123,6 +127,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             history: &history,
             capabilities: "",
             input: "",
+            date: "Friday 11 September 2026",
             templates: Templates::default(),
         },
         Budget::default(),
@@ -159,6 +164,7 @@ fn the_wording_around_every_section_comes_from_configuration() {
             memory: &memories,
             evidence: &ev,
             input: "q",
+            date: "Friday 11 September 2026",
             templates: Templates {
                 role_line_no_roles: "caller {user}",
                 memory_header: "REMEMBERED",
@@ -188,6 +194,7 @@ fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
                 system: "s",
                 evidence: &ev,
                 input: "q",
+                date: "Friday 11 September 2026",
                 ..Sections::default()
             },
             Budget {
@@ -199,4 +206,41 @@ fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
         .evidence_used
     };
     assert!(count(2) < count(8), "{} < {}", count(2), count(8));
+}
+
+#[test]
+fn the_date_reaches_the_prompt_so_today_is_answerable() {
+    // Evidence rows are labelled by day. Without the date the model cannot tell which label
+    // the question means, and it reads the first value in the row.
+    let a = assemble(
+        &ctx(),
+        &Sections {
+            system: "You are Sparky.",
+            input: "hours today?",
+            date: "Friday 11 September 2026",
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let system = &a.messages[0].content;
+    assert!(system.contains("Friday 11 September 2026"), "{system}");
+}
+
+#[test]
+fn no_date_writes_no_date_line() {
+    let a = assemble(
+        &ctx(),
+        &Sections {
+            system: "You are Sparky.",
+            input: "hi",
+            date: "",
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    assert!(
+        !a.messages[0].content.contains("Today is"),
+        "{:?}",
+        a.messages[0]
+    );
 }

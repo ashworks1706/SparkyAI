@@ -1,5 +1,5 @@
 from scraper.chunk import chunk_text
-from scraper.extract import extract_text, title_of
+from scraper.extract import extract_text, is_divider, plain, table_cells, title_of
 
 HTML = b"""
 <html><head><title>Hayden Library Hours</title></head>
@@ -39,3 +39,34 @@ def test_long_paragraph_is_split() -> None:
     chunks = chunk_text(text, max_chars=300, overlap_chars=0)
     assert all(len(c) <= 300 for c in chunks)
     assert sum(len(c) for c in chunks) >= len(text) * 0.95
+
+
+def test_a_divider_row_with_a_caption_after_it_is_still_a_divider() -> None:
+    # lib.asu.edu/hours emits the table caption after the closing pipe of the divider row.
+    # Read as a cell it stops the row looking like a divider, and the divider becomes the
+    # header row: every column then reads as dashes and the day names become data.
+    cells = table_cells("| --- | --- | --- |Display of Opening hours")
+    assert cells == ["---", "---", "---"]
+    assert is_divider(cells)
+
+
+def test_a_plain_table_row_keeps_every_cell() -> None:
+    assert table_cells("| Hayden | 7am | Closed |") == ["Hayden", "7am", "Closed"]
+    assert table_cells("not a table") is None
+
+
+def test_a_line_break_tag_becomes_a_space() -> None:
+    # lib.asu.edu/hours puts the weekday under the date with a break tag inside the cell.
+    assert plain("Sep 11  <br>Friday") == "Sep 11 Friday"
+    assert plain("a<br/>b") == "a b"
+
+
+def test_overlap_starts_on_a_line_boundary() -> None:
+    # A chunk that opens mid-row starts with a fragment no reader can attribute, so the
+    # overlap is cut back to the newest whole lines that fit.
+    row = "Library {}: Monday 7am - 2am; Tuesday 7am - 2am; Sunday 10am - 6pm"
+    rows = [row.format(i) for i in range(20)]
+    chunks = chunk_text("\n".join(rows), max_chars=400, overlap_chars=120)
+    assert len(chunks) > 1
+    for c in chunks[1:]:
+        assert c.startswith("Library "), f"chunk opens mid-line: {c[:60]!r}"

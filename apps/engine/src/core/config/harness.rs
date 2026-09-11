@@ -105,6 +105,10 @@ pub struct Prompt {
     pub memory_header: String,
     /// Heading above retrieved evidence.
     pub evidence_header: String,
+    /// Line naming the current date, with {date}.
+    pub date_line: String,
+    /// Hours from UTC the date is rendered in. Arizona keeps -7 all year.
+    pub utc_offset_hours: i32,
 }
 
 impl Default for Prompt {
@@ -116,6 +120,8 @@ impl Default for Prompt {
             role_line_no_roles: assemble::ROLE_LINE_NO_ROLES.into(),
             memory_header: assemble::MEMORY_HEADER.into(),
             evidence_header: assemble::EVIDENCE_HEADER.into(),
+            date_line: assemble::DATE_LINE.into(),
+            utc_offset_hours: -7,
         }
     }
 }

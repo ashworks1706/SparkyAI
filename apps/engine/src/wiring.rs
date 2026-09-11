@@ -48,8 +48,15 @@ use crate::stores::skills::PgSkills;
 /// Versioned by content; changes show up in traces via the prompt hash.
 pub const SYSTEM_PROMPT: &str = "You are Sparky, the ASU AI Society's assistant on Discord. \
 Answer from the evidence you are given or from tools; never from memory of the web. \
-When you cite, use the bracketed evidence numbers. If the evidence does not answer the \
-question, say so plainly and suggest where the user might look. Be brief.";
+\n\nEvidence comes to you before you ask for it. Read it first, and call a tool only for what \
+it does not cover. A tool that returns nothing means the knowledge base does not hold the \
+answer; say so rather than repeating the call with different arguments.\
+\n\nA row of evidence often carries one value per day or per date. Match the label the \
+question asks about. Taking the first value in the row answers a different question.\
+\n\nWhen you cite, use the bracketed evidence numbers. Answer what the evidence supports and \
+stop; do not add that the user should check the official site when you have just cited it. If \
+the evidence does not answer the question, say so plainly and suggest where the user might \
+look. Be brief.";
 
 /// Serves until shutdown.
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
@@ -342,9 +349,21 @@ async fn build_tools(
     let mut tools = ToolSet::new();
     let mut mcp_names = Vec::new();
     if cfg.tools.knowledge_search {
-        let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(retriever, cfg.retrieval.top_k));
-        if !disabled(&search.definition().name) {
-            tools = tools.with(search);
+        // The categories name what the scraper has published. The tool offers them as the
+        // only values the filter accepts.
+        let categories = retriever.categories().await?;
+        if categories.is_empty() {
+            tracing::info!("nothing indexed; search_knowledge_base is not offered");
+        } else {
+            let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(
+                retriever,
+                cfg.retrieval.top_k,
+                categories.clone(),
+            ));
+            if !disabled(&search.definition().name) {
+                tracing::info!(?categories, "knowledge search registered");
+                tools = tools.with(search);
+            }
         }
     }
     if cfg.tools.query_source {

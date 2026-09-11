@@ -29,6 +29,7 @@ _WS = re.compile(r"[ \t\r\f\v]+")
 _BLANKS = re.compile(r"\n{3,}")
 _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _MARKER = re.compile(r"^\s*(?:[#>]+|[-*+]|\d+\.)\s*")
 _DIVIDER_CELL = re.compile(r"^:?-{2,}:?$")
 _HEADING_LINE = re.compile(r"^\s{0,3}#{1,6}\s")
@@ -72,8 +73,10 @@ def page_text(fetched: Fetched) -> str:
 
 
 def plain(line: str) -> str:
-    """One markdown line as readable text: images dropped, links reduced to their label."""
-    text = _IMAGE.sub("", line)
+    """One markdown line as readable text: breaks become spaces, images dropped, links
+    reduced to their label."""
+    text = _BREAK.sub(" ", line)
+    text = _IMAGE.sub("", text)
     text = _LINK.sub(r"\1", text)
     text = text.replace("**", "").replace("`", "")
     text = _MARKER.sub("", text)
@@ -81,11 +84,18 @@ def plain(line: str) -> str:
 
 
 def table_cells(line: str) -> list[str] | None:
-    """Cells of a markdown table row, or None when the line is not one."""
+    """Cells of a markdown table row, or None when the line is not one.
+
+    A row runs from its opening pipe to its closing pipe. Text after the closing pipe is a
+    caption the page put beside the table, not a cell.
+    """
     stripped = line.strip()
     if not stripped.startswith("|"):
         return None
-    return [cell.strip() for cell in stripped.strip("|").split("|")]
+    close = stripped.rfind("|")
+    if close == 0:
+        return None
+    return [cell.strip() for cell in stripped[1:close].split("|")]
 
 
 def is_divider(cells: list[str]) -> bool:

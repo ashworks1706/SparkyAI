@@ -47,6 +47,10 @@ role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
 evidence_header = "Evidence from ASU sources. Answer only from this; cite sources by number. If it does not answer the question, say so."
+# {date} is filled in at assembly. Evidence rows carry a day or date label; without today's
+# date the model cannot tell which one a question means.
+date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
+utc_offset_hours = -7          # Arizona, which keeps -7 all year
 
 # ---------------------------------------------------------------- the model
 # base_url and api_key are per-machine and live in .env.

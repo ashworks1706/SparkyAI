@@ -64,6 +64,17 @@ impl PgRetriever {
             tuning,
         }
     }
+
+    /// The categories the scraper has published, sorted. Empty when nothing is indexed.
+    ///
+    /// # Errors
+    /// Returns [`RetrievalError::Store`] when the query fails.
+    pub async fn categories(&self) -> Result<Vec<String>, RetrievalError> {
+        sqlx::query_scalar("select distinct category from sources order by category")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| RetrievalError::Store(e.to_string()))
+    }
 }
 
 #[derive(Clone)]

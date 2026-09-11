@@ -24,7 +24,7 @@ def chunk_text(text: str, *, max_chars: int = 1200, overlap_chars: int = 200) ->
             continue
         if current:
             chunks.append(current)
-            tail = current[-overlap_chars:] if overlap_chars else ""
+            tail = _tail(current, overlap_chars)
             current = f"{tail}\n{piece}".strip() if tail else piece
             if len(current) > max_chars:
                 chunks.append(current[:max_chars])
@@ -54,3 +54,22 @@ def _split_long(paragraph: str, max_chars: int) -> list[str]:
         out.append(paragraph[start:end].strip())
         start = end
     return [o for o in out if o]
+
+
+def _tail(chunk: str, overlap_chars: int) -> str:
+    """The newest whole lines of chunk that fit in overlap_chars.
+
+    A character slice opens the next chunk mid-line, leaving a fragment with nothing to
+    attribute it to.
+    """
+    if overlap_chars <= 0:
+        return ""
+    lines = chunk.split("\n")
+    kept: list[str] = []
+    total = 0
+    for line in reversed(lines):
+        total += len(line) + (1 if kept else 0)
+        if total > overlap_chars:
+            break
+        kept.append(line)
+    return "\n".join(reversed(kept))

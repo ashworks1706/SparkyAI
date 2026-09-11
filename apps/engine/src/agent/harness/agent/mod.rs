@@ -361,6 +361,7 @@ impl Agent {
                 history: &prompt_history,
                 capabilities: &self.capabilities,
                 input: run.input,
+                date: &self.prompt.today(),
                 templates: self.prompt.templates(),
             },
             budget,

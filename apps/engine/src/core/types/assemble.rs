@@ -33,6 +33,8 @@ pub struct Templates<'a> {
     pub memory_header: &'a str,
     /// Heading above retrieved evidence.
     pub evidence_header: &'a str,
+    /// Line naming the current date, with {date}.
+    pub date_line: &'a str,
 }
 
 /// Default line naming the user, with {user} and {roles}.
@@ -41,6 +43,9 @@ pub const ROLE_LINE: &str = "The user is `{user}`. Roles: {roles}.";
 pub const ROLE_LINE_NO_ROLES: &str = "The user is `{user}`. They hold no special roles.";
 /// Default heading above recalled memories.
 pub const MEMORY_HEADER: &str = "What you remember about this user:";
+/// Default line naming the current date, with {date}.
+pub const DATE_LINE: &str = "Today is {date}. Evidence rows are labelled by day or date; read \
+                             the label the question asks for, never the first value in a row.";
 /// Default heading above retrieved evidence.
 pub const EVIDENCE_HEADER: &str = "Evidence from ASU sources. Answer only from this; cite \
                                    sources by number. If it does not answer the question, say so.";
@@ -52,6 +57,7 @@ impl Default for Templates<'_> {
             role_line_no_roles: ROLE_LINE_NO_ROLES,
             memory_header: MEMORY_HEADER,
             evidence_header: EVIDENCE_HEADER,
+            date_line: DATE_LINE,
         }
     }
 }
@@ -71,6 +77,8 @@ pub struct Sections<'a> {
     pub capabilities: &'a str,
     /// The current message from the user.
     pub input: &'a str,
+    /// Today's date as the model should read it. Empty writes no date line.
+    pub date: &'a str,
     /// Wording written around the sections.
     pub templates: Templates<'a>,
 }
