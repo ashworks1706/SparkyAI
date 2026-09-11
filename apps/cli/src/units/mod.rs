@@ -87,7 +87,7 @@ fn services() -> Vec<Unit> {
         service("redis", None, "queue backend", Some("localhost:6379")),
         service("minio", None, "object store", Some("http://localhost:9001")),
         service(
-            "posthog-proxy",
+            "posthog",
             Some("posthog"),
             "PostHog UI and ingestion, brings up the posthog stack",
             Some("http://localhost:8010"),

@@ -17,5 +17,5 @@ services:
   minio:
     ports: !reset []
   # PostHog holds full prompts and replies. No host port; reach it over a tunnel.
-  posthog-proxy:
+  posthog:
     ports: !reset []

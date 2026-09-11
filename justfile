@@ -137,7 +137,7 @@ infra *ARGS:
 # PostHog (traces, LLM analytics, product events) on http://localhost:8010, loopback. About 16 GB of memory
 posthog *ARGS:
     ./scripts/posthog.sh
-    docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep '^posthog-')
+    docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep -E '^posthog(-|$)')
 
 # llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
 model *ARGS:

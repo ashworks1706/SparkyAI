@@ -75,7 +75,7 @@ services:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
-      SPARKY_TELEMETRY__HOST: http://posthog-proxy
+      SPARKY_TELEMETRY__HOST: http://posthog
       SPARKY_MCP__PLAYWRIGHT_URL: http://playwright-mcp:8931/mcp
     ports: ["8080:8080"]
     depends_on:
@@ -89,7 +89,7 @@ services:
       - { path: ../.env, required: false }
     environment:
       SPARKY_ENGINE__BASE_URL: http://engine:8080
-      SPARKY_TELEMETRY__HOST: http://posthog-proxy
+      SPARKY_TELEMETRY__HOST: http://posthog
     depends_on: [engine]
     restart: unless-stopped
 
@@ -103,7 +103,7 @@ services:
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
-      SPARKY_TELEMETRY__HOST: http://posthog-proxy
+      SPARKY_TELEMETRY__HOST: http://posthog
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped
@@ -334,13 +334,13 @@ services:
     restart: unless-stopped
 
   # ---------- PostHog (profile posthog) ----------
-  # Each service joins the posthog network under its upstream name. Only posthog-proxy joins
-  # the default network: http://posthog-proxy from other services, http://localhost:8010 from
+  # Each service joins the posthog network under its upstream name. Only posthog joins
+  # the default network: http://posthog from other services, http://localhost:8010 from
   # the host. Upstream files mount from SPARKY_POSTHOG_DIR (an absolute path), default
   # ../.sparky/posthog, filled by scripts/posthog.sh.
 
   # Caddy in front of the UI and every ingestion path. Plain http on port 80.
-  posthog-proxy:
+  posthog:
     image: *posthog-caddy-image
     profiles: [posthog]
     entrypoint: sh

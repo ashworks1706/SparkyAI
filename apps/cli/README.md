@@ -17,7 +17,7 @@ just cli          # from anywhere inside the repo
 │  ● postgres     :5432  ││ 12:01:09    Compiling engine v0.1.0                    │
 │  ● redis        :6379  ││ 12:01:31 INFO engine: listening addr=0.0.0.0:8080      │
 │  ○ minio        :9001  ││ 12:01:40 INFO engine::routes::chat: request_id=…       │
-│  ● posthog-proxy :8010 ││ 12:01:44 INFO engine::agent: tool search_knowledge_base 412 ms │
+│  ● posthog       :8010 ││ 12:01:44 INFO engine::agent: tool search_knowledge_base 412 ms │
 │  ● prometheus   :9090  ││ 12:01:47 INFO engine::routes::chat: answered 2 steps   │
 │  ● grafana      :3000  ││                                                        │
 │ models                 ││                                                        │
@@ -59,7 +59,7 @@ under **tasks**.
 
 | Group | Units | How |
 |---|---|---|
-| infra | postgres, redis, minio, posthog-proxy, pgweb, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f`; `--profile posthog` / `db` / `metrics` / `gpu-metrics` where gated |
+| infra | postgres, redis, minio, posthog, pgweb, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f`; `--profile posthog` / `db` / `metrics` / `gpu-metrics` where gated |
 | models | chat, embed | same, `--profile model` |
 | tools | firecrawl, playwright-mcp | same, `--profile crawl` / `browser` |
 | apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group so `cargo run` and its binary both go |

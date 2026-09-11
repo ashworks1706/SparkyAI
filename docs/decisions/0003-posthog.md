@@ -13,8 +13,8 @@ llama-server metrics; the self-hosted PostHog stack has no metrics ingestion.
 PostHog runs from the hobby stack of the upstream repository, pinned to one commit, vendored into
 `deploy/compose.yml` under the `posthog` profile. `just posthog` fetches the pinned upstream files
 the stack mounts (ClickHouse config, Kafka topics, GeoIP) into `.sparky/posthog` and starts it.
-Services are named `posthog-<upstream name>` and reach each other over a `posthog` network by
-their upstream names. The upstream hobby file omits `capture-ai`, which serves `/i/v0/ai/*`; the
+The Caddy proxy is the `posthog` service; the rest are named `posthog-<upstream name>`. They
+reach each other over a `posthog` network by their upstream names. The upstream hobby file omits `capture-ai`, which serves `/i/v0/ai/*`; the
 vendored stack includes it. The UI and every ingestion path are behind one Caddy proxy on
 `http://localhost:8010`, loopback only. The stack wants about 16 GB of memory.
 
@@ -24,7 +24,7 @@ After the first start, create a project in the UI and put its project token in `
 
 | Setting | Where | Meaning |
 |---|---|---|
-| `telemetry.host` | `.env`, default `http://localhost:8010` | PostHog base URL; compose sets `http://posthog-proxy` |
+| `telemetry.host` | `.env`, default `http://localhost:8010` | PostHog base URL; compose sets `http://posthog` |
 | `telemetry.project_token` | `.env`, secret | project token; empty disables export and logs one warning |
 | `telemetry.traces_path` | `sparky.toml` | `/i/v1/traces` |
 | `telemetry.ai_path` | `sparky.toml` | `/i/v0/ai/otel` |
