@@ -6,9 +6,10 @@ use std::time::Duration;
 use crate::agent::harness::agent::{Agent, AgentDeps, PromptText};
 use crate::agent::harness::capability;
 use crate::agent::harness::compact::{self, ChatCompactor};
+use crate::agent::harness::detect::{RuleDetector, Rules as DetectorRules};
 use crate::agent::harness::guardrail::{RuleGuardrail, Rules};
 use crate::agent::harness::policy::RiskPolicy;
-use crate::agent::harness::profile::{self, Classifier, GraphAgent, ProfileWriter};
+use crate::agent::harness::profile::{self, GraphAgent, ProfileWriter};
 use crate::agent::harness::task::{Task, TaskConfig};
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
@@ -22,6 +23,7 @@ use crate::agent::tools::skills::GetSkillTool;
 use crate::core::config::Config;
 use crate::core::traits::compaction::Compactor;
 use crate::core::traits::confirmation::ConfirmationStore;
+use crate::core::traits::detector::FactDetector;
 use crate::core::traits::guardrail::Guardrail;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::profile::ProfileGraph;
@@ -216,20 +218,10 @@ fn profile_writer(
             .unwrap_or(fallback)
             .to_owned()
     };
-    let classifier = Classifier::new(Task::new(
-        Arc::clone(model),
-        "profile.classify",
-        instructions(
-            cfg.profile.classifier_instructions.as_ref(),
-            profile::CLASSIFIER_INSTRUCTIONS,
-        ),
-        TaskConfig {
-            // One word. Anything longer is the classifier failing to follow its instructions.
-            max_tokens: 8,
-            temperature: 0.0,
-            timeout: budget,
-        },
-    ));
+    // The gate runs on every turn, so it is rules rather than a model call.
+    let detector: Arc<dyn FactDetector> = Arc::new(RuleDetector::new(DetectorRules::from(
+        &cfg.profile.detector,
+    )));
     let agent = GraphAgent::new(Task::new(
         Arc::clone(model),
         "profile.extract",
@@ -243,9 +235,7 @@ fn profile_writer(
             timeout: budget,
         },
     ));
-    Some(Arc::new(ProfileWriter::new(
-        classifier, agent, graph, budget,
-    )))
+    Some(Arc::new(ProfileWriter::new(detector, agent, graph, budget)))
 }
 
 /// The chat agent, when compaction is on. Shares the model the loop calls.

@@ -9,15 +9,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agent::harness::task::Task;
+use crate::core::traits::detector::FactDetector;
 use crate::core::traits::profile::ProfileGraph;
 use crate::core::types::context::RequestContext;
 use crate::core::types::profile::{ProfileError, ProfileFact};
-
-/// Default instructions for the classifier.
-pub const CLASSIFIER_INSTRUCTIONS: &str = "You decide whether a message states something worth \
-remembering about the person who wrote it: a fact about them, a record such as a course, club \
-or job, or a preference. Greetings, questions, thanks and small talk state nothing. Answer \
-with one word, yes or no. Write no other word, no punctuation and no explanation.";
 
 /// Default instructions for the graph agent.
 pub const GRAPH_INSTRUCTIONS: &str = "You extract what a message states about the person who \
@@ -33,35 +28,6 @@ answer {\"facts\":[]}.";
 #[derive(Debug, Deserialize)]
 struct Extraction {
     facts: Vec<ProfileFact>,
-}
-
-/// Answers whether a turn carries a fact, a record, or a preference.
-pub struct Classifier {
-    task: Task,
-}
-
-impl Classifier {
-    /// Builds the classifier over a task holding the classifier instructions.
-    pub fn new(task: Task) -> Self {
-        Self { task }
-    }
-
-    /// Whether turn states something worth extracting. Any answer but yes is no.
-    ///
-    /// # Errors
-    /// Returns [`ProfileError::Model`] when the model call fails.
-    pub async fn carries_fact(
-        &self,
-        ctx: &RequestContext,
-        turn: &str,
-    ) -> Result<bool, ProfileError> {
-        let answer = self.task.run(ctx, turn).await?;
-        let word = answer
-            .trim()
-            .trim_matches(|c: char| !c.is_alphanumeric())
-            .to_ascii_lowercase();
-        Ok(word == "yes")
-    }
 }
 
 /// Extracts the facts a turn states, as values the graph stores.
@@ -111,7 +77,7 @@ fn json_object(text: &str) -> Option<&str> {
 /// Extraction never runs in the request path. The loop hands a finished turn over and returns;
 /// what happens after that is detached from the answer the user is waiting for.
 pub struct ProfileWriter {
-    classifier: Classifier,
+    detector: Arc<dyn FactDetector>,
     agent: GraphAgent,
     graph: Arc<dyn ProfileGraph>,
     budget: Duration,
@@ -120,13 +86,13 @@ pub struct ProfileWriter {
 impl ProfileWriter {
     /// Builds the writer over its two prompted sub-agents and the graph.
     pub fn new(
-        classifier: Classifier,
+        detector: Arc<dyn FactDetector>,
         agent: GraphAgent,
         graph: Arc<dyn ProfileGraph>,
         budget: Duration,
     ) -> Self {
         Self {
-            classifier,
+            detector,
             agent,
             graph,
             budget,
@@ -136,15 +102,11 @@ impl ProfileWriter {
     /// Classifies turn, extracts what it states, and writes it. Detached from the request, so
     /// it builds its own context with its own deadline.
     pub async fn record(&self, tenant_id: String, user_id: String, turn: String) {
-        let ctx = RequestContext::new(tenant_id, user_id, self.budget);
-        match self.classifier.carries_fact(&ctx, &turn).await {
-            Ok(false) => return,
-            Ok(true) => {}
-            Err(error) => {
-                tracing::warn!(error = %error, "profile classifier failed");
-                return;
-            }
+        // The gate runs on every turn. A model call here would cost one on every greeting.
+        if !self.detector.carries_fact(&turn) {
+            return;
         }
+        let ctx = RequestContext::new(tenant_id, user_id, self.budget);
         let facts = match self.agent.extract(&ctx, &turn).await {
             Ok(facts) => facts,
             Err(error) => {

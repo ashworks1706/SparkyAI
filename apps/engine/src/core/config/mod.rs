@@ -785,14 +785,37 @@ impl Default for SandboxSettings {
     }
 }
 
+/// The gate on profile extraction. It runs on every turn, so it takes no model call.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Detector {
+    /// First-person markers. Empty uses the built-in list.
+    pub subjects: Vec<String>,
+    /// Cues that mark a statement rather than a question. Empty uses the built-in list.
+    pub cues: Vec<String>,
+    /// Shortest turn considered.
+    pub min_words: usize,
+}
+
+impl Default for Detector {
+    fn default() -> Self {
+        Self {
+            subjects: Vec::new(),
+            cues: Vec::new(),
+            min_words: 4,
+        }
+    }
+}
+
 /// The classifier and the graph agent. Detached from the request that produced the turn.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Profile {
     /// Record what a turn states about the user.
     pub enabled: bool,
-    /// Instructions for the classifier. Empty uses the built-in default.
-    pub classifier_instructions: Option<String>,
+    /// What decides whether a turn is worth extracting from.
+    #[serde(default)]
+    pub detector: Detector,
     /// Instructions for the graph agent. Empty uses the built-in default.
     pub graph_instructions: Option<String>,
     /// Completion budget for the graph agent.
@@ -805,7 +828,7 @@ impl Default for Profile {
     fn default() -> Self {
         Self {
             enabled: false,
-            classifier_instructions: None,
+            detector: Detector::default(),
             graph_instructions: None,
             max_tokens: 512,
             timeout_secs: 60,

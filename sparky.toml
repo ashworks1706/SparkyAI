@@ -102,6 +102,14 @@ enabled = false
 max_tokens = 512
 timeout_secs = 60
 
+# The gate on extraction. It runs on every turn, so it is rules rather than a model call.
+# Empty lists use the built-in ones. A turn passes when a first-person marker sits next to a
+# cue and it is not a question.
+[profile.detector]
+subjects = []
+cues = []
+min_words = 4
+
 # A command in an isolated environment. The engine needs access to the container runtime.
 # No network, read-only root, dropped capabilities, non-root user.
 [sandbox]

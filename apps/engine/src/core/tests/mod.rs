@@ -8,6 +8,7 @@ mod compact;
 mod config;
 mod confirm;
 mod context;
+mod detect;
 mod guardrail;
 mod limit;
 mod mcp;

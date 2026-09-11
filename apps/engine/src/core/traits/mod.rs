@@ -4,6 +4,7 @@
 pub mod compaction;
 pub mod confirmation;
 pub mod conversation;
+pub mod detector;
 pub mod guardrail;
 pub mod memory;
 pub mod model;

@@ -3,23 +3,12 @@
 
 use std::sync::Arc;
 
-use crate::agent::harness::profile::{
-    CLASSIFIER_INSTRUCTIONS, Classifier, GRAPH_INSTRUCTIONS, GraphAgent,
-};
+use crate::agent::harness::profile::{GRAPH_INSTRUCTIONS, GraphAgent};
 use crate::agent::harness::task::{Task, TaskConfig};
 use crate::core::tests::support::{Scripted, ctx, text};
 use crate::core::types::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelResponse};
 use crate::core::types::profile::ProfileError;
-
-fn classifier(replies: Vec<Result<ModelResponse, ModelError>>) -> Classifier {
-    Classifier::new(Task::new(
-        Arc::new(Scripted::new(replies)),
-        "profile_classifier",
-        CLASSIFIER_INSTRUCTIONS,
-        TaskConfig::default(),
-    ))
-}
 
 fn graph_agent(replies: Vec<Result<ModelResponse, ModelError>>) -> GraphAgent {
     GraphAgent::new(Task::new(
@@ -28,38 +17,6 @@ fn graph_agent(replies: Vec<Result<ModelResponse, ModelError>>) -> GraphAgent {
         GRAPH_INSTRUCTIONS,
         TaskConfig::default(),
     ))
-}
-
-#[tokio::test]
-async fn small_talk_carries_nothing_to_extract() {
-    let c = classifier(vec![Ok(text("no"))]);
-    let Ok(carries) = c.carries_fact(&ctx(), "hey sparky, how's it going").await else {
-        unreachable!("the model answered")
-    };
-    assert!(!carries);
-}
-
-#[tokio::test]
-async fn a_stated_preference_is_worth_extracting() {
-    let c = classifier(vec![Ok(text("Yes."))]);
-    let Ok(carries) = c
-        .carries_fact(&ctx(), "i'd rather study at hayden than noble")
-        .await
-    else {
-        unreachable!("the model answered")
-    };
-    // The one word is the whole contract; casing and punctuation around it are not.
-    assert!(carries);
-}
-
-#[tokio::test]
-async fn an_answer_that_is_not_one_word_is_read_as_no() {
-    let c = classifier(vec![Ok(text("Well, it might be a preference, I think"))]);
-    let Ok(carries) = c.carries_fact(&ctx(), "something ambiguous").await else {
-        unreachable!("the model answered")
-    };
-    // Queueing extraction on a hedge would run the graph agent on every turn.
-    assert!(!carries);
 }
 
 #[tokio::test]

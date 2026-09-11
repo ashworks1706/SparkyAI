@@ -318,7 +318,9 @@ A compacted turn is model output. It is stored with its own role so a replayed c
 
 Flat memory rows answer what a user said. They do not answer how two facts relate. The profile graph holds entities, the relations between them, and an embedding per node, so recall can start from a relation rather than from similarity alone.
 
-Extraction never runs in the request path. After a turn is appended, the loop hands it to the profile writer and returns. A classifier decides whether it carries a fact, a record, or a preference; only then does the Graph Agent run. Both are prompted sub-agents in the engine, so the work is detached from the request rather than queued for the scraper worker, which cannot call a model. The task carries its own context and deadline.
+Extraction never runs in the request path. After a turn is appended, the loop hands it to the profile writer and returns, and the writer carries its own context and deadline.
+
+The gate is rules, not a model call. It runs on every turn, so a greeting must cost nothing: `FactDetector` looks for a first-person marker next to a stative cue and rejects questions. Only a turn that passes reaches the Graph Agent, which is the prompted sub-agent that extracts. Generic embeddings are not the gate because they encode topic and style rather than whether a sentence is worth keeping, and they place `I like this` and `I do not like this` close together; a trained head could replace the rules through the same trait.
 
 Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete. `POST /profile/forget` removes one label or everything a user carries; relations cascade from the node they run through.
 
