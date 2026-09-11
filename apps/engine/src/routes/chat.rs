@@ -93,7 +93,7 @@ pub async fn chat(
     if !state.rate_limit.allow(&req.user_id) {
         return too_many(&req.user_id);
     }
-    let span = tracing::info_span!("http.chat", "sparky.user_id" = %req.user_id);
+    let span = tracing::info_span!("http.chat", "posthog.distinct_id" = %req.user_id);
     if let Some(parent) = headers
         .get("traceparent")
         .and_then(|v| v.to_str().ok())
@@ -121,7 +121,7 @@ pub async fn stream(
     if !state.rate_limit.allow(&req.user_id) {
         return too_many(&req.user_id);
     }
-    let span = tracing::info_span!("http.chat.stream", "sparky.user_id" = %req.user_id);
+    let span = tracing::info_span!("http.chat.stream", "posthog.distinct_id" = %req.user_id);
     if let Some(parent) = headers
         .get("traceparent")
         .and_then(|v| v.to_str().ok())

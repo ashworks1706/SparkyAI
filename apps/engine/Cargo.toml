@@ -41,5 +41,8 @@ opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 opentelemetry-otlp.workspace = true
 
+[dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
+
 [lints]
 workspace = true

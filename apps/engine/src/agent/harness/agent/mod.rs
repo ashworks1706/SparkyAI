@@ -148,18 +148,22 @@ impl Agent {
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
         let span = tracing::info_span!(
             "agent.run",
-            "openinference.span.kind" = "CHAIN",
-            "session.id" = %ctx.conversation_id,
-            "user.id" = %ctx.user_id,
+            "gen_ai.operation.name" = "invoke_agent",
+            "gen_ai.agent.name" = "sparky",
+            "$ai_session_id" = %ctx.conversation_id,
+            "posthog.distinct_id" = %ctx.user_id,
             "sparky.request_id" = %ctx.request_id,
             "sparky.tenant_id" = %ctx.tenant_id,
-            "input.value" = %input,
-            "output.value" = Empty,
+            "sparky.input" = %truncate(input, self.cfg.max_span_value_chars),
+            "sparky.output" = Empty,
             "sparky.status" = Empty,
         );
         let result = self.run_inner(ctx, input).instrument(span.clone()).await;
         if let Ok(answer) = &result {
-            span.record("output.value", truncate(&answer.text, 4_000).as_str());
+            span.record(
+                "sparky.output",
+                truncate(&answer.text, self.cfg.max_span_value_chars).as_str(),
+            );
             span.record("sparky.status", format!("{:?}", answer.status).as_str());
         }
         result
@@ -176,19 +180,26 @@ impl Agent {
     ) -> Result<Answer, AgentError> {
         let span = tracing::info_span!(
             "agent.resume",
-            "openinference.span.kind" = "CHAIN",
-            "session.id" = %ctx.conversation_id,
-            "user.id" = %ctx.user_id,
+            "gen_ai.operation.name" = "invoke_agent",
+            "gen_ai.agent.name" = "sparky",
+            "$ai_session_id" = %ctx.conversation_id,
+            "posthog.distinct_id" = %ctx.user_id,
             "sparky.request_id" = %ctx.request_id,
-            "input.value" = %pending.action.tool,
-            "output.value" = Empty,
+            "sparky.tenant_id" = %ctx.tenant_id,
+            "sparky.input" = %pending.action.tool,
+            "sparky.output" = Empty,
+            "sparky.status" = Empty,
         );
         let result = self
             .resume_inner(ctx, pending)
             .instrument(span.clone())
             .await;
         if let Ok(answer) = &result {
-            span.record("output.value", truncate(&answer.text, 4_000).as_str());
+            span.record(
+                "sparky.output",
+                truncate(&answer.text, self.cfg.max_span_value_chars).as_str(),
+            );
+            span.record("sparky.status", format!("{:?}", answer.status).as_str());
         }
         result
     }
@@ -489,25 +500,25 @@ impl Agent {
             };
             let started = Instant::now();
             // Full prompt and full reply as JSON.
-            let input_json = json(&request.messages);
+            let limit = self.cfg.max_span_value_chars;
             let span = tracing::info_span!(
                 "llm",
-                "openinference.span.kind" = "LLM",
-                "llm.model_name" = Empty,
-                "llm.token_count.prompt" = Empty,
-                "llm.token_count.completion" = Empty,
-                "llm.invocation_parameters" = %format!(
-                    "{{\"max_tokens\":{},\"temperature\":{},\"tools\":{}}}",
-                    request.max_tokens,
-                    request.temperature,
-                    request.tools.len()
-                ),
-                "input.value" = %truncate(&input_json, self.cfg.max_span_value_chars),
-                "input.mime_type" = "application/json",
-                "output.value" = Empty,
-                "output.mime_type" = "application/json",
+                "gen_ai.operation.name" = "chat",
+                "gen_ai.provider.name" = %self.cfg.provider_name,
+                "gen_ai.request.model" = %self.cfg.model_name,
+                "gen_ai.response.model" = Empty,
+                "gen_ai.request.max_tokens" = request.max_tokens,
+                "gen_ai.request.temperature" = f64::from(request.temperature),
+                "gen_ai.usage.input_tokens" = Empty,
+                "gen_ai.usage.output_tokens" = Empty,
+                "gen_ai.input.messages" = %truncate(&json(&request.messages), limit),
+                "gen_ai.output.messages" = Empty,
+                "sparky.span" = "llm",
+                "sparky.tools" = %truncate(&json(&request.tools), limit),
                 "sparky.step" = step,
                 "sparky.attempt" = attempt,
+                "$ai_session_id" = %ctx.conversation_id,
+                "posthog.distinct_id" = %ctx.user_id,
             );
             let result = tokio::select! {
                 () = ctx.cancel.cancelled() => Err(ModelError::Cancelled),
@@ -517,20 +528,17 @@ impl Agent {
             };
             match result {
                 Ok(response) => {
-                    span.record("llm.model_name", response.model.as_str());
+                    span.record("gen_ai.response.model", response.model.as_str());
                     span.record(
-                        "llm.token_count.prompt",
+                        "gen_ai.usage.input_tokens",
                         i64::from(response.usage.prompt_tokens),
                     );
                     span.record(
-                        "llm.token_count.completion",
+                        "gen_ai.usage.output_tokens",
                         i64::from(response.usage.completion_tokens),
                     );
-                    let shown = json(&response.as_message());
-                    span.record(
-                        "output.value",
-                        truncate(&shown, self.cfg.max_span_value_chars).as_str(),
-                    );
+                    let shown = json(&[response.as_message()]);
+                    span.record("gen_ai.output.messages", truncate(&shown, limit).as_str());
                     deps.trace.emit(
                         ctx,
                         TraceEvent::ModelCall {

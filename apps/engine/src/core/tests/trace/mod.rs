@@ -1,6 +1,8 @@
 //! Trace sinks: JSONL round trip.
 
+mod export;
 mod progress;
+mod spans;
 
 use std::time::Duration;
 

@@ -119,10 +119,11 @@ impl Agent {
                 let query = RetrievalQuery::new(input, self.cfg.retrieval_top_k);
                 let span = tracing::info_span!(
                     "retrieve",
-                    "openinference.span.kind" = "RETRIEVER",
-                    "input.value" = %input,
-                    "output.value" = Empty,
-                    "output.mime_type" = "application/json",
+                    "gen_ai.operation.name" = "retrieval",
+                    "sparky.input" = %truncate(input, self.cfg.max_span_value_chars),
+                    "sparky.output" = Empty,
+                    "$ai_session_id" = %ctx.conversation_id,
+                    "posthog.distinct_id" = %ctx.user_id,
                 );
                 let found = retriever
                     .retrieve(ctx, &query)
@@ -143,7 +144,7 @@ impl Agent {
                         })
                         .collect();
                     span.record(
-                        "output.value",
+                        "sparky.output",
                         truncate(&json(&listing), self.cfg.max_span_value_chars).as_str(),
                     );
                     deps.trace.emit(
