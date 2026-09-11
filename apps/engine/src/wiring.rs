@@ -4,8 +4,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::agent::harness::agent::{Agent, AgentDeps, PromptText};
+use crate::agent::harness::capability;
 use crate::agent::harness::compact::{self, ChatCompactor};
+use crate::agent::harness::guardrail::{RuleGuardrail, Rules};
 use crate::agent::harness::policy::RiskPolicy;
+use crate::agent::harness::profile::{self, Classifier, GraphAgent, ProfileWriter};
 use crate::agent::harness::task::{Task, TaskConfig};
 use crate::agent::harness::tool::ToolSet;
 use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
@@ -14,11 +17,17 @@ use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::agent::tools::knowledge_search::KnowledgeSearch;
 use crate::agent::tools::mcp::{self, McpLimits};
 use crate::agent::tools::query_source::QuerySourceTool;
+use crate::agent::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
+use crate::agent::tools::skills::GetSkillTool;
 use crate::core::config::Config;
 use crate::core::traits::compaction::Compactor;
 use crate::core::traits::confirmation::ConfirmationStore;
+use crate::core::traits::guardrail::Guardrail;
 use crate::core::traits::model::ModelProvider;
+use crate::core::traits::profile::ProfileGraph;
 use crate::core::traits::query::SourceQueries;
+use crate::core::traits::retrieval::Embedder;
+use crate::core::traits::skills::SkillStore;
 use crate::core::traits::tool::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
@@ -29,6 +38,8 @@ use crate::routes::rate_limit::RateLimiter;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
+use crate::stores::profile::PgProfileGraph;
+use crate::stores::skills::PgSkills;
 
 /// Default system prompt, used when neither prompt.system_file nor prompt.system is set.
 /// Versioned by content; changes show up in traces via the prompt hash.
@@ -76,19 +87,30 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     .map_err(|e| anyhow::anyhow!("postgres: {e}"))?;
     let retriever = Arc::new(PgRetriever::new(
         pool.clone(),
-        embedder,
+        Arc::clone(&embedder) as Arc<dyn Embedder>,
         RetrievalTuning::from(&cfg.retrieval),
     ));
     let conversations = Arc::new(PgConversations::new(pool.clone()));
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
-    let tools = build_tools(&cfg, retriever.clone(), source_queries(&cfg, &pool)).await?;
+    let (tools, mcp_names) =
+        build_tools(&cfg, &pool, retriever.clone(), source_queries(&cfg, &pool)).await?;
+    let capabilities = capability::render(&capability::from_definitions(
+        &tools.definitions(),
+        &mcp_names,
+    ));
 
     let agent_cfg = agent_config(&cfg);
 
+    let profile_graph = profile_graph(&cfg, &pool, &embedder);
     let deps = AgentDeps {
+        profile: profile_writer(&cfg, &model, profile_graph.clone()),
+        profile_graph,
         compactor: compactor(&cfg, &model),
+        guardrail: cfg.guardrail.enabled.then(|| {
+            Arc::new(RuleGuardrail::new(Rules::from(&cfg.guardrail))) as Arc<dyn Guardrail>
+        }),
         model,
         tools,
         policy: Arc::new(RiskPolicy::from(&cfg.policy)),
@@ -99,18 +121,11 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         confirmations: Some(confirmations.clone()),
     };
     let system_prompt = cfg.system_prompt(SYSTEM_PROMPT)?;
-    let agent =
-        Agent::new(deps, agent_cfg, system_prompt).with_prompt_text(PromptText::from(&cfg.prompt));
+    let agent = Agent::new(deps, agent_cfg, system_prompt)
+        .with_prompt_text(PromptText::from(&cfg.prompt))
+        .with_capabilities(capabilities);
 
-    let state = ChatState {
-        confirmations: Some(confirmations),
-        agent,
-        conversations: Some(conversations),
-        request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
-        default_tenant: cfg.discord.guild_id.to_string(),
-        service_token: cfg.engine.service_token.clone(),
-        rate_limit: RateLimiter::new(cfg.http.rate_limit_per_min),
-    };
+    let state = chat_state(&cfg, agent, conversations, confirmations);
     let health = HealthState {
         pool,
         model_base_url: cfg.model.base_url.clone(),
@@ -145,6 +160,85 @@ async fn expire(wait: tokio::sync::oneshot::Receiver<()>, grace: Duration) {
         std::future::pending::<()>().await;
     }
     tokio::time::sleep(grace).await;
+}
+
+/// What the chat routes need, gathered from the settings that describe it.
+fn chat_state(
+    cfg: &Config,
+    agent: Agent,
+    conversations: Arc<PgConversations>,
+    confirmations: Arc<dyn ConfirmationStore>,
+) -> ChatState {
+    ChatState {
+        confirmations: Some(confirmations),
+        agent,
+        conversations: Some(conversations),
+        request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
+        default_tenant: cfg.discord.guild_id.to_string(),
+        service_token: cfg.engine.service_token.clone(),
+        rate_limit: RateLimiter::new(cfg.http.rate_limit_per_min),
+    }
+}
+
+/// The profile graph, when profile recording is on.
+fn profile_graph(
+    cfg: &Config,
+    pool: &sqlx::PgPool,
+    embedder: &Arc<RigEmbedder>,
+) -> Option<Arc<dyn ProfileGraph>> {
+    cfg.profile.enabled.then(|| {
+        Arc::new(PgProfileGraph::new(
+            pool.clone(),
+            Arc::clone(embedder) as Arc<dyn Embedder>,
+        )) as Arc<dyn ProfileGraph>
+    })
+}
+
+/// The classifier and the graph agent, when profile recording is on.
+fn profile_writer(
+    cfg: &Config,
+    model: &Arc<dyn ModelProvider>,
+    graph: Option<Arc<dyn ProfileGraph>>,
+) -> Option<Arc<ProfileWriter>> {
+    let graph = graph?;
+    let budget = Duration::from_secs(cfg.profile.timeout_secs);
+    let instructions = |set: Option<&String>, fallback: &'static str| {
+        set.map(String::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(fallback)
+            .to_owned()
+    };
+    let classifier = Classifier::new(Task::new(
+        Arc::clone(model),
+        "profile.classify",
+        instructions(
+            cfg.profile.classifier_instructions.as_ref(),
+            profile::CLASSIFIER_INSTRUCTIONS,
+        ),
+        TaskConfig {
+            // One word. Anything longer is the classifier failing to follow its instructions.
+            max_tokens: 8,
+            temperature: 0.0,
+            timeout: budget,
+        },
+    ));
+    let agent = GraphAgent::new(Task::new(
+        Arc::clone(model),
+        "profile.extract",
+        instructions(
+            cfg.profile.graph_instructions.as_ref(),
+            profile::GRAPH_INSTRUCTIONS,
+        ),
+        TaskConfig {
+            max_tokens: cfg.profile.max_tokens,
+            temperature: 0.0,
+            timeout: budget,
+        },
+    ));
+    Some(Arc::new(ProfileWriter::new(
+        classifier, agent, graph, budget,
+    )))
 }
 
 /// The chat agent, when compaction is on. Shares the model the loop calls.
@@ -225,11 +319,13 @@ fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
 /// Every tool the model may call, with tools.disabled removed at registration.
 async fn build_tools(
     cfg: &Config,
+    pool: &sqlx::PgPool,
     retriever: Arc<PgRetriever>,
     queries: Arc<dyn SourceQueries>,
-) -> anyhow::Result<ToolSet> {
+) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
+    let mut mcp_names = Vec::new();
     if cfg.tools.knowledge_search {
         let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(retriever, cfg.retrieval.top_k));
         if !disabled(&search.definition().name) {
@@ -253,6 +349,33 @@ async fn build_tools(
             }
         }
     }
+    if cfg.tools.get_skill {
+        // An empty registry means review has offered nothing. Registering the tool anyway
+        // would name procedures that do not exist.
+        let skills = PgSkills::new(pool.clone());
+        let offered = skills.list().await?;
+        if offered.is_empty() {
+            tracing::info!("no reviewed skills; get_skill is not offered");
+        } else {
+            let tool: Arc<dyn Tool> = Arc::new(GetSkillTool::new(Arc::new(skills), &offered));
+            if !disabled(&tool.definition().name) {
+                tracing::info!(count = offered.len(), "skills registered");
+                tools = tools.with(tool);
+            }
+        }
+    }
+    if cfg.sandbox.enabled {
+        let sandbox = Arc::new(ContainerSandbox::new(SandboxLimits::from(&cfg.sandbox)));
+        let tool: Arc<dyn Tool> = Arc::new(SandboxTool::new(sandbox, cfg.sandbox.risk));
+        if !disabled(&tool.definition().name) {
+            tracing::info!(
+                runtime = %cfg.sandbox.runtime,
+                image = %cfg.sandbox.image,
+                "sandbox registered"
+            );
+            tools = tools.with(tool);
+        }
+    }
     for server in cfg.mcp.resolved_servers() {
         let limits = McpLimits {
             required_props_only: server
@@ -269,6 +392,7 @@ async fn build_tools(
             if disabled(&tool.definition().name) {
                 continue;
             }
+            mcp_names.push(tool.definition().name);
             tools = tools.with(tool);
             registered += 1;
         }
@@ -280,7 +404,7 @@ async fn build_tools(
         );
     }
     tracing::info!(tools = ?tools, "tool set");
-    Ok(tools)
+    Ok((tools, mcp_names))
 }
 
 /// Resolves on Ctrl-C or SIGTERM.

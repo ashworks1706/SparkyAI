@@ -2,19 +2,24 @@
 
 mod agent;
 mod assemble;
+mod capability;
 mod compact;
 mod config;
 mod confirm;
 mod context;
+mod guardrail;
 mod limit;
 mod mcp;
 mod openai;
 mod policy;
 mod postgres;
+mod profile;
 mod progress;
 mod query;
 mod rate_limit;
 mod rig_mapping;
+mod sandbox;
+mod skills;
 mod support;
 mod tokens;
 mod trace;

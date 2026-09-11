@@ -55,7 +55,11 @@ def _run_source(source: Source, *, force: bool) -> RunResult:
         snapshot_key = f"{source.key}/{fetched_at:%Y%m%dT%H%M%SZ}-{content_hash[:12]}.{ext}"
         objects.put_snapshot(snapshot_key, fetched.body, fetched.content_type)
 
-        if fetched.text is not None:
+        if source.extractor is not None:
+            text = source.extractor(fetched)
+            html_title = None if fetched.text is not None else extract.title_of(fetched.body)
+            title = fetched.title or html_title or source.key
+        elif fetched.text is not None:
             text = fetched.text
             title = fetched.title or source.key
         else:

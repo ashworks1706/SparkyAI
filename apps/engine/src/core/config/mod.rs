@@ -56,6 +56,15 @@ pub struct Config {
     /// How history that no longer fits is compacted.
     #[serde(default)]
     pub compaction: Compaction,
+    /// What the guardrail refuses.
+    #[serde(default)]
+    pub guardrail: Guardrail,
+    /// How a sandboxed command runs.
+    #[serde(default)]
+    pub sandbox: SandboxSettings,
+    /// How a turn becomes a profile.
+    #[serde(default)]
+    pub profile: Profile,
     /// JSONL trace recording.
     #[serde(default)]
     pub trace: Trace,
@@ -348,6 +357,8 @@ pub struct Agent {
     pub history_budget_tokens: usize,
     /// Cap on the memory section.
     pub memory_budget_tokens: usize,
+    /// Cap on the capabilities section.
+    pub capabilities_budget_tokens: usize,
     /// Characters per token the budget estimator assumes.
     pub chars_per_token: usize,
     /// First retry wait, doubled per attempt.
@@ -375,6 +386,7 @@ impl Default for Agent {
             evidence_budget_tokens: 1_200,
             history_budget_tokens: 1_000,
             memory_budget_tokens: 300,
+            capabilities_budget_tokens: 600,
             chars_per_token: 4,
             retry_base_ms: 250,
             retry_cap_ms: 8_000,
@@ -446,6 +458,8 @@ pub struct Tools {
     pub knowledge_search: bool,
     /// Register the live source-query tool, when the scraper has published a registry.
     pub query_source: bool,
+    /// Register the get_skill tool, when a reviewed skill exists.
+    pub get_skill: bool,
 }
 
 /// How a live source query runs. [tools] decides whether it is offered at all.
@@ -473,6 +487,7 @@ impl Default for Tools {
             disabled: Vec::new(),
             knowledge_search: true,
             query_source: true,
+            get_skill: true,
         }
     }
 }
@@ -636,6 +651,7 @@ impl Agent {
             evidence: self.evidence_budget_tokens,
             history: self.history_budget_tokens,
             memory: self.memory_budget_tokens,
+            capabilities: self.capabilities_budget_tokens,
             chars_per_token: self.chars_per_token,
         }
     }
@@ -697,6 +713,99 @@ impl Default for Compaction {
             max_tokens: 512,
             temperature: 0.0,
             timeout_secs: 30,
+        }
+    }
+}
+
+/// The gate every model response passes.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Guardrail {
+    /// Check responses at all.
+    pub enabled: bool,
+    /// Phrases that block a response wherever they appear. Matched without case.
+    pub denied_phrases: Vec<String>,
+    /// Longest answer allowed. 0 removes the limit.
+    pub max_answer_chars: usize,
+    /// Shown in place of a blocked response.
+    pub replacement: String,
+}
+
+impl Default for Guardrail {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            denied_phrases: Vec::new(),
+            max_answer_chars: 8_000,
+            replacement: "I cannot answer that. Ask a moderator if you need help.".into(),
+        }
+    }
+}
+
+/// A command in an isolated environment. Off until a deployment decides the runtime is there.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct SandboxSettings {
+    /// Offer the sandbox to the model. The engine needs access to the container runtime.
+    pub enabled: bool,
+    /// Container runtime binary.
+    pub runtime: String,
+    /// Image the command runs in.
+    pub image: String,
+    /// Memory ceiling.
+    pub memory: String,
+    /// CPU ceiling.
+    pub cpus: String,
+    /// Process ceiling.
+    pub pids: u32,
+    /// Wall-clock budget for one command.
+    pub timeout_secs: u64,
+    /// Longest stdout or stderr handed back to the model.
+    pub max_output_chars: usize,
+    /// Risk class the tool declares, which is what Policy gates it by.
+    pub risk: RiskClass,
+}
+
+impl Default for SandboxSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            runtime: "docker".into(),
+            image: "alpine:3.20".into(),
+            memory: "256m".into(),
+            cpus: "1".into(),
+            pids: 128,
+            timeout_secs: 20,
+            max_output_chars: 4_000,
+            risk: RiskClass::PrepareWrite,
+        }
+    }
+}
+
+/// The classifier and the graph agent. Detached from the request that produced the turn.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Profile {
+    /// Record what a turn states about the user.
+    pub enabled: bool,
+    /// Instructions for the classifier. Empty uses the built-in default.
+    pub classifier_instructions: Option<String>,
+    /// Instructions for the graph agent. Empty uses the built-in default.
+    pub graph_instructions: Option<String>,
+    /// Completion budget for the graph agent.
+    pub max_tokens: u32,
+    /// Wall-clock budget for classifying, extracting, and writing one turn.
+    pub timeout_secs: u64,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            classifier_instructions: None,
+            graph_instructions: None,
+            max_tokens: 512,
+            timeout_secs: 60,
         }
     }
 }
@@ -785,6 +894,9 @@ impl Config {
                 self.retrieval.text_search_config
             ));
         }
+        if self.sandbox.enabled && self.sandbox.runtime.trim().is_empty() {
+            return invalid("sandbox.runtime is empty".into());
+        }
         if self.compaction.enabled && self.compaction.max_tokens == 0 {
             return invalid("compaction.max_tokens must be at least 1".into());
         }
@@ -815,6 +927,7 @@ impl Config {
             ("evidence", self.agent.evidence_budget_tokens),
             ("history", self.agent.history_budget_tokens),
             ("memory", self.agent.memory_budget_tokens),
+            ("capabilities", self.agent.capabilities_budget_tokens),
         ] {
             if value > self.agent.prompt_budget_tokens {
                 return invalid(format!(

@@ -29,6 +29,15 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     used += estimate(&system, cpt);
     messages.push(Message::system(system));
 
+    if !s.capabilities.trim().is_empty() {
+        let block = s.capabilities.trim().to_owned();
+        let cost = estimate(&block, cpt);
+        if cost <= budget.capabilities {
+            used += cost;
+            messages.push(Message::system(block));
+        }
+    }
+
     if !s.memory.is_empty() {
         let mut block = format!("{}\n", s.templates.memory_header.trim());
         let mut spent = estimate(&block, cpt);

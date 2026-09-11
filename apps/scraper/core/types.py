@@ -9,13 +9,18 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Source:
-    """A registered public ASU source. A row in sources, never a folder."""
+    """A registered public ASU source. A row in sources, never a folder.
+
+    extractor, when set, turns the fetched page into clean text in place of the shared
+    heuristic in extract.py.
+    """
 
     key: str
     url: str
     category: str
     fetch_every_hours: int = 24
     needs_js: bool = False
+    extractor: Callable[[Fetched], str] | None = None
 
 
 @dataclass(frozen=True)

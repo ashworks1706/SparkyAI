@@ -121,6 +121,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             memory: &[],
             evidence: &[],
             history: &history,
+            capabilities: "",
             input: "",
             templates: Templates::default(),
         },

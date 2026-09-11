@@ -16,6 +16,8 @@ pub struct Budget {
     pub history: usize,
     /// Cap on the memory section.
     pub memory: usize,
+    /// Cap on the capabilities section.
+    pub capabilities: usize,
     /// Characters per token the estimator assumes. Never zero.
     pub chars_per_token: usize,
 }
@@ -65,6 +67,8 @@ pub struct Sections<'a> {
     pub evidence: &'a [Evidence],
     /// Prior turns and the tool exchanges of this request, oldest first.
     pub history: &'a [Message],
+    /// What the model may do, rendered. Empty writes no section.
+    pub capabilities: &'a str,
     /// The current message from the user.
     pub input: &'a str,
     /// Wording written around the sections.

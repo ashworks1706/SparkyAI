@@ -148,6 +148,9 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
         compactor: Some(Arc::new(compactor(vec![Ok(text(
             "Forty exchanges about hours.",
         ))]))),
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
     };
     let cfg = AgentConfig {
         budget: Budget {
@@ -200,6 +203,9 @@ async fn a_failed_compaction_leaves_the_run_working() {
         confirmations: None,
         // The compactor has no scripted reply, so its model call fails.
         compactor: Some(Arc::new(compactor(Vec::new()))),
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
     };
     let cfg = AgentConfig {
         budget: Budget {

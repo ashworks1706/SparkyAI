@@ -12,21 +12,25 @@ use tracing::Instrument;
 use tracing::field::Empty;
 
 use crate::agent::harness::assemble;
+use crate::agent::harness::profile::ProfileWriter;
 use crate::agent::harness::tool::ToolSet;
 use crate::core::traits::compaction::Compactor;
 use crate::core::traits::confirmation::ConfirmationStore;
 use crate::core::traits::conversation::ConversationStore;
+use crate::core::traits::guardrail::Guardrail;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::policy::Policy;
+use crate::core::traits::profile::ProfileGraph;
 use crate::core::traits::retrieval::Retriever;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
 use crate::core::types::assemble::{Sections, Templates};
 use crate::core::types::context::RequestContext;
 use crate::core::types::evidence::Evidence;
+use crate::core::types::guardrail::{Stage, Verdict};
 use crate::core::types::memory::{Memory, MemoryQuery};
-use crate::core::types::message::{Message, ToolCall};
+use crate::core::types::message::{Message, Role, ToolCall};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 use crate::core::types::policy::{ConfirmationRequest, Decision, PendingAction, ProposedAction};
 use crate::core::types::retrieval::RetrievalQuery;
@@ -54,6 +58,36 @@ pub struct AgentDeps {
     pub confirmations: Option<Arc<dyn ConfirmationStore>>,
     /// Compacts history that no longer fits, when configured.
     pub compactor: Option<Arc<dyn Compactor>>,
+    /// Checks every response, when configured.
+    pub guardrail: Option<Arc<dyn Guardrail>>,
+    /// Records what a turn states about the user, when configured.
+    pub profile: Option<Arc<ProfileWriter>>,
+    /// The profile graph read at assembly time, when configured.
+    pub profile_graph: Option<Arc<dyn ProfileGraph>>,
+}
+
+/// The outcome of a step that asked for no capabilities.
+fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
+    if !response.content.trim().is_empty() {
+        return StepOutcome::Stop(RunStatus::Answered, response.content.clone(), None);
+    }
+    let (status, text) = if force_answer {
+        (
+            RunStatus::Stalled,
+            "I could not turn what I found into an answer. Try rephrasing.",
+        )
+    } else if response.finish_reason == FinishReason::Length {
+        (
+            RunStatus::Answered,
+            "I ran out of room before finishing the answer.",
+        )
+    } else {
+        (
+            RunStatus::Answered,
+            "The model returned nothing. Try rephrasing.",
+        )
+    };
+    StepOutcome::Stop(status, text.to_owned(), None)
 }
 
 /// How many leading turns have to go for the rest to fit budget.
@@ -90,6 +124,8 @@ pub struct Agent {
     system_prompt: Arc<str>,
     /// Wording written around the prompt sections. Owned, and sourced from configuration.
     prompt: Arc<PromptText>,
+    /// The capabilities section, rendered once at boot.
+    capabilities: Arc<str>,
 }
 
 /// The configurable wording assembly writes around the sections.
@@ -177,7 +213,14 @@ impl Agent {
             cfg,
             system_prompt: system_prompt.into(),
             prompt: Arc::new(PromptText::default()),
+            capabilities: Arc::from(""),
         }
+    }
+
+    /// Replaces the capabilities section the prompt carries.
+    pub fn with_capabilities(mut self, capabilities: impl Into<Arc<str>>) -> Self {
+        self.capabilities = capabilities.into();
+        self
     }
 
     /// Replaces the wording written around the prompt sections.
@@ -439,6 +482,7 @@ impl Agent {
                 .map_err(|error| AgentError::Store(error.to_string()))?,
             None => Vec::new(),
         };
+        let memory = self.with_profile(ctx, memory).await;
         let evidence = match &deps.retriever {
             Some(retriever) => {
                 let started = Instant::now();
@@ -521,6 +565,7 @@ impl Agent {
                 memory: &inputs.memory,
                 evidence: &inputs.evidence,
                 history: &prompt_history,
+                capabilities: &self.capabilities,
                 input: run.input,
                 templates: self.prompt.templates(),
             },
@@ -547,31 +592,17 @@ impl Agent {
         run.usage.add(response.usage);
         run.new_turns.push(response.as_message());
 
+        let stage = if response.tool_calls.is_empty() {
+            Stage::Answer
+        } else {
+            Stage::Capability
+        };
+        if let Some(blocked) = self.guarded(ctx, run.steps, stage, &response.content).await {
+            return Ok(blocked);
+        }
+
         if response.tool_calls.is_empty() {
-            if response.content.trim().is_empty() {
-                let (status, text) = if run.force_answer {
-                    (
-                        RunStatus::Stalled,
-                        "I could not turn what I found into an answer. Try rephrasing.".to_owned(),
-                    )
-                } else if response.finish_reason == FinishReason::Length {
-                    (
-                        RunStatus::Answered,
-                        "I ran out of room before finishing the answer.".to_owned(),
-                    )
-                } else {
-                    (
-                        RunStatus::Answered,
-                        "The model returned nothing. Try rephrasing.".to_owned(),
-                    )
-                };
-                return Ok(StepOutcome::Stop(status, text, None));
-            }
-            return Ok(StepOutcome::Stop(
-                RunStatus::Answered,
-                response.content,
-                None,
-            ));
+            return Ok(answered(&response, run.force_answer));
         }
 
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
@@ -593,6 +624,38 @@ impl Agent {
         };
 
         self.execute(run, runnable).await
+    }
+
+    /// Checks a response against the guardrail. A block ends the run with the replacement text.
+    async fn guarded(
+        &self,
+        ctx: &RequestContext,
+        step: u32,
+        stage: Stage,
+        text: &str,
+    ) -> Option<StepOutcome> {
+        let guardrail = self.deps.guardrail.as_ref()?;
+        // An empty capability branch has no text to check and every step would pay for it.
+        if stage == Stage::Capability && text.trim().is_empty() {
+            return None;
+        }
+        let verdict = guardrail.check(ctx, stage, text).await;
+        let Verdict::Block {
+            replacement,
+            reason,
+        } = verdict
+        else {
+            return None;
+        };
+        self.deps.trace.emit(
+            ctx,
+            TraceEvent::GuardrailBlocked {
+                step,
+                stage,
+                reason,
+            },
+        );
+        Some(StepOutcome::Stop(RunStatus::Blocked, replacement, None))
     }
 
     /// Runs the calls policy allowed. Repeats are refused and reported, and a step made only
@@ -914,12 +977,46 @@ impl Agent {
         confirmation: Option<ConfirmationRequest>,
     ) -> Result<Answer, AgentError> {
         self.persist(run.ctx, &run.new_turns).await?;
+        self.record_profile(run);
         let text = if text.trim().is_empty() {
             status.explain().unwrap_or_default().to_owned()
         } else {
             text
         };
         Ok(self.finish(run, status, text, evidence, confirmation))
+    }
+
+    /// Appends what the graph knows about this user to the memories recalled. A graph that
+    /// cannot be read leaves the prompt with the memories alone.
+    async fn with_profile(&self, ctx: &RequestContext, mut memory: Vec<Memory>) -> Vec<Memory> {
+        let Some(graph) = &self.deps.profile_graph else {
+            return memory;
+        };
+        match graph.recall(ctx, self.cfg.memory_recall_limit).await {
+            Ok(nodes) => memory.extend(nodes.iter().map(Memory::from)),
+            Err(error) => tracing::warn!(error = %error, "profile graph recall failed"),
+        }
+        memory
+    }
+
+    /// Hands the turn to the profile writer and returns. The spawned task carries its own
+    /// context and deadline, so the answer never waits on it.
+    fn record_profile(&self, run: &Run<'_>) {
+        let Some(writer) = self.deps.profile.clone() else {
+            return;
+        };
+        let turn = run
+            .new_turns
+            .iter()
+            .filter(|m| m.role == Role::User)
+            .map(|m| m.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        if turn.trim().is_empty() {
+            return;
+        }
+        let (tenant, user) = (run.ctx.tenant_id.clone(), run.ctx.user_id.clone());
+        tokio::spawn(async move { writer.record(tenant, user, turn).await });
     }
 
     async fn persist(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), AgentError> {

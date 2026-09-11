@@ -31,6 +31,7 @@ prompt_budget_tokens = 3000
 evidence_budget_tokens = 1200
 history_budget_tokens = 1000
 memory_budget_tokens = 300
+capabilities_budget_tokens = 600
 chars_per_token = 4
 
 retry_base_ms = 250
@@ -93,6 +94,33 @@ confirm_from = "external_write"
 disabled = []
 knowledge_search = true
 query_source = true
+
+# The classifier and the graph agent. Detached from the request that produced the turn.
+# Off until the graph is wanted; every turn otherwise costs two extra model calls.
+[profile]
+enabled = false
+max_tokens = 512
+timeout_secs = 60
+
+# A command in an isolated environment. The engine needs access to the container runtime.
+# No network, read-only root, dropped capabilities, non-root user.
+[sandbox]
+enabled = false
+runtime = "docker"
+image = "alpine:3.20"
+memory = "256m"
+cpus = "1"
+pids = 128
+timeout_secs = 20
+max_output_chars = 4000
+risk = "prepare_write"
+
+# The gate every model response passes, on the capability branch and the answer branch.
+[guardrail]
+enabled = true
+denied_phrases = []
+max_answer_chars = 8000
+replacement = "I cannot answer that. Ask a moderator if you need help."
 
 # The chat agent. Replaces the turns that no longer fit with one turn that does. Off leaves
 # history trimmed by dropping the oldest turns.

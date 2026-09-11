@@ -4,10 +4,14 @@
 pub mod compaction;
 pub mod confirmation;
 pub mod conversation;
+pub mod guardrail;
 pub mod memory;
 pub mod model;
 pub mod policy;
+pub mod profile;
 pub mod query;
 pub mod retrieval;
+pub mod sandbox;
+pub mod skills;
 pub mod tool;
 pub mod trace;

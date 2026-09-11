@@ -169,6 +169,9 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         memory: None,
         confirmations: None,
         compactor: None,
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
 }
@@ -265,6 +268,9 @@ pub fn agent_with_store(
         memory: None,
         confirmations: None,
         compactor: None,
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
     };
     Agent::new(deps, cfg, "sys")
 }
@@ -286,6 +292,9 @@ pub fn agent_holding(
         memory: None,
         confirmations: Some(confirmations),
         compactor: None,
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
     };
     Agent::new(deps, AgentConfig::default(), "sys")
 }

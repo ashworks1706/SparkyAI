@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::types::guardrail::Stage;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::policy::Decision;
 
@@ -66,6 +67,15 @@ pub enum TraceEvent {
         tool: String,
         /// Verdict.
         decision: Decision,
+    },
+    /// The guardrail refused a response.
+    GuardrailBlocked {
+        /// Loop step.
+        step: u32,
+        /// Which branch the response was on.
+        stage: Stage,
+        /// Why it was refused.
+        reason: String,
     },
     /// History that no longer fits is being replaced by one turn.
     Compaction {
@@ -129,6 +139,7 @@ impl TraceEvent {
             Self::ModelCall { .. } => "model_call",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
+            Self::GuardrailBlocked { .. } => "guardrail_blocked",
             Self::Compaction { .. } => "compaction",
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
@@ -149,6 +160,9 @@ impl TraceEvent {
                 "query_source" => "checking a live ASU page".to_owned(),
                 other => format!("running {other}"),
             }),
+            Self::GuardrailBlocked { stage, .. } => {
+                Some(format!("the {} was not allowed", stage.as_str()))
+            }
             Self::Compaction { turns } => Some(format!("summarising {turns} earlier turns")),
             Self::Retrieval {
                 query, chunk_ids, ..
@@ -187,6 +201,8 @@ pub enum RunStatus {
     Deadline,
     /// Cancelled by the caller.
     Cancelled,
+    /// The guardrail refused the response.
+    Blocked,
     /// Failed with an error.
     Error,
 }
@@ -197,7 +213,9 @@ impl RunStatus {
     /// None only for Answered, where the model text is the answer. The match is exhaustive.
     pub fn explain(&self) -> Option<&'static str> {
         match self {
-            Self::Answered => None,
+            // Answered carries the model text. Blocked carries the replacement the guardrail
+            // supplied. Neither needs a stand-in here.
+            Self::Answered | Self::Blocked => None,
             Self::AwaitingConfirmation => Some("I stopped to ask you first."),
             Self::StepLimit => Some("I could not finish within the allowed number of steps."),
             Self::Stalled => {
