@@ -125,7 +125,7 @@ min_words = 4
 # A command in an isolated environment. The engine needs access to the container runtime.
 # No network, read-only root, dropped capabilities, non-root user.
 [sandbox]
-enabled = false
+enabled = true
 runtime = "docker"
 image = "alpine:3.20"
 memory = "256m"

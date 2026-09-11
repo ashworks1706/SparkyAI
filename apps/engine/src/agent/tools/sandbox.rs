@@ -123,7 +123,6 @@ impl ContainerSandbox {
         let l = &self.limits;
         [
             "--network",
-            "--network",
             "none",
             "--read-only",
             "--cap-drop",

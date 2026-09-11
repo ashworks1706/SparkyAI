@@ -16,23 +16,37 @@ fn ctx() -> RequestContext {
 }
 
 #[test]
-fn every_flag_that_seals_the_container_is_passed() {
+fn every_flag_that_seals_the_container_is_passed_once_with_its_value() {
     let args = ContainerSandbox::new(Limits::default()).args();
-    let joined = args.join(" ");
-    // Each of these is the difference between a sandbox and a shell on the host.
-    for flag in [
-        "--network none",
-        "--read-only",
-        "--cap-drop ALL",
-        "--security-opt no-new-privileges",
-        "--user 65534:65534",
-        "--memory",
-        "--cpus",
-        "--pids-limit",
+
+    // Each of these is the difference between a sandbox and a shell on the host. Checking the
+    // joined string for a substring is not enough: a flag repeated by accident still contains
+    // the pair, and docker then reads the value as the image name.
+    for (flag, value) in [
+        ("--network", Some("none")),
+        ("--read-only", None),
+        ("--cap-drop", Some("ALL")),
+        ("--security-opt", Some("no-new-privileges")),
+        ("--user", Some("65534:65534")),
+        ("--memory", Some("256m")),
+        ("--cpus", Some("1")),
+        ("--pids-limit", Some("128")),
+        ("--rm", None),
     ] {
-        assert!(joined.contains(flag), "{flag} is missing from {joined}");
+        let at: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.as_str() == flag)
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(at.len(), 1, "{flag} appears {} times in {args:?}", at.len());
+        if let Some(value) = value {
+            assert_eq!(args.get(at[0] + 1).map(String::as_str), Some(value));
+        }
     }
-    assert!(joined.contains("--rm"), "a container is not left behind");
+
+    // The image is the last argument, and the command follows it.
+    assert_eq!(args.last().map(String::as_str), Some("alpine:3.20"));
 }
 
 #[test]
@@ -214,4 +228,98 @@ fn a_session_call_keeps_the_container_and_a_plain_call_does_not() {
         !seal.contains("--rm"),
         "a session container outlives one command"
     );
+}
+
+/// Live check against the container runtime. Run it with
+/// `cargo test -p engine -- --ignored sandbox_runs`.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_real_container_computes_and_stays_sealed() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+
+    let Ok(out) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "echo $((7*191))".into(),
+                session: None,
+            },
+        )
+        .await
+    else {
+        unreachable!("the runtime answered")
+    };
+    assert_eq!(out.exit_code, 0);
+    assert_eq!(out.stdout.trim(), "1337");
+
+    // The seal is the reason this tool is allowed to exist at all.
+    let Ok(net) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "wget -T2 -q -O- https://example.com".into(),
+                session: None,
+            },
+        )
+        .await
+    else {
+        unreachable!("the runtime answered")
+    };
+    assert_ne!(net.exit_code, 0, "the network is refused");
+
+    let Ok(fs) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "touch /etc/x".into(),
+                session: None,
+            },
+        )
+        .await
+    else {
+        unreachable!("the runtime answered")
+    };
+    assert_ne!(fs.exit_code, 0, "the root filesystem is read only");
+}
+
+/// Live check that a session keeps what an earlier command wrote.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_real_session_keeps_state_between_calls() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        session_idle_secs: 60,
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let session = Some("itest".to_owned());
+
+    let first = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "echo kept > state.txt".into(),
+                session: session.clone(),
+            },
+        )
+        .await;
+    assert!(first.is_ok(), "{first:?}");
+
+    let Ok(second) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "cat state.txt".into(),
+                session,
+            },
+        )
+        .await
+    else {
+        unreachable!("the session resumed")
+    };
+    assert_eq!(second.stdout.trim(), "kept");
 }
