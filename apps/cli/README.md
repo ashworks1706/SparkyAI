@@ -11,13 +11,13 @@ just cli          # from anywhere inside the repo
 ```
 
 ```
- sparky  NORMAL  ● engine ● model ● phoenix                        started engine
+ sparky  NORMAL  ● engine ● model ● posthog                        started engine
 ╭ units ─────────────────╮╭ engine · running · 42s · 318 lines · follow ───────────╮
 │ infra                  ││ 12:01:07 $ setsid just engine                          │
 │  ● postgres     :5432  ││ 12:01:09    Compiling engine v0.1.0                    │
 │  ● redis        :6379  ││ 12:01:31 INFO engine: listening addr=0.0.0.0:8080      │
 │  ○ minio        :9001  ││ 12:01:40 INFO engine::routes::chat: request_id=…       │
-│  ● phoenix      :6006  ││ 12:01:44 INFO engine::agent: tool search_knowledge_base 412 ms │
+│  ● posthog-proxy :8010 ││ 12:01:44 INFO engine::agent: tool search_knowledge_base 412 ms │
 │  ● prometheus   :9090  ││ 12:01:47 INFO engine::routes::chat: answered 2 steps   │
 │  ● grafana      :3000  ││                                                        │
 │ models                 ││                                                        │
@@ -59,17 +59,17 @@ under **tasks**.
 
 | Group | Units | How |
 |---|---|---|
-| infra | postgres, redis, minio, phoenix, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f` |
+| infra | postgres, redis, minio, posthog-proxy, pgweb, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f`; `--profile posthog` / `db` / `metrics` / `gpu-metrics` where gated |
 | models | chat, embed | same, `--profile model` |
 | tools | firecrawl, playwright-mcp | same, `--profile crawl` / `browser` |
 | apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group so `cargo run` and its binary both go |
 | tasks | doctor, setup, migrate, scraper run, check, data *, eval *, train sft | `just <recipe>`, exit code shown as ✓ / ✗ |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes the RunPod host uses; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
-Container state comes from `docker compose ps`. The status bar probes the engine, chat model, and Phoenix.
+Container state comes from `docker compose ps`. The status bar probes the engine, chat model, and PostHog at `SPARKY_CLI__POSTHOG_URL/_health`.
 
 ## Settings
 
-`SPARKY_ENGINE__BASE_URL`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `src/core/config.rs`.
+`SPARKY_ENGINE__BASE_URL`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__POSTHOG_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `src/core/config.rs`.
 
 The console keeps a bounded in-memory view and appends full unit output to `.sparky/logs/`.
