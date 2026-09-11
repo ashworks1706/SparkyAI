@@ -2,7 +2,7 @@
 
 2026-09-05.
 
-MyASU was listed under "out of scope until stated otherwise". It moves into phase 7, which
+MyASU was listed under "out of scope until stated otherwise". It moves into phase 8, which
 already covers authenticated browser sessions through the Playwright MCP server.
 
 Read-only first: hours, holds, deadlines, enrolled sections. No submission, no payment, no form

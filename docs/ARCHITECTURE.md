@@ -111,9 +111,9 @@ Only the scraper touches the web. The engine and the scraper meet only in Postgr
 ```mermaid
 flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["agent::harness<br/>loop · policy · assemble · tools · trace"]
+    HARNESS["agent::harness<br/>loop · task · guardrail · policy<br/>assemble · capability · compact · tools · trace"]
     MODEL["agent::model<br/>rig_openai"]
-    TOOLS["agent::tools<br/>knowledge_search · query_source · mcp"]
+    TOOLS["agent::tools<br/>knowledge_search · query_source · mcp<br/>skills · sandbox"]
     STORES["stores<br/>postgres"]
     CORE["core<br/>config · types · traits · tests"]
 
@@ -193,7 +193,7 @@ pub trait ConversationStore {
 #[async_trait]
 pub trait MemoryStore {
     async fn recall(&self, ctx: &RequestContext, q: &MemoryQuery) -> Result<Vec<Memory>, StoreError>;
-    // write and forget arrive with Phase 4, when the agent starts producing memories
+    // write and forget arrive with Phase 5, when the agent starts producing memories
 }
 
 #[async_trait]
@@ -258,13 +258,15 @@ sequenceDiagram
 flowchart TD
     ASM["assembled context"] --> CALL["call model"]
     CALL --> ANS{"tool calls<br/>requested?"}
-    ANS -->|no| DONE(["Answered · text + citations"])
+    ANS -->|no| OUT["Guardrail::check the answer"]
+    OUT --> DONE(["Answered · text + citations"])
     ANS -->|yes| REPEAT{"identical call<br/>already made?"}
     REPEAT -->|yes| FORCE["tell the model it repeated<br/>next step offers no tools"]
     FORCE --> AGAIN{"repeats again?"}
     AGAIN -->|yes| STALLED(["Stalled"])
     AGAIN -->|no| CALL
-    REPEAT -->|no| POL["Policy::authorize each call"]
+    REPEAT -->|no| GUARD["Guardrail::check the response"]
+    GUARD --> POL["Policy::authorize each call"]
     POL --> DEC{"decision"}
     DEC -->|Deny| FEED
     DEC -->|Confirm| WAIT(["AwaitingConfirmation"])
@@ -276,6 +278,47 @@ flowchart TD
 ```
 
 The loop owns every stopping condition. Structured output gets one correction attempt. Independent calls run in parallel; a stateful tool makes the step sequential. Identical calls are not run twice.
+
+Every model response passes the guardrail, on the execution branch and on the answer branch alike. The guardrail is the outer gate and `Policy` is what it consults for a proposed action: `Policy` classifies a typed action by risk, the guardrail decides whether a response may proceed at all. Neither replaces the other.
+
+## Prompted sub-agents
+
+The harness runs more than one prompt. The loop is one of them; compaction and profile extraction are others, each with its own instructions and its own model call, and none of them but the loop may call a tool.
+
+| Agent | When | Reads | Writes |
+|---|---|---|---|
+| Sparky | every request | retrieval, memory, history, capabilities | the turn |
+| Chat | the context window fills | the turns being replaced | one compacted turn |
+| Graph | after a turn is appended, when the classifier finds something | the turn | the profile graph |
+
+`agent::harness::task` is what they share: a prompt, one model call, no tools, a typed result. The loop is not built on it, because the loop is the thing with tools and stopping conditions.
+
+## Capabilities
+
+What the model may do is one list, not several. `agent::harness::capability` renders the `<capabilities>` section of the prompt and each entry names its kind.
+
+| Kind | Executed by | Risk |
+|---|---|---|
+| `tool` | a built-in `Tool` | declared per tool |
+| `mcp` | a remote MCP server | derived from the tool name |
+| `skill` | fetched by `get_skill`, then followed | the steps it names |
+| `sandbox` | a command in an isolated environment | its own class |
+
+A skill is a saved procedure, not code the model wrote: parameters, an ordered list of steps, and the domain it applies to. `get_skill` fetches one; the model follows it with the capabilities it already has. Skills are reviewed before they are offered, so a skill is never promoted from a trace without a person in the loop.
+
+## Compaction
+
+History is trimmed to its budget by dropping the oldest turns. When the window fills, the Chat Agent replaces the turns it would have dropped with one compacted turn instead.
+
+A compacted turn is model output. It is stored with its own role so a replayed conversation can tell it from what the user and the assistant actually said, it is never retrieval evidence, and the turns it replaced stay in `messages`. Compaction changes what the next prompt carries, not what happened.
+
+## Profile graph
+
+Flat memory rows answer what a user said. They do not answer how two facts relate. The profile graph holds entities, the relations between them, and an embedding per node, so recall can start from a relation rather than from similarity alone.
+
+Extraction never runs in the request path. After a turn is appended, a classifier decides whether it carries a fact, a record, or a preference; only then is a job queued, and the Graph Agent claims it the way the scraper worker claims a source query. The graph feeds retrieval on the next request.
+
+Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete.
 
 ## Tool risk classes
 
@@ -337,7 +380,7 @@ Both queries filter by tenant and category. Reciprocal rank fusion combines dens
 | Profile | approved preferences, interests, goals |
 | Task | state to continue a multi-step job |
 
-A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. Users can view and delete their memory (Phase 4). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
+A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. Users can view and delete their memory (Phase 5). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
 
 ## Storage
 
@@ -427,7 +470,7 @@ Phoenix holds spans, Prometheus holds time series. A slow request reads as the `
 
 Dashboard panels and the metric names behind them: `deploy/README.md`.
 
-## Authenticated browser tasks (Phase 7)
+## Authenticated browser tasks (Phase 8)
 
 The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
 
