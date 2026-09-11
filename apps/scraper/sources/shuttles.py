@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import blocks, flatten_tables, listing_lines, page_text, plain
+from scraper.ingest.extract import blocks, flatten_tables, listing_lines, page_text, plain
 
 _LABELS = {
     "Stops": ("stop", "serves", "route stops"),

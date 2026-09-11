@@ -15,12 +15,14 @@ uv run scraper status
 
 | Module | Holds |
 |---|---|
-| `fetch.py` | Firecrawl (`just crawl`) by default: JS rendered, main content as markdown. `SPARKY_SCRAPER__FETCHER=http` uses httpx + Playwright instead |
-| `extract.py` | HTML → text, for the `http` fetcher |
-| `chunk.py` | text → chunks |
-| `embed.py` | llama-server embed endpoint |
-| `tree.py` | the hierarchical index: cluster a level, summarize each cluster on the chat endpoint, embed the summary, recurse |
-| `pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index → tree |
+| `ingest/fetch.py` | Firecrawl (`just crawl`) by default: JS rendered, main content as markdown. `SPARKY_SCRAPER__FETCHER=http` uses httpx + Playwright instead |
+| `ingest/extract.py` | HTML → text, for the `http` fetcher |
+| `ingest/chunk.py` | text → chunks |
+| `ingest/embed.py` | llama-server embed endpoint |
+| `ingest/tree.py` | the hierarchical index: cluster a level, summarize each cluster on the chat endpoint, embed the summary, recurse |
+| `ingest/pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index → tree |
+| `query/registry.py` | the live query sources the engine may call, published by `scraper worker` |
+| `query/worker.py` | claims `jobs` rows the engine queues, fetches, and writes the result |
 | `sources/` | one module per ASU source; a source is a row, not a folder |
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |

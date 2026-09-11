@@ -10,10 +10,10 @@ from datetime import UTC, datetime
 import psycopg
 import structlog
 
-from scraper import chunk, embed, extract, fetch, tree
 from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import ChunkRow, PipelineError, RunResult, Source, SourceRow
+from scraper.ingest import chunk, embed, extract, fetch, tree
 from scraper.store import object as objects
 from scraper.store import postgres
 

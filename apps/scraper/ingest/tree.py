@@ -12,9 +12,9 @@ import numpy as np
 import structlog
 from sklearn.cluster import KMeans
 
-from scraper import embed as embedding
 from scraper.core.settings import Scraper, Summary, settings
 from scraper.core.types import PipelineError, SummaryError, TreeNode
+from scraper.ingest import embed as embedding
 
 log = structlog.get_logger()
 

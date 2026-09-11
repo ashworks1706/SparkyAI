@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import is_divider, page_text, plain, table_cells
+from scraper.ingest.extract import is_divider, page_text, plain, table_cells
 
 
 def extract_hours(fetched: Fetched) -> str:

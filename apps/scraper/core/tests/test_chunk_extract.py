@@ -1,5 +1,5 @@
-from scraper.chunk import chunk_text
-from scraper.extract import extract_text, is_divider, plain, table_cells, title_of
+from scraper.ingest.chunk import chunk_text
+from scraper.ingest.extract import extract_text, is_divider, plain, table_cells, title_of
 
 HTML = b"""
 <html><head><title>Hayden Library Hours</title></head>

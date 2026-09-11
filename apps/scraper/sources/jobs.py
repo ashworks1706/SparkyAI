@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from scraper.core.types import Fetched, Source
-from scraper.extract import blocks, flatten_tables, labeled, listing_lines, page_text, plain
+from scraper.ingest.extract import blocks, flatten_tables, labeled, listing_lines, page_text, plain
 
 _LABELS = {
     "Department": ("department", "unit", "college", "school", "employer"),

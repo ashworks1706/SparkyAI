@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-from scraper.chunk import chunk_text
 from scraper.core.types import Fetched
+from scraper.ingest.chunk import chunk_text
 from scraper.sources import SOURCES
 from scraper.sources.clubs import extract_clubs
 from scraper.sources.courses import extract_courses

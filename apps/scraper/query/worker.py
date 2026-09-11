@@ -10,11 +10,11 @@ import time
 
 import structlog
 
-from scraper import extract, fetch
 from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import Job, QueryError, QueryResult
-from scraper.query_sources import QUERY_SOURCES, url_for
+from scraper.ingest import extract, fetch
+from scraper.query.registry import QUERY_SOURCES, url_for
 from scraper.store import postgres
 
 log = structlog.get_logger()
