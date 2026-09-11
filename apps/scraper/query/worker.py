@@ -41,8 +41,7 @@ def run_job(job: Job) -> QueryResult:
     with telemetry.tracer().start_as_current_span(
         "scrape.query",
         attributes={
-            "openinference.span.kind": "CHAIN",
-            "input.value": url,
+            "sparky.input": url,
             "sparky.source": source.key,
         },
     ) as span:
@@ -54,7 +53,7 @@ def run_job(job: Job) -> QueryResult:
         limit = settings().scraper.query_max_chars
         if len(text) > limit:
             text = text[:limit] + "\n…[truncated]"
-        span.set_attribute("output.value", f"{len(text)} chars")
+        span.set_attribute("sparky.output", f"{len(text)} chars")
     return QueryResult(source=source.key, url=url, text=text)
 
 

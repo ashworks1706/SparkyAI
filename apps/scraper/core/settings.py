@@ -69,8 +69,12 @@ class Firecrawl(BaseModel):
 
 
 class Telemetry(BaseModel):
-    # Phoenix locally; empty disables export.
-    otlp_endpoint: str = "http://localhost:4317"
+    """OTLP/HTTP span export to PostHog. An empty host or project token disables export."""
+
+    host: str = "http://localhost:8010"
+    project_token: SecretStr = SecretStr("")
+    traces_path: str = "/i/v1/traces"
+    export_timeout_secs: float = 10.0
 
 
 class Scraper(BaseModel):
