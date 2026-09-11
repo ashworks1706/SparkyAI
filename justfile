@@ -112,12 +112,12 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, scraper, phoenix, postgres, redis, minio
+# Start engine, discord, scraper, postgres, redis, minio
 up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -130,9 +130,14 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores and the Phoenix trace UI on http://localhost:6006. The engine runs on the host..
+# Datastores: postgres, redis, minio. The engine runs on the host. PostHog is just posthog
 infra *ARGS:
-    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio phoenix
+    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
+
+# PostHog (traces, LLM analytics, product events) on http://localhost:8010, loopback. About 16 GB of memory
+posthog *ARGS:
+    ./scripts/posthog.sh
+    docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep '^posthog-')
 
 # llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
 model *ARGS:
@@ -160,10 +165,10 @@ gpu-metrics *ARGS:
 
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog logs -f {{ARGS}}
 
 # Build both images locally
 images:

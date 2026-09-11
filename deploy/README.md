@@ -8,7 +8,7 @@ just engine        # then in separate shells: just discord, just web
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
-Starts engine, discord, scraper, Phoenix (trace UI at http://localhost:6006), Postgres 17 (pgvector), Redis 7, MinIO. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat and embed. `just crawl` starts self-hosted Firecrawl (five containers, API on :3002) for the scraper; `just browser` starts Playwright MCP (:8931, loopback) for the engine's browser tools; set `SPARKY_MCP__PLAYWRIGHT_URL=http://localhost:8931/mcp` for a host-run engine (the compose engine has it already).
+Starts engine, discord, scraper, Postgres 17 (pgvector), Redis 7, MinIO. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat and embed. `just crawl` starts self-hosted Firecrawl (five containers, API on :3002) for the scraper; `just browser` starts Playwright MCP (:8931, loopback) for the engine's browser tools; set `SPARKY_MCP__PLAYWRIGHT_URL=http://localhost:8931/mcp` for a host-run engine (the compose engine has it already).
 
 ## Production
 
@@ -20,7 +20,7 @@ SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no ho
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, and no host ports except engine `:8080`. Phoenix, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, and no host ports except engine `:8080`. PostHog, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
 
 ## Models
 
@@ -37,12 +37,30 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 
 ## Observability
 
-- Traces: every app exports OpenTelemetry to Phoenix (`SPARKY_TELEMETRY__OTLP_ENDPOINT`, default `http://localhost:4317`; empty disables). UI at http://localhost:6006. Engine spans carry OpenInference attributes; a Discord conversation is one Phoenix session.
+- Traces, LLM analytics, product events: self-hosted PostHog, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__HOST` (default `http://localhost:8010`; compose sets `http://posthog-proxy`) with `SPARKY_TELEMETRY__PROJECT_TOKEN`; an empty token disables export. Model spans become `$ai_generation` events; a Discord conversation is one `$ai_session_id`. Contract: `docs/decisions/0003-posthog.md`.
 - Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
 - Database: `just db` starts pgweb on http://localhost:8081, loopback only. It browses the same database the engine reads and writes, so a change made there is a change to live data. `chunks.embedding` is a 1024-dimension vector and does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback only. They scrape `llama-server`, which exports Prometheus format on its own port; `chat` and `embed` run with `--metrics`. On a GPU host add `just gpu-metrics` for the utilisation, VRAM and temperature panels. The exporter shells out to `nvidia-smi`, so it runs under the nvidia container runtime with the `utility` driver capability rather than binding the driver library in by path.
 
-Phoenix holds one span per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. Prometheus holds server-side time series: throughput, queue depth, batching.
+PostHog holds one `$ai_generation` per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. Prometheus holds server-side time series: throughput, queue depth, batching.
+
+### PostHog
+
+```bash
+just posthog       # fetch pinned upstream files into .sparky/posthog, then start the posthog profile
+```
+
+The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` (about 40 containers). It wants about 16 GB of memory. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config, Kafka topics, Temporal and livestream config) and downloads GeoIP into `.sparky/posthog/share`; set `SPARKY_POSTHOG_DIR` to an absolute path to keep them elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
+
+The UI and every ingestion path sit behind `posthog-proxy` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces), `/i/v0/ai/otel` (OTLP to LLM analytics), `/batch/` (events). The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
+
+First run:
+
+1. Open http://localhost:8010, create the account, organization, and project.
+2. Put the project token (Settings, Project, Project token, `phc_...`) in `.env` as `SPARKY_TELEMETRY__PROJECT_TOKEN`.
+3. For `just data export`, create a personal API key with the Query Read scope and set `SPARKY_TRAINING__POSTHOG_HOST=http://localhost:8010`, `SPARKY_TRAINING__POSTHOG_PROJECT_ID` (the number in the project URL), and `SPARKY_TRAINING__POSTHOG_API_KEY`.
+
+`SPARKY_POSTHOG_SECRET` and `SPARKY_POSTHOG_ENCRYPTION_SALT_KEYS` have local-only defaults; set real values in `.env` before the first start on any shared host, and keep them afterwards (the salt encrypts stored data). `SPARKY_POSTHOG_SITE_URL` changes the URL PostHog puts in links. In production `posthog-proxy` has no host port.
 
 ### Reading the dashboard
 
