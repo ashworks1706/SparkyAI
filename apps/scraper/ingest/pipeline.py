@@ -25,14 +25,13 @@ def run_source(source: Source, *, force: bool = False) -> RunResult:
     with telemetry.tracer().start_as_current_span(
         "scrape.source",
         attributes={
-            "openinference.span.kind": "CHAIN",
-            "input.value": source.url,
+            "sparky.input": source.url,
             "sparky.source": source.key,
         },
     ) as span:
         result = _run_source(source, force=force)
         span.set_attribute(
-            "output.value",
+            "sparky.output",
             f"{'indexed' if result.changed else 'unchanged'}: {result.chunks} chunks",
         )
         return result

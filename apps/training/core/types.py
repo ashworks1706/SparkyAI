@@ -19,7 +19,7 @@ class Message(BaseModel):
 
 
 class TrainingExample(BaseModel):
-    """One model call: the full prompt and the reply. One llm span."""
+    """One model call: the full prompt and the reply. One llm generation."""
 
     id: str
     messages: list[Message]
@@ -155,7 +155,7 @@ class SftPlan(BaseModel):
 
 
 class ExportError(RuntimeError):
-    """Phoenix answered with something other than complete llm spans."""
+    """PostHog answered with something other than complete llm generations."""
 
 
 class RunnerError(RuntimeError):

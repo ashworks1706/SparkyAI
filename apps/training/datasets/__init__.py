@@ -1,1 +1,1 @@
-"""Datasets: export training examples from Phoenix llm spans, redact, verify."""
+"""Datasets: export training examples from PostHog llm generations, redact, verify."""

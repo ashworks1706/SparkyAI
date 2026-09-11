@@ -20,7 +20,7 @@ just train sft
 
 | Module | Holds |
 |---|---|
-| `datasets/export.py` | Phoenix `llm` spans → `TrainingExample` (full prompt + reply). Phoenix is the source because only the engine's `llm` span carries the whole prompt. |
+| `datasets/export.py` | PostHog `$ai_generation` events from the engine's `llm` span → `TrainingExample` (full prompt + reply), read through the HogQL query API. |
 | `datasets/redact.py` | Regex PII removal: emails, phones, Discord and ASU ids, bot tokens. |
 | `datasets/verify.py` | Schema, non-empty replies, named tool calls, dedupe by content hash. |
 | `evals/runner.py` | Posts each golden case to `/chat`, reads the engine's JSONL trace for that request. |
@@ -30,4 +30,4 @@ just train sft
 
 Generated datasets, reports, checkpoints, TensorBoard logs, and exports are written under `../../.sparky/training/`. Engine traces are read from `../../.sparky/traces/`. Golden cases and the promoted baseline remain source-controlled in `evals/`.
 
-Data export requires Phoenix. Evals require a live engine and use deterministic scorers rather than an LLM judge.
+Data export requires PostHog and `SPARKY_TRAINING__POSTHOG_HOST`, `SPARKY_TRAINING__POSTHOG_PROJECT_ID`, and `SPARKY_TRAINING__POSTHOG_API_KEY` (a personal API key with Query Read) in `.env`. Evals require a live engine and use deterministic scorers rather than an LLM judge.
