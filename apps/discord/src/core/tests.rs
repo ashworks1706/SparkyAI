@@ -705,3 +705,92 @@ fn memory_renders_things_and_relations_or_says_it_is_empty() {
     });
     assert_eq!(off, "Memory is turned off here.");
 }
+
+#[test]
+fn an_analytics_event_serializes_to_the_posthog_batch_shape() {
+    use crate::core::types::{AnalyticsBatch, AnalyticsEvent};
+
+    let event = AnalyticsEvent::new("discord_ask", &42_u64)
+        .with("place", "thread")
+        .with("latency_ms", 120);
+    let batch = [event];
+    let wire = serde_json::to_value(AnalyticsBatch {
+        api_key: "phc_test",
+        batch: &batch,
+    })
+    .unwrap_or_default();
+    assert_eq!(wire["api_key"], "phc_test");
+    let first = &wire["batch"][0];
+    assert_eq!(first["event"], "discord_ask");
+    assert_eq!(first["distinct_id"], "42");
+    assert_eq!(first["properties"]["place"], "thread");
+    assert_eq!(first["properties"]["latency_ms"], 120);
+    let stamp = first["timestamp"].as_str().unwrap_or_default();
+    assert!(stamp.ends_with('Z') && stamp.contains('.'), "{stamp}");
+}
+
+#[test]
+fn a_full_analytics_queue_drops_instead_of_waiting() {
+    use crate::analytics::Analytics;
+    use crate::core::types::AnalyticsEvent;
+
+    let (handle, mut rx) = Analytics::channel(1);
+    assert!(handle.record(AnalyticsEvent::new("a", &1_u64)));
+    assert!(!handle.record(AnalyticsEvent::new("b", &1_u64)), "full");
+    assert_eq!(rx.try_recv().map(|e| e.event).ok(), Some("a"));
+    drop(rx);
+    assert!(!handle.record(AnalyticsEvent::new("c", &1_u64)), "closed");
+    assert!(!Analytics::disabled().record(AnalyticsEvent::new("d", &1_u64)));
+}
+
+#[test]
+fn analytics_stays_off_without_the_switch_or_a_project_token() {
+    use crate::analytics::Analytics;
+    use crate::core::config::{Analytics as Settings, Telemetry};
+    use crate::core::types::AnalyticsEvent;
+
+    let off = Settings {
+        enabled: false,
+        ..Settings::default()
+    };
+    let (handle, flusher) = Analytics::start(&off, &Telemetry::default());
+    assert!(flusher.is_none());
+    assert!(!handle.record(AnalyticsEvent::new("a", &1_u64)));
+
+    let (handle, flusher) = Analytics::start(&Settings::default(), &Telemetry::default());
+    assert!(flusher.is_none(), "the default token is empty");
+    assert!(!handle.record(AnalyticsEvent::new("a", &1_u64)));
+}
+
+#[test]
+fn the_export_target_needs_a_host_and_a_token_and_trims_the_slash() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::export_target;
+    use secrecy::{ExposeSecret, SecretString};
+
+    let mut cfg = Telemetry::default();
+    assert!(export_target(&cfg).is_none(), "empty token");
+    cfg.project_token = SecretString::from("phc_x".to_owned());
+    cfg.host = Some(" http://posthog:8000/ ".into());
+    let target = export_target(&cfg).map(|(h, t)| (h.to_owned(), t.expose_secret().to_owned()));
+    assert_eq!(
+        target,
+        Some(("http://posthog:8000".to_owned(), "phc_x".to_owned()))
+    );
+    cfg.host = Some("  ".into());
+    assert!(export_target(&cfg).is_none(), "blank host");
+    cfg.host = None;
+    assert!(export_target(&cfg).is_none());
+}
+
+#[test]
+fn analytics_settings_reject_an_empty_queue() {
+    use crate::core::config::Analytics;
+
+    assert!(Analytics::default().validate().is_ok());
+    let bad = Analytics {
+        queue_capacity: 0,
+        ..Analytics::default()
+    };
+    assert!(bad.validate().is_err());
+}

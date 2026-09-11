@@ -5,7 +5,7 @@ use tracing::field::Empty;
 
 use super::commands;
 use super::destination::Destination;
-use super::{Handler, option_bool, option_str, tell};
+use super::{Handler, event, option_bool, option_str, tell};
 use crate::access::roles::authorized_roles;
 use crate::access::route::{self, AskMode, Place};
 
@@ -41,6 +41,12 @@ impl Handler {
             inline.say(&ctx.http, "Ask me something.").await;
             return;
         }
+        let label = route::place_name(cmd.guild_id.is_none(), kind.is_some_and(route::is_thread));
+        self.record(
+            event("discord_ask", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                .with("place", label)
+                .with("private", mode == AskMode::Private),
+        );
         let Some(guild_id) = cmd.guild_id else {
             inline
                 .say(&ctx.http, "Ask me in the server, not in a DM.")
@@ -51,6 +57,12 @@ impl Handler {
             Ok(roles) => roles,
             Err(e) => {
                 tracing::error!(error = %e, user = %cmd.user.id, "role lookup failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "roles")
+                        .with("kind", "discord")
+                        .with("place", label),
+                );
                 inline
                     .say(
                         &ctx.http,
@@ -68,14 +80,14 @@ impl Handler {
         let req = route::chat_request(place, cmd.user.id, guild_id, roles, question);
         let span = tracing::info_span!(
             "discord.ask",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %cmd.user.id,
+            "discord.command" = "ask",
+            "posthog.distinct_id" = %cmd.user.id,
             "sparky.visibility" = ?req.visibility,
-            "session.id" = Empty,
-            "input.value" = %req.message,
-            "output.value" = Empty,
+            "$ai_session_id" = Empty,
+            "sparky.input" = %req.message,
+            "sparky.output" = Empty,
         );
-        self.converse(ctx, &dest, &req, span).await;
+        self.converse(ctx, &dest, &req, span, label).await;
     }
 
     /// Shows the question as the command response and opens a thread from it. Falls back to

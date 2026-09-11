@@ -7,7 +7,7 @@ use serenity::all::{
 use tracing::Instrument;
 
 use super::commands;
-use super::{Handler, option_str, tell};
+use super::{Handler, error_kind, event, option_str, tell};
 use crate::core::types::{ForgetRequest, ProfileRequest, ResetRequest};
 use crate::render::components::{self, CustomId};
 use crate::render::reply;
@@ -32,16 +32,25 @@ impl Handler {
         };
         let span = tracing::info_span!(
             "discord.reset",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %cmd.user.id,
+            "discord.command" = "reset",
+            "posthog.distinct_id" = %cmd.user.id,
         );
         let text = match self.engine.reset(&req).instrument(span).await {
             Ok(done) => {
                 tracing::info!(user = %cmd.user.id, ended = done.ended, "conversation reset");
+                self.record(
+                    event("discord_reset", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("ended", done.ended),
+                );
                 "Fresh start. Ask away.".to_owned()
             }
             Err(e) => {
                 tracing::error!(error = %e, user = %cmd.user.id, "reset failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "reset")
+                        .with("kind", error_kind(&e)),
+                );
                 reply::failure(&e)
             }
         };
@@ -63,8 +72,8 @@ impl Handler {
         };
         let span = tracing::info_span!(
             "discord.memory",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %cmd.user.id,
+            "discord.command" = "memory",
+            "posthog.distinct_id" = %cmd.user.id,
         );
         let messages = match self.engine.profile_list(&req).instrument(span).await {
             Ok(profile) => {
@@ -74,10 +83,20 @@ impl Handler {
                     relations = profile.relations.len(),
                     "profile listed"
                 );
+                self.record(
+                    event("discord_memory", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("nodes", profile.nodes.len())
+                        .with("relations", profile.relations.len()),
+                );
                 reply::render_profile(&profile, self.max_message_chars)
             }
             Err(e) => {
                 tracing::warn!(error = %e, user = %cmd.user.id, "profile list failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "memory")
+                        .with("kind", error_kind(&e)),
+                );
                 vec![reply::memory_failure(&e)]
             }
         };
@@ -117,17 +136,27 @@ impl Handler {
         };
         let span = tracing::info_span!(
             "discord.forget",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %cmd.user.id,
+            "discord.command" = "forget",
+            "posthog.distinct_id" = %cmd.user.id,
             "sparky.everything" = false,
         );
         let text = match self.engine.forget(&req).instrument(span).await {
             Ok(done) => {
                 tracing::info!(user = %cmd.user.id, removed = done.removed, "forgot by label");
+                self.record(
+                    event("discord_forget", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("removed", done.removed)
+                        .with("everything", false),
+                );
                 reply::forgot(done.removed, true)
             }
             Err(e) => {
                 tracing::warn!(error = %e, user = %cmd.user.id, "forget failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "forget")
+                        .with("kind", error_kind(&e)),
+                );
                 reply::memory_failure(&e)
             }
         };
@@ -169,17 +198,37 @@ impl Handler {
                 };
                 let span = tracing::info_span!(
                     "discord.forget",
-                    "openinference.span.kind" = "CHAIN",
-                    "user.id" = %press.user.id,
+                    "discord.command" = "forget",
+                    "posthog.distinct_id" = %press.user.id,
                     "sparky.everything" = true,
                 );
                 match self.engine.forget(&req).instrument(span).await {
                     Ok(done) => {
                         tracing::info!(user = %press.user.id, removed = done.removed, "forgot everything");
+                        self.record(
+                            event(
+                                "discord_forget",
+                                press.user.id,
+                                press.guild_id,
+                                press.channel_id,
+                            )
+                            .with("removed", done.removed)
+                            .with("everything", true),
+                        );
                         reply::forgot(done.removed, false)
                     }
                     Err(e) => {
                         tracing::warn!(error = %e, user = %press.user.id, "forget failed");
+                        self.record(
+                            event(
+                                "discord_error",
+                                press.user.id,
+                                press.guild_id,
+                                press.channel_id,
+                            )
+                            .with("stage", "forget")
+                            .with("kind", error_kind(&e)),
+                        );
                         reply::memory_failure(&e)
                     }
                 }

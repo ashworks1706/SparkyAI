@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use serenity::all::{Context, Message, Permissions, RoleId, UserId};
 use tracing::field::Empty;
 
-use super::Handler;
 use super::destination::Destination;
+use super::{Handler, event};
 use crate::access::roles::{authorized_roles, member_permissions};
 use crate::access::route::{self, Place};
 use crate::render::reply;
@@ -55,10 +55,31 @@ impl Handler {
             here.say(&ctx.http, "Ask me something.").await;
             return;
         }
+        let label = route::place_name(false, in_thread);
+        self.record(
+            event(
+                "discord_mention",
+                msg.author.id,
+                Some(guild_id),
+                msg.channel_id,
+            )
+            .with("place", label),
+        );
         let roles = match self.message_roles(ctx, msg).await {
             Ok(roles) => roles,
             Err(e) => {
                 tracing::error!(error = %e, user = %msg.author.id, "role lookup failed");
+                self.record(
+                    event(
+                        "discord_error",
+                        msg.author.id,
+                        Some(guild_id),
+                        msg.channel_id,
+                    )
+                    .with("stage", "roles")
+                    .with("kind", "discord")
+                    .with("place", label),
+                );
                 here.say(
                     &ctx.http,
                     "I could not verify your roles, so I did not run that.",
@@ -70,39 +91,50 @@ impl Handler {
         let (dest, place) = if in_thread {
             (here, Place::Thread(msg.channel_id))
         } else {
-            match msg
-                .channel_id
-                .create_thread_from_message(&ctx.http, msg.id, self.thread_for(&question))
-                .await
-            {
-                Ok(thread) => (
-                    Destination::Channel {
-                        channel: thread.id,
-                        reply_to: None,
-                    },
-                    Place::Thread(thread.id),
-                ),
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        channel = %msg.channel_id,
-                        "could not open a thread; answering inline"
-                    );
-                    (here, Place::Inline(msg.channel_id))
-                }
-            }
+            self.mention_thread(ctx, msg, &question, here).await
         };
         let req = route::chat_request(place, msg.author.id, guild_id, roles, question);
         let span = tracing::info_span!(
             "discord.mention",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %msg.author.id,
+            "discord.command" = "mention",
+            "posthog.distinct_id" = %msg.author.id,
             "sparky.visibility" = ?req.visibility,
-            "session.id" = Empty,
-            "input.value" = %req.message,
-            "output.value" = Empty,
+            "$ai_session_id" = Empty,
+            "sparky.input" = %req.message,
+            "sparky.output" = Empty,
         );
-        self.converse(ctx, &dest, &req, span).await;
+        self.converse(ctx, &dest, &req, span, label).await;
+    }
+
+    /// Opens a thread from msg for question. Falls back to here when the thread cannot be made.
+    async fn mention_thread<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message,
+        question: &str,
+        here: Destination<'a>,
+    ) -> (Destination<'a>, Place) {
+        match msg
+            .channel_id
+            .create_thread_from_message(&ctx.http, msg.id, self.thread_for(question))
+            .await
+        {
+            Ok(thread) => (
+                Destination::Channel {
+                    channel: thread.id,
+                    reply_to: None,
+                },
+                Place::Thread(thread.id),
+            ),
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    channel = %msg.channel_id,
+                    "could not open a thread; answering inline"
+                );
+                (here, Place::Inline(msg.channel_id))
+            }
+        }
     }
 
     /// Role names the author holds plus the capability their guild roles or ownership grant.

@@ -6,23 +6,32 @@ use serenity::all::{Context, MessageId};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::Instrument;
 
-use super::Handler;
 use super::destination::Destination;
-use crate::core::types::{ChatRequest, ChatResponse, EngineError, Update};
+use super::{Handler, error_kind};
+use crate::core::types::{AnalyticsEvent, ChatRequest, ChatResponse, EngineError, Update};
 use crate::render::card::{self, Pacer, Steps};
 use crate::render::components::{self, ButtonSpec};
 use crate::render::reply;
 
+/// An analytics event for the asker of req, in the guild and channel of req.
+fn turn_event(name: &'static str, req: &ChatRequest) -> AnalyticsEvent {
+    AnalyticsEvent::new(name, &req.user_id)
+        .with("guild_id", req.tenant_id.as_str())
+        .with("channel_id", req.channel_id.as_str())
+}
+
 impl Handler {
     /// Runs req against the engine and shows the turn on one message in dest. span receives
-    /// the session id and the answer.
+    /// the session id and the answer. place names where the question was asked.
     pub(super) async fn converse(
         &self,
         ctx: &Context,
         dest: &Destination<'_>,
         req: &ChatRequest,
         span: tracing::Span,
+        place: &'static str,
     ) {
+        let started = Instant::now();
         let limit = self.max_message_chars;
         let posted = dest
             .send(&ctx.http, card::thinking(&[], limit), Vec::new(), true)
@@ -48,10 +57,21 @@ impl Handler {
         });
         match outcome {
             Ok(resp) => {
-                span.record("session.id", resp.conversation_id.to_string().as_str());
+                let conversation = resp.conversation_id.to_string();
+                span.record("$ai_session_id", conversation.as_str());
                 span.record(
-                    "output.value",
+                    "sparky.output",
                     resp.text.chars().take(2_000).collect::<String>().as_str(),
+                );
+                let latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                self.record(
+                    turn_event("discord_answer", req)
+                        .with("$session_id", conversation.as_str())
+                        .with("conversation_id", conversation)
+                        .with("status", resp.status.as_str())
+                        .with("latency_ms", latency_ms)
+                        .with("chars", resp.text.chars().count())
+                        .with("place", place),
                 );
                 tracing::info!(
                     request_id = %resp.request_id,
@@ -65,6 +85,12 @@ impl Handler {
             }
             Err(e) => {
                 tracing::error!(error = %e, user = %req.user_id, "engine call failed");
+                self.record(
+                    turn_event("discord_error", req)
+                        .with("stage", "chat")
+                        .with("kind", error_kind(&e))
+                        .with("place", place),
+                );
                 let text = card::failed(steps.lines(), &reply::failure(&e), limit);
                 self.show(ctx, dest, card_id, vec![text], &[]).await;
             }

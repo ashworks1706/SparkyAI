@@ -2,6 +2,7 @@
 //! A client of the engine. Never links it.
 
 mod access;
+mod analytics;
 mod bot;
 mod core;
 mod engine;

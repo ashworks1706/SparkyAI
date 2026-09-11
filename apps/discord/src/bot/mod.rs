@@ -22,13 +22,17 @@ use serenity::async_trait;
 use tokio::sync::Mutex;
 
 use crate::access::route;
+use crate::analytics::Analytics;
 use crate::core::config::Config;
+use crate::core::types::{AnalyticsEvent, EngineError};
 use crate::engine::client::EngineClient;
 use crate::render::components::CustomId;
 
 /// Per-process bot state and the serenity event handler.
 struct Handler {
     engine: EngineClient,
+    /// Product events for PostHog.
+    analytics: Analytics,
     guild_id: GuildId,
     /// Channels the bot answers in. Empty answers everywhere it can see.
     channels: Vec<ChannelId>,
@@ -62,8 +66,10 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         Duration::from_secs(cfg.engine.connect_timeout_secs),
         Duration::from_secs(cfg.engine.request_timeout_secs),
     )?;
+    let (analytics, flusher) = Analytics::start(&cfg.analytics, &cfg.telemetry);
     let handler = Handler {
         engine,
+        analytics,
         guild_id: GuildId::new(cfg.discord.guild_id),
         channels: cfg
             .bot
@@ -84,8 +90,49 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
     let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
         .event_handler(handler)
         .await?;
-    client.start().await?;
-    Ok(())
+    let shards = client.shard_manager.clone();
+    let result = tokio::select! {
+        started = client.start() => started.map_err(anyhow::Error::from),
+        () = interrupted() => {
+            tracing::info!("shutting down");
+            shards.shutdown_all().await;
+            Ok(())
+        }
+    };
+    if let Some(flusher) = flusher {
+        flusher
+            .finish(Duration::from_secs(cfg.telemetry.export_timeout_secs))
+            .await;
+    }
+    result
+}
+
+/// Resolves on ctrl-c. Never resolves when the signal cannot be watched.
+async fn interrupted() {
+    if let Err(e) = tokio::signal::ctrl_c().await {
+        tracing::warn!(error = %e, "cannot watch ctrl-c");
+        std::future::pending::<()>().await;
+    }
+}
+
+/// An analytics event by user in channel of guild.
+fn event(
+    name: &'static str,
+    user: UserId,
+    guild: Option<GuildId>,
+    channel: ChannelId,
+) -> AnalyticsEvent {
+    AnalyticsEvent::new(name, &user)
+        .with("guild_id", guild.map(|g| g.to_string()).unwrap_or_default())
+        .with("channel_id", channel.to_string())
+}
+
+/// A short name for an engine failure: transport or status_NNN.
+fn error_kind(e: &EngineError) -> String {
+    match e {
+        EngineError::Transport(_) => "transport".to_owned(),
+        EngineError::Status { status, .. } => format!("status_{status}"),
+    }
 }
 
 /// The Discord duration for a validated number of minutes.
@@ -126,6 +173,11 @@ impl Handler {
             "Give me {} seconds between questions.",
             self.cooldown.as_secs()
         )
+    }
+
+    /// Queues a product event without waiting.
+    fn record(&self, event: AnalyticsEvent) {
+        self.analytics.record(event);
     }
 
     /// The builder for a thread opened from a question.
