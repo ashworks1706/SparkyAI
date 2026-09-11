@@ -3,10 +3,6 @@
 
 mod app;
 mod core;
-mod health;
-mod logs;
-mod runner;
-mod ui;
 mod units;
 
 use std::time::Duration;
@@ -33,12 +29,12 @@ async fn main() -> anyhow::Result<()> {
         return Err(anyhow::anyhow!(".env: {e}"));
     }
     let cfg = core::config::load()?;
-    let targets = health::Targets::from_config(&cfg);
+    let targets = units::health::Targets::from_config(&cfg);
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
     let mut app = App::new(cfg, root.clone(), &tx)?;
 
-    tokio::spawn(health::poll(targets, tx.clone()));
+    tokio::spawn(units::health::poll(targets, tx.clone()));
     tokio::spawn(services_task(root, tx.clone()));
     tokio::spawn(ticker(tx.clone()));
     tokio::spawn(keys(tx));
@@ -60,7 +56,7 @@ async fn run(
     app: &mut App,
     rx: &mut mpsc::UnboundedReceiver<Event>,
 ) -> anyhow::Result<()> {
-    terminal.draw(|f| ui::draw(f, app))?;
+    terminal.draw(|f| app::ui::draw(f, app))?;
     while let Some(event) = rx.recv().await {
         app.handle(event);
         // Drain whatever else is queued. A burst of log lines costs one redraw.
@@ -70,7 +66,7 @@ async fn run(
         if app.should_quit {
             break;
         }
-        terminal.draw(|f| ui::draw(f, app))?;
+        terminal.draw(|f| app::ui::draw(f, app))?;
     }
     Ok(())
 }
@@ -103,7 +99,7 @@ async fn keys(tx: mpsc::UnboundedSender<Event>) {
 
 async fn services_task(root: std::path::PathBuf, tx: mpsc::UnboundedSender<Event>) {
     loop {
-        let states = runner::Runner::service_states(&root).await;
+        let states = units::runner::Runner::service_states(&root).await;
         if tx.send(Event::Services(states)).is_err() {
             return;
         }

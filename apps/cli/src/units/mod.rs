@@ -1,5 +1,9 @@
 //! The catalog of every unit the repo can run, in sidebar order.
 
+pub mod health;
+pub mod logs;
+pub mod runner;
+
 use crate::core::types::{Group, Kind, Unit};
 
 fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Unit {
