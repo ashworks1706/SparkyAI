@@ -37,6 +37,17 @@ pub fn is_thread(kind: ChannelType) -> bool {
     )
 }
 
+/// Where a question was asked, as analytics names it: dm, thread, or channel.
+pub fn place_name(dm: bool, in_thread: bool) -> &'static str {
+    if dm {
+        "dm"
+    } else if in_thread {
+        "thread"
+    } else {
+        "channel"
+    }
+}
+
 /// The parent channel that counts for the allowlist: a thread parent, never a category.
 pub fn thread_parent(kind: Option<ChannelType>, parent: Option<ChannelId>) -> Option<ChannelId> {
     if kind.is_some_and(is_thread) {

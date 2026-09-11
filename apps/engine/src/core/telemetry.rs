@@ -41,7 +41,7 @@ pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyho
     {
         Some(endpoint) => {
             let exporter = SpanExporter::builder()
-                .with_tonic()
+                .with_http()
                 .with_endpoint(endpoint)
                 .with_timeout(Duration::from_secs(cfg.export_timeout_secs))
                 .build()?;

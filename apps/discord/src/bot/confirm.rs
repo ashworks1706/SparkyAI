@@ -4,9 +4,10 @@ use serenity::all::{
     ComponentInteraction, Context, CreateInteractionResponseFollowup, EditInteractionResponse,
 };
 use tracing::Instrument;
+use tracing::field::Empty;
 use uuid::Uuid;
 
-use super::Handler;
+use super::{Handler, error_kind, event};
 use crate::access::route;
 use crate::core::types::ConfirmRequest;
 use crate::render::card;
@@ -43,15 +44,46 @@ impl Handler {
         };
         let span = tracing::info_span!(
             "discord.confirm",
-            "openinference.span.kind" = "CHAIN",
-            "user.id" = %press.user.id,
+            "discord.command" = "confirm",
+            "posthog.distinct_id" = %press.user.id,
+            "$ai_session_id" = %conversation,
             "sparky.approved" = approve,
             "sparky.visibility" = ?visibility,
+            "sparky.output" = Empty,
         );
-        let resp = match self.engine.confirm(&req).instrument(span).await {
-            Ok(resp) => resp,
+        let answered = self.engine.confirm(&req).instrument(span.clone()).await;
+        let resp = match answered {
+            Ok(resp) => {
+                span.record(
+                    "sparky.output",
+                    resp.text.chars().take(2_000).collect::<String>().as_str(),
+                );
+                self.record(
+                    event(
+                        "discord_confirm",
+                        press.user.id,
+                        Some(guild_id),
+                        press.channel_id,
+                    )
+                    .with("$session_id", conversation.to_string())
+                    .with("conversation_id", conversation.to_string())
+                    .with("approved", approve)
+                    .with("status", resp.status.as_str()),
+                );
+                resp
+            }
             Err(e) => {
                 tracing::warn!(error = %e, user = %press.user.id, "confirm refused or failed");
+                self.record(
+                    event(
+                        "discord_error",
+                        press.user.id,
+                        Some(guild_id),
+                        press.channel_id,
+                    )
+                    .with("stage", "confirm")
+                    .with("kind", error_kind(&e)),
+                );
                 self.tell_presser(ctx, press, reply::confirm_failure(&e))
                     .await;
                 return;
