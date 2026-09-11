@@ -117,7 +117,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -146,6 +146,10 @@ crawl *ARGS:
 browser *ARGS:
     docker compose -f deploy/compose.yml --profile browser up -d {{ARGS}} playwright-mcp
 
+# Browse the database at http://localhost:8081 (pgweb, loopback)
+db *ARGS:
+    docker compose -f deploy/compose.yml --profile db up -d {{ARGS}} pgweb
+
 # Prometheus (:9090) and Grafana (:3000, dashboard "SparkyAI inference"). Needs SPARKY_GRAFANA_PASSWORD.
 metrics *ARGS:
     docker compose -f deploy/compose.yml --profile metrics up -d {{ARGS}} prometheus grafana
@@ -156,10 +160,10 @@ gpu-metrics *ARGS:
 
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile metrics --profile gpu-metrics logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics logs -f {{ARGS}}
 
 # Build both images locally
 images:

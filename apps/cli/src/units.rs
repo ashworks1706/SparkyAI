@@ -7,7 +7,7 @@ fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Un
         id: id.into(),
         group: match profile {
             Some("model") => Group::Models,
-            Some("metrics" | "gpu-metrics") | None => Group::Infra,
+            Some("metrics" | "gpu-metrics" | "db") | None => Group::Infra,
             Some(_) => Group::Tools,
         },
         kind: Kind::Service {
@@ -82,6 +82,12 @@ fn services() -> Vec<Unit> {
             None,
             "traces from every app",
             Some("http://localhost:6006"),
+        ),
+        service(
+            "pgweb",
+            Some("db"),
+            "browse the database in a browser",
+            Some("http://localhost:8081"),
         ),
         service(
             "prometheus",

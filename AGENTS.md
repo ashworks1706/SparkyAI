@@ -22,6 +22,7 @@ just worker           # answer the engine's live source queries (apps/scraper)
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio, phoenix
+just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
 just browser          # Playwright MCP browser tools for the engine

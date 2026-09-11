@@ -201,6 +201,18 @@ services:
       interval: 5s
       retries: 10
 
+  # Browses the retrieval index and the conversation tables: http://localhost:8081.
+  # Started by just db. Read-write against the same database the engine uses.
+  pgweb:
+    image: sosedoff/pgweb:latest
+    profiles: [db]
+    environment:
+      PGWEB_DATABASE_URL: postgres://sparky:sparky@postgres:5432/sparky?sslmode=disable
+    ports: ["127.0.0.1:8081:8081"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
