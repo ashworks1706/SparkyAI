@@ -186,6 +186,23 @@ pub enum Focus {
     Logs,
 }
 
+/// One row of docker compose ps --format json, as printed.
+#[derive(Debug, serde::Deserialize)]
+pub struct ComposePsRow {
+    /// Service name.
+    #[serde(rename = "Service")]
+    pub service: String,
+    /// Container state.
+    #[serde(rename = "State")]
+    pub state: String,
+    /// Healthcheck result, empty without a healthcheck.
+    #[serde(rename = "Health", default)]
+    pub health: String,
+    /// Last exit code.
+    #[serde(rename = "ExitCode", default)]
+    pub exit_code: i32,
+}
+
 /// One row of docker compose ps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceState {

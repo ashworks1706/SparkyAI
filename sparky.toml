@@ -43,6 +43,20 @@ max_span_value_chars = 32000
 # carries to whoever is watching the turn.
 progress_detail_chars = 160
 
+# Whether a model call reasons before it answers. llama-server returns the reasoning in
+# reasoning_content, the harness shows it as the live thinking line, and it never reaches the
+# answer. Tasks such as compaction never think.
+[agent.thinking]
+mode = "auto"                  # on, off, or auto
+# auto takes the first rule that applies: a call offered no tools does not think; a step with
+# tool results thinks when after_tools is set; a question holding a cue, longer than
+# max_quick_chars, or with no evidence retrieved thinks; anything else does not.
+after_tools = true
+max_quick_chars = 80
+cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
+# A call that thought and left no answer and no tool call is made again without thinking.
+retry_without = true
+
 # ---------------------------------------------------------------- what the model is told
 # Changing any of this changes the prompt hash. system_file beats system, which beats the
 # built-in default.
@@ -63,12 +77,10 @@ utc_offset_hours = -7          # Arizona, which keeps -7 all year
 # base_url and api_key are per-machine and live in .env.
 [model]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
-# Reasoning comes out of the same budget as the answer, so thinking needs room for both. The
-# slot has to hold the prompt and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot.
+# Reasoning comes out of the same budget as the answer, so a call that thinks needs room for
+# both. The slot has to hold the prompt and this: chat ctx-size 16384 over --parallel 2 is
+# 8192 a slot. Whether a call thinks is agent.thinking.
 max_tokens = 4096
-# Qwen3 reasons before it answers. llama-server returns that reasoning in reasoning_content,
-# the harness shows it as the live thinking line, and it never reaches the answer.
-thinking = true
 usd_per_m_prompt = 0.0
 usd_per_m_completion = 0.0
 

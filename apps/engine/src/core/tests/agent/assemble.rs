@@ -330,7 +330,7 @@ fn no_date_writes_no_date_line() {
 
 #[test]
 fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
-    use crate::agent::harness::agent::thought::split;
+    use crate::agent::harness::agent::call::thought::split;
 
     let (thought, visible) = split(
         "",

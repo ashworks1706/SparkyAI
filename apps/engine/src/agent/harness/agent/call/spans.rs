@@ -9,7 +9,11 @@ use crate::agent::harness::safety::redact::{json, truncate};
 use crate::core::types::model::ModelResponse;
 
 /// Records the reply, the model that answered and the token counts on a model span.
-pub(super) fn record_reply(span: &Span, response: &ModelResponse, limit: usize) {
+pub(in crate::agent::harness::agent) fn record_reply(
+    span: &Span,
+    response: &ModelResponse,
+    limit: usize,
+) {
     span.record("gen_ai.response.model", response.model.as_str());
     span.record("llm.model_name", response.model.as_str());
     span.record(

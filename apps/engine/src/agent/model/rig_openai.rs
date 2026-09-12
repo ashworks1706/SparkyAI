@@ -12,6 +12,7 @@ use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericE
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::core::config::{CHAT_TEMPLATE_KWARGS, ENABLE_THINKING};
 use crate::core::traits::knowledge::retrieval::Embedder;
 use crate::core::traits::model::ModelProvider;
 use crate::core::types::agent::context::RequestContext;
@@ -34,8 +35,8 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
 pub struct RigChat {
     model: CompletionModel,
     name: String,
-    /// Provider-specific request fields sent with every completion: sampling parameters and
-    /// the chat-template switch. Built once from configuration.
+    /// Provider-specific request fields sent with every completion. Built once from
+    /// configuration; the thinking switch is added per call.
     additional_params: serde_json::Value,
 }
 
@@ -54,6 +55,24 @@ impl RigChat {
             additional_params,
         }
     }
+}
+
+/// The provider request fields for one call: params with the chat template switch set to
+/// thinking. Template arguments already in params are kept.
+pub(crate) fn with_thinking(params: &serde_json::Value, thinking: bool) -> serde_json::Value {
+    let mut params = params.clone();
+    if let serde_json::Value::Object(map) = &mut params {
+        let kwargs = map
+            .entry(CHAT_TEMPLATE_KWARGS)
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+        if let serde_json::Value::Object(kwargs) = kwargs {
+            kwargs.insert(
+                ENABLE_THINKING.to_owned(),
+                serde_json::Value::Bool(thinking),
+            );
+        }
+    }
+    params
 }
 
 /// Splits the flat message list into the Rig preamble plus chat history.
@@ -200,8 +219,7 @@ impl ModelProvider for RigChat {
             temperature: Some(f64::from(req.temperature)),
             max_tokens: Some(u64::from(req.max_tokens)),
             // llama-server honours chat_template_kwargs and the llama.cpp sampling fields.
-            // Both arrive here from [model] configuration.
-            additional_params: Some(self.additional_params.clone()),
+            additional_params: Some(with_thinking(&self.additional_params, req.thinking)),
             output_schema: None,
             record_telemetry_content: false,
         };

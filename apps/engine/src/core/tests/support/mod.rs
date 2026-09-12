@@ -24,7 +24,7 @@ use crate::core::types::agent::context::RequestContext;
 pub use self::conversation::{Recording, Rooms};
 pub use self::knowledge::FakeQueries;
 pub use self::memory::{Known, Recalling};
-pub use self::model::{Scripted, calls, text};
+pub use self::model::{Scripted, calls, only_thought, text};
 pub use self::safety::Held;
 pub use self::tools::{Boom, Echo, Ordered, Slow};
 pub use self::trace::MemorySink;

@@ -48,6 +48,7 @@ fn request() -> ModelRequest {
         tools: Vec::new(),
         max_tokens: 16,
         temperature: 0.0,
+        thinking: false,
     }
 }
 

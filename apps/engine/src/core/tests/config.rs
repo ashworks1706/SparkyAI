@@ -165,7 +165,41 @@ fn sampling_sends_only_what_is_set() {
     assert_eq!(sent["top_p"], 0.9);
     assert_eq!(sent["seed"], 7);
     assert!(sent.get("top_k").is_none(), "unset fields are not sent");
-    assert_eq!(sent["chat_template_kwargs"]["enable_thinking"], false);
+    assert!(
+        sent.get("chat_template_kwargs").is_none(),
+        "thinking is set per call"
+    );
+}
+
+#[test]
+fn thinking_is_automatic_by_default_and_takes_a_fixed_mode() {
+    use crate::core::types::agent::thinking::ThinkingMode;
+
+    assert_eq!(ok("").agent.thinking.mode, ThinkingMode::Auto);
+    let cfg = ok("[agent.thinking]\nmode = \"off\"\n");
+    assert_eq!(cfg.agent.thinking.mode, ThinkingMode::Off);
+    assert!(err("[agent.thinking]\nmode = \"sometimes\"\n").contains("mode"));
+}
+
+#[test]
+fn a_thinking_cue_with_no_word_is_rejected() {
+    let e = err("[agent.thinking]\ncues = [\"why\", \" ? \"]\n");
+    assert!(e.contains("agent.thinking.cues"), "{e}");
+}
+
+#[test]
+fn extra_params_json_may_not_set_thinking() {
+    let cfg = ok(
+        "[model]\nextra_params_json = \"{\\\"chat_template_kwargs\\\": {\\\"enable_thinking\\\": true}}\"\n",
+    );
+    match cfg.model.additional_params() {
+        Ok(value) => unreachable!("thinking is not a static field, got {value}"),
+        Err(e) => assert!(e.to_string().contains("agent.thinking.mode"), "{e}"),
+    }
+    let kept = ok(
+        "[model]\nextra_params_json = \"{\\\"chat_template_kwargs\\\": {\\\"custom\\\": 1}}\"\n",
+    );
+    assert_eq!(params(&kept)["chat_template_kwargs"]["custom"], 1);
 }
 
 #[test]

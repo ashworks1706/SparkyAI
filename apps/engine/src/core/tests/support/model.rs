@@ -1,6 +1,6 @@
 //! Model doubles: a scripted provider and the responses it replays.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -10,14 +10,25 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::ToolCall;
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
 
-/// Replays canned responses in order.
-pub struct Scripted(Mutex<Vec<Result<ModelResponse, ModelError>>>);
+/// Replays canned responses in order and keeps every request it was sent.
+pub struct Scripted {
+    items: Mutex<Vec<Result<ModelResponse, ModelError>>>,
+    sent: Arc<Mutex<Vec<ModelRequest>>>,
+}
 
 impl Scripted {
     pub fn new(items: Vec<Result<ModelResponse, ModelError>>) -> Self {
         let mut reversed = items;
         reversed.reverse();
-        Self(Mutex::new(reversed))
+        Self {
+            items: Mutex::new(reversed),
+            sent: Arc::default(),
+        }
+    }
+
+    /// The requests this model is sent, readable after it moves into an agent.
+    pub fn sent(&self) -> Arc<Mutex<Vec<ModelRequest>>> {
+        Arc::clone(&self.sent)
     }
 }
 
@@ -26,9 +37,12 @@ impl ModelProvider for Scripted {
     async fn generate(
         &self,
         _ctx: &RequestContext,
-        _req: ModelRequest,
+        req: ModelRequest,
     ) -> Result<ModelResponse, ModelError> {
-        self.0
+        if let Ok(mut sent) = self.sent.lock() {
+            sent.push(req);
+        }
+        self.items
             .lock()
             .ok()
             .and_then(|mut items| items.pop())
@@ -68,5 +82,14 @@ pub fn calls(items: Vec<(&str, &str, Value)>) -> ModelResponse {
             completion_tokens: 5,
         },
         model: "test".into(),
+    }
+}
+
+/// A completion that reasoned and left no answer.
+pub fn only_thought(reasoning: &str) -> ModelResponse {
+    ModelResponse {
+        reasoning: reasoning.into(),
+        finish_reason: FinishReason::Unknown,
+        ..text("")
     }
 }

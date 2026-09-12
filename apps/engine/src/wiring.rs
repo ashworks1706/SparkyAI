@@ -392,6 +392,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         usd_per_m_prompt: cfg.model.usd_per_m_prompt,
         usd_per_m_completion: cfg.model.usd_per_m_completion,
         budget: cfg.agent.budget(),
+        thinking: cfg.agent.thinking.clone(),
     }
 }
 

@@ -122,11 +122,11 @@ Only the scraper touches the web. The engine and the scraper meet only in Postgr
 ```mermaid
 flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["agent::harness<br/>agent/{loop,inputs,execute,conclude,run,task,retry}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
+    HARNESS["agent::harness<br/>agent/{loop,step,inputs,execute,conclude,run,task}<br/>agent/call/{retry,spans,thinking,thought}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
     MODEL["agent::model<br/>rig_openai · limit"]
     TOOLS["agent::tools<br/>knowledge/{search,query,skills} · mcp · sandbox"]
     STORES["stores<br/>postgres · conversation · confirmation<br/>knowledge/{retrieval,query,skills} · memory/{memories,profile}"]
-    CORE["core<br/>config/{services,harness,retrieval}<br/>types · traits · tests, each split by domain"]
+    CORE["core<br/>config/{services,http} · config/harness by domain<br/>types · traits · tests, each split by domain"]
 
     ROUTES --> HARNESS
     ROUTES --> MODEL
@@ -289,6 +289,8 @@ flowchart TD
     LIMIT -->|yes| STOP(["StepLimit · Deadline · Cancelled"])
     LIMIT -->|no| CALL
 ```
+
+Every model call decides whether the model reasons first (`agent.thinking`). In `auto` the first rule that applies wins: a call offered no tools does not think, a step with tool results thinks, a question with a cue word, longer than a quick one, or with no evidence thinks, and a short question with evidence does not. A call that thought and left no answer and no tool call is made again without thinking, inside the same step. The `llm` span records `sparky.thinking` and `sparky.thinking_reason`. Prompted sub-agents never think.
 
 The loop owns every stopping condition. Structured output gets one correction attempt. Independent calls run in parallel; a stateful tool makes the step sequential. Identical calls are not run twice.
 

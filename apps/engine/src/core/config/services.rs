@@ -105,6 +105,11 @@ impl Sampling {
     }
 }
 
+/// Request field holding the chat template arguments.
+pub const CHAT_TEMPLATE_KWARGS: &str = "chat_template_kwargs";
+/// Chat template argument that turns reasoning on for one call.
+pub const ENABLE_THINKING: &str = "enable_thinking";
+
 /// Chat model served by llama-server (OpenAI-compatible).
 #[derive(Debug, Deserialize)]
 pub struct Model {
@@ -122,28 +127,23 @@ pub struct Model {
     /// USD per million completion tokens; zero for local serving.
     #[serde(default)]
     pub usd_per_m_completion: f64,
-    /// Let Qwen3-style models emit reasoning before answering. Off by default; the reasoning is
-    /// dropped from the answer.
-    #[serde(default)]
-    pub thinking: bool,
     /// Sampling parameters sent with every completion.
     #[serde(default)]
     pub sampling: Sampling,
     /// A JSON object merged into the provider request, for anything sampling does not name.
-    /// Set keys win over sampling.
+    /// Set keys win over sampling. Thinking is set per call by agent.thinking.
     #[serde(default)]
     pub extra_params_json: Option<String>,
 }
 
 impl Model {
-    /// Provider-specific request fields: the chat template switch, sampling, then
-    /// extra_params_json on top.
+    /// Provider-specific request fields: sampling, then extra_params_json on top.
+    ///
+    /// # Errors
+    /// Returns [ConfigError::Invalid] when extra_params_json is not a JSON object, or sets the
+    /// chat template kwargs to anything but an object or sets enable_thinking in them.
     pub fn additional_params(&self) -> Result<Value, ConfigError> {
         let mut map = self.sampling.to_json();
-        map.insert(
-            "chat_template_kwargs".to_owned(),
-            serde_json::json!({ "enable_thinking": self.thinking }),
-        );
         if let Some(raw) = self
             .extra_params_json
             .as_deref()
@@ -157,6 +157,20 @@ impl Model {
                     "model.extra_params_json must be a JSON object".into(),
                 ));
             };
+            match extra.get(CHAT_TEMPLATE_KWARGS) {
+                None => {}
+                Some(Value::Object(kwargs)) if !kwargs.contains_key(ENABLE_THINKING) => {}
+                Some(Value::Object(_)) => {
+                    return Err(ConfigError::Invalid(format!(
+                        "model.extra_params_json sets {ENABLE_THINKING}; set agent.thinking.mode"
+                    )));
+                }
+                Some(_) => {
+                    return Err(ConfigError::Invalid(format!(
+                        "model.extra_params_json {CHAT_TEMPLATE_KWARGS} must be a JSON object"
+                    )));
+                }
+            }
             map.extend(extra);
         }
         Ok(Value::Object(map))

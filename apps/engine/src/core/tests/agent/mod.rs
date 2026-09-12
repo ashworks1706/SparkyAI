@@ -4,6 +4,7 @@ mod assemble;
 mod capability;
 mod citation;
 mod context;
+mod thinking;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -338,7 +339,7 @@ async fn stateful_tools_run_in_order() {
 fn backoff_grows_and_spreads_retries_across_requests() {
     use uuid::Uuid;
 
-    use crate::agent::harness::agent::backoff;
+    use crate::agent::harness::agent::call::backoff;
 
     let id = Uuid::from_u128(0);
     let plenty = Duration::from_mins(1);

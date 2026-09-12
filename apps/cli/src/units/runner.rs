@@ -11,6 +11,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::types::{Event, Kind, LogLine, RunnerError, ServiceState, Stream, Unit};
+use crate::units::output::{parse_ps, sanitize_line};
 
 const COMPOSE_FILE: &str = "deploy/compose.yml";
 
@@ -283,68 +284,4 @@ where
             }
         }
     });
-}
-
-/// Removes ANSI escape sequences so colored output from children renders as plain text.
-pub fn sanitize_line(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for d in chars.by_ref() {
-                    if d.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-        // Tabs are the only control character the pane keeps.
-        if c.is_control() && c != '\t' {
-            continue;
-        }
-        out.push(c);
-    }
-    out
-}
-
-/// Parses docker compose ps --format json: a JSON array on older releases, one object per
-/// line on newer ones. Anything else is an error, not an empty stack.
-pub fn parse_ps(raw: &str) -> Result<HashMap<String, ServiceState>, String> {
-    #[derive(serde::Deserialize)]
-    struct Row {
-        #[serde(rename = "Service")]
-        service: String,
-        #[serde(rename = "State")]
-        state: String,
-        #[serde(rename = "Health", default)]
-        health: String,
-        #[serde(rename = "ExitCode", default)]
-        exit_code: i32,
-    }
-    let rows: Vec<Row> = if raw.trim().is_empty() {
-        Vec::new()
-    } else if let Ok(rows) = serde_json::from_str::<Vec<Row>>(raw) {
-        rows
-    } else {
-        raw.lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| serde_json::from_str::<Row>(l).map_err(|e| format!("compose ps row: {e}")))
-            .collect::<Result<_, _>>()?
-    };
-    Ok(rows
-        .into_iter()
-        .map(|r| {
-            (
-                r.service,
-                ServiceState {
-                    state: r.state,
-                    health: r.health,
-                    exit_code: r.exit_code,
-                },
-            )
-        })
-        .collect())
 }

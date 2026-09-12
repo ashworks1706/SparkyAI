@@ -2,6 +2,7 @@
 
 pub mod health;
 pub mod logs;
+pub mod output;
 pub mod runner;
 
 use crate::core::types::{Group, Kind, Unit};

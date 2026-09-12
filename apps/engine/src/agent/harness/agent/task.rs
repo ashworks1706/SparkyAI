@@ -85,6 +85,7 @@ impl Task {
             tools: Vec::new(),
             max_tokens: self.cfg.max_tokens,
             temperature: self.cfg.temperature,
+            thinking: false,
         };
         let limit = self.cfg.max_span_value_chars;
         let prompt = truncate(&json(&request.messages), limit);
@@ -124,7 +125,7 @@ impl Task {
         let response = tokio::time::timeout(budget, call)
             .await
             .map_err(|_| ModelError::Transport(format!("{} timed out", self.name)))??;
-        super::spans::record_reply(&span, &response, limit);
+        super::call::record_reply(&span, &response, limit);
         let text = response.content.trim().to_owned();
         if text.is_empty() {
             return Err(ModelError::Malformed(format!(

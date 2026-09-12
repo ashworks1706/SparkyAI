@@ -5,7 +5,7 @@ use crate::core::config::{Cli, repo_root};
 use crate::core::types::{Command, Group, Kind, LogLine, ServiceState, Status, Stream};
 use crate::units::catalog;
 use crate::units::logs::{LogBuffer, LogWriter};
-use crate::units::runner::{parse_ps, sanitize_line};
+use crate::units::output::{parse_ps, sanitize_line};
 
 #[test]
 fn commands_parse_into_actions() {

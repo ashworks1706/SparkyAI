@@ -2,12 +2,14 @@
 
 pub mod assemble;
 pub mod context;
+pub mod thinking;
 
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::core::types::agent::assemble::Budget;
+use crate::core::types::agent::thinking::ThinkingRules;
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::ConfirmationRequest;
@@ -55,6 +57,8 @@ pub struct AgentConfig {
     pub usd_per_m_completion: f64,
     /// Prompt budgets.
     pub budget: Budget,
+    /// When a model call thinks.
+    pub thinking: ThinkingRules,
 }
 
 /// How a run ended and what it produced.

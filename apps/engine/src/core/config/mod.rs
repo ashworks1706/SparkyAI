@@ -5,7 +5,7 @@
 //! and SPARKY_* environment variables. Env values win over file values.
 
 pub mod harness;
-pub mod retrieval;
+pub mod http;
 pub mod services;
 
 use figment::Figment;
@@ -16,7 +16,7 @@ use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 
 pub use self::harness::*;
-pub use self::retrieval::*;
+pub use self::http::*;
 pub use self::services::*;
 
 /// TOML layer read when SPARKY_CONFIG_FILE is unset. Missing is not an error.
@@ -108,6 +108,7 @@ impl Default for AgentConfig {
             max_span_value_chars: agent.max_span_value_chars,
             retrieval_top_k: Retrieval::default().top_k,
             budget: agent.budget(),
+            thinking: agent.thinking,
             // [model] has no defaults; these values are not read from a settings struct.
             max_tokens: 1024,
             usd_per_m_prompt: 0.0,
@@ -132,9 +133,10 @@ pub enum ConfigError {
 /// An unknown SPARKY_* variable is not rejected: the apps share one .env, so the engine sees
 /// the scraper keys and the scraper sees the engine keys. A variable named here is a boot
 /// failure that reports where it went.
-const RENAMED: [(&str, &str); 2] = [
+const RENAMED: [(&str, &str); 3] = [
     ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
     ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
+    ("SPARKY_MODEL__THINKING", "SPARKY_AGENT__THINKING__MODE"),
 ];
 
 impl Config {
@@ -195,6 +197,7 @@ impl Config {
         if self.profile.request_timeout_secs == 0 {
             return invalid("profile.request_timeout_secs must be at least 1".into());
         }
+        validate_thinking(&self.agent.thinking)?;
         if self.agent.max_steps == 0 {
             return invalid("agent.max_steps must be at least 1".into());
         }

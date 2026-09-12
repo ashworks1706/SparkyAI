@@ -4,7 +4,7 @@ use ::rig_core::completion::AssistantContent;
 use ::rig_core::message::Message as RigMessage;
 use serde_json::json;
 
-use crate::agent::model::rig_openai::{from_rig, to_rig};
+use crate::agent::model::rig_openai::{from_rig, to_rig, with_thinking};
 use crate::core::types::conversation::message::{Message, ToolCall};
 
 fn rig(messages: &[Message]) -> (Option<String>, Vec<RigMessage>) {
@@ -67,4 +67,15 @@ fn a_tool_result_without_ids_is_rejected() {
     let mut orphan = Message::tool_result("c", "echo", "ok");
     orphan.tool_call_id = None;
     assert!(to_rig(&[orphan]).is_err());
+}
+
+#[test]
+fn each_call_sets_the_thinking_switch_and_keeps_other_template_arguments() {
+    let params = json!({"top_p": 0.9, "chat_template_kwargs": {"custom": 1}});
+    let on = with_thinking(&params, true);
+    assert_eq!(on["chat_template_kwargs"]["enable_thinking"], true);
+    assert_eq!(on["chat_template_kwargs"]["custom"], 1);
+    assert_eq!(on["top_p"], 0.9);
+    let off = with_thinking(&json!({}), false);
+    assert_eq!(off["chat_template_kwargs"]["enable_thinking"], false);
 }

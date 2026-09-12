@@ -18,6 +18,8 @@ pub struct ModelRequest {
     pub max_tokens: u32,
     /// Sampling temperature.
     pub temperature: f32,
+    /// Let the model reason before it answers.
+    pub thinking: bool,
 }
 
 /// Why the model stopped.
