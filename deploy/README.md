@@ -37,8 +37,8 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 
 ## Observability
 
-- Traces, LLM analytics, product events: self-hosted PostHog, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__HOST` (default `http://localhost:8010`; compose sets `http://posthog`) with `SPARKY_TELEMETRY__PROJECT_TOKEN`; an empty token disables export. Model spans become `$ai_generation` events; a Discord conversation is one `$ai_session_id`. Contract: `docs/decisions/0003-posthog.md`.
-- Reading one conversation: Phoenix, below. The same spans also go to `SPARKY_TELEMETRY__PHOENIX_URL` when it is set, and the two destinations are independent. Contract: `docs/decisions/0004-phoenix-for-trace-reading.md`.
+- Traces, LLM analytics, product events: self-hosted PostHog, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__HOST` (default `http://localhost:8010`; compose sets `http://posthog`) with `SPARKY_TELEMETRY__PROJECT_TOKEN`; an empty token disables export. Model spans become `$ai_generation` events; a Discord conversation is one `$ai_session_id`.
+- Reading one conversation: Phoenix, below. The same spans also go to `SPARKY_TELEMETRY__PHOENIX_URL` when it is set, and the two destinations are independent.
 - Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
 - Database: `just db` starts pgweb on http://localhost:8081, loopback only. It browses the same database the engine reads and writes, so a change made there is a change to live data. `chunks.embedding` is a 1024-dimension vector and does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback only. They scrape `llama-server`, which exports Prometheus format on its own port; `chat` and `embed` run with `--metrics`. On a GPU host add `just gpu-metrics` for the utilisation, VRAM and temperature panels. The exporter shells out to `nvidia-smi`, so it runs under the nvidia container runtime with the `utility` driver capability rather than binding the driver library in by path.
@@ -61,7 +61,7 @@ just posthog       # fetch pinned upstream files into .sparky/posthog, then star
 
 The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` (28 containers; session replay, error tracking, screenshots, and live events are left out). It wants about 16 GB of memory. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config, Kafka topics, Temporal and livestream config) and downloads GeoIP into `.sparky/posthog/share`; set `SPARKY_POSTHOG_DIR` to an absolute path to keep them elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
 
-The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces), `/i/v0/ai/otel` (OTLP to LLM analytics), `/batch/` (events). The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
+The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces), `/batch/` (events); `/i/v0/ai/otel` takes PostHog's own payload rather than OTLP here, so `telemetry.ai_path` is empty. The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
 
 First run:
 

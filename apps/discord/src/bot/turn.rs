@@ -63,6 +63,7 @@ impl Handler {
                 let shown = resp.text.chars().take(2_000).collect::<String>();
                 span.record("sparky.output", shown.as_str());
                 span.record("output.value", shown.as_str());
+                span.record("otel.status_code", "OK");
                 let latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 self.record(
                     turn_event("discord_answer", req)
@@ -84,6 +85,8 @@ impl Handler {
                 self.show(ctx, dest, card_id, messages, &rows).await;
             }
             Err(e) => {
+                span.record("otel.status_code", "ERROR");
+                span.record("otel.status_message", e.to_string().as_str());
                 tracing::error!(error = %e, user = %req.user_id, "engine call failed");
                 self.record(
                     turn_event("discord_error", req)
@@ -171,7 +174,10 @@ impl Handler {
             tokio::select! {
                 update = rx.recv() => match update {
                     None => break,
-                    Some(Update::Progress(p)) => pacer.mark(steps.push(p.slot.as_deref(), &p.text)),
+                    Some(Update::Progress(p)) => pacer.mark(match (p.clear, p.slot.as_deref()) {
+                        (true, Some(slot)) => steps.clear(slot),
+                        (_, slot) => steps.push(slot, &p.text),
+                    }),
                     Some(Update::Answer(answer)) => outcome = Some(Ok(*answer)),
                     Some(Update::Failed(e)) => outcome = Some(Err(e)),
                 },

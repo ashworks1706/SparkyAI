@@ -138,7 +138,7 @@ impl Default for Telemetry {
             host: Some("http://localhost:8010".into()),
             project_token: SecretString::from(String::new()),
             traces_path: "/i/v1/traces".into(),
-            ai_path: "/i/v0/ai/otel".into(),
+            ai_path: String::new(),
             phoenix_url: None,
             service_name: None,
             sample_ratio: 1.0,
@@ -161,6 +161,10 @@ impl Telemetry {
             ("traces_path", &self.traces_path),
             ("ai_path", &self.ai_path),
         ] {
+            // An empty ai_path is how the AI endpoint is turned off.
+            if path.is_empty() && name == "ai_path" {
+                continue;
+            }
             if !path.starts_with('/') {
                 anyhow::bail!("telemetry.{name} must start with /, got {path:?}");
             }

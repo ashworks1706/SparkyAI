@@ -63,6 +63,8 @@ impl Usage {
 pub struct ModelResponse {
     /// Text the model produced. Empty when it only called tools.
     pub content: String,
+    /// Reasoning the model returned beside its answer. Empty when it returned none.
+    pub reasoning: String,
     /// Tool calls, in the order the model listed them.
     pub tool_calls: Vec<ToolCall>,
     /// Why it stopped.

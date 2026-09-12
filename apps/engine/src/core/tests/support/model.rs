@@ -39,6 +39,7 @@ impl ModelProvider for Scripted {
 pub fn text(content: &str) -> ModelResponse {
     ModelResponse {
         content: content.into(),
+        reasoning: String::new(),
         tool_calls: vec![],
         finish_reason: FinishReason::Stop,
         usage: Usage {
@@ -52,6 +53,7 @@ pub fn text(content: &str) -> ModelResponse {
 pub fn calls(items: Vec<(&str, &str, Value)>) -> ModelResponse {
     ModelResponse {
         content: String::new(),
+        reasoning: String::new(),
         tool_calls: items
             .into_iter()
             .map(|(id, name, arguments)| ToolCall {

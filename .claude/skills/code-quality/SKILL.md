@@ -291,7 +291,7 @@ These come from `AGENTS.md`; a pass that leaves one broken is not done.
   quotation marks around terms, em dashes, arrows, or other non-ASCII. They say
   what the code does in present tense. No justification of a decision, no
   argument against an alternative, no openers (Note that, Simply, Basically), no
-  closing summary. The why goes in the commit message or `docs/decisions/`.
+  closing summary. The why goes in the commit message.
 - **Public items** carry a one-line doc comment saying what, not how.
 - **The core split**: data (serde derives, values crossing a module, wire shapes,
   errors) lives in `core/types`; interfaces live in `core/traits` with a test

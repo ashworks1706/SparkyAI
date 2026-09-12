@@ -107,6 +107,8 @@ impl Handler {
             "input.value" = %req.message,
             "output.value" = Empty,
             "session.id" = Empty,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
             "user.id" = %msg.author.id,
         );
         self.converse(ctx, &dest, &req, span, label).await;

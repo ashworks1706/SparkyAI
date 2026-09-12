@@ -45,13 +45,17 @@ fn tool_calls_and_results_round_trip_their_ids() {
 }
 
 #[test]
-fn response_content_splits_text_and_calls() {
-    let (text, calls) = from_rig(vec![
+fn response_content_splits_text_reasoning_and_calls() {
+    let (text, reasoning, calls) = from_rig(vec![
         AssistantContent::text("hello"),
         AssistantContent::tool_call("c1", "echo", json!({"x": 2})),
-        AssistantContent::reasoning("thinking"),
+        AssistantContent::reasoning("the hours are not in what I was given"),
     ]);
     assert_eq!(text, "hello");
+    assert_eq!(
+        reasoning, "the hours are not in what I was given",
+        "what the model reasoned is kept, not dropped"
+    );
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].id, "c1");
     assert_eq!(calls[0].name, "echo");

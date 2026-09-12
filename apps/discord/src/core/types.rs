@@ -115,6 +115,9 @@ pub struct Progress {
     /// The line this replaces, when it replaces one.
     #[serde(default)]
     pub slot: Option<String>,
+    /// Removes the line of slot instead of writing text there.
+    #[serde(default)]
+    pub clear: bool,
 }
 
 /// What arrives while a streamed turn runs.

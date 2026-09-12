@@ -121,7 +121,7 @@ services:
       - "8000"
       # ctx-size is the total across slots: each of --parallel N gets ctx-size / N.
       - --ctx-size
-      - ${SPARKY_CHAT_CTX:-8192}
+      - ${SPARKY_CHAT_CTX:-16384}
       - --parallel
       - ${SPARKY_CHAT_PARALLEL:-2}
       - --n-gpu-layers

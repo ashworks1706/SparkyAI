@@ -210,6 +210,8 @@ impl Agent {
             "sparky.step" = step,
             "$ai_session_id" = %ctx.conversation_id,
             "posthog.distinct_id" = %ctx.user_id,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
         );
         let result = tokio::select! {
             () = ctx.cancel.cancelled() => Err(ToolError::Cancelled),
@@ -249,11 +251,14 @@ impl Agent {
                 let shown = truncate(&redact_text(text), 4_000);
                 span.record("gen_ai.tool.call.result", shown.as_str());
                 span.record("output.value", shown.as_str());
+                span.record("otel.status_code", "OK");
             }
             Err(error) => {
                 let shown = format!("error: {error}");
                 span.record("gen_ai.tool.call.result", shown.as_str());
                 span.record("output.value", shown.as_str());
+                span.record("otel.status_code", "ERROR");
+                span.record("otel.status_message", error.to_string().as_str());
             }
         }
         (content, found)

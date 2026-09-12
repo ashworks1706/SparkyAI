@@ -83,7 +83,7 @@ fn a_linked_source_becomes_a_button_and_an_unlinked_one_a_subtext_line() {
     assert_eq!(out.len(), 1);
     assert!(!out[0].contains("Sources"), "no source list in the text");
     assert!(!out[0].contains("fetched"), "no fetch dates either");
-    assert!(out[0].contains("also from front desk note"), "{}", out[0]);
+    assert!(out[0].contains("Also from** front desk note"), "{}", out[0]);
 
     let rows = rows_for(&resp);
     assert_eq!(rows.len(), 1, "one row of sources");
@@ -198,7 +198,7 @@ fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
     let shown = thinking(&steps.lines(), 2_000, 0);
     assert_eq!(
         shown,
-        format!("{head}\n-# • thinking\n-# • searching the knowledge base\n-# • thinking")
+        format!("{head}\n-# thinking\n-# searching the knowledge base\n-# thinking")
     );
     assert_ne!(
         thinking(&[], 2_000, 1),
@@ -256,10 +256,10 @@ fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
     let card = &out[0];
     assert!(!card.contains(THINKING), "the header goes once answered");
     let order = [
-        "-# • \u{1f914} thinking",
-        "-# • \u{2705} `search_knowledge_base`",
+        "-# \u{1f914} thinking",
+        "-# \u{2705} `search_knowledge_base`",
         "Hayden closes at 2am.",
-        "also from desk note",
+        "Also from** desk note",
         "Memory used**\n- You study CSE.",
     ];
     let positions: Vec<usize> = order
@@ -284,7 +284,7 @@ fn an_oversized_card_folds_steps_then_trims_footers_then_continues() {
     let folded = answer(&steps, &resp, 500);
     assert_eq!(folded.len(), 1);
     assert!(folded[0].starts_with("-# 40 steps"), "{}", folded[0]);
-    assert!(!folded[0].contains("-# •"));
+    assert!(!folded[0].contains("step 0"), "{}", folded[0]);
 
     let mut resp = response("short answer", Vec::new(), "answered");
     resp.memories = (0..40)
@@ -328,17 +328,17 @@ fn an_accepted_approval_keeps_the_steps_and_replaces_prompt_and_footers() {
     assert_eq!(
         out,
         vec![
-            "-# • thinking\n-# • search finished\n-# • approved\n\nRegistered.\n\n-# \u{1f4da} also from new source"
+            "-# thinking\n-# search finished\n-# approved\n\nRegistered.\n\n**\u{1f4da} Also from** new source"
                 .to_owned()
         ]
     );
     let declined = resumed(&card[0], false, &done, 2_000);
-    assert!(declined[0].contains("-# • declined"));
+    assert!(declined[0].contains("-# declined"));
     assert!(!declined[0].contains("needs your approval"));
     assert!(!declined[0].contains("old source"));
 
     let broke = failed(&["thinking".to_owned()], "Sparky is unavailable.", 2_000);
-    assert_eq!(broke, "-# • thinking\n\nSparky is unavailable.");
+    assert_eq!(broke, "-# thinking\n\nSparky is unavailable.");
 }
 
 #[test]
@@ -365,7 +365,7 @@ fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
     let out = resumed(&card[0], true, &done, 2_000);
     assert!(out.iter().all(|m| m.len() <= 2_000));
     assert!(
-        out[0].starts_with("-# 60 steps\n-# • approved\n\nword"),
+        out[0].starts_with("-# 60 steps\n-# approved\n\nword"),
         "{}",
         out[0]
     );
@@ -967,7 +967,7 @@ fn analytics_batches_reach_the_batch_path_with_the_api_key() {
 }
 
 #[test]
-fn discord_spans_reach_both_paths_with_the_bearer_token() {
+fn discord_spans_reach_the_traces_path_with_the_bearer_token() {
     use crate::core::config::Telemetry;
     use crate::core::telemetry::provider;
     use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
@@ -982,6 +982,8 @@ fn discord_spans_reach_both_paths_with_the_bearer_token() {
     let cfg = Telemetry {
         host: Some(format!("http://{addr}")),
         project_token: SecretString::from("phc_test".to_owned()),
+        // Off by default; set here to prove it is still reachable when it is configured.
+        ai_path: "/i/v0/ai/otel".into(),
         ..Telemetry::default()
     };
     let built = provider(&cfg, "discord-test", "test");
@@ -1003,6 +1005,15 @@ fn discord_spans_reach_both_paths_with_the_bearer_token() {
         got.iter().all(|(_, auth, _)| auth == "Bearer phc_test"),
         "{got:?}"
     );
+}
+
+#[test]
+fn the_ai_path_is_off_unless_it_is_configured() {
+    use crate::core::config::Telemetry;
+
+    // The self-hosted capture-ai service refuses OTLP, so a batch sent there fails forever.
+    assert!(Telemetry::default().ai_path.is_empty());
+    assert!(Telemetry::default().validate().is_ok());
 }
 
 #[test]

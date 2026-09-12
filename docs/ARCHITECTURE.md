@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord.
 
-This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are in [decisions/](decisions/).
+This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are recorded in the commits that settle them.
 
 ## Stack
 
@@ -22,7 +22,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Vector store | pgvector | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
-| Observability | OpenTelemetry and product events → PostHog, self-hosted; the same spans → Phoenix for reading one conversation; logs under `.sparky/` | every app; `deploy/compose.yml` profiles `posthog` and `phoenix`; `docs/decisions/0003-posthog.md`, `docs/decisions/0004-phoenix-for-trace-reading.md` |
+| Observability | OpenTelemetry and product events → PostHog, self-hosted; the same spans → Phoenix for reading one conversation; logs under `.sparky/` | every app; `deploy/compose.yml` profiles `posthog` and `phoenix` |
 | Config | `sparky.toml` (committed), then `SPARKY_*` env vars from `.env`, which win | `sparky.toml`, `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -66,7 +66,7 @@ apps/
   training/       Python. datasets from PostHog LLM generations, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
   web/            Vite + React frontend and admin UI
 deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
-docs/             ROADMAP.md, this file, decisions/
+docs/             ROADMAP.md, this file
 .sparky/          ignored local state: traces, logs, training data, reports, and outputs
 ```
 
@@ -115,7 +115,7 @@ flowchart LR
     ING -->|OTLP| PH
 ```
 
-Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
+Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. A host process whose port is already served is not started a second time; the console says what holds the port instead. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
 
 ## Inside `engine`
 
@@ -418,9 +418,9 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | `/ask` or @mention in a thread | that thread | public |
 | `/ask private:true` | an ephemeral reply | private |
 
-A turn is one message, edited in place: it opens as a spinner line, gains one line per progress event, and ends with the answer. A progress line that carries a `slot` writes over the line of that slot, so a tool result lands where its own start line was, carrying the arguments and a trimmed result. What the model writes on its way to a tool call is shown as a thought. Under the answer sit the memories that went into the prompt (`ChatResponse.memories`) and any source with no page of its own; every other source is a link button. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
+A turn is one message, edited in place: it opens as a spinner line, gains one line per progress event, and ends with the answer. A progress line that carries a `slot` writes over the line of that slot, so a tool result lands where its own start line was, carrying the arguments and a trimmed result. The model's own reasoning is shown as a thought on that same line, and a step that reasoned nothing worth showing takes its thinking line back. Under the answer sit the memories that went into the prompt (`ChatResponse.memories`) and any source with no page of its own; every other source is a link button. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
 
-A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state; `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`. Details: `decisions/0002-discord-threads-and-visibility.md`.
+A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state; `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`.
 
 ## Storage
 
@@ -483,8 +483,8 @@ flowchart TD
 Two forms of it:
 
 - **JSONL** (`.sparky/traces/<request_id>.jsonl`): complete local replay records.
-- **PostHog spans**: cross-process traces joined with W3C `traceparent`, exported over OTLP/HTTP to both the traces path and the AI path. Spans carry `gen_ai.*` attributes; each model call becomes an `$ai_generation` with the prompt, reply, model, and usage, tied to the user (`posthog.distinct_id`) and the conversation (`$ai_session_id`). Training export reads these. Retrieval, tool, policy, and scraper spans carry their structured results. The attribute contract is `docs/decisions/0003-posthog.md`.
-- **Phoenix spans**: the same spans, exported to `telemetry.phoenix_url` plus `/v1/traces` with no authentication, read as a trace tree of one conversation. They carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those; see `docs/decisions/0004-phoenix-for-trace-reading.md`. Each destination is independent: either can be off.
+- **PostHog spans**: cross-process traces joined with W3C `traceparent`, exported over OTLP/HTTP to the traces path, and to the AI path when `telemetry.ai_path` is set. Spans carry `gen_ai.*` attributes; each model call becomes an `$ai_generation` with the prompt, reply, model, and usage, tied to the user (`posthog.distinct_id`) and the conversation (`$ai_session_id`). Training export reads these. Retrieval, tool, policy, and scraper spans carry their structured results.
+- **Phoenix spans**: the same spans, exported to `telemetry.phoenix_url` plus `/v1/traces` with no authentication, read as a trace tree of one conversation. They carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those. Each destination is independent: either can be off.
 
 Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
 
@@ -513,7 +513,7 @@ Dashboard panels and the metric names behind them: `deploy/README.md`.
 
 ## Authenticated tasks (Phase 8)
 
-No mechanism. The browser MCP server that Phase 8 assumed is gone, see [decisions/0005](decisions/0005-drop-the-browser-mcp.md). Whatever replaces it needs its own decision note first. The rules it has to meet stand: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
+No mechanism. The browser MCP server that Phase 8 assumed is gone: no browser, no Playwright MCP, nothing that drives a page. Whatever replaces it is a new design. The rules it has to meet stand: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
 
 ## Live source queries
 
@@ -550,4 +550,4 @@ Two images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects) and `sp
 
 Chat model size and quantization · whether a reranker earns its place once the eval set exists · parallel slots per llama-server under load · default `chars_per_token` once the tokenizer is measured · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
 
-Record each as a short note under `docs/decisions/` when made.
+Record each in the commit that settles it.

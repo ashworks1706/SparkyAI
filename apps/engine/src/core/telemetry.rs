@@ -38,16 +38,22 @@ fn base(url: Option<&str>) -> Option<&str> {
         .filter(|h| !h.is_empty())
 }
 
-/// The PostHog endpoints, or None when the host or the token is empty.
-fn posthog_urls(cfg: &Telemetry) -> Option<[String; 2]> {
-    let host = base(cfg.host.as_deref())?;
+/// The PostHog endpoints, empty when the host or the token is empty.
+///
+/// The AI endpoint is only included when ai_path is set. The self-hosted capture-ai service
+/// takes PostHog's own event payload, not OTLP, so exporting spans there fails every batch.
+fn posthog_urls(cfg: &Telemetry) -> Vec<String> {
+    let Some(host) = base(cfg.host.as_deref()) else {
+        return Vec::new();
+    };
     if cfg.project_token.expose_secret().trim().is_empty() {
-        return None;
+        return Vec::new();
     }
-    Some([
-        format!("{host}{}", cfg.traces_path),
-        format!("{host}{}", cfg.ai_path),
-    ])
+    let mut urls = vec![format!("{host}{}", cfg.traces_path)];
+    if !cfg.ai_path.trim().is_empty() {
+        urls.push(format!("{host}{}", cfg.ai_path));
+    }
+    urls
 }
 
 /// The Phoenix endpoint, or None when phoenix_url is empty.
@@ -57,7 +63,7 @@ fn phoenix_url(cfg: &Telemetry) -> Option<String> {
 
 /// Why export is off, or None when at least one destination is configured.
 fn disabled(cfg: &Telemetry) -> Option<&'static str> {
-    (posthog_urls(cfg).is_none() && phoenix_url(cfg).is_none())
+    (posthog_urls(cfg).is_empty() && phoenix_url(cfg).is_none())
         .then_some("telemetry.host, telemetry.project_token and telemetry.phoenix_url are unset; trace export is off")
 }
 
@@ -95,10 +101,8 @@ pub fn provider(
         return Ok(None);
     }
     let mut builder = SdkTracerProvider::builder();
-    if let Some(urls) = posthog_urls(cfg) {
-        for url in urls {
-            builder = builder.with_batch_exporter(exporter(cfg, url, bearer(cfg))?);
-        }
+    for url in posthog_urls(cfg) {
+        builder = builder.with_batch_exporter(exporter(cfg, url, bearer(cfg))?);
     }
     if let Some(url) = phoenix_url(cfg) {
         builder = builder.with_batch_exporter(exporter(cfg, url, HashMap::new())?);

@@ -7,7 +7,7 @@ use ::rig_core::completion::{
     ToolDefinition as RigTool,
 };
 use ::rig_core::embeddings::EmbeddingModel as _;
-use ::rig_core::message::{Message as RigMessage, ToolChoice, UserContent};
+use ::rig_core::message::{Message as RigMessage, ReasoningContent, ToolChoice, UserContent};
 use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericEmbeddingModel};
 use async_trait::async_trait;
 use secrecy::{ExposeSecret, SecretString};
@@ -114,9 +114,11 @@ fn tool_to_rig(t: &ToolDefinition) -> RigTool {
     }
 }
 
-/// Maps Rig response content into core types. Reasoning and media are dropped.
-pub(crate) fn from_rig(choice: Vec<AssistantContent>) -> (String, Vec<ToolCall>) {
+/// Maps Rig response content into core types: the text, the reasoning, and the calls. Media is
+/// dropped.
+pub(crate) fn from_rig(choice: Vec<AssistantContent>) -> (String, String, Vec<ToolCall>) {
     let mut text = String::new();
+    let mut reasoning = String::new();
     let mut calls = Vec::new();
     for item in choice {
         match item {
@@ -132,10 +134,22 @@ pub(crate) fn from_rig(choice: Vec<AssistantContent>) -> (String, Vec<ToolCall>)
                     arguments: call.function.arguments,
                 });
             }
-            AssistantContent::Reasoning(_) | AssistantContent::Image(_) => {}
+            AssistantContent::Reasoning(r) => {
+                for block in r.content {
+                    if let ReasoningContent::Text { text, .. } | ReasoningContent::Summary(text) =
+                        block
+                    {
+                        if !reasoning.is_empty() {
+                            reasoning.push('\n');
+                        }
+                        reasoning.push_str(&text);
+                    }
+                }
+            }
+            AssistantContent::Image(_) => {}
         }
     }
-    (text, calls)
+    (text, reasoning, calls)
 }
 
 fn map_error(e: CompletionError) -> ModelError {
@@ -192,7 +206,7 @@ impl ModelProvider for RigChat {
             record_telemetry_content: false,
         };
         let response = self.model.completion(request).await.map_err(map_error)?;
-        let (content, tool_calls) = from_rig(response.choice);
+        let (content, reasoning, tool_calls) = from_rig(response.choice);
         // Rig does not surface the finish reason of the provider. Tool calls and text are the
         // two cases readable off the response. An empty completion stays Unknown.
         let finish_reason = if !tool_calls.is_empty() {
@@ -204,6 +218,7 @@ impl ModelProvider for RigChat {
         };
         Ok(ModelResponse {
             content,
+            reasoning,
             tool_calls,
             finish_reason,
             usage: Usage {

@@ -12,8 +12,8 @@ pub const THINKING: &str = "**Sparky is working on it…**";
 /// Frames the header spinner cycles through, one per edit of the running card.
 const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
 
-/// Prefix of one step line.
-const BULLET: &str = "-# • ";
+/// Prefix of one step line. The emoji the engine sends is the only marker a step carries.
+const BULLET: &str = "-# ";
 
 /// Items each footer keeps once footers are trimmed to fit.
 const FOOTER_KEEP: usize = 3;
@@ -63,6 +63,13 @@ impl Steps {
             text: text.to_owned(),
         });
         true
+    }
+
+    /// Takes back the line of slot, and says whether one was there.
+    pub fn clear(&mut self, slot: &str) -> bool {
+        let before = self.lines.len();
+        self.lines.retain(|line| line.slot.as_deref() != Some(slot));
+        self.lines.len() != before
     }
 
     /// The steps so far, in order.
@@ -161,15 +168,18 @@ pub fn steps_of(card: &str) -> (usize, Vec<String>) {
     let mut folded = 0;
     let mut steps = Vec::new();
     for line in card.lines() {
-        if let Some(step) = line.strip_prefix(BULLET) {
-            steps.push(step.to_owned());
-        } else if let Some(rest) = line.strip_prefix("-# ")
-            && let Some(n) = rest
-                .strip_suffix(" steps")
-                .or_else(|| rest.strip_suffix(" step"))
-                .and_then(|n| n.parse::<usize>().ok())
+        let Some(rest) = line.strip_prefix(BULLET) else {
+            continue;
+        };
+        // A count of folded steps shares the prefix, so it is read first.
+        if let Some(n) = rest
+            .strip_suffix(" steps")
+            .or_else(|| rest.strip_suffix(" step"))
+            .and_then(|n| n.parse::<usize>().ok())
         {
             folded += n;
+        } else {
+            steps.push(rest.to_owned());
         }
     }
     (folded, steps)
@@ -197,12 +207,12 @@ fn layout(folded: usize, steps: &[String], resp: &ChatResponse, limit: usize) ->
     chunk(&trimmed, limit)
 }
 
-/// One step as a small grey bullet.
+/// One step as a small grey line.
 fn bullet(step: &str) -> String {
     format!("{BULLET}{step}")
 }
 
-/// Every step as a bullet, one per line.
+/// Every step as a line of its own.
 fn bullets(steps: &[String]) -> String {
     steps
         .iter()
@@ -258,7 +268,8 @@ fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
         .collect();
     if !unlinked.is_empty() {
         let shown = kept(&unlinked, keep).join(", ");
-        let mut s = format!("-# \u{1f4da} also from {shown}");
+        // Not subtext: a step line carries that prefix and is read back out of the card.
+        let mut s = format!("**\u{1f4da} Also from** {shown}");
         if let Some(n) = hidden(unlinked.len(), keep) {
             let _ = write!(s, ", and {n} more");
         }

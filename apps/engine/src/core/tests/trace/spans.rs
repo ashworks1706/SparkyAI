@@ -164,3 +164,20 @@ fn every_span_carries_the_openinference_attributes_phoenix_reads() {
         attr(llm, "gen_ai.output.messages").as_deref()
     );
 }
+
+#[test]
+fn a_finished_span_says_whether_it_succeeded() {
+    use opentelemetry::trace::Status;
+
+    let spans = spans_of_one_turn();
+    for name in ["agent.run", "llm"] {
+        let Some(span) = spans.iter().find(|s| s.name == name) else {
+            unreachable!("{name} is exported by an answered turn")
+        };
+        assert_eq!(
+            span.status,
+            Status::Ok,
+            "{name} left its status unset, so every trace UI reads it as unknown"
+        );
+    }
+}

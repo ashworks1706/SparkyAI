@@ -131,6 +131,7 @@ impl Agent {
                     "user.id" = %ctx.user_id,
                     "$ai_session_id" = %ctx.conversation_id,
                     "posthog.distinct_id" = %ctx.user_id,
+                    "otel.status_code" = Empty,
                 );
                 let found = retriever
                     .retrieve(ctx, &query)
@@ -153,6 +154,7 @@ impl Agent {
                     let shown = truncate(&json(&listing), self.cfg.max_span_value_chars);
                     span.record("sparky.output", shown.as_str());
                     span.record("output.value", shown.as_str());
+                    span.record("otel.status_code", "OK");
                     deps.trace.emit(
                         ctx,
                         TraceEvent::Retrieval {

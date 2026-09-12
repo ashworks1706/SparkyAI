@@ -19,6 +19,7 @@ use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::Instrument;
+use tracing::field::Empty;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::agent::harness::agent::Agent;
@@ -80,6 +81,42 @@ pub fn parse_traceparent(value: &str) -> Option<opentelemetry::Context> {
         .then(|| opentelemetry::Context::new().with_remote_span_context(remote))
 }
 
+/// The span one request runs under, carrying the attributes both trace UIs read. The answer
+/// and the outcome are recorded on it when the turn ends.
+macro_rules! route_span {
+    ($name:literal, $req:expr) => {
+        tracing::info_span!(
+            $name,
+            "posthog.distinct_id" = %$req.user_id,
+            "openinference.span.kind" = "CHAIN",
+            "input.value" = %$req.message,
+            "output.value" = Empty,
+            "user.id" = %$req.user_id,
+            "session.id" = Empty,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
+        )
+    };
+}
+
+/// Records how a turn ended on the span it ran under.
+fn record_outcome(span: &tracing::Span, outcome: &Result<ChatResponse, Failure>) {
+    match outcome {
+        Ok(answer) => {
+            span.record("session.id", answer.conversation_id.to_string().as_str());
+            span.record(
+                "output.value",
+                answer.text.chars().take(4_000).collect::<String>().as_str(),
+            );
+            span.record("otel.status_code", "OK");
+        }
+        Err(failure) => {
+            span.record("otel.status_code", "ERROR");
+            span.record("otel.status_message", failure.body.error.as_str());
+        }
+    }
+}
+
 /// Handles one chat turn. Runs under an http.chat span parented to the traceparent of the
 /// caller.
 pub async fn chat(
@@ -93,7 +130,7 @@ pub async fn chat(
     if !state.rate_limit.allow(&req.user_id) {
         return too_many(&req.user_id);
     }
-    let span = tracing::info_span!("http.chat", "posthog.distinct_id" = %req.user_id);
+    let span = route_span!("http.chat", req);
     if let Some(parent) = headers
         .get("traceparent")
         .and_then(|v| v.to_str().ok())
@@ -102,7 +139,9 @@ pub async fn chat(
     {
         tracing::debug!(error = %e, "traceparent ignored");
     }
-    match run_turn(state, req, None).instrument(span).await {
+    let outcome = run_turn(state, req, None).instrument(span.clone()).await;
+    record_outcome(&span, &outcome);
+    match outcome {
         Ok(answer) => Json(answer).into_response(),
         Err(failure) => failure.into_response(),
     }
@@ -121,7 +160,7 @@ pub async fn stream(
     if !state.rate_limit.allow(&req.user_id) {
         return too_many(&req.user_id);
     }
-    let span = tracing::info_span!("http.chat.stream", "posthog.distinct_id" = %req.user_id);
+    let span = route_span!("http.chat.stream", req);
     if let Some(parent) = headers
         .get("traceparent")
         .and_then(|v| v.to_str().ok())
@@ -133,9 +172,12 @@ pub async fn stream(
 
     let (progress_tx, progress_rx) = mpsc::unbounded_channel();
     let (answer_tx, answer_rx) = oneshot::channel();
+    let outcome_span = span.clone();
     tokio::spawn(
         async move {
-            let _ = answer_tx.send(run_turn(state, req, Some(progress_tx)).await);
+            let outcome = run_turn(state, req, Some(progress_tx)).await;
+            record_outcome(&outcome_span, &outcome);
+            let _ = answer_tx.send(outcome);
         }
         .instrument(span),
     );

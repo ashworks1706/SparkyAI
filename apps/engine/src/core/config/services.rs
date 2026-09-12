@@ -207,7 +207,7 @@ pub struct Telemetry {
     pub project_token: SecretString,
     /// Path of the OTLP traces endpoint, joined to host.
     pub traces_path: String,
-    /// Path of the OTLP AI endpoint, joined to host.
+    /// Path of the OTLP AI endpoint, joined to host. Empty exports nothing there.
     pub ai_path: String,
     /// Phoenix base URL for the trace UI; unset or empty exports nothing there.
     pub phoenix_url: Option<String>,
@@ -230,7 +230,7 @@ impl Default for Telemetry {
             host: Some("http://localhost:8010".into()),
             project_token: SecretString::from(""),
             traces_path: "/i/v1/traces".into(),
-            ai_path: "/i/v0/ai/otel".into(),
+            ai_path: String::new(),
             phoenix_url: None,
             provider_name: "llama.cpp".into(),
             service_name: None,

@@ -63,6 +63,9 @@ pub struct Cli {
     pub log_dir: PathBuf,
     /// Seconds between health probes.
     pub health_interval_secs: u64,
+    /// Milliseconds a port check waits before it calls the port free. A unit whose port is
+    /// already served is not started a second time.
+    pub port_check_ms: u64,
 }
 
 impl Default for Cli {
@@ -72,6 +75,7 @@ impl Default for Cli {
             log_lines: 5000,
             log_dir: PathBuf::from(".sparky/logs"),
             health_interval_secs: 5,
+            port_check_ms: 150,
         }
     }
 }

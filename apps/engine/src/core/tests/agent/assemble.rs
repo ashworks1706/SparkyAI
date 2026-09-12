@@ -327,3 +327,35 @@ fn no_date_writes_no_date_line() {
         a.messages[0]
     );
 }
+
+#[test]
+fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
+    use crate::agent::harness::agent::thought::split;
+
+    let (thought, visible) = split(
+        "",
+        "<think>The hours are not in what I was given.</think>Hayden closes at 2am.",
+    );
+    assert_eq!(
+        thought.as_deref(),
+        Some("The hours are not in what I was given.")
+    );
+    assert_eq!(
+        visible, "Hayden closes at 2am.",
+        "the tags never reach a user"
+    );
+
+    // A step that ran out of room mid-thought still reported a thought.
+    let (cut, visible) = split("", "<think>I should search for");
+    assert_eq!(cut.as_deref(), Some("I should search for"));
+    assert!(visible.is_empty());
+
+    // Reasoning the provider returned in a field of its own wins over the text.
+    let (given, visible) = split("provider reasoning", "<think>inline</think>answer");
+    assert_eq!(given.as_deref(), Some("provider reasoning"));
+    assert_eq!(visible, "answer");
+
+    let (none, visible) = split("", "Hayden closes at 2am.");
+    assert!(none.is_none());
+    assert_eq!(visible, "Hayden closes at 2am.");
+}

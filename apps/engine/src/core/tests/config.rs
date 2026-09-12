@@ -127,7 +127,8 @@ fn telemetry_defaults_point_at_the_local_posthog() {
     assert_eq!(cfg.telemetry.host.as_deref(), Some("http://localhost:8010"));
     assert!(cfg.telemetry.project_token.expose_secret().is_empty());
     assert_eq!(cfg.telemetry.traces_path, "/i/v1/traces");
-    assert_eq!(cfg.telemetry.ai_path, "/i/v0/ai/otel");
+    // Off: the self-hosted capture-ai service refuses OTLP, so every batch sent there fails.
+    assert_eq!(cfg.telemetry.ai_path, "");
     assert_eq!(cfg.telemetry.provider_name, "llama.cpp");
 }
 

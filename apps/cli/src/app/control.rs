@@ -1,10 +1,11 @@
 //! Starting, stopping and restarting a unit, and the commands that ask for it.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::{App, UnitState};
 use crate::core::types::{Command, Focus, Kind, Status};
 use crate::units;
+use crate::units::health;
 
 impl App {
     pub(super) fn toggle_selected(&mut self) {
@@ -34,6 +35,12 @@ impl App {
         }
         let unit = self.units[i].unit.clone();
         self.selected = i;
+        if let Some(addr) = self.taken_port(&unit) {
+            self.notice = Some(format!(
+                "{id} is already served on {addr} by something this console did not start"
+            ));
+            return;
+        }
         match self.runner.start(&unit) {
             Ok(()) => {
                 let u = &mut self.units[i];
@@ -51,6 +58,17 @@ impl App {
             }
         }
     }
+    /// The address a process unit would bind, when something already answers there. A compose
+    /// service is left alone: bringing one up that is already up changes nothing.
+    fn taken_port(&self, unit: &crate::core::types::Unit) -> Option<String> {
+        if !matches!(unit.kind, Kind::Process) || self.runner.owns(&unit.id) {
+            return None;
+        }
+        let addr = health::address_of(unit.url.as_deref()?)?;
+        let timeout = Duration::from_millis(self.cfg.cli.port_check_ms.max(1));
+        health::served(&addr, timeout).then_some(addr)
+    }
+
     pub(super) fn stop_by_id(&mut self, id: &str) {
         let Some(i) = self.index_of(id) else {
             self.notice = Some(format!("no unit {id:?}"));

@@ -50,7 +50,7 @@ apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. Al
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
-docs/             ROADMAP.md, ARCHITECTURE.md, decisions/ (one note per decision, numbered)
+docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
 Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `query_source` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
@@ -92,7 +92,7 @@ Two layers, lowest first: `sparky.toml`, which is committed, and `SPARKY_<SECTIO
 
 - Every app has a `core/` (`src/core/` in Rust) holding what the rest of the app builds on and nothing that does work: config/settings, telemetry, data types, interfaces, and `tests`. Rust: `core/{config,telemetry,types,traits,tests}`; Python: `core/{settings.py,types.py,tests/}`. The split: **data** (derives serde, or crosses a module as a value — messages, config, errors, wire shapes) → `core/types`; **interfaces** (traits) → `core/traits`; **objects** (state plus the methods that own it — `Agent`, `ToolSet`, sinks, clients, stores, handlers) live beside their `impl` with private fields. Domain code imports from `core`; `core` imports nothing from the app.
 - Public items have a one-line doc comment saying what, not how.
-- **Comment style is plain ASCII and monotone.** Applies to `//`, `///`, `//!`, `#`, `"""` and `--`. No backticks, no quotation marks around terms, no em dashes, no arrows, no non-ASCII of any kind. State what the code does; do not justify a decision, argue against an alternative, or say why one approach beat another. No openers (Note that, Simply, Basically, Crucially, Importantly) and no closing summary. Present tense, declarative, one line where one line does. An invariant the code depends on is kept as a fact, without the argument for it. The why belongs in the commit message and in `docs/decisions/`, never in a comment.
+- **Comment style is plain ASCII and monotone.** Applies to `//`, `///`, `//!`, `#`, `"""` and `--`. No backticks, no quotation marks around terms, no em dashes, no arrows, no non-ASCII of any kind. State what the code does; do not justify a decision, argue against an alternative, or say why one approach beat another. No openers (Note that, Simply, Basically, Crucially, Importantly) and no closing summary. Present tense, declarative, one line where one line does. An invariant the code depends on is kept as a fact, without the argument for it. The why belongs in the commit message, never in a comment.
 - Commit messages: imperative subject ≤ 72 chars, body explains why.
 - The tree is scaffolded ahead of code. Fill a stub in place; don't create parallel files or rename stubs without updating ARCHITECTURE.md.
 - Keep docs lean. No filler prose.

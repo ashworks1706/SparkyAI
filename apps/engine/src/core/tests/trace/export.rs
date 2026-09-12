@@ -59,6 +59,8 @@ fn a_span_reaches_both_paths_with_the_bearer_token() {
     let cfg = Telemetry {
         host: Some(format!("http://{addr}/")),
         project_token: SecretString::from("phc_test"),
+        // Off by default; set here to prove it is still reachable when it is configured.
+        ai_path: "/i/v0/ai/otel".into(),
         ..Telemetry::default()
     };
     let built = provider(&cfg, "engine-test", "test");
@@ -168,7 +170,7 @@ fn both_destinations_receive_every_span() {
     let mut got = Vec::new();
     while Instant::now() < deadline {
         got = seen.lock().map(|s| s.clone()).unwrap_or_default();
-        if got.len() >= 3 {
+        if got.len() >= 2 {
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
@@ -176,5 +178,9 @@ fn both_destinations_receive_every_span() {
     let _ = provider.shutdown();
     let mut paths: Vec<&str> = got.iter().map(|(p, _)| p.as_str()).collect();
     paths.sort_unstable();
-    assert_eq!(paths, ["/i/v0/ai/otel", "/i/v1/traces", "/v1/traces"]);
+    assert_eq!(
+        paths,
+        ["/i/v1/traces", "/v1/traces"],
+        "PostHog and Phoenix each receive the span"
+    );
 }

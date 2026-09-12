@@ -1,5 +1,7 @@
-//! Periodic probes of the engine, the chat model server, and PostHog.
+//! Periodic probes of the engine, the chat model server, and PostHog, and the one-shot check
+//! of whether a unit's port is already served.
 
+use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use tokio::sync::mpsc::UnboundedSender;
@@ -70,4 +72,31 @@ async fn probe(http: &reqwest::Client, url: &str) -> Probe {
         }
         Err(_) => Probe::Down,
     }
+}
+
+/// The host and port a unit's url points at, when it names one that can be connected to.
+///
+/// A wildcard host is read as loopback, which is where a unit started here would be reached.
+pub fn address_of(url: &str) -> Option<String> {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let rest = rest.split(['/', '?', '#']).next()?;
+    let (host, port) = rest.rsplit_once(':')?;
+    if port.is_empty() || port.parse::<u16>().is_err() {
+        return None;
+    }
+    let host = match host.trim() {
+        "" | "0.0.0.0" | "[::]" => "127.0.0.1",
+        other => other,
+    };
+    Some(format!("{host}:{port}"))
+}
+
+/// Whether something already accepts connections at addr.
+pub fn served(addr: &str, timeout: Duration) -> bool {
+    let Ok(resolved) = addr.to_socket_addrs() else {
+        return false;
+    };
+    resolved
+        .into_iter()
+        .any(|target| TcpStream::connect_timeout(&target, timeout).is_ok())
 }

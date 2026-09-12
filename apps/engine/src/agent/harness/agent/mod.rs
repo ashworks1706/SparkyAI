@@ -9,6 +9,7 @@ mod retry;
 mod run;
 mod spans;
 pub mod task;
+pub mod thought;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -76,6 +77,30 @@ pub struct AgentDeps {
     pub profile_graph: Option<Arc<dyn ProfileGraph>>,
 }
 
+/// Records the answer and how the run ended on the span it ran under.
+fn record_outcome(span: &tracing::Span, result: &Result<Answer, AgentError>, limit: usize) {
+    match result {
+        Ok(answer) => {
+            let text = truncate(&answer.text, limit);
+            span.record("sparky.output", text.as_str());
+            span.record("output.value", text.as_str());
+            span.record("sparky.status", format!("{:?}", answer.status).as_str());
+            let failed = matches!(answer.status, RunStatus::Error | RunStatus::Blocked);
+            span.record("otel.status_code", if failed { "ERROR" } else { "OK" });
+            if failed {
+                span.record(
+                    "otel.status_message",
+                    format!("{:?}", answer.status).as_str(),
+                );
+            }
+        }
+        Err(error) => {
+            span.record("otel.status_code", "ERROR");
+            span.record("otel.status_message", error.to_string().as_str());
+        }
+    }
+}
+
 /// The outcome of a step that asked for no capabilities.
 fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
     if !response.content.trim().is_empty() {
@@ -86,7 +111,10 @@ fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
             RunStatus::Stalled,
             "I could not turn what I found into an answer. Try rephrasing.",
         )
-    } else if response.finish_reason == FinishReason::Length {
+    } else if response.finish_reason == FinishReason::Length
+        || !response.reasoning.trim().is_empty()
+    {
+        // Reasoning that leaves no room for an answer spends the whole completion budget.
         (
             RunStatus::Answered,
             "I ran out of room before finishing the answer.",
@@ -165,14 +193,11 @@ impl Agent {
             "sparky.input" = %asked,
             "sparky.output" = Empty,
             "sparky.status" = Empty,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
         );
         let result = self.run_inner(ctx, input).instrument(span.clone()).await;
-        if let Ok(answer) = &result {
-            let text = truncate(&answer.text, self.cfg.max_span_value_chars);
-            span.record("sparky.output", text.as_str());
-            span.record("output.value", text.as_str());
-            span.record("sparky.status", format!("{:?}", answer.status).as_str());
-        }
+        record_outcome(&span, &result, self.cfg.max_span_value_chars);
         result
     }
 
@@ -202,17 +227,14 @@ impl Agent {
             "sparky.input" = %pending.action.tool,
             "sparky.output" = Empty,
             "sparky.status" = Empty,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
         );
         let result = self
             .resume_inner(ctx, pending)
             .instrument(span.clone())
             .await;
-        if let Ok(answer) = &result {
-            let text = truncate(&answer.text, self.cfg.max_span_value_chars);
-            span.record("sparky.output", text.as_str());
-            span.record("output.value", text.as_str());
-            span.record("sparky.status", format!("{:?}", answer.status).as_str());
-        }
+        record_outcome(&span, &result, self.cfg.max_span_value_chars);
         result
     }
 
@@ -417,23 +439,17 @@ impl Agent {
             },
         );
 
-        let response = self
+        let mut response = self
             .call_model(ctx, run.steps, assembled.messages, run.force_answer)
             .await?;
         run.usage.add(response.usage);
+        // Thinking the model wrote inline belongs to the trace, not to the answer or the
+        // history.
+        let (thought, visible) = thought::split(&response.reasoning, &response.content);
+        response.content = visible;
         run.new_turns.push(response.as_message());
 
-        // What the model wrote on its way to a tool call is the closest thing to a thought
-        // the loop can show.
-        if !response.tool_calls.is_empty() && !response.content.trim().is_empty() {
-            self.deps.trace.emit(
-                ctx,
-                TraceEvent::ModelThought {
-                    step: run.steps,
-                    text: truncate(&response.content, self.cfg.max_span_value_chars),
-                },
-            );
-        }
+        let thought_shown = self.report_thought(ctx, run.steps, thought, &response);
 
         let stage = if response.tool_calls.is_empty() {
             Stage::Answer
@@ -445,6 +461,13 @@ impl Agent {
         }
 
         if response.tool_calls.is_empty() {
+            // Replaces the thinking line of a step that thought nothing worth showing. A step
+            // that did keeps the thought.
+            if !thought_shown {
+                self.deps
+                    .trace
+                    .emit(ctx, TraceEvent::ModelAnswered { step: run.steps });
+            }
             return Ok(answered(&response, run.force_answer));
         }
 
@@ -467,6 +490,34 @@ impl Agent {
         };
 
         self.execute(run, runnable).await
+    }
+
+    /// Reports what the model was thinking on this step, and says whether anything was shown.
+    ///
+    /// The model's own reasoning when it returned some, and otherwise what it wrote on its way
+    /// to a tool call.
+    fn report_thought(
+        &self,
+        ctx: &RequestContext,
+        step: u32,
+        reasoned: Option<String>,
+        response: &ModelResponse,
+    ) -> bool {
+        let shown = reasoned.or_else(|| {
+            let preamble = response.content.trim();
+            (!response.tool_calls.is_empty() && !preamble.is_empty()).then(|| preamble.to_owned())
+        });
+        let Some(text) = shown else {
+            return false;
+        };
+        self.deps.trace.emit(
+            ctx,
+            TraceEvent::ModelThought {
+                step,
+                text: truncate(&text, self.cfg.max_span_value_chars),
+            },
+        );
+        true
     }
 
     /// Checks a response against the guardrail. A block ends the run with the replacement text.
@@ -540,6 +591,8 @@ impl Agent {
             "sparky.attempt" = attempt,
             "$ai_session_id" = %ctx.conversation_id,
             "posthog.distinct_id" = %ctx.user_id,
+            "otel.status_code" = Empty,
+            "otel.status_message" = Empty,
         )
     }
 
@@ -575,6 +628,7 @@ impl Agent {
             };
             match result {
                 Ok(response) => {
+                    span.record("otel.status_code", "OK");
                     spans::record_reply(&span, &response, limit);
                     deps.trace.emit(
                         ctx,
@@ -590,6 +644,8 @@ impl Agent {
                     return Ok(response);
                 }
                 Err(error) => {
+                    span.record("otel.status_code", "ERROR");
+                    span.record("otel.status_message", error.to_string().as_str());
                     let retry = error.is_retryable() && attempt < self.cfg.max_model_retries;
                     deps.trace.emit(
                         ctx,

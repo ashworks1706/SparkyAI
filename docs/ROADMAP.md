@@ -31,7 +31,7 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [ ] A mechanism for authenticated sessions. The browser MCP server is gone (decisions/0005); this needs a decision note before any work
+- [ ] A mechanism for authenticated sessions. The browser MCP server is gone; this needs a design before any work
 - [ ] Human confirmation for any authenticated or consequential submission
 - [ ] MyASU: the first authenticated integration, read-only before anything else
 

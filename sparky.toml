@@ -63,8 +63,12 @@ utc_offset_hours = -7          # Arizona, which keeps -7 all year
 # base_url and api_key are per-machine and live in .env.
 [model]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
-max_tokens = 2048
-thinking = false
+# Reasoning comes out of the same budget as the answer, so thinking needs room for both. The
+# slot has to hold the prompt and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot.
+max_tokens = 4096
+# Qwen3 reasons before it answers. llama-server returns that reasoning in reasoning_content,
+# the harness shows it as the live thinking line, and it never reaches the answer.
+thinking = true
 usd_per_m_prompt = 0.0
 usd_per_m_completion = 0.0
 
@@ -193,16 +197,19 @@ dir = ".sparky/traces"
 max_file_bytes = 0             # 0 removes the limit
 retention_hours = 0            # 0 keeps them forever
 
-# Spans go to PostHog over OTLP/HTTP, to both paths, and to Phoenix at phoenix_url plus
+# Spans go to PostHog over OTLP/HTTP at traces_path, and to Phoenix at phoenix_url plus
 # /v1/traces. host and phoenix_url are per-machine and project_token is a secret; all three live
 # in .env. Each destination is independent: an empty project_token turns PostHog off, an empty
 # phoenix_url turns Phoenix off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with
 # just phoenix running to read a conversation as a trace tree.
+# ai_path is off: the self-hosted capture-ai service answers /i/v0/ai/otel with "request missing
+# data payload" because it takes PostHog's own event payload rather than OTLP, so every batch
+# sent there fails. Set it to /i/v0/ai/otel against PostHog Cloud, which does take OTLP.
 [telemetry]
 sample_ratio = 1.0
 export_timeout_secs = 10
 traces_path = "/i/v1/traces"
-ai_path = "/i/v0/ai/otel"
+ai_path = ""
 provider_name = "llama.cpp"
 
 # Discord product events to PostHog, through the telemetry host and project token.
@@ -274,6 +281,7 @@ posthog_url = "http://localhost:8010"
 log_lines = 5000
 log_dir = ".sparky/logs"
 health_interval_secs = 5
+port_check_ms = 150
 
 # ---------------------------------------------------------------- training and evals
 # engine_url, engine_service_token, posthog_host, posthog_project_id and posthog_api_key are

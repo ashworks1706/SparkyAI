@@ -83,17 +83,20 @@ pub fn provider(
     let timeout = Duration::from_secs(cfg.export_timeout_secs);
     let mut builder = SdkTracerProvider::builder();
     if let Some((host, token)) = posthog {
-        builder = builder
-            .with_batch_exporter(exporter(
-                format!("{host}{}", cfg.traces_path),
-                Some(token),
-                timeout,
-            )?)
-            .with_batch_exporter(exporter(
+        builder = builder.with_batch_exporter(exporter(
+            format!("{host}{}", cfg.traces_path),
+            Some(token),
+            timeout,
+        )?);
+        // The self-hosted capture-ai service takes PostHog's own event payload, not OTLP, so
+        // the AI endpoint is off unless ai_path says otherwise.
+        if !cfg.ai_path.trim().is_empty() {
+            builder = builder.with_batch_exporter(exporter(
                 format!("{host}{}", cfg.ai_path),
                 Some(token),
                 timeout,
             )?);
+        }
     }
     if let Some(url) = phoenix {
         builder = builder.with_batch_exporter(exporter(url, None, timeout)?);

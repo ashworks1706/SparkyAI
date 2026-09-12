@@ -159,6 +159,30 @@ fn a_model_call_a_thought_and_recalled_memory_each_get_a_line() {
 }
 
 #[test]
+fn the_thinking_line_resolves_into_the_thought_or_the_answer() {
+    let thinking = TraceEvent::ModelStarted { step: 1 };
+    let thought = TraceEvent::ModelThought {
+        step: 1,
+        text: "the hours are not in what I was given".into(),
+    };
+    let answered = TraceEvent::ModelAnswered { step: 1 };
+    assert_eq!(thinking.slot(), thought.slot());
+    assert_eq!(thinking.slot(), answered.slot(), "one line, rewritten");
+    assert!(
+        answered.clears_slot() && line(&answered).is_none(),
+        "a step that thought nothing worth showing takes its thinking line back"
+    );
+    let Some(taken) = Progress::of(&answered, ProgressStyle::default()) else {
+        unreachable!("an event that clears a slot still reaches the client")
+    };
+    assert!(taken.clear && taken.text.is_empty(), "{taken:?}");
+    assert!(
+        Progress::of(&thought, ProgressStyle::default()).is_some_and(|p| !p.clear),
+        "a thought writes its line instead"
+    );
+}
+
+#[test]
 fn a_tool_result_replaces_the_line_its_own_start_wrote() {
     let start = started("search_knowledge_base", json!({}));
     let end = finished("search_knowledge_base", Ok("three passages".into()));

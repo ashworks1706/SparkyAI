@@ -204,11 +204,12 @@ impl Config {
                 self.telemetry.sample_ratio
             ));
         }
+        // An empty ai_path is how the AI endpoint is turned off.
         for (name, path) in [
             ("traces_path", &self.telemetry.traces_path),
             ("ai_path", &self.telemetry.ai_path),
         ] {
-            if !path.starts_with('/') {
+            if !(path.starts_with('/') || (name == "ai_path" && path.is_empty())) {
                 return invalid(format!("telemetry.{name} must start with /, got {path:?}"));
             }
         }

@@ -25,8 +25,8 @@ impl Default for ProgressStyle {
 /// One line of progress for whoever is watching a run.
 ///
 /// text is rendered by the engine; a client can display any event, including kinds added after
-/// the client was written. event names the kind, detail carries the event itself, and slot
-/// names the line this one writes over.
+/// the client was written. event names the kind, detail carries the event itself, slot names
+/// the line this one writes over, and clear takes that line away.
 #[derive(Debug, Clone, Serialize)]
 pub struct Progress {
     /// Snake-case name of the trace event this came from.
@@ -36,6 +36,9 @@ pub struct Progress {
     /// The line this replaces, when it replaces one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<String>,
+    /// Removes the line of slot instead of writing text there.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub clear: bool,
     /// The event itself, for clients that want more than text.
     pub detail: TraceEvent,
 }
@@ -43,10 +46,17 @@ pub struct Progress {
 impl Progress {
     /// The progress line for an event, or None when the event is bookkeeping.
     pub fn of(event: &TraceEvent, style: ProgressStyle) -> Option<Self> {
+        let slot = event.slot();
+        let clear = event.clears_slot() && slot.is_some();
+        let text = event.progress(style);
+        if text.is_none() && !clear {
+            return None;
+        }
         Some(Self {
             event: event.kind(),
-            text: event.progress(style)?,
-            slot: event.slot(),
+            text: text.unwrap_or_default(),
+            slot,
+            clear,
             detail: event.clone(),
         })
     }

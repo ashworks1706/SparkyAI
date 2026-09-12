@@ -63,6 +63,11 @@ pub enum TraceEvent {
         /// What it wrote, truncated.
         text: String,
     },
+    /// The model wrote the answer and the loop is done.
+    ModelAnswered {
+        /// Loop step.
+        step: u32,
+    },
     /// A model call failed.
     ModelError {
         /// Loop step.
@@ -163,6 +168,7 @@ impl TraceEvent {
             Self::ModelStarted { .. } => "model_started",
             Self::ModelCall { .. } => "model_call",
             Self::ModelThought { .. } => "model_thought",
+            Self::ModelAnswered { .. } => "model_answered",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
             Self::GuardrailBlocked { .. } => "guardrail_blocked",
@@ -225,9 +231,9 @@ impl TraceEvent {
             Self::GuardrailBlocked { stage, .. } => {
                 Some(format!("\u{1f6d1} the {} was not allowed", stage.as_str()))
             }
-            Self::Compaction { turns } => {
-                Some(format!("\u{1f5dc} summarising {turns} earlier turns"))
-            }
+            Self::Compaction { turns } => Some(format!(
+                "\u{1f5dc}\u{fe0f} summarising {turns} earlier turns"
+            )),
             Self::Retrieval { chunk_ids, .. } => Some(format!(
                 "\u{1f4da} read {} {} from the knowledge base",
                 chunk_ids.len(),
@@ -244,9 +250,18 @@ impl TraceEvent {
             Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }
+            | Self::ModelAnswered { .. }
             | Self::ModelError { .. }
             | Self::Completed { .. } => None,
         }
+    }
+
+    /// Whether this event removes the line of its slot instead of writing one.
+    ///
+    /// A step that answered without thinking anything worth showing takes its thinking line
+    /// back rather than leaving it standing.
+    pub fn clears_slot(&self) -> bool {
+        matches!(self, Self::ModelAnswered { .. })
     }
 
     /// The line this event writes over, or None to append a new line.
@@ -258,9 +273,9 @@ impl TraceEvent {
             Self::ToolStarted { call_id, .. } | Self::ToolCall { call_id, .. } => {
                 Some(format!("tool:{call_id}"))
             }
-            Self::ModelStarted { step } | Self::ModelThought { step, .. } => {
-                Some(format!("model:{step}"))
-            }
+            Self::ModelStarted { step }
+            | Self::ModelThought { step, .. }
+            | Self::ModelAnswered { step } => Some(format!("model:{step}")),
             _ => None,
         }
     }
