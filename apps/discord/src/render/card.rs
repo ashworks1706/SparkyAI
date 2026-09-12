@@ -6,8 +6,11 @@ use std::time::{Duration, Instant};
 use crate::core::types::ChatResponse;
 use crate::render::reply::{MAX_MESSAGE, chunk};
 
-/// Header of the message while a turn runs.
-pub const THINKING: &str = "**Sparky is thinking…**";
+/// Header of the message while a turn runs, after the spinner frame.
+pub const THINKING: &str = "**Sparky is working on it…**";
+
+/// Frames the header spinner cycles through, one per edit of the running card.
+const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
 
 /// Prefix of one step line.
 const BULLET: &str = "-# • ";
@@ -15,27 +18,56 @@ const BULLET: &str = "-# • ";
 /// Items each footer keeps once footers are trimmed to fit.
 const FOOTER_KEEP: usize = 3;
 
+/// Longest label on a source button. Discord allows 80.
+const LABEL_CHARS: usize = 40;
+
+/// One step line and the key of the line it replaces, when it replaces one.
+#[derive(Debug, Clone)]
+struct Step {
+    slot: Option<String>,
+    text: String,
+}
+
 /// The steps the engine reported for one turn, in order.
 #[derive(Debug, Default, Clone)]
 pub struct Steps {
-    lines: Vec<String>,
+    lines: Vec<Step>,
 }
 
 impl Steps {
-    /// Appends a step and says whether the list changed. A blank line or an immediate repeat
-    /// is dropped.
-    pub fn push(&mut self, text: &str) -> bool {
+    /// Records a step and says whether the list changed. A step carrying a slot writes over
+    /// the line of that slot, so a tool result lands on the line its own start wrote. A blank
+    /// line, or an immediate repeat with no slot, is dropped.
+    pub fn push(&mut self, slot: Option<&str>, text: &str) -> bool {
         let text = text.trim();
-        if text.is_empty() || self.lines.last().is_some_and(|last| last == text) {
+        if text.is_empty() {
             return false;
         }
-        self.lines.push(text.to_owned());
+        if let Some(key) = slot
+            && let Some(held) = self
+                .lines
+                .iter_mut()
+                .find(|line| line.slot.as_deref() == Some(key))
+        {
+            if held.text == text {
+                return false;
+            }
+            text.clone_into(&mut held.text);
+            return true;
+        }
+        if self.lines.last().is_some_and(|last| last.text == text) {
+            return false;
+        }
+        self.lines.push(Step {
+            slot: slot.map(str::to_owned),
+            text: text.to_owned(),
+        });
         true
     }
 
-    /// The steps so far.
-    pub fn lines(&self) -> &[String] {
-        &self.lines
+    /// The steps so far, in order.
+    pub fn lines(&self) -> Vec<String> {
+        self.lines.iter().map(|line| line.text.clone()).collect()
     }
 }
 
@@ -78,11 +110,13 @@ impl Pacer {
     }
 }
 
-/// The message while the turn runs. The oldest steps fold into a count when they do not fit.
-pub fn thinking(steps: &[String], limit: usize) -> String {
+/// The message while the turn runs. frame advances the spinner once per edit, and the oldest
+/// steps fold into a count when they do not fit.
+pub fn thinking(steps: &[String], limit: usize, frame: usize) -> String {
     let limit = clamp(limit);
+    let header = format!("{} {THINKING}", SPINNER[frame % SPINNER.len()]);
     for hidden in 0..=steps.len() {
-        let mut out = THINKING.to_owned();
+        let mut out = header.clone();
         if hidden > 0 {
             let _ = write!(out, "\n-# {hidden} earlier {}", plural(hidden));
         }
@@ -94,7 +128,7 @@ pub fn thinking(steps: &[String], limit: usize) -> String {
             return out;
         }
     }
-    fit(THINKING.to_owned(), limit)
+    fit(header, limit)
 }
 
 /// The finished turn: steps, answer, then the footers that have content. Steps fold into a
@@ -212,38 +246,26 @@ fn body(resp: &ChatResponse) -> String {
     body
 }
 
-/// Sources, Tools, and Memory used, each only when it has content. keep caps each list.
+/// What sits under the answer: the sources with no link of their own, and the memory the answer
+/// drew on. Sources that carry a link are buttons, not text. keep caps each list.
 fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
     let mut sections = Vec::new();
-    if !resp.citations.is_empty() {
-        let mut s = String::from("**Sources**");
-        for (i, c) in kept(&resp.citations, keep).iter().enumerate() {
-            let _ = write!(s, "\n{}. {c}", i + 1);
-        }
-        if let Some(n) = hidden(resp.citations.len(), keep) {
-            let _ = write!(s, "\nand {n} more");
-        }
-        sections.push(s);
-    }
-    if !resp.tools.is_empty() {
-        let names: Vec<String> = kept(&resp.tools, keep)
-            .iter()
-            .map(|t| {
-                if t.ok {
-                    format!("`{}`", t.tool)
-                } else {
-                    format!("`{}` (failed)", t.tool)
-                }
-            })
-            .collect();
-        let mut s = format!("**Tools** {}", names.join(", "));
-        if let Some(n) = hidden(resp.tools.len(), keep) {
+    let unlinked: Vec<&str> = resp
+        .citations
+        .iter()
+        .filter(|c| c.url.as_deref().unwrap_or("").trim().is_empty())
+        .map(|c| c.title.as_str())
+        .collect();
+    if !unlinked.is_empty() {
+        let shown = kept(&unlinked, keep).join(", ");
+        let mut s = format!("-# \u{1f4da} also from {shown}");
+        if let Some(n) = hidden(unlinked.len(), keep) {
             let _ = write!(s, ", and {n} more");
         }
         sections.push(s);
     }
     if !resp.memories.is_empty() {
-        let mut s = String::from("**Memory used**");
+        let mut s = String::from("**\u{1f9e0} Memory used**");
         for m in kept(&resp.memories, keep) {
             let _ = write!(s, "\n- {m}");
         }
@@ -253,6 +275,17 @@ fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
         sections.push(s);
     }
     sections.join("\n")
+}
+
+/// The label a source button carries: its title, held to what Discord shows.
+pub fn source_label(title: &str) -> String {
+    let title = title.replace('_', " ");
+    let title = title.trim();
+    if title.chars().count() <= LABEL_CHARS {
+        return title.to_owned();
+    }
+    let kept: String = title.chars().take(LABEL_CHARS - 1).collect();
+    format!("{}\u{2026}", kept.trim_end())
 }
 
 /// The first keep items, or all of them.

@@ -117,7 +117,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -151,10 +151,6 @@ model *ARGS:
 crawl *ARGS:
     docker compose -f deploy/compose.yml --profile crawl up -d {{ARGS}} firecrawl
 
-# Playwright MCP browser tools for the engine: :8931 (loopback)
-browser *ARGS:
-    docker compose -f deploy/compose.yml --profile browser up -d {{ARGS}} playwright-mcp
-
 # Browse the database at http://localhost:8081 (pgweb, loopback)
 db *ARGS:
     docker compose -f deploy/compose.yml --profile db up -d {{ARGS}} pgweb
@@ -169,10 +165,10 @@ gpu-metrics *ARGS:
 
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix logs -f {{ARGS}}
 
 # Build both images locally
 images:

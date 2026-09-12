@@ -72,14 +72,13 @@ pub fn from_definitions(definitions: &[ToolDefinition], mcp_names: &[String]) ->
         .collect()
 }
 
-/// Renders the section. Empty when nothing is offered, so no heading is written for a list
-/// with nothing under it.
+/// Renders the list. Empty when nothing is offered, so assembly writes no section for it. The
+/// heading above it is configured wording and is written by assembly.
 pub fn render(capabilities: &[Capability]) -> String {
     if capabilities.is_empty() {
         return String::new();
     }
-    let mut out =
-        String::from("What you can do. Each line is a name, how it runs, and what it does.\n");
+    let mut out = String::new();
     for c in capabilities {
         let confirmed = if c.risk >= RiskClass::ExternalWrite {
             " [needs the user to approve it first]"

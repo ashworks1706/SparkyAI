@@ -55,7 +55,10 @@ def test_tool_selection_and_args():
 
 
 def test_grounding_needs_citation_status_and_mentions():
-    good = _turn(text="Open 7am to 9pm", citations=["library_hours — url"])
+    good = _turn(
+        text="Open 7am to 9pm",
+        citations=[{"title": "library_hours", "url": "https://lib.asu.edu/hours"}],
+    )
     assert grounding.score(_case(source_key="library_hours", mentions=["7am"]), [good]).passed
     assert not grounding.score(_case(source_key="events"), [good]).passed
     assert not grounding.score(_case(source_key="library_hours"), [_turn(status="stalled")]).passed
@@ -66,7 +69,7 @@ def test_refusal_and_clarification():
         _case(refuse=True), [_turn(text="I can't find that in my sources.")]
     ).passed
     assert not refusal.score(
-        _case(refuse=True), [_turn(text="Sure, it is 5.", citations=["x"])]
+        _case(refuse=True), [_turn(text="Sure, it is 5.", citations=[{"title": "x"}])]
     ).passed
     assert clarification.score(
         _case(clarify=True), [_turn(text="Which library do you mean?")]

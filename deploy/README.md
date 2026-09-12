@@ -8,7 +8,7 @@ just engine        # then in separate shells: just discord, just web
 just up            # docker compose -f deploy/compose.yml up -d
 ```
 
-Starts engine, discord, scraper, Postgres 17 (pgvector), Redis 7, MinIO. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat and embed. `just crawl` starts self-hosted Firecrawl (five containers, API on :3002) for the scraper; `just browser` starts Playwright MCP (:8931, loopback) for the engine's browser tools; set `SPARKY_MCP__PLAYWRIGHT_URL=http://localhost:8931/mcp` for a host-run engine (the compose engine has it already).
+Starts engine, discord, scraper, Postgres 17 (pgvector), Redis 7, MinIO. `engine` and `discord` are the same image (`rust.Dockerfile`) with different entrypoints. The models are behind the `model` profile: `just model` starts chat and embed. `just crawl` starts self-hosted Firecrawl (five containers, API on :3002) for the scraper;
 
 ## Production
 

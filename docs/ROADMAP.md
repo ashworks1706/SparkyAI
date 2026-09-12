@@ -31,7 +31,7 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [ ] Authenticated browser sessions through the Playwright MCP server: one isolated context per user, allowlisted domains, limits, logging, cleanup
+- [ ] A mechanism for authenticated sessions. The browser MCP server is gone (decisions/0005); this needs a decision note before any work
 - [ ] Human confirmation for any authenticated or consequential submission
 - [ ] MyASU: the first authenticated integration, read-only before anything else
 
@@ -41,4 +41,4 @@ Only after Phase 5 yields clean interaction data.
 
 ## Out of scope until stated otherwise
 
-GPA or coursework access · unrestricted browser autonomy · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.
+GPA or coursework access · browser automation of any kind · university-wide deployment · FERPA claims · one agent per domain · RL before evals exist.

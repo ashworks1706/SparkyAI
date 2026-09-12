@@ -75,7 +75,6 @@ services:
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__HOST: http://posthog
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
-      SPARKY_MCP__PLAYWRIGHT_URL: http://playwright-mcp:8931/mcp
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -233,17 +232,6 @@ services:
       POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
       POSTGRES_DB: postgres
     volumes: [firecrawldata:/var/lib/postgresql/data]
-    restart: unless-stopped
-
-  # Playwright MCP: the browser as tools for the engine's own loop. Not started by default:
-  # Started by just browser. Headless, isolated profile, loopback-only port.
-  playwright-mcp:
-    image: mcr.microsoft.com/playwright/mcp:latest
-    profiles: [browser]
-    # The image entrypoint is already node /app/cli.js --headless --browser chromium.
-    command: ["--isolated", "--port", "8931", "--host", "0.0.0.0", "--allowed-hosts", "localhost:8931,127.0.0.1:8931,playwright-mcp:8931"]
-    init: true
-    ports: ["127.0.0.1:8931:8931"]
     restart: unless-stopped
 
   postgres:

@@ -8,10 +8,10 @@ use crate::core::types::tools::RiskClass;
 #[test]
 fn reads_and_inspection_run_freely() {
     for name in [
-        "browser_navigate",
-        "browser_snapshot",
-        "browser_take_screenshot",
-        "browser_find",
+        "page_navigate",
+        "page_snapshot",
+        "take_screenshot",
+        "find_text",
     ] {
         assert_eq!(risk_for(name), RiskClass::ReadPublic, "{name}");
     }
@@ -19,26 +19,21 @@ fn reads_and_inspection_run_freely() {
 
 #[test]
 fn filling_a_page_in_is_a_draft() {
-    for name in [
-        "browser_type",
-        "browser_fill_form",
-        "browser_select_option",
-        "browser_hover",
-    ] {
+    for name in ["type_text", "fill_form", "select_option", "hover"] {
         assert_eq!(risk_for(name), RiskClass::PrepareWrite, "{name}");
     }
 }
 
 #[test]
 fn anything_that_can_commit_the_page_needs_confirmation() {
-    // Playwright MCP ships no tool named submit. A form is submitted by clicking a button or
-    // pressing Enter, and browser_evaluate runs arbitrary script in the page.
+    // A form is committed by clicking a button or pressing Enter, and evaluate runs arbitrary
+    // script wherever the server runs it.
     for name in [
-        "browser_click",
-        "browser_press_key",
-        "browser_evaluate",
-        "browser_file_upload",
-        "browser_handle_dialog",
+        "click",
+        "press_key",
+        "evaluate",
+        "file_upload",
+        "handle_dialog",
     ] {
         assert_eq!(risk_for(name), RiskClass::ExternalWrite, "{name}");
     }
@@ -46,8 +41,8 @@ fn anything_that_can_commit_the_page_needs_confirmation() {
 
 #[test]
 fn submits_and_unknowns_need_confirmation() {
-    assert_eq!(risk_for("browser_submit_form"), RiskClass::ExternalWrite);
-    assert_eq!(risk_for("browser_route"), RiskClass::ExternalWrite);
+    assert_eq!(risk_for("submit_form"), RiskClass::ExternalWrite);
+    assert_eq!(risk_for("route"), RiskClass::ExternalWrite);
 }
 
 #[test]
@@ -84,73 +79,4 @@ fn compact_schema_trims_descriptions_and_noise() {
             .as_str()
             .is_some_and(|d| d.len() <= 80)
     );
-}
-
-/// Live smoke test against a running Playwright MCP server. Start it with just browser, then
-/// cargo test -p engine -- --ignored mcp_server.
-#[tokio::test]
-#[ignore = "needs `just browser`"]
-async fn mcp_server_lists_the_tools_the_engine_asks_for() {
-    use crate::agent::tools::mcp::{self, McpLimits};
-    use crate::core::config::Mcp;
-
-    let defaults = Mcp::default();
-    let tools = mcp::connect(
-        "http://127.0.0.1:8931/mcp",
-        &defaults.playwright_tools,
-        &McpLimits::default(),
-    )
-    .await
-    .unwrap_or_default();
-    assert!(!tools.is_empty(), "no tools; is `just browser` running?");
-
-    let names: Vec<String> = tools.iter().map(|t| t.definition().name).collect();
-    for wanted in &defaults.playwright_tools {
-        assert!(names.contains(wanted), "{wanted} missing from {names:?}");
-    }
-    let Some(navigate) = tools
-        .iter()
-        .find(|t| t.definition().name == "browser_navigate")
-    else {
-        unreachable!("browser_navigate is in the allowlist and was found above")
-    };
-    let schema = navigate.definition().parameters.to_string();
-    assert!(schema.contains("url"), "{schema}");
-
-    let output = navigate
-        .call(
-            &crate::core::tests::support::ctx(),
-            serde_json::json!({"url": "about:blank"}),
-        )
-        .await
-        .map(|o| o.content)
-        .unwrap_or_default();
-    assert!(!output.is_empty(), "browser_navigate returned nothing");
-}
-
-#[test]
-fn a_snapshot_saved_to_a_file_tells_the_model_how_to_read_the_page() {
-    use crate::agent::tools::mcp::usable_output;
-
-    // browser_navigate writes the page to a file inside the MCP container and returns a path
-    // the engine cannot open.
-    let navigate = "### Page\n- Page URL: https://example.com/\n### Snapshot\n\
-                    - [Snapshot](.playwright-mcp/page-2026-09-05T04-07-54-110Z.yml)";
-    let out = usable_output(navigate.to_owned());
-    assert!(
-        out.contains("https://example.com/"),
-        "keeps what it did tell us"
-    );
-    assert!(
-        !out.contains(".playwright-mcp/"),
-        "the path is unusable here: {out}"
-    );
-    assert!(
-        out.contains("browser_snapshot"),
-        "says how to read the page: {out}"
-    );
-
-    // An inline snapshot is the page itself and passes through untouched.
-    let inline = "### Page\n### Snapshot\n```yaml\n- heading \"Example Domain\"\n```";
-    assert_eq!(usable_output(inline.to_owned()), inline);
 }

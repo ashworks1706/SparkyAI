@@ -16,6 +16,10 @@ pub struct PromptText {
     pub memory_header: String,
     /// Heading above retrieved evidence.
     pub evidence_header: String,
+    /// Line written when retrieval found nothing.
+    pub no_evidence_line: String,
+    /// Heading above what the model may do.
+    pub capabilities_header: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
     /// Hours from UTC the date is rendered in.
@@ -35,6 +39,8 @@ impl From<&crate::core::config::Prompt> for PromptText {
             role_line_no_roles: cfg.role_line_no_roles.clone(),
             memory_header: cfg.memory_header.clone(),
             evidence_header: cfg.evidence_header.clone(),
+            no_evidence_line: cfg.no_evidence_line.clone(),
+            capabilities_header: cfg.capabilities_header.clone(),
             date_line: cfg.date_line.clone(),
             utc_offset_hours: cfg.utc_offset_hours,
         }
@@ -62,6 +68,8 @@ impl PromptText {
             role_line_no_roles: &self.role_line_no_roles,
             memory_header: &self.memory_header,
             evidence_header: &self.evidence_header,
+            no_evidence_line: &self.no_evidence_line,
+            capabilities_header: &self.capabilities_header,
             date_line: &self.date_line,
         }
     }

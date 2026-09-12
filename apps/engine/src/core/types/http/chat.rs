@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::types::conversation::Visibility;
+use crate::core::types::knowledge::evidence::Citation;
 use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::RunStatus;
@@ -49,8 +50,8 @@ pub struct ChatResponse {
     pub conversation_id: Uuid,
     /// The answer.
     pub text: String,
-    /// Citation lines, best first.
-    pub citations: Vec<String>,
+    /// Sources the answer rests on, best first.
+    pub citations: Vec<Citation>,
     /// Set when the agent stopped to ask.
     pub confirmation: Option<ConfirmationRequest>,
     /// How the run ended.

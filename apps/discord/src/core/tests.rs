@@ -3,11 +3,11 @@
 use uuid::Uuid;
 
 use crate::access::roles::can_write;
-use crate::core::types::ChatResponse;
+use crate::core::types::{ChatResponse, Citation};
 use crate::render::reply::{MAX_MESSAGE, chunk};
 use serenity::all::Permissions;
 
-fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
+fn response(text: &str, citations: Vec<Citation>, status: &str) -> ChatResponse {
     ChatResponse {
         request_id: Uuid::new_v4(),
         conversation_id: Uuid::new_v4(),
@@ -15,9 +15,35 @@ fn response(text: &str, citations: Vec<String>, status: &str) -> ChatResponse {
         citations,
         confirmation: None,
         status: status.into(),
-        tools: Vec::new(),
         memories: Vec::new(),
     }
+}
+
+/// A source that carries a link, so it renders as a button.
+fn linked(title: &str) -> Citation {
+    Citation {
+        title: title.into(),
+        url: Some(format!("https://asu.edu/{title}")),
+    }
+}
+
+/// A source with no page of its own, so it renders as text.
+fn unlinked(title: &str) -> Citation {
+    Citation {
+        title: title.into(),
+        url: None,
+    }
+}
+
+/// The label of every button in one row.
+fn labels_of(row: &[crate::render::components::ButtonSpec]) -> Vec<String> {
+    use crate::render::components::ButtonSpec;
+    row.iter()
+        .map(|b| match b {
+            ButtonSpec::Press { label, .. } => (*label).to_owned(),
+            ButtonSpec::Link { label, .. } => label.clone(),
+        })
+        .collect()
 }
 
 /// The final render of resp with no head and no steps, as one string.
@@ -45,14 +71,40 @@ fn long_text_splits_on_line_boundaries_under_the_limit() {
 }
 
 #[test]
-fn citations_are_appended_as_a_footer() {
-    let out = render(
-        &response("2am", vec!["lib — url".into()], "answered"),
-        2_000,
+fn a_linked_source_becomes_a_button_and_an_unlinked_one_a_subtext_line() {
+    use crate::render::components::{ButtonSpec, rows_for};
+
+    let resp = response(
+        "2am",
+        vec![linked("library_hours"), unlinked("front desk note")],
+        "answered",
     );
+    let out = render(&resp, 2_000);
     assert_eq!(out.len(), 1);
-    assert!(out[0].contains("**Sources**"));
-    assert!(out[0].contains("1. lib — url"));
+    assert!(!out[0].contains("Sources"), "no source list in the text");
+    assert!(!out[0].contains("fetched"), "no fetch dates either");
+    assert!(out[0].contains("also from front desk note"), "{}", out[0]);
+
+    let rows = rows_for(&resp);
+    assert_eq!(rows.len(), 1, "one row of sources");
+    assert_eq!(
+        rows[0],
+        vec![ButtonSpec::Link {
+            label: "library hours".into(),
+            url: "https://asu.edu/library_hours".into(),
+        }],
+        "only the source with a page of its own is a button"
+    );
+}
+
+#[test]
+fn a_button_label_stays_within_what_discord_shows() {
+    use crate::render::card::source_label;
+
+    assert_eq!(source_label("library_hours"), "library hours");
+    let long = source_label(&"a".repeat(80));
+    assert!(long.chars().count() <= 40, "{long}");
+    assert!(long.ends_with('\u{2026}'), "{long}");
 }
 
 #[test]
@@ -127,86 +179,88 @@ fn capacity_and_outage_read_differently_to_the_user() {
 }
 
 #[test]
-fn tools_the_agent_ran_are_listed_under_the_answer() {
-    use crate::core::types::ToolRun;
-
-    let mut resp = response("Hayden closes at 2am.", vec![], "answered");
-    resp.tools = vec![
-        ToolRun {
-            tool: "browser_navigate".into(),
-            ok: true,
-        },
-        ToolRun {
-            tool: "browser_snapshot".into(),
-            ok: false,
-        },
-    ];
-
-    let out = render(&resp, 2_000).join("\n");
-
-    assert!(out.contains("browser_navigate"), "{out}");
-    assert!(out.contains("browser_snapshot"), "{out}");
-    assert!(out.contains("failed"), "a failed call is marked: {out}");
-
-    let quiet = render(&response("hi", vec![], "answered"), 2_000).join("\n");
-    assert!(!quiet.contains("Tools"), "no tools, no footer: {quiet}");
-}
-
-#[test]
 fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
     use crate::render::card::{Steps, THINKING, thinking};
 
     let mut steps = Steps::default();
-    assert!(steps.push("thinking"));
-    assert!(!steps.push("thinking"), "an immediate repeat is dropped");
-    assert!(steps.push("searching the knowledge base"));
-    assert!(steps.push("thinking"), "a repeat later on is kept");
-    assert!(!steps.push("   "));
+    assert!(steps.push(None, "thinking"));
+    assert!(
+        !steps.push(None, "thinking"),
+        "an immediate repeat is dropped"
+    );
+    assert!(steps.push(None, "searching the knowledge base"));
+    assert!(steps.push(None, "thinking"), "a repeat later on is kept");
+    assert!(!steps.push(None, "   "));
     assert_eq!(steps.lines().len(), 3);
 
-    assert_eq!(thinking(&[], 2_000), THINKING);
-    let shown = thinking(steps.lines(), 2_000);
+    let head = thinking(&[], 2_000, 0);
+    assert!(head.ends_with(THINKING), "{head}");
+    let shown = thinking(&steps.lines(), 2_000, 0);
     assert_eq!(
         shown,
-        format!("{THINKING}\n-# • thinking\n-# • searching the knowledge base\n-# • thinking")
+        format!("{head}\n-# • thinking\n-# • searching the knowledge base\n-# • thinking")
+    );
+    assert_ne!(
+        thinking(&[], 2_000, 1),
+        head,
+        "the spinner turns with the frame"
     );
 
     let many: Vec<String> = (0..200).map(|i| format!("step number {i}")).collect();
-    let folded = thinking(&many, 500);
+    let folded = thinking(&many, 500, 0);
     assert!(folded.len() <= 500);
-    assert!(folded.starts_with(THINKING));
-    assert!(folded.contains("earlier steps"), "{folded}");
     assert!(folded.ends_with("step number 199"), "the newest step stays");
+    assert!(folded.contains("earlier steps"), "{folded}");
+}
+
+#[test]
+fn a_tool_result_writes_over_the_line_its_own_start_wrote() {
+    use crate::render::card::Steps;
+
+    let mut steps = Steps::default();
+    assert!(steps.push(Some("model:1"), "thinking"));
+    assert!(steps.push(Some("tool:c1"), "`search` running"));
+    assert!(steps.push(Some("model:1"), "checking the hours page"));
+    assert!(steps.push(Some("tool:c1"), "`search` gave 3 passages"));
+    assert!(
+        !steps.push(Some("tool:c1"), "`search` gave 3 passages"),
+        "the same line twice changes nothing"
+    );
+    assert_eq!(
+        steps.lines(),
+        vec![
+            "checking the hours page".to_owned(),
+            "`search` gave 3 passages".to_owned()
+        ],
+        "each slot keeps its place and holds its newest line"
+    );
 }
 
 #[test]
 fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
-    use crate::core::types::ToolRun;
     use crate::render::card::{THINKING, answer};
 
     let mut resp = response(
         "Hayden closes at 2am.",
-        vec!["Hayden hours".into()],
+        vec![linked("Hayden hours"), unlinked("desk note")],
         "answered",
     );
-    resp.tools = vec![ToolRun {
-        tool: "search".into(),
-        ok: true,
-    }];
     resp.memories = vec!["You study CSE.".into()];
-    let steps = vec!["thinking".to_owned(), "reading 1 source".to_owned()];
+    let steps = vec![
+        "\u{1f914} thinking".to_owned(),
+        "\u{2705} `search_knowledge_base` \u{2192} three passages".to_owned(),
+    ];
 
     let out = answer(&steps, &resp, 2_000);
     assert_eq!(out.len(), 1);
     let card = &out[0];
     assert!(!card.contains(THINKING), "the header goes once answered");
     let order = [
-        "-# • thinking",
-        "-# • reading 1 source",
+        "-# • \u{1f914} thinking",
+        "-# • \u{2705} `search_knowledge_base`",
         "Hayden closes at 2am.",
-        "**Sources**\n1. Hayden hours",
-        "**Tools** `search`",
-        "**Memory used**\n- You study CSE.",
+        "also from desk note",
+        "Memory used**\n- You study CSE.",
     ];
     let positions: Vec<usize> = order
         .iter()
@@ -232,17 +286,17 @@ fn an_oversized_card_folds_steps_then_trims_footers_then_continues() {
     assert!(folded[0].starts_with("-# 40 steps"), "{}", folded[0]);
     assert!(!folded[0].contains("-# •"));
 
-    let sources: Vec<String> = (0..40)
-        .map(|i| format!("source {i} {}", "u".repeat(30)))
+    let mut resp = response("short answer", Vec::new(), "answered");
+    resp.memories = (0..40)
+        .map(|i| format!("memory {i} {}", "m".repeat(30)))
         .collect();
-    let resp = response("short answer", sources, "answered");
     let trimmed = answer(&steps, &resp, 500);
     assert_eq!(trimmed.len(), 1, "{trimmed:?}");
-    assert!(trimmed[0].contains("3. source 2"));
-    assert!(!trimmed[0].contains("4. source 3"));
+    assert!(trimmed[0].contains("- memory 2"));
+    assert!(!trimmed[0].contains("- memory 3"));
     assert!(trimmed[0].contains("and 37 more"));
 
-    let resp = response(&"word ".repeat(300), vec!["one".into()], "answered");
+    let resp = response(&"word ".repeat(300), vec![linked("one")], "answered");
     let spilled = answer(&steps, &resp, 500);
     assert!(spilled.len() > 1, "only a long answer continues");
     assert!(spilled.iter().all(|m| m.len() <= 500));
@@ -255,27 +309,26 @@ fn an_accepted_approval_keeps_the_steps_and_replaces_prompt_and_footers() {
     use crate::render::card::{answer, failed, resumed, steps_of};
     use crate::render::components::rows_for;
 
-    let mut asked = response("", vec!["old source".into()], "awaiting_confirmation");
+    let mut asked = response("", vec![unlinked("old source")], "awaiting_confirmation");
     asked.confirmation = Some(Confirmation {
         token: Uuid::new_v4(),
-        tool: "browser_click".into(),
-        summary: "Click Register.".into(),
+        tool: "announce".into(),
+        summary: "Post the announcement.".into(),
     });
     let steps = vec!["thinking".to_owned(), "search finished".to_owned()];
     let card = answer(&steps, &asked, 2_000);
     assert_eq!(card.len(), 1);
-    assert!(card[0].contains("`browser_click` needs your approval:** Click Register."));
+    assert!(card[0].contains("`announce` needs your approval:** Post the announcement."));
     assert!(!card[0].contains("no answer"), "{}", card[0]);
-    let labels: Vec<&str> = rows_for(&asked)[0].iter().map(|b| b.label).collect();
-    assert_eq!(labels, vec!["Yes, do it", "No"]);
+    assert_eq!(labels_of(&rows_for(&asked)[0]), vec!["Yes, do it", "No"]);
     assert_eq!(steps_of(&card[0]), (0, steps.clone()));
 
-    let done = response("Registered.", vec!["new source".into()], "answered");
+    let done = response("Registered.", vec![unlinked("new source")], "answered");
     let out = resumed(&card[0], true, &done, 2_000);
     assert_eq!(
         out,
         vec![
-            "-# • thinking\n-# • search finished\n-# • approved\n\nRegistered.\n\n**Sources**\n1. new source"
+            "-# • thinking\n-# • search finished\n-# • approved\n\nRegistered.\n\n-# \u{1f4da} also from new source"
                 .to_owned()
         ]
     );
@@ -299,8 +352,8 @@ fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
     let mut asked = response(&"a".repeat(400), vec![], "awaiting_confirmation");
     asked.confirmation = Some(Confirmation {
         token: Uuid::new_v4(),
-        tool: "browser_click".into(),
-        summary: "Click Register.".into(),
+        tool: "announce".into(),
+        summary: "Post the announcement.".into(),
     });
     let card = answer(&steps, &asked, 2_000);
     assert_eq!(card.len(), 1);
@@ -308,7 +361,7 @@ fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
     assert!(card[0].starts_with("-# 60 steps"), "{}", card[0]);
     assert_eq!(steps_of(&card[0]).0, 60);
 
-    let done = response(&"word ".repeat(380), vec!["one".into()], "answered");
+    let done = response(&"word ".repeat(380), vec![linked("one")], "answered");
     let out = resumed(&card[0], true, &done, 2_000);
     assert!(out.iter().all(|m| m.len() <= 2_000));
     assert!(
@@ -317,7 +370,7 @@ fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
         out[0]
     );
 
-    let longer = response(&"word ".repeat(398), vec!["one".into()], "answered");
+    let longer = response(&"word ".repeat(398), vec![linked("one")], "answered");
     let out = resumed(&card[0], true, &longer, 2_000);
     assert!(out.iter().all(|m| m.len() <= 2_000));
     assert!(out[0].starts_with("-# 61 steps\n\nword"), "{}", out[0]);
@@ -455,8 +508,8 @@ fn a_confirmation_offers_the_two_answers_and_a_plain_answer_offers_none() {
     let mut asked = response("", vec![], "awaiting_confirmation");
     asked.confirmation = Some(Confirmation {
         token: Uuid::new_v4(),
-        tool: "browser_click".into(),
-        summary: "Run browser_click.".into(),
+        tool: "announce".into(),
+        summary: "Post the announcement.".into(),
     });
     let rows = rows_for(&asked);
     assert_eq!(rows.len(), 1, "one row of answers");
@@ -478,9 +531,15 @@ fn forget_ids_carry_the_asker_and_survive_the_round_trip() {
     assert_eq!(CustomId::parse("sparky:forget_all"), None);
 
     let rows = forget_rows(user);
-    assert_eq!(rows[0][0].id, CustomId::ForgetAll { user });
-    assert!(rows[0][0].danger);
-    assert_eq!(rows[0][1].id, CustomId::KeepAll { user });
+    assert_eq!(
+        rows[0][0],
+        crate::render::components::ButtonSpec::Press {
+            id: CustomId::ForgetAll { user },
+            label: "Forget everything",
+            danger: true,
+        }
+    );
+    assert_eq!(labels_of(&rows[0]), vec!["Forget everything", "Cancel"]);
 
     assert!(CustomId::ForgetAll { user }.may_press(user));
     assert!(!CustomId::ForgetAll { user }.may_press(user + 1));

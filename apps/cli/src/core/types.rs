@@ -11,7 +11,7 @@ pub enum Group {
     Infra,
     /// llama-server chat and embed.
     Models,
-    /// Firecrawl and Playwright MCP.
+    /// Firecrawl.
     Tools,
     /// Long-running host processes.
     Apps,

@@ -219,7 +219,9 @@ fn citations_list_each_source_once_best_first() {
     let lines = Evidence::citations(&evidence);
 
     assert_eq!(lines.len(), 3, "{lines:?}");
-    assert!(lines[0].starts_with("library_hours"));
-    assert!(lines[1].starts_with("events"));
-    assert!(lines[2].starts_with("note"));
+    assert_eq!(lines[0].title, "library_hours");
+    assert_eq!(lines[0].url.as_deref(), Some("https://lib.asu.edu/hours"));
+    assert_eq!(lines[1].title, "events");
+    assert_eq!(lines[2].title, "note");
+    assert_eq!(lines[2].url, None, "a source with no page of its own");
 }

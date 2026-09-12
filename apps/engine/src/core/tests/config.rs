@@ -132,21 +132,13 @@ fn telemetry_defaults_point_at_the_local_posthog() {
 }
 
 #[test]
-fn the_legacy_playwright_url_becomes_a_named_server() {
-    let cfg = ok("[mcp]\nplaywright_url = \"http://localhost:8931/mcp\"\n");
+fn no_mcp_server_is_configured_by_default_and_an_empty_url_is_dropped() {
+    assert!(ok("").mcp.resolved_servers().is_empty());
+    let cfg = ok("[[mcp.servers]]\nname = \"a\"\nurl = \"\"\n\
+                  [[mcp.servers]]\nname = \"b\"\nurl = \"http://one/mcp\"\n");
     let servers = cfg.mcp.resolved_servers();
     assert_eq!(servers.len(), 1);
-    assert_eq!(servers[0].name, "playwright");
-    assert!(servers[0].tools.contains(&"browser_snapshot".to_owned()));
-}
-
-#[test]
-fn a_server_list_replaces_the_legacy_entry_of_the_same_name() {
-    let cfg = ok("[mcp]\nplaywright_url = \"http://legacy/mcp\"\n\
-                  [[mcp.servers]]\nname = \"playwright\"\nurl = \"http://new/mcp\"\n");
-    let servers = cfg.mcp.resolved_servers();
-    assert_eq!(servers.len(), 1);
-    assert_eq!(servers[0].url, "http://new/mcp");
+    assert_eq!(servers[0].name, "b");
 }
 
 #[test]

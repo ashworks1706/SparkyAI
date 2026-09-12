@@ -55,29 +55,27 @@ pub struct ChatResponse {
     pub conversation_id: Uuid,
     /// The answer.
     pub text: String,
-    /// Citation lines.
+    /// Sources the answer rests on, best first.
     #[serde(default)]
-    pub citations: Vec<String>,
+    pub citations: Vec<Citation>,
     /// Set when the engine stopped to ask.
     #[serde(default)]
     pub confirmation: Option<Confirmation>,
     /// How the run ended.
     pub status: String,
-    /// Tools the agent ran, in order.
-    #[serde(default)]
-    pub tools: Vec<ToolRun>,
     /// Remembered things the answer drew on, one line each.
     #[serde(default)]
     pub memories: Vec<String>,
 }
 
-/// One tool the agent ran.
+/// One source under an answer. Mirrors engine::core::types::knowledge::evidence::Citation.
 #[derive(Debug, Clone, Deserialize)]
-pub struct ToolRun {
-    /// Tool name.
-    pub tool: String,
-    /// Whether it returned a result.
-    pub ok: bool,
+pub struct Citation {
+    /// Human-readable source name.
+    pub title: String,
+    /// Canonical page URL, when the source has one.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 /// Engine call failures.
@@ -108,18 +106,22 @@ pub struct ErrorFrame {
 
 /// One line of progress from /chat/stream.
 ///
-/// Only text is read. The engine renders the sentence.
+/// The engine renders the sentence. slot names the line this one writes over, so a tool result
+/// lands where its own start line was.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Progress {
     /// Ready-to-display sentence.
     pub text: String,
+    /// The line this replaces, when it replaces one.
+    #[serde(default)]
+    pub slot: Option<String>,
 }
 
 /// What arrives while a streamed turn runs.
 #[derive(Debug)]
 pub enum Update {
     /// Something happened worth showing.
-    Progress(String),
+    Progress(Progress),
     /// The turn finished.
     Answer(Box<ChatResponse>),
     /// The turn failed.

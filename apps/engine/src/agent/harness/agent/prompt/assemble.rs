@@ -35,7 +35,11 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     messages.push(Message::system(system));
 
     if !s.capabilities.trim().is_empty() {
-        let block = s.capabilities.trim().to_owned();
+        let block = format!(
+            "{}\n{}",
+            s.templates.capabilities_header.trim(),
+            s.capabilities.trim()
+        );
         let cost = estimate(&block, cpt);
         if cost <= budget.capabilities {
             used += cost;
@@ -52,31 +56,21 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
 
     let mut evidence_used = 0;
     let input_cost = estimate(s.input, cpt);
-    if !s.evidence.is_empty() {
-        let mut block = format!("{}\n", s.templates.evidence_header.trim());
-        let mut spent = estimate(&block, cpt);
+    if s.evidence.is_empty() {
+        if !s.templates.no_evidence_line.trim().is_empty() {
+            let block = s.templates.no_evidence_line.trim().to_owned();
+            used += estimate(&block, cpt);
+            messages.push(Message::system(block));
+        }
+    } else {
         // Evidence is capped by its own budget and by what remains of the total after the
         // sections above and the current input.
         let evidence_budget = budget
             .evidence
             .min(budget.total.saturating_sub(used + input_cost));
-        for (i, e) in s.evidence.iter().enumerate() {
-            let entry = format!(
-                "\n[{}] {} (fetched {})\n{}\n",
-                i + 1,
-                e.title,
-                e.fetched_at.format("%Y-%m-%d"),
-                e.content.trim()
-            );
-            let cost = estimate(&entry, cpt);
-            if spent + cost > evidence_budget {
-                break;
-            }
-            block.push_str(&entry);
-            spent += cost;
-            evidence_used += 1;
-        }
+        let (block, spent, count) = evidence_block(s, evidence_budget, cpt);
         used += spent;
+        evidence_used = count;
         messages.push(Message::system(block));
     }
 
@@ -111,6 +105,36 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         evidence_used,
         memory_used,
     }
+}
+
+/// The evidence section: the header and every chunk that fits budget, with the tokens it
+/// spends and how many chunks it holds. Each entry is numbered, so an answer can cite it.
+fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize, usize) {
+    let mut block = format!("{}\n", s.templates.evidence_header.trim());
+    let mut spent = estimate(&block, cpt);
+    let mut count = 0;
+    for (i, e) in s.evidence.iter().enumerate() {
+        let page = e
+            .url
+            .as_deref()
+            .map(|url| format!(" - {url}"))
+            .unwrap_or_default();
+        let entry = format!(
+            "\n[{}] {}{page} (fetched {})\n{}\n",
+            i + 1,
+            e.title,
+            e.fetched_at.format("%Y-%m-%d"),
+            e.content.trim()
+        );
+        let cost = estimate(&entry, cpt);
+        if spent + cost > budget {
+            break;
+        }
+        block.push_str(&entry);
+        spent += cost;
+        count += 1;
+    }
+    (block, spent, count)
 }
 
 /// The memory section: the header and every memory that fits budget, with the tokens it

@@ -56,6 +56,13 @@ class EvalCase(BaseModel):
     expect: Expectation = Field(default_factory=Expectation)
 
 
+class Citation(BaseModel):
+    """One source under an answer. Mirrors the engine wire shape."""
+
+    title: str
+    url: str | None = None
+
+
 class TurnResult(BaseModel):
     """The engine answer to one turn plus its trace."""
 
@@ -63,7 +70,7 @@ class TurnResult(BaseModel):
     conversation_id: str
     status: str
     text: str
-    citations: list[str]
+    citations: list[Citation]
     steps: int
     tokens: int
     latency_ms: int

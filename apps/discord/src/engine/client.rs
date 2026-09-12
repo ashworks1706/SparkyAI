@@ -145,7 +145,7 @@ impl EngineClient {
                 match name.as_str() {
                     "progress" => match serde_json::from_str::<Progress>(&data) {
                         Ok(p) => {
-                            let _ = tx.send(Update::Progress(p.text));
+                            let _ = tx.send(Update::Progress(p));
                         }
                         Err(e) => tracing::debug!(error = %e, "unreadable progress frame"),
                     },

@@ -73,8 +73,8 @@ pub fn transcript(answer: &Answer) -> String {
     }
     if !answer.evidence.is_empty() {
         out.push_str("\n\nSources");
-        for (i, line) in Evidence::citations(&answer.evidence).iter().enumerate() {
-            let _ = write!(out, "\n{}. {line}", i + 1);
+        for (i, source) in Evidence::citations(&answer.evidence).iter().enumerate() {
+            let _ = write!(out, "\n{}. {}", i + 1, source.line());
         }
     }
     out

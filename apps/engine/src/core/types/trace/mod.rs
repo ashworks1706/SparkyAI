@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
+use crate::core::types::trace::progress::ProgressStyle;
 
 /// One thing that happened during a request. Never carries secrets or raw credentials.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +56,13 @@ pub enum TraceEvent {
         /// Retry index, 0 for the first attempt.
         attempt: u32,
     },
+    /// The model wrote something on a step that ended in tool calls.
+    ModelThought {
+        /// Loop step.
+        step: u32,
+        /// What it wrote, truncated.
+        text: String,
+    },
     /// A model call failed.
     ModelError {
         /// Loop step.
@@ -93,8 +101,12 @@ pub enum TraceEvent {
     ToolStarted {
         /// Loop step.
         step: u32,
+        /// Provider call id.
+        call_id: String,
         /// Tool name.
         tool: String,
+        /// Validated arguments.
+        arguments: Value,
     },
     /// A tool ran.
     ToolCall {
@@ -150,6 +162,7 @@ impl TraceEvent {
             Self::ContextAssembled { .. } => "context_assembled",
             Self::ModelStarted { .. } => "model_started",
             Self::ModelCall { .. } => "model_call",
+            Self::ModelThought { .. } => "model_thought",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
             Self::GuardrailBlocked { .. } => "guardrail_blocked",
@@ -164,40 +177,69 @@ impl TraceEvent {
 
     /// What to show someone waiting on this run, or None when the event is bookkeeping.
     ///
-    /// The match is exhaustive: a new event must decide whether it is shown.
-    pub fn progress(&self) -> Option<String> {
+    /// Every line opens with an emoji so a client can show it as it arrives. The match is
+    /// exhaustive: a new event must decide whether it is shown.
+    pub fn progress(&self, style: ProgressStyle) -> Option<String> {
+        let detail = style.detail_chars;
         match self {
-            Self::ModelStarted { .. } => Some("thinking".to_owned()),
-            Self::ToolStarted { tool, .. } => Some(match friendly(tool) {
-                Some((started, _)) => started.to_owned(),
-                None => format!("running {tool}"),
-            }),
-            Self::ToolCall { tool, result, .. } => {
-                let name = friendly(tool).map_or(tool.as_str(), |(_, name)| name);
-                let outcome = if result.is_ok() { "finished" } else { "failed" };
-                Some(format!("{name} {outcome}"))
+            Self::ModelStarted { .. } => Some("\u{1f914} thinking".to_owned()),
+            Self::ModelThought { text, .. } => {
+                let thought = clip(&one_line(text), detail);
+                (!thought.is_empty()).then(|| format!("\u{1f4ad} {thought}"))
+            }
+            Self::ToolStarted {
+                tool, arguments, ..
+            } => Some(format!(
+                "\u{1f527} `{}`{} \u{2014} {}",
+                tool,
+                call_arguments(arguments, detail),
+                friendly(tool).map_or("running", |(started, _)| started)
+            )),
+            Self::ToolCall {
+                tool,
+                arguments,
+                result,
+                ..
+            } => {
+                let head = format!("`{}`{}", tool, call_arguments(arguments, detail));
+                Some(match result {
+                    Ok(output) => {
+                        let shown = clip(&one_line(output), detail);
+                        if shown.is_empty() {
+                            format!("\u{2705} {head} \u{2014} nothing came back")
+                        } else {
+                            format!("\u{2705} {head} \u{2192} {shown}")
+                        }
+                    }
+                    Err(error) => format!(
+                        "\u{274c} {head} \u{2014} {}",
+                        clip(&one_line(error), detail)
+                    ),
+                })
             }
             Self::MemoryRecalled { count: 0 } => None,
             Self::MemoryRecalled { count } => Some(format!(
-                "remembering {count} {} about you",
+                "\u{1f9e0} remembering {count} {} about you",
                 plural(*count, "thing", "things")
             )),
             Self::GuardrailBlocked { stage, .. } => {
-                Some(format!("the {} was not allowed", stage.as_str()))
+                Some(format!("\u{1f6d1} the {} was not allowed", stage.as_str()))
             }
-            Self::Compaction { turns } => Some(format!("summarising {turns} earlier turns")),
+            Self::Compaction { turns } => {
+                Some(format!("\u{1f5dc} summarising {turns} earlier turns"))
+            }
             Self::Retrieval { chunk_ids, .. } => Some(format!(
-                "reading {} {}",
+                "\u{1f4da} read {} {} from the knowledge base",
                 chunk_ids.len(),
                 plural(chunk_ids.len(), "source", "sources")
             )),
             Self::PolicyDecision { tool, decision, .. } => match decision {
-                Decision::Deny { .. } => Some(format!("{tool} was not allowed")),
-                Decision::Confirm(_) => Some(format!("{tool} needs your approval")),
+                Decision::Deny { .. } => Some(format!("\u{1f6ab} `{tool}` was not allowed")),
+                Decision::Confirm(_) => Some(format!("\u{270b} `{tool}` needs your approval")),
                 Decision::Allow => None,
             },
             Self::ModelError { retried: true, .. } => {
-                Some("the model stumbled, retrying".to_owned())
+                Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
             Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
@@ -206,6 +248,54 @@ impl TraceEvent {
             | Self::Completed { .. } => None,
         }
     }
+
+    /// The line this event writes over, or None to append a new line.
+    ///
+    /// A tool result replaces the line its own start wrote, and a thought replaces the
+    /// thinking line of its step.
+    pub fn slot(&self) -> Option<String> {
+        match self {
+            Self::ToolStarted { call_id, .. } | Self::ToolCall { call_id, .. } => {
+                Some(format!("tool:{call_id}"))
+            }
+            Self::ModelStarted { step } | Self::ModelThought { step, .. } => {
+                Some(format!("model:{step}"))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A compact rendering of the arguments a call was made with. Empty when there are none.
+fn call_arguments(arguments: &Value, limit: usize) -> String {
+    let Some(fields) = arguments.as_object() else {
+        return String::new();
+    };
+    let shown: Vec<String> = fields
+        .iter()
+        .map(|(key, value)| match value {
+            Value::String(text) => format!("{key}: {text}"),
+            other => format!("{key}: {other}"),
+        })
+        .collect();
+    if shown.is_empty() {
+        return String::new();
+    }
+    format!(" ({})", clip(&one_line(&shown.join(", ")), limit))
+}
+
+/// Text as one line, with runs of whitespace collapsed.
+fn one_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Text held to limit characters, with an ellipsis when it was cut.
+fn clip(text: &str, limit: usize) -> String {
+    if text.chars().count() <= limit {
+        return text.to_owned();
+    }
+    let kept: String = text.chars().take(limit.saturating_sub(1)).collect();
+    format!("{}\u{2026}", kept.trim_end())
 }
 
 /// What a tool is shown as: the line while it runs, and its name once it is done. None for a
@@ -213,9 +303,8 @@ impl TraceEvent {
 fn friendly(tool: &str) -> Option<(&'static str, &'static str)> {
     match tool {
         "search_knowledge_base" => Some(("searching the knowledge base", "knowledge base search")),
-        "browser_navigate" => Some(("opening the page", "page load")),
-        "browser_snapshot" => Some(("reading the page", "page read")),
         "query_source" => Some(("checking a live ASU page", "live ASU page check")),
+        "get_skill" => Some(("reading a saved procedure", "saved procedure")),
         _ => None,
     }
 }

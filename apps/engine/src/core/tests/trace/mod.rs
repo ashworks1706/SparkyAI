@@ -109,7 +109,9 @@ fn kind_matches_the_name_each_event_serialises_under() {
         },
         TraceEvent::ToolStarted {
             step: 1,
+            call_id: String::new(),
             tool: String::new(),
+            arguments: serde_json::Value::Null,
         },
         TraceEvent::ToolCall {
             step: 1,
@@ -162,7 +164,9 @@ fn a_capped_trace_keeps_the_start_of_the_run_and_drops_the_tail() {
             &ctx,
             TraceEvent::ToolStarted {
                 step,
-                tool: "browser_snapshot".into(),
+                call_id: format!("c{step}"),
+                tool: "search_knowledge_base".into(),
+                arguments: serde_json::json!({}),
             },
         );
     }

@@ -18,10 +18,10 @@ fn definition(name: &str, risk: RiskClass) -> ToolDefinition {
 
 #[test]
 fn a_remote_tool_is_kinded_by_the_server_it_came_from() {
-    let mcp = vec!["browser_click".to_owned()];
-    assert_eq!(kind_of("browser_click", &mcp), Kind::Mcp);
-    // A built-in with a browser-looking name is still a built-in.
-    assert_eq!(kind_of("browser_click", &[]), Kind::Tool);
+    let mcp = vec!["remote_lookup".to_owned()];
+    assert_eq!(kind_of("remote_lookup", &mcp), Kind::Mcp);
+    // A built-in of the same name is still a built-in when no server offers it.
+    assert_eq!(kind_of("remote_lookup", &[]), Kind::Tool);
     assert_eq!(kind_of("search_knowledge_base", &mcp), Kind::Tool);
     assert_eq!(kind_of("get_skill", &mcp), Kind::Skill);
     assert_eq!(kind_of("run_sandbox", &mcp), Kind::Sandbox);
@@ -31,16 +31,16 @@ fn a_remote_tool_is_kinded_by_the_server_it_came_from() {
 fn every_offered_tool_becomes_one_line_naming_its_kind() {
     let defs = vec![
         definition("search_knowledge_base", RiskClass::ReadPublic),
-        definition("browser_click", RiskClass::ExternalWrite),
+        definition("remote_lookup", RiskClass::ExternalWrite),
     ];
-    let caps = from_definitions(&defs, &["browser_click".to_owned()]);
+    let caps = from_definitions(&defs, &["remote_lookup".to_owned()]);
     let text = render(&caps);
     assert!(text.contains("search_knowledge_base (tool)"), "{text}");
-    assert!(text.contains("browser_click (mcp)"), "{text}");
+    assert!(text.contains("remote_lookup (mcp)"), "{text}");
     assert_eq!(
         text.lines().count(),
-        3,
-        "a heading and one line per capability"
+        2,
+        "one line per capability, and the heading is written by assembly"
     );
 }
 

@@ -53,10 +53,6 @@ pub struct Mcp {
     pub max_schema_description_chars: usize,
     /// Longest tool description kept.
     pub max_tool_description_chars: usize,
-    /// Legacy single-server form, folded into servers as playwright. Prefer servers.
-    pub playwright_url: Option<String>,
-    /// Tools exposed by the legacy playwright_url server.
-    pub playwright_tools: Vec<String>,
 }
 
 /// One MCP server.
@@ -78,30 +74,13 @@ pub struct McpServer {
 }
 
 impl Mcp {
-    /// Configured servers, with the legacy playwright_url folded in and empty URLs dropped.
+    /// Configured servers, with empty URLs dropped.
     pub fn resolved_servers(&self) -> Vec<McpServer> {
-        let mut out: Vec<McpServer> = self
-            .servers
+        self.servers
             .iter()
             .filter(|s| !s.url.trim().is_empty())
             .cloned()
-            .collect();
-        if let Some(url) = self
-            .playwright_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|u| !u.is_empty())
-            && !out.iter().any(|s| s.name == "playwright")
-        {
-            out.push(McpServer {
-                name: "playwright".into(),
-                url: url.to_owned(),
-                tools: self.playwright_tools.clone(),
-                required_props_only: None,
-                tool_timeout_secs: None,
-            });
-        }
-        out
+            .collect()
     }
 }
 
@@ -113,18 +92,6 @@ impl Default for Mcp {
             max_output_chars: 6_000,
             max_schema_description_chars: 80,
             max_tool_description_chars: 160,
-            playwright_url: None,
-            playwright_tools: [
-                "browser_navigate",
-                "browser_navigate_back",
-                "browser_snapshot",
-                "browser_click",
-                "browser_type",
-                "browser_press_key",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
         }
     }
 }

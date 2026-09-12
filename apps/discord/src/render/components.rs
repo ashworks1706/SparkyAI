@@ -7,6 +7,10 @@ use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
 use uuid::Uuid;
 
 use crate::core::types::ChatResponse;
+use crate::render::card::source_label;
+
+/// Source buttons one reply carries. Discord allows five buttons in a row.
+const MAX_SOURCES: usize = 5;
 
 /// Marks a custom_id as belonging to this bot. A component from anywhere else is ignored.
 const PREFIX: &str = "sparky";
@@ -133,44 +137,71 @@ impl std::fmt::Display for CustomId {
 
 /// One button, described without serenity types.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ButtonSpec {
-    /// What pressing it means.
-    pub id: CustomId,
-    /// Text on the button.
-    pub label: &'static str,
-    /// Whether it reads as the safe or the consequential answer.
-    pub danger: bool,
+pub enum ButtonSpec {
+    /// Presses back into the bot.
+    Press {
+        /// What pressing it means.
+        id: CustomId,
+        /// Text on the button.
+        label: &'static str,
+        /// Whether it reads as the safe or the consequential answer.
+        danger: bool,
+    },
+    /// Opens a page. Discord sends no press for one.
+    Link {
+        /// Text on the button.
+        label: String,
+        /// Where it goes.
+        url: String,
+    },
 }
 
-/// The buttons a reply should carry. Empty when it asks nothing of the reader.
+/// The buttons a reply should carry: the approval answers, then the sources behind the answer.
+/// Empty when the reply neither asks nor cites anything.
 pub fn rows_for(resp: &ChatResponse) -> Vec<Vec<ButtonSpec>> {
-    let Some(confirmation) = &resp.confirmation else {
-        return Vec::new();
-    };
-    let row = vec![
-        ButtonSpec {
-            id: CustomId::new(Action::Approve, confirmation.token, resp.conversation_id),
-            label: "Yes, do it",
-            danger: true,
-        },
-        ButtonSpec {
-            id: CustomId::new(Action::Deny, confirmation.token, resp.conversation_id),
-            label: "No",
-            danger: false,
-        },
-    ];
-    vec![row]
+    let mut rows = Vec::new();
+    if let Some(confirmation) = &resp.confirmation {
+        rows.push(vec![
+            ButtonSpec::Press {
+                id: CustomId::new(Action::Approve, confirmation.token, resp.conversation_id),
+                label: "Yes, do it",
+                danger: true,
+            },
+            ButtonSpec::Press {
+                id: CustomId::new(Action::Deny, confirmation.token, resp.conversation_id),
+                label: "No",
+                danger: false,
+            },
+        ]);
+    }
+    let sources: Vec<ButtonSpec> = resp
+        .citations
+        .iter()
+        .filter_map(|c| {
+            let url = c.url.as_deref()?.trim();
+            let linkable = url.starts_with("https://") || url.starts_with("http://");
+            linkable.then(|| ButtonSpec::Link {
+                label: source_label(&c.title),
+                url: url.to_owned(),
+            })
+        })
+        .take(MAX_SOURCES)
+        .collect();
+    if !sources.is_empty() {
+        rows.push(sources);
+    }
+    rows
 }
 
 /// The buttons under the forget everything prompt, bound to the user who asked.
 pub fn forget_rows(user: u64) -> Vec<Vec<ButtonSpec>> {
     vec![vec![
-        ButtonSpec {
+        ButtonSpec::Press {
             id: CustomId::ForgetAll { user },
             label: "Forget everything",
             danger: true,
         },
-        ButtonSpec {
+        ButtonSpec::Press {
             id: CustomId::KeepAll { user },
             label: "Cancel",
             danger: false,
@@ -184,14 +215,17 @@ pub fn to_action_rows(rows: &[Vec<ButtonSpec>]) -> Vec<CreateActionRow> {
         .map(|row| {
             CreateActionRow::Buttons(
                 row.iter()
-                    .map(|b| {
-                        CreateButton::new(b.id.to_string())
-                            .label(b.label)
-                            .style(if b.danger {
-                                ButtonStyle::Danger
-                            } else {
-                                ButtonStyle::Secondary
-                            })
+                    .map(|b| match b {
+                        ButtonSpec::Press { id, label, danger } => {
+                            CreateButton::new(id.to_string())
+                                .label(*label)
+                                .style(if *danger {
+                                    ButtonStyle::Danger
+                                } else {
+                                    ButtonStyle::Secondary
+                                })
+                        }
+                        ButtonSpec::Link { label, url } => CreateButton::new_link(url).label(label),
                     })
                     .collect(),
             )

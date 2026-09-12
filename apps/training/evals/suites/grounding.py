@@ -11,9 +11,10 @@ def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     if last.status != "answered":
         problems.append(f"status {last.status}")
     if case.expect.source_key and not any(
-        c.startswith(case.expect.source_key) for c in last.citations
+        c.title.startswith(case.expect.source_key) for c in last.citations
     ):
-        problems.append(f"no citation from {case.expect.source_key}; got {last.citations[:2]}")
+        cited = [c.title for c in last.citations[:2]]
+        problems.append(f"no citation from {case.expect.source_key}; got {cited}")
     text = last.text.lower()
     missing = [m for m in case.expect.mentions if m.lower() not in text]
     if missing:

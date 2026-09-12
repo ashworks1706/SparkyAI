@@ -34,7 +34,7 @@ impl Handler {
         let started = Instant::now();
         let limit = self.max_message_chars;
         let posted = dest
-            .send(&ctx.http, card::thinking(&[], limit), Vec::new(), true)
+            .send(&ctx.http, card::thinking(&[], limit, 0), Vec::new(), true)
             .await;
         let card_id = match posted {
             Ok(message) => Some(message.id),
@@ -79,7 +79,7 @@ impl Handler {
                     user = %req.user_id,
                     "answered"
                 );
-                let messages = card::answer(steps.lines(), &resp, limit);
+                let messages = card::answer(&steps.lines(), &resp, limit);
                 let rows = components::rows_for(&resp);
                 self.show(ctx, dest, card_id, messages, &rows).await;
             }
@@ -91,7 +91,7 @@ impl Handler {
                         .with("kind", error_kind(&e))
                         .with("place", place),
                 );
-                let text = card::failed(steps.lines(), &reply::failure(&e), limit);
+                let text = card::failed(&steps.lines(), &reply::failure(&e), limit);
                 self.show(ctx, dest, card_id, vec![text], &[]).await;
             }
         }
@@ -163,18 +163,22 @@ impl Handler {
     ) -> Option<Result<ChatResponse, EngineError>> {
         let mut outcome = None;
         let mut pacer = Pacer::new(self.edit_every, Instant::now());
+        // The spinner turns once per edit, so a running turn reads as alive without costing
+        // an edit of its own.
+        let mut frame = 0usize;
         loop {
             let wait = pacer.wait(Instant::now()).filter(|_| outcome.is_none());
             tokio::select! {
                 update = rx.recv() => match update {
                     None => break,
-                    Some(Update::Progress(text)) => pacer.mark(steps.push(&text)),
+                    Some(Update::Progress(p)) => pacer.mark(steps.push(p.slot.as_deref(), &p.text)),
                     Some(Update::Answer(answer)) => outcome = Some(Ok(*answer)),
                     Some(Update::Failed(e)) => outcome = Some(Err(e)),
                 },
                 () = tokio::time::sleep(wait.unwrap_or_default()), if wait.is_some() => {
                     if let Some(id) = card_id {
-                        let text = card::thinking(steps.lines(), self.max_message_chars);
+                        frame = frame.wrapping_add(1);
+                        let text = card::thinking(&steps.lines(), self.max_message_chars, frame);
                         if let Err(e) = dest.edit(&ctx.http, id, text, None).await {
                             tracing::warn!(error = %e, "progress edit failed");
                         }

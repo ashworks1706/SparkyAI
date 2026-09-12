@@ -179,7 +179,9 @@ impl Agent {
             ctx,
             TraceEvent::ToolStarted {
                 step,
+                call_id: call.id.clone(),
                 tool: call.name.clone(),
+                arguments: redact(&call.arguments),
             },
         );
         let started = Instant::now();

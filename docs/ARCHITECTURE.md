@@ -1,6 +1,6 @@
 # Architecture
 
-SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord. Later phases add authenticated browser tasks through the same Playwright MCP server.
+SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord.
 
 This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are in [decisions/](decisions/).
 
@@ -10,10 +10,9 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 |---|---|---|
 | Engine, Discord bot | tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
 | Model and embed clients | Rig (`rig-core`) OpenAI-compatible client. | `apps/engine/src/agent/model/rig_openai.rs` |
-| MCP | `rmcp` (official SDK); Playwright MCP | `apps/engine/src/agent/tools/mcp.rs` |
+| MCP | `rmcp` (official SDK) | `apps/engine/src/agent/tools/mcp.rs` |
 | Scraper | psycopg, boto3, httpx | `apps/scraper` |
 | Fetch + extract | Firecrawl, self-hosted; httpx + BeautifulSoup | `deploy/compose.yml` profile `crawl` |
-| Browser tools | Playwright MCP over Streamable HTTP | `apps/engine/src/agent/tools/mcp.rs`, compose profile `browser` |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
 | Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF | `apps/training/posttrain` |
 | Evals | Golden cases against `/chat`, deterministic baseline gate | `apps/training/evals` |
@@ -32,7 +31,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 
 - Open models only, served by `llama-server` behind an OpenAI-compatible HTTP API.
 - Facts come from retrieval or live observation, never from model weights.
-- Public sites are ingested offline through Firecrawl. The request path never fetches a page as retrieval evidence; browser tools act under `Policy` and never write to the index.
+- Public sites are ingested offline through Firecrawl. The request path never fetches a page as retrieval evidence; no tool writes to the index.
 - The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
@@ -345,7 +344,7 @@ Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` be
 | Class | Examples | Behavior |
 |---|---|---|
 | `ReadPublic` | search indexed pages, library hours | run |
-| `ReadAuthenticated` | read a page in the user's own browser session | deny unless `policy.allow_authenticated_reads` |
+| `ReadAuthenticated` | read a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | draft an announcement, fill a form without submitting | run |
 | `ExternalWrite` | post, create ticket, book, submit | require a `policy.write_roles` role, then confirm immediately before |
 | `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm immediately before |
@@ -419,7 +418,7 @@ A candidate is written only if it is useful later, stable, belongs to this user,
 | `/ask` or @mention in a thread | that thread | public |
 | `/ask private:true` | an ephemeral reply | private |
 
-A turn is one message, edited in place: it opens as a thinking line, gains one line per progress event, and ends with the answer followed by sources, tools, and the memories that went into the prompt (`ChatResponse.memories`). The model's text between tool calls is never shown. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
+A turn is one message, edited in place: it opens as a spinner line, gains one line per progress event, and ends with the answer. A progress line that carries a `slot` writes over the line of that slot, so a tool result lands where its own start line was, carrying the arguments and a trimmed result. What the model writes on its way to a tool call is shown as a thought. Under the answer sit the memories that went into the prompt (`ChatResponse.memories`) and any source with no page of its own; every other source is a link button. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
 
 A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state; `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`. Details: `decisions/0002-discord-threads-and-visibility.md`.
 
@@ -430,7 +429,7 @@ A conversation belongs to one tenant, user, channel, and visibility. The bot hol
 | users, roles, conversations, messages, memories, source metadata and versions, jobs, confirmations | PostgreSQL (source of truth) |
 | chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | pgvector, same PostgreSQL (rebuildable) |
 | raw snapshots, model artifacts | object storage |
-| browser session secrets | encrypted, separate namespace |
+| session secrets | encrypted, separate namespace |
 | local traces, console logs, training outputs | `.sparky/` (ignored) |
 
 ```mermaid
@@ -449,7 +448,7 @@ Each `chunks` row contains a `vector(1024)` embedding and a generated `tsvector`
 
 ## Background jobs
 
-Discord handlers never block on long work. Ingestion, embedding, browser tasks, reminders, evals, and trace processing run as jobs with id, owner, type, status, input ref, attempts, deadline, cancel state, result ref, and error category.
+Discord handlers never block on long work. Ingestion, embedding, reminders, evals, and trace processing run as jobs with id, owner, type, status, input ref, attempts, deadline, cancel state, result ref, and error category.
 
 ## Failure behavior
 
@@ -512,9 +511,9 @@ PostHog holds spans and events, Prometheus holds time series. A slow request rea
 
 Dashboard panels and the metric names behind them: `deploy/README.md`.
 
-## Authenticated browser tasks (Phase 8)
+## Authenticated tasks (Phase 8)
 
-The Playwright MCP server, never a browser inside the engine process. One isolated browser context per user session; the user completes login and MFA themselves; SparkyAI never asks for or stores a password. Allowlisted domains, blocked or quarantined downloads, size-limited structured observations, redacted action logs, session expiry and cleanup. CAPTCHA, MFA failure, expired session, or an unexpected page stops the task. Authenticated page content is never indexed or memorized. Requires explicit authorization before work begins (see roadmap out-of-scope).
+No mechanism. The browser MCP server that Phase 8 assumed is gone, see [decisions/0005](decisions/0005-drop-the-browser-mcp.md). Whatever replaces it needs its own decision note first. The rules it has to meet stand: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
 
 ## Live source queries
 

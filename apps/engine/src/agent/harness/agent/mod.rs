@@ -423,6 +423,18 @@ impl Agent {
         run.usage.add(response.usage);
         run.new_turns.push(response.as_message());
 
+        // What the model wrote on its way to a tool call is the closest thing to a thought
+        // the loop can show.
+        if !response.tool_calls.is_empty() && !response.content.trim().is_empty() {
+            self.deps.trace.emit(
+                ctx,
+                TraceEvent::ModelThought {
+                    step: run.steps,
+                    text: truncate(&response.content, self.cfg.max_span_value_chars),
+                },
+            );
+        }
+
         let stage = if response.tool_calls.is_empty() {
             Stage::Answer
         } else {

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::trace::progress::Progress;
+use crate::core::types::trace::progress::{Progress, ProgressStyle};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
 
 fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
@@ -106,19 +106,30 @@ impl TraceSink for NullSink {
 /// the ones that map to progress.
 pub struct Fanout {
     inner: Arc<dyn TraceSink>,
+    style: ProgressStyle,
 }
 
 impl Fanout {
-    /// Wraps the sink that records the full trace.
+    /// Wraps the sink that records the full trace, with the default amount of detail.
     pub fn new(inner: Arc<dyn TraceSink>) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            style: ProgressStyle::default(),
+        }
+    }
+
+    /// Sets how much detail a forwarded progress line carries.
+    #[must_use]
+    pub fn with_style(mut self, style: ProgressStyle) -> Self {
+        self.style = style;
+        self
     }
 }
 
 impl TraceSink for Fanout {
     fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
         if let Some(tx) = &ctx.progress
-            && let Some(progress) = Progress::of(&event)
+            && let Some(progress) = Progress::of(&event, self.style)
         {
             // A dropped receiver means the caller stopped watching. The trace still lands.
             let _ = tx.send(progress);

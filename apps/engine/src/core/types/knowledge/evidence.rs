@@ -23,27 +23,37 @@ pub struct Evidence {
     pub score: f32,
 }
 
-impl Evidence {
-    /// A citation line for the answer footer.
-    pub fn citation(&self) -> String {
+/// One source an answer rests on. A client decides how to show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Citation {
+    /// Human-readable source name.
+    pub title: String,
+    /// Canonical page URL, when the source has one.
+    pub url: Option<String>,
+}
+
+impl Citation {
+    /// The citation as one line, for a client that shows text.
+    pub fn line(&self) -> String {
         match &self.url {
-            Some(url) => format!(
-                "{} — {} (fetched {})",
-                self.title,
-                url,
-                self.fetched_at.format("%Y-%m-%d")
-            ),
-            None => format!(
-                "{} (fetched {})",
-                self.title,
-                self.fetched_at.format("%Y-%m-%d")
-            ),
+            Some(url) => format!("{} - {}", self.title, url),
+            None => self.title.clone(),
+        }
+    }
+}
+
+impl Evidence {
+    /// The source this chunk credits.
+    pub fn citation(&self) -> Citation {
+        Citation {
+            title: self.title.clone(),
+            url: self.url.clone(),
         }
     }
 
-    /// One citation line per source, best first. Chunks sharing a url, or a source id when
-    /// there is no url, collapse into the first of them.
-    pub fn citations(evidence: &[Evidence]) -> Vec<String> {
+    /// One citation per source, best first. Chunks sharing a url, or a source id when there
+    /// is no url, collapse into the first of them.
+    pub fn citations(evidence: &[Evidence]) -> Vec<Citation> {
         let mut seen = std::collections::HashSet::new();
         evidence
             .iter()

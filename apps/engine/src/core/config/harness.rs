@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::core::types::agent::assemble::{self, Budget};
 use crate::core::types::tools::RiskClass;
+use crate::core::types::trace::progress::{self, ProgressStyle};
 
 /// Agent loop limits. Every field has a default so a bare .env still boots.
 #[derive(Debug, Deserialize)]
@@ -49,6 +50,9 @@ pub struct Agent {
     pub retry_cap_ms: u64,
     /// Longest value recorded on a span; the JSONL trace keeps the rest.
     pub max_span_value_chars: usize,
+    /// Characters of a thought, a tool argument list, or a tool result one live progress line
+    /// carries.
+    pub progress_detail_chars: usize,
 }
 
 impl Default for Agent {
@@ -74,11 +78,19 @@ impl Default for Agent {
             retry_base_ms: 250,
             retry_cap_ms: 8_000,
             max_span_value_chars: 32_000,
+            progress_detail_chars: progress::DETAIL_CHARS,
         }
     }
 }
 
 impl Agent {
+    /// How much detail a live progress line carries.
+    pub fn progress_style(&self) -> ProgressStyle {
+        ProgressStyle {
+            detail_chars: self.progress_detail_chars,
+        }
+    }
+
     /// The prompt budgets these settings describe.
     pub fn budget(&self) -> Budget {
         Budget {
@@ -108,6 +120,10 @@ pub struct Prompt {
     pub memory_header: String,
     /// Heading above retrieved evidence.
     pub evidence_header: String,
+    /// Line written when retrieval found nothing.
+    pub no_evidence_line: String,
+    /// Heading above what the model may do.
+    pub capabilities_header: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
     /// Hours from UTC the date is rendered in. Arizona keeps -7 all year.
@@ -123,6 +139,8 @@ impl Default for Prompt {
             role_line_no_roles: assemble::ROLE_LINE_NO_ROLES.into(),
             memory_header: assemble::MEMORY_HEADER.into(),
             evidence_header: assemble::EVIDENCE_HEADER.into(),
+            no_evidence_line: assemble::NO_EVIDENCE_LINE.into(),
+            capabilities_header: assemble::CAPABILITIES_HEADER.into(),
             date_line: assemble::DATE_LINE.into(),
             utc_offset_hours: -7,
         }

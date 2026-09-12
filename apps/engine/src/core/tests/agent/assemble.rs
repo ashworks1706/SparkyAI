@@ -179,7 +179,90 @@ fn the_wording_around_every_section_comes_from_configuration() {
     assert!(text.contains("REMEMBERED"), "{text}");
     assert!(text.contains("SOURCES"), "{text}");
     assert!(text.contains("caller u"), "{text}");
-    assert!(!text.contains("Evidence from ASU sources"), "{text}");
+    assert!(!text.contains("Knowledge base results"), "{text}");
+}
+
+#[test]
+fn a_question_retrieval_found_nothing_for_says_so_instead_of_going_quiet() {
+    let empty = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            input: "q",
+            templates: Templates {
+                no_evidence_line: "NOTHING FOUND",
+                ..Templates::default()
+            },
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = empty.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(text.contains("NOTHING FOUND"), "{text}");
+    assert_eq!(empty.evidence_used, 0);
+
+    let ev = evidence(1);
+    let found = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            evidence: &ev,
+            input: "q",
+            templates: Templates {
+                no_evidence_line: "NOTHING FOUND",
+                ..Templates::default()
+            },
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = found.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(!text.contains("NOTHING FOUND"), "{text}");
+}
+
+#[test]
+fn an_evidence_entry_carries_its_number_its_page_and_its_date() {
+    let mut ev = evidence(1);
+    ev[0].url = Some("https://lib.asu.edu/hours".into());
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            evidence: &ev,
+            input: "q",
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(
+        text.contains("[1] Doc 0 - https://lib.asu.edu/hours"),
+        "{text}"
+    );
+    assert!(text.contains("(fetched "), "{text}");
+}
+
+#[test]
+fn the_capabilities_heading_is_written_around_the_rendered_list() {
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            capabilities: "- search_knowledge_base (tool): finds ASU pages",
+            input: "q",
+            templates: Templates {
+                capabilities_header: "WHAT YOU CAN DO",
+                ..Templates::default()
+            },
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(
+        text.contains("WHAT YOU CAN DO\n- search_knowledge_base (tool)"),
+        "{text}"
+    );
 }
 
 #[test]

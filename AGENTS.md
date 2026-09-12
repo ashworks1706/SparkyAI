@@ -27,7 +27,6 @@ just phoenix          # Phoenix trace UI on :6006: one conversation as a tree
 just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
-just browser          # Playwright MCP browser tools for the engine
 just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just web              # Vite dev server on :5173
@@ -54,7 +53,7 @@ deploy/           compose, one Dockerfile per image, inference/ (model serving c
 docs/             ROADMAP.md, ARCHITECTURE.md, decisions/ (one note per decision, numbered)
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server / Playwright MCP, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `query_source` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `query_source` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 

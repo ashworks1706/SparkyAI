@@ -140,12 +140,6 @@ fn services() -> Vec<Unit> {
             "self-hosted Firecrawl for the scraper",
             Some("http://localhost:3002"),
         ),
-        service(
-            "playwright-mcp",
-            Some("browser"),
-            "browser tools for the engine",
-            Some("http://127.0.0.1:8931"),
-        ),
     ]
 }
 

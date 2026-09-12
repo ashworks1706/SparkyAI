@@ -39,6 +39,9 @@ chars_per_token = 4
 retry_base_ms = 250
 retry_cap_ms = 8000
 max_span_value_chars = 32000
+# Characters of a thought, of the arguments, and of the result that one live progress line
+# carries to whoever is watching the turn.
+progress_detail_chars = 160
 
 # ---------------------------------------------------------------- what the model is told
 # Changing any of this changes the prompt hash. system_file beats system, which beats the
@@ -48,7 +51,9 @@ max_span_value_chars = 32000
 role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
-evidence_header = "Evidence from ASU sources. Answer only from this; cite sources by number. If it does not answer the question, say so."
+evidence_header = "Knowledge base results for this question, closest match first. These were retrieved for you before you were called. Answer from them and from tool output only, and cite the bracketed number of every entry you use."
+no_evidence_line = "The knowledge base returned nothing for this question. Search it with a tool before you answer, or say you do not have it."
+capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly. Evidence rows carry a day or date label; without today's
 # date the model cannot tell which one a question means.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
@@ -167,8 +172,7 @@ timeout_secs = 90
 poll_ms = 400
 
 # ---------------------------------------------------------------- MCP
-# playwright_url is per-machine and lives in .env. Additional servers go in [[mcp.servers]],
-# which the environment cannot express.
+# Servers go in [[mcp.servers]], which the environment cannot express. None is configured.
 [mcp]
 required_props_only = true
 max_output_chars = 6000

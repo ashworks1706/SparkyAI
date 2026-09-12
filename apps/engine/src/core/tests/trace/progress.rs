@@ -12,41 +12,74 @@ use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::policy::Decision;
-use crate::core::types::trace::progress::Progress;
+use crate::core::types::trace::progress::{Progress, ProgressStyle};
 use crate::core::types::trace::{RunStatus, TraceEvent};
+
+/// A tool start, as the loop emits it.
+fn started(tool: &str, arguments: serde_json::Value) -> TraceEvent {
+    TraceEvent::ToolStarted {
+        step: 1,
+        call_id: "c1".into(),
+        tool: tool.into(),
+        arguments,
+    }
+}
+
+/// A finished tool call, as the loop emits it.
+fn finished(tool: &str, result: Result<String, String>) -> TraceEvent {
+    TraceEvent::ToolCall {
+        step: 1,
+        call_id: "c1".into(),
+        tool: tool.into(),
+        arguments: json!({"query": "hayden hours"}),
+        result,
+        duration_ms: 3,
+    }
+}
+
+/// The line an event writes, at the default amount of detail.
+fn line(event: &TraceEvent) -> Option<String> {
+    event.progress(ProgressStyle::default())
+}
 
 #[test]
 fn events_the_caller_should_see_carry_their_own_wording() {
-    let started = TraceEvent::ToolStarted {
-        step: 1,
-        tool: "search_knowledge_base".into(),
-    };
-    assert_eq!(
-        started.progress().as_deref(),
-        Some("searching the knowledge base"),
-        "a tool the engine ships gets wording a student understands"
+    let search = line(&started(
+        "search_knowledge_base",
+        json!({"query": "hayden hours"}),
+    ))
+    .unwrap_or_default();
+    assert!(
+        search.contains("`search_knowledge_base`"),
+        "the line names the tool: {search}"
+    );
+    assert!(
+        search.contains("query: hayden hours"),
+        "and what it was asked: {search}"
+    );
+    assert!(
+        search.contains("searching the knowledge base"),
+        "in wording a student understands: {search}"
     );
 
-    let unknown = TraceEvent::ToolStarted {
-        step: 1,
-        tool: "some_new_mcp_tool".into(),
-    };
-    assert_eq!(
-        unknown.progress().as_deref(),
-        Some("running some_new_mcp_tool"),
-        "a tool nobody wrote a phrase for still reports something"
+    let unknown = line(&started("some_new_mcp_tool", json!({}))).unwrap_or_default();
+    assert!(
+        unknown.contains("`some_new_mcp_tool`") && unknown.contains("running"),
+        "a tool nobody wrote a phrase for still reports something: {unknown}"
     );
 
     let denied = TraceEvent::PolicyDecision {
         step: 1,
-        tool: "browser_click".into(),
+        tool: "announce".into(),
         decision: Decision::Deny {
             reason: "no".into(),
         },
     };
-    assert_eq!(
-        denied.progress().as_deref(),
-        Some("browser_click was not allowed")
+    assert!(
+        line(&denied)
+            .unwrap_or_default()
+            .contains("`announce` was not allowed"),
+        "{denied:?}"
     );
 
     let retrieval = TraceEvent::Retrieval {
@@ -55,66 +88,101 @@ fn events_the_caller_should_see_carry_their_own_wording() {
         chunk_ids: vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
         duration_ms: 12,
     };
-    assert_eq!(retrieval.progress().as_deref(), Some("reading 2 sources"));
+    assert!(
+        line(&retrieval)
+            .unwrap_or_default()
+            .contains("read 2 sources from the knowledge base")
+    );
 }
 
 #[test]
-fn a_model_call_a_finished_tool_and_recalled_memory_each_get_a_line() {
-    assert_eq!(
-        TraceEvent::ModelStarted { step: 1 }.progress().as_deref(),
-        Some("thinking")
+fn a_finished_tool_call_carries_its_result_and_a_failed_one_its_error() {
+    let ok = line(&finished(
+        "search_knowledge_base",
+        Ok("three passages about Hayden".into()),
+    ))
+    .unwrap_or_default();
+    assert!(ok.contains("three passages about Hayden"), "{ok}");
+    assert!(ok.contains("`search_knowledge_base`"), "{ok}");
+
+    let failed =
+        line(&finished("query_source", Err("upstream said 500".into()))).unwrap_or_default();
+    assert!(failed.contains("upstream said 500"), "{failed}");
+
+    let empty = line(&finished("query_source", Ok(String::new()))).unwrap_or_default();
+    assert!(empty.contains("nothing came back"), "{empty}");
+}
+
+#[test]
+fn detail_is_held_to_what_the_style_allows() {
+    let long = finished("search_knowledge_base", Ok("x".repeat(4_000)));
+    let short = long
+        .progress(ProgressStyle { detail_chars: 40 })
+        .unwrap_or_default();
+    assert!(short.chars().count() < 140, "{short}");
+    assert!(short.contains('\u{2026}'), "the cut is visible: {short}");
+}
+
+#[test]
+fn a_model_call_a_thought_and_recalled_memory_each_get_a_line() {
+    assert!(
+        line(&TraceEvent::ModelStarted { step: 1 })
+            .unwrap_or_default()
+            .contains("thinking")
     );
 
-    let tool = |name: &str, result: Result<String, String>| TraceEvent::ToolCall {
-        step: 1,
-        call_id: "c1".into(),
-        tool: name.into(),
-        arguments: json!({}),
-        result,
-        duration_ms: 3,
+    let thought = TraceEvent::ModelThought {
+        step: 2,
+        text: "The hours are not in what I was given,\nso I will search.".into(),
     };
-    assert_eq!(
-        tool("search_knowledge_base", Ok("three passages".into()))
-            .progress()
-            .as_deref(),
-        Some("knowledge base search finished"),
-        "the line names the tool, never the result"
-    );
-    assert_eq!(
-        tool("query_source", Err("upstream said 500".into()))
-            .progress()
-            .as_deref(),
-        Some("live ASU page check failed"),
-        "the line never carries the error text"
-    );
-    assert_eq!(
-        tool("some_new_mcp_tool", Ok(String::new()))
-            .progress()
-            .as_deref(),
-        Some("some_new_mcp_tool finished")
-    );
+    let shown = line(&thought).unwrap_or_default();
+    assert!(shown.contains("so I will search."), "{shown}");
+    assert!(!shown.contains('\n'), "a step is one line: {shown}");
 
-    assert_eq!(
-        TraceEvent::MemoryRecalled { count: 3 }
-            .progress()
-            .as_deref(),
-        Some("remembering 3 things about you")
-    );
-    assert_eq!(
-        TraceEvent::MemoryRecalled { count: 1 }
-            .progress()
-            .as_deref(),
-        Some("remembering 1 thing about you")
-    );
-    assert!(TraceEvent::MemoryRecalled { count: 0 }.progress().is_none());
-
-    let one = TraceEvent::Retrieval {
-        step: 1,
-        query: "q".into(),
-        chunk_ids: vec![uuid::Uuid::new_v4()],
-        duration_ms: 1,
+    let quiet = TraceEvent::ModelThought {
+        step: 2,
+        text: "   ".into(),
     };
-    assert_eq!(one.progress().as_deref(), Some("reading 1 source"));
+    assert!(line(&quiet).is_none(), "an empty thought says nothing");
+
+    assert!(
+        line(&TraceEvent::MemoryRecalled { count: 3 })
+            .unwrap_or_default()
+            .contains("remembering 3 things about you")
+    );
+    assert!(
+        line(&TraceEvent::MemoryRecalled { count: 1 })
+            .unwrap_or_default()
+            .contains("remembering 1 thing about you")
+    );
+    assert!(line(&TraceEvent::MemoryRecalled { count: 0 }).is_none());
+}
+
+#[test]
+fn a_tool_result_replaces_the_line_its_own_start_wrote() {
+    let start = started("search_knowledge_base", json!({}));
+    let end = finished("search_knowledge_base", Ok("three passages".into()));
+    assert_eq!(start.slot(), end.slot(), "one line, twice written");
+    assert_eq!(
+        TraceEvent::ModelStarted { step: 2 }.slot(),
+        TraceEvent::ModelThought {
+            step: 2,
+            text: "t".into()
+        }
+        .slot(),
+        "a thought lands where the thinking line was"
+    );
+    assert!(
+        TraceEvent::Retrieval {
+            step: 1,
+            query: "q".into(),
+            chunk_ids: Vec::new(),
+            duration_ms: 1,
+        }
+        .slot()
+        .is_none(),
+        "an event with no slot appends"
+    );
 }
 
 #[test]
@@ -125,7 +193,7 @@ fn bookkeeping_events_stay_out_of_the_callers_way() {
         estimated_tokens: 900,
         evidence_ids: Vec::new(),
     };
-    assert!(assembled.progress().is_none());
+    assert!(line(&assembled).is_none());
 
     let completed = TraceEvent::Completed {
         status: RunStatus::Answered,
@@ -134,23 +202,28 @@ fn bookkeeping_events_stay_out_of_the_callers_way() {
         cost_usd: 0.0,
         duration_ms: 10,
     };
-    assert!(completed.progress().is_none(), "the answer says this");
+    assert!(line(&completed).is_none(), "the answer says this");
 }
 
 #[test]
 fn the_wire_form_reads_without_knowing_the_variant() {
-    let event = TraceEvent::ToolStarted {
-        step: 2,
-        tool: "browser_navigate".into(),
-    };
-    let Some(progress) = Progress::of(&event) else {
+    let event = started("query_source", json!({"source": "library"}));
+    let Some(progress) = Progress::of(&event, ProgressStyle::default()) else {
         unreachable!("ToolStarted is user-visible")
     };
     let wire = serde_json::to_value(&progress).unwrap_or(json!(null));
 
-    // A client renders text and needs no match arm of its own; event names the kind.
-    assert_eq!(wire["text"], json!("opening the page"));
+    // A client renders text and needs no match arm of its own; event names the kind and slot
+    // says which line it lands on.
     assert_eq!(wire["event"], json!("tool_started"));
+    assert_eq!(wire["slot"], json!("tool:c1"));
+    assert!(
+        wire["text"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("checking a live ASU page"),
+        "{wire}"
+    );
 }
 
 #[tokio::test]
@@ -160,13 +233,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
     let fanout = Fanout::new(sink.clone());
     let listening = ctx().listening_to(tx);
 
-    fanout.emit(
-        &listening,
-        TraceEvent::ToolStarted {
-            step: 1,
-            tool: "search_knowledge_base".into(),
-        },
-    );
+    fanout.emit(&listening, started("search_knowledge_base", json!({})));
     fanout.emit(
         &listening,
         TraceEvent::ContextAssembled {
@@ -178,8 +245,12 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
     );
 
     assert_eq!(sink.records().len(), 2, "every event is still traced");
-    let seen = rx.try_recv().ok().map(|p: Progress| p.text);
-    assert_eq!(seen.as_deref(), Some("searching the knowledge base"));
+    let seen = rx
+        .try_recv()
+        .ok()
+        .map(|p: Progress| p.text)
+        .unwrap_or_default();
+    assert!(seen.contains("searching the knowledge base"), "{seen}");
     assert!(rx.try_recv().is_err(), "only user-visible events are sent");
 }
 

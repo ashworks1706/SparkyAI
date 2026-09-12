@@ -33,6 +33,10 @@ pub struct Templates<'a> {
     pub memory_header: &'a str,
     /// Heading above retrieved evidence.
     pub evidence_header: &'a str,
+    /// Line written when retrieval found nothing.
+    pub no_evidence_line: &'a str,
+    /// Heading above what the model may do.
+    pub capabilities_header: &'a str,
     /// Line naming the current date, with {date}.
     pub date_line: &'a str,
 }
@@ -47,8 +51,17 @@ pub const MEMORY_HEADER: &str = "What you remember about this user:";
 pub const DATE_LINE: &str = "Today is {date}. Evidence rows are labelled by day or date; read \
                              the label the question asks for, never the first value in a row.";
 /// Default heading above retrieved evidence.
-pub const EVIDENCE_HEADER: &str = "Evidence from ASU sources. Answer only from this; cite \
-                                   sources by number. If it does not answer the question, say so.";
+pub const EVIDENCE_HEADER: &str = "Knowledge base results for this question, closest match \
+                                   first. These were retrieved for you before you were called. \
+                                   Answer from them and from tool output only, and cite the \
+                                   bracketed number of every entry you use.";
+/// Default line written when retrieval found nothing.
+pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
+                                    Search it with a tool before you answer, or say you do not \
+                                    have it.";
+/// Default heading above what the model may do.
+pub const CAPABILITIES_HEADER: &str = "What you can do. Each line is a name, how it runs, and \
+                                       what it does.";
 
 impl Default for Templates<'_> {
     fn default() -> Self {
@@ -57,6 +70,8 @@ impl Default for Templates<'_> {
             role_line_no_roles: ROLE_LINE_NO_ROLES,
             memory_header: MEMORY_HEADER,
             evidence_header: EVIDENCE_HEADER,
+            no_evidence_line: NO_EVIDENCE_LINE,
+            capabilities_header: CAPABILITIES_HEADER,
             date_line: DATE_LINE,
         }
     }
