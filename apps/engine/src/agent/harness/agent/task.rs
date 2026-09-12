@@ -87,6 +87,7 @@ impl Task {
             temperature: self.cfg.temperature,
         };
         let limit = self.cfg.max_span_value_chars;
+        let prompt = truncate(&json(&request.messages), limit);
         let span = tracing::info_span!(
             "task",
             "gen_ai.operation.name" = "chat",
@@ -97,8 +98,19 @@ impl Task {
             "gen_ai.request.temperature" = f64::from(request.temperature),
             "gen_ai.usage.input_tokens" = Empty,
             "gen_ai.usage.output_tokens" = Empty,
-            "gen_ai.input.messages" = %truncate(&json(&request.messages), limit),
+            "gen_ai.input.messages" = %prompt,
             "gen_ai.output.messages" = Empty,
+            // OpenInference, read by the Phoenix trace UI.
+            "openinference.span.kind" = "LLM",
+            "input.value" = %prompt,
+            "input.mime_type" = "application/json",
+            "output.value" = Empty,
+            "output.mime_type" = "application/json",
+            "llm.model_name" = Empty,
+            "llm.token_count.prompt" = Empty,
+            "llm.token_count.completion" = Empty,
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
             "sparky.span" = "task",
             "sparky.task" = self.name,
             "sparky.tools" = "[]",
@@ -112,19 +124,7 @@ impl Task {
         let response = tokio::time::timeout(budget, call)
             .await
             .map_err(|_| ModelError::Transport(format!("{} timed out", self.name)))??;
-        span.record("gen_ai.response.model", response.model.as_str());
-        span.record(
-            "gen_ai.usage.input_tokens",
-            i64::from(response.usage.prompt_tokens),
-        );
-        span.record(
-            "gen_ai.usage.output_tokens",
-            i64::from(response.usage.completion_tokens),
-        );
-        span.record(
-            "gen_ai.output.messages",
-            truncate(&json(&[response.as_message()]), limit).as_str(),
-        );
+        super::spans::record_reply(&span, &response, limit);
         let text = response.content.trim().to_owned();
         if text.is_empty() {
             return Err(ModelError::Malformed(format!(

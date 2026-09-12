@@ -117,7 +117,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix down
 
 # Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
 prod-up *ARGS:
@@ -138,6 +138,10 @@ infra *ARGS:
 posthog *ARGS:
     ./scripts/posthog.sh
     docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep -E '^posthog(-|$)')
+
+# Phoenix trace UI on http://localhost:6006, loopback. Set SPARKY_TELEMETRY__PHOENIX_URL to export.
+phoenix *ARGS:
+    docker compose -f deploy/compose.yml --profile phoenix up -d {{ARGS}} phoenix
 
 # llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
 model *ARGS:
@@ -165,10 +169,10 @@ gpu-metrics *ARGS:
 
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile browser --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix logs -f {{ARGS}}
 
 # Build both images locally
 images:

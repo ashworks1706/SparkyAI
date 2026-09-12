@@ -102,6 +102,12 @@ impl Handler {
             "$ai_session_id" = Empty,
             "sparky.input" = %req.message,
             "sparky.output" = Empty,
+            // OpenInference, read by the Phoenix trace UI.
+            "openinference.span.kind" = "CHAIN",
+            "input.value" = %req.message,
+            "output.value" = Empty,
+            "session.id" = Empty,
+            "user.id" = %msg.author.id,
         );
         self.converse(ctx, &dest, &req, span, label).await;
     }

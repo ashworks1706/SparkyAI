@@ -7,6 +7,7 @@ mod inputs;
 pub mod prompt;
 mod retry;
 mod run;
+mod spans;
 pub mod task;
 
 use std::collections::HashSet;
@@ -146,24 +147,30 @@ impl Agent {
     /// Runs one user message to completion. One CHAIN span per request, with the conversation
     /// as the session.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
+        let asked = truncate(input, self.cfg.max_span_value_chars);
         let span = tracing::info_span!(
             "agent.run",
             "gen_ai.operation.name" = "invoke_agent",
             "gen_ai.agent.name" = "sparky",
             "$ai_session_id" = %ctx.conversation_id,
             "posthog.distinct_id" = %ctx.user_id,
+            // OpenInference, read by the Phoenix trace UI.
+            "openinference.span.kind" = "CHAIN",
+            "input.value" = %asked,
+            "output.value" = Empty,
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
             "sparky.request_id" = %ctx.request_id,
             "sparky.tenant_id" = %ctx.tenant_id,
-            "sparky.input" = %truncate(input, self.cfg.max_span_value_chars),
+            "sparky.input" = %asked,
             "sparky.output" = Empty,
             "sparky.status" = Empty,
         );
         let result = self.run_inner(ctx, input).instrument(span.clone()).await;
         if let Ok(answer) = &result {
-            span.record(
-                "sparky.output",
-                truncate(&answer.text, self.cfg.max_span_value_chars).as_str(),
-            );
+            let text = truncate(&answer.text, self.cfg.max_span_value_chars);
+            span.record("sparky.output", text.as_str());
+            span.record("output.value", text.as_str());
             span.record("sparky.status", format!("{:?}", answer.status).as_str());
         }
         result
@@ -184,6 +191,12 @@ impl Agent {
             "gen_ai.agent.name" = "sparky",
             "$ai_session_id" = %ctx.conversation_id,
             "posthog.distinct_id" = %ctx.user_id,
+            // OpenInference, read by the Phoenix trace UI.
+            "openinference.span.kind" = "CHAIN",
+            "input.value" = %pending.action.tool,
+            "output.value" = Empty,
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
             "sparky.request_id" = %ctx.request_id,
             "sparky.tenant_id" = %ctx.tenant_id,
             "sparky.input" = %pending.action.tool,
@@ -195,10 +208,9 @@ impl Agent {
             .instrument(span.clone())
             .await;
         if let Ok(answer) = &result {
-            span.record(
-                "sparky.output",
-                truncate(&answer.text, self.cfg.max_span_value_chars).as_str(),
-            );
+            let text = truncate(&answer.text, self.cfg.max_span_value_chars);
+            span.record("sparky.output", text.as_str());
+            span.record("output.value", text.as_str());
             span.record("sparky.status", format!("{:?}", answer.status).as_str());
         }
         result
@@ -477,6 +489,48 @@ impl Agent {
         Some(StepOutcome::Stop(RunStatus::Blocked, replacement, None))
     }
 
+    /// The span of one model call. Full prompt and full reply as JSON, under the gen_ai names
+    /// PostHog reads and the OpenInference names the Phoenix trace UI reads.
+    fn model_span(
+        &self,
+        ctx: &RequestContext,
+        step: u32,
+        attempt: u32,
+        request: &ModelRequest,
+    ) -> tracing::Span {
+        let limit = self.cfg.max_span_value_chars;
+        let prompt = truncate(&json(&request.messages), limit);
+        tracing::info_span!(
+            "llm",
+            "gen_ai.operation.name" = "chat",
+            "gen_ai.provider.name" = %self.cfg.provider_name,
+            "gen_ai.request.model" = %self.cfg.model_name,
+            "gen_ai.response.model" = Empty,
+            "gen_ai.request.max_tokens" = request.max_tokens,
+            "gen_ai.request.temperature" = f64::from(request.temperature),
+            "gen_ai.usage.input_tokens" = Empty,
+            "gen_ai.usage.output_tokens" = Empty,
+            "gen_ai.input.messages" = %prompt,
+            "gen_ai.output.messages" = Empty,
+            "openinference.span.kind" = "LLM",
+            "input.value" = %prompt,
+            "input.mime_type" = "application/json",
+            "output.value" = Empty,
+            "output.mime_type" = "application/json",
+            "llm.model_name" = Empty,
+            "llm.token_count.prompt" = Empty,
+            "llm.token_count.completion" = Empty,
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
+            "sparky.span" = "llm",
+            "sparky.tools" = %truncate(&json(&request.tools), limit),
+            "sparky.step" = step,
+            "sparky.attempt" = attempt,
+            "$ai_session_id" = %ctx.conversation_id,
+            "posthog.distinct_id" = %ctx.user_id,
+        )
+    }
+
     async fn call_model(
         &self,
         ctx: &RequestContext,
@@ -499,27 +553,8 @@ impl Agent {
                 temperature: self.cfg.temperature,
             };
             let started = Instant::now();
-            // Full prompt and full reply as JSON.
             let limit = self.cfg.max_span_value_chars;
-            let span = tracing::info_span!(
-                "llm",
-                "gen_ai.operation.name" = "chat",
-                "gen_ai.provider.name" = %self.cfg.provider_name,
-                "gen_ai.request.model" = %self.cfg.model_name,
-                "gen_ai.response.model" = Empty,
-                "gen_ai.request.max_tokens" = request.max_tokens,
-                "gen_ai.request.temperature" = f64::from(request.temperature),
-                "gen_ai.usage.input_tokens" = Empty,
-                "gen_ai.usage.output_tokens" = Empty,
-                "gen_ai.input.messages" = %truncate(&json(&request.messages), limit),
-                "gen_ai.output.messages" = Empty,
-                "sparky.span" = "llm",
-                "sparky.tools" = %truncate(&json(&request.tools), limit),
-                "sparky.step" = step,
-                "sparky.attempt" = attempt,
-                "$ai_session_id" = %ctx.conversation_id,
-                "posthog.distinct_id" = %ctx.user_id,
-            );
+            let span = self.model_span(ctx, step, attempt, &request);
             let result = tokio::select! {
                 () = ctx.cancel.cancelled() => Err(ModelError::Cancelled),
                 outcome = tokio::time::timeout(ctx.remaining(), deps.model.generate(ctx, request).instrument(span.clone())) => {
@@ -528,17 +563,7 @@ impl Agent {
             };
             match result {
                 Ok(response) => {
-                    span.record("gen_ai.response.model", response.model.as_str());
-                    span.record(
-                        "gen_ai.usage.input_tokens",
-                        i64::from(response.usage.prompt_tokens),
-                    );
-                    span.record(
-                        "gen_ai.usage.output_tokens",
-                        i64::from(response.usage.completion_tokens),
-                    );
-                    let shown = json(&[response.as_message()]);
-                    span.record("gen_ai.output.messages", truncate(&shown, limit).as_str());
+                    spans::record_reply(&span, &response, limit);
                     deps.trace.emit(
                         ctx,
                         TraceEvent::ModelCall {

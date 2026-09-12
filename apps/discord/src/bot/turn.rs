@@ -59,10 +59,10 @@ impl Handler {
             Ok(resp) => {
                 let conversation = resp.conversation_id.to_string();
                 span.record("$ai_session_id", conversation.as_str());
-                span.record(
-                    "sparky.output",
-                    resp.text.chars().take(2_000).collect::<String>().as_str(),
-                );
+                span.record("session.id", conversation.as_str());
+                let shown = resp.text.chars().take(2_000).collect::<String>();
+                span.record("sparky.output", shown.as_str());
+                span.record("output.value", shown.as_str());
                 let latency_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 self.record(
                     turn_event("discord_answer", req)

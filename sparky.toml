@@ -189,8 +189,11 @@ dir = ".sparky/traces"
 max_file_bytes = 0             # 0 removes the limit
 retention_hours = 0            # 0 keeps them forever
 
-# Spans go to PostHog over OTLP/HTTP, to both paths. host is per-machine and project_token is
-# a secret; both live in .env. An empty project_token disables export.
+# Spans go to PostHog over OTLP/HTTP, to both paths, and to Phoenix at phoenix_url plus
+# /v1/traces. host and phoenix_url are per-machine and project_token is a secret; all three live
+# in .env. Each destination is independent: an empty project_token turns PostHog off, an empty
+# phoenix_url turns Phoenix off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with
+# just phoenix running to read a conversation as a trace tree.
 [telemetry]
 sample_ratio = 1.0
 export_timeout_secs = 10

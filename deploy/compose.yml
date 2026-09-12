@@ -74,6 +74,7 @@ services:
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__HOST: http://posthog
+      SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
       SPARKY_MCP__PLAYWRIGHT_URL: http://playwright-mcp:8931/mcp
     ports: ["8080:8080"]
     depends_on:
@@ -88,6 +89,7 @@ services:
     environment:
       SPARKY_ENGINE__BASE_URL: http://engine:8080
       SPARKY_TELEMETRY__HOST: http://posthog
+      SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
     depends_on: [engine]
     restart: unless-stopped
 
@@ -102,6 +104,7 @@ services:
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
       SPARKY_TELEMETRY__HOST: http://posthog
+      SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped
@@ -282,6 +285,18 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     volumes: [miniodata:/data]
     ports: ["9000:9000", "9001:9001"]
+
+  # Trace UI (Arize Phoenix) on http://localhost:6006, loopback only. Started by just phoenix.
+  # It reads the OpenInference attributes the apps set beside the gen_ai ones. Holds full
+  # prompts and replies and has no authentication.
+  phoenix:
+    image: arizephoenix/phoenix:version-20.11.0
+    profiles: [phoenix]
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    volumes: [phoenixdata:/data]
+    ports: ["127.0.0.1:6006:6006"]
+    restart: unless-stopped
 
   # Metrics store. Scrapes llama-server; ad-hoc queries at http://localhost:9090.
   prometheus:
@@ -1111,6 +1126,7 @@ volumes:
   miniodata:
   modelcache:
   firecrawldata:
+  phoenixdata:
   promdata:
   grafanadata:
   posthog-postgres-data:

@@ -117,11 +117,18 @@ impl Agent {
             Some(retriever) => {
                 let started = Instant::now();
                 let query = RetrievalQuery::new(input, self.cfg.retrieval_top_k);
+                let asked = truncate(input, self.cfg.max_span_value_chars);
                 let span = tracing::info_span!(
                     "retrieve",
                     "gen_ai.operation.name" = "retrieval",
-                    "sparky.input" = %truncate(input, self.cfg.max_span_value_chars),
+                    "sparky.input" = %asked,
                     "sparky.output" = Empty,
+                    // OpenInference, read by the Phoenix trace UI.
+                    "openinference.span.kind" = "RETRIEVER",
+                    "input.value" = %asked,
+                    "output.value" = Empty,
+                    "session.id" = %ctx.conversation_id,
+                    "user.id" = %ctx.user_id,
                     "$ai_session_id" = %ctx.conversation_id,
                     "posthog.distinct_id" = %ctx.user_id,
                 );
@@ -143,10 +150,9 @@ impl Agent {
                             })
                         })
                         .collect();
-                    span.record(
-                        "sparky.output",
-                        truncate(&json(&listing), self.cfg.max_span_value_chars).as_str(),
-                    );
+                    let shown = truncate(&json(&listing), self.cfg.max_span_value_chars);
+                    span.record("sparky.output", shown.as_str());
+                    span.record("output.value", shown.as_str());
                     deps.trace.emit(
                         ctx,
                         TraceEvent::Retrieval {

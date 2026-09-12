@@ -69,11 +69,13 @@ class Firecrawl(BaseModel):
 
 
 class Telemetry(BaseModel):
-    """OTLP/HTTP span export to PostHog. An empty host or project token disables export."""
+    """OTLP/HTTP span export to PostHog and Phoenix. Each destination is independent: an empty
+    host or project token turns PostHog off, an empty phoenix_url turns Phoenix off."""
 
     host: str = "http://localhost:8010"
     project_token: SecretStr = SecretStr("")
     traces_path: str = "/i/v1/traces"
+    phoenix_url: str = ""
     export_timeout_secs: float = 10.0
 
 

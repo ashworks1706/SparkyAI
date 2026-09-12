@@ -189,13 +189,22 @@ impl Agent {
             .timeout_secs
             .map_or(self.cfg.tool_timeout, Duration::from_secs);
         let limit = declared.min(ctx.remaining());
+        let arguments = redact(&call.arguments);
         let span = tracing::info_span!(
             "tool",
             "gen_ai.operation.name" = "execute_tool",
             "gen_ai.tool.name" = %call.name,
             "gen_ai.tool.call.id" = %call.id,
-            "gen_ai.tool.call.arguments" = %redact(&call.arguments),
+            "gen_ai.tool.call.arguments" = %arguments,
             "gen_ai.tool.call.result" = Empty,
+            // OpenInference, read by the Phoenix trace UI.
+            "openinference.span.kind" = "TOOL",
+            "tool.name" = %call.name,
+            "tool.call_id" = %call.id,
+            "input.value" = %arguments,
+            "output.value" = Empty,
+            "session.id" = %ctx.conversation_id,
+            "user.id" = %ctx.user_id,
             "sparky.step" = step,
             "$ai_session_id" = %ctx.conversation_id,
             "posthog.distinct_id" = %ctx.user_id,
@@ -235,16 +244,14 @@ impl Agent {
         );
         match &content {
             Ok(text) => {
-                span.record(
-                    "gen_ai.tool.call.result",
-                    truncate(&redact_text(text), 4_000).as_str(),
-                );
+                let shown = truncate(&redact_text(text), 4_000);
+                span.record("gen_ai.tool.call.result", shown.as_str());
+                span.record("output.value", shown.as_str());
             }
             Err(error) => {
-                span.record(
-                    "gen_ai.tool.call.result",
-                    format!("error: {error}").as_str(),
-                );
+                let shown = format!("error: {error}");
+                span.record("gen_ai.tool.call.result", shown.as_str());
+                span.record("output.value", shown.as_str());
             }
         }
         (content, found)

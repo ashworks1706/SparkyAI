@@ -209,6 +209,8 @@ pub struct Telemetry {
     pub traces_path: String,
     /// Path of the OTLP AI endpoint, joined to host.
     pub ai_path: String,
+    /// Phoenix base URL for the trace UI; unset or empty exports nothing there.
+    pub phoenix_url: Option<String>,
     /// gen_ai.provider.name on model spans.
     pub provider_name: String,
     /// service.name on exported spans. Defaults to the name of the binary.
@@ -229,6 +231,7 @@ impl Default for Telemetry {
             project_token: SecretString::from(""),
             traces_path: "/i/v1/traces".into(),
             ai_path: "/i/v0/ai/otel".into(),
+            phoenix_url: None,
             provider_name: "llama.cpp".into(),
             service_name: None,
             sample_ratio: 1.0,

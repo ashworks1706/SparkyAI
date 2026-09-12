@@ -945,3 +945,63 @@ fn discord_spans_reach_both_paths_with_the_bearer_token() {
         "{got:?}"
     );
 }
+
+#[test]
+fn discord_spans_reach_phoenix_without_a_token() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::{phoenix_target, provider};
+    use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
+
+    let seen = Seen::default();
+    let addr = serve(std::sync::Arc::clone(&seen));
+    assert!(addr.is_some());
+    let Some(addr) = addr else {
+        return;
+    };
+    // PostHog off, Phoenix on: the two destinations are independent.
+    let cfg = Telemetry {
+        host: None,
+        phoenix_url: Some(format!(" http://{addr}/ ")),
+        ..Telemetry::default()
+    };
+    assert_eq!(
+        phoenix_target(&cfg),
+        Some(format!("http://{addr}/v1/traces"))
+    );
+    let built = provider(&cfg, "discord-test", "test");
+    assert!(built.as_ref().is_ok_and(Option::is_some), "{built:?}");
+    let Ok(Some(provider)) = built else {
+        return;
+    };
+    let mut span = provider.tracer("discord-test").start("probe");
+    span.end();
+    let flushed = provider.force_flush();
+    assert!(flushed.is_ok(), "{flushed:?}");
+
+    let got = wait_for(&seen, 1);
+    let _ = provider.shutdown();
+    assert_eq!(
+        got.iter().map(|(p, _, _)| p.as_str()).collect::<Vec<_>>(),
+        ["/v1/traces"]
+    );
+    assert!(got.iter().all(|(_, auth, _)| auth.is_empty()), "{got:?}");
+}
+
+#[test]
+fn export_is_off_only_when_every_destination_is_unset() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::provider;
+
+    let off = Telemetry {
+        host: None,
+        phoenix_url: None,
+        ..Telemetry::default()
+    };
+    assert!(matches!(provider(&off, "d", "test"), Ok(None)));
+    let phoenix_only = Telemetry {
+        host: None,
+        phoenix_url: Some("http://localhost:6006".into()),
+        ..Telemetry::default()
+    };
+    assert!(matches!(provider(&phoenix_only, "d", "test"), Ok(Some(_))));
+}

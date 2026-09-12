@@ -92,6 +92,9 @@ prompt messages and `gen_ai.output.messages` the reply. The span uuid is the exa
 `$ai_session_id` the session; `posthog.distinct_id` is read into the example and then cleared by
 `redact_example` before the raw JSONL is written.
 
+Reading one conversation as a tree is Phoenix's job, running beside this:
+`docs/decisions/0004-phoenix-for-trace-reading.md`.
+
 The AI events are unreadable in a self-hosted stack. `capture-ai` accepts them and produces to the
 `events_plugin_ingestion_ai` Kafka lane, and no service in the stack consumes that lane, so
 `$ai_generation` never reaches ClickHouse and the LLM analytics views stay empty. Checked on

@@ -23,7 +23,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Vector store | pgvector | same database |
 | Cache, queue | Redis 7 | `apps/engine` |
 | Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
-| Observability | OpenTelemetry and product events → PostHog, self-hosted; logs under `.sparky/` | every app; `deploy/compose.yml` profile `posthog`; `docs/decisions/0003-posthog.md` |
+| Observability | OpenTelemetry and product events → PostHog, self-hosted; the same spans → Phoenix for reading one conversation; logs under `.sparky/` | every app; `deploy/compose.yml` profiles `posthog` and `phoenix`; `docs/decisions/0003-posthog.md`, `docs/decisions/0004-phoenix-for-trace-reading.md` |
 | Config | `sparky.toml` (committed), then `SPARKY_*` env vars from `.env`, which win | `sparky.toml`, `config.rs`, `settings.py`, `.env.example` |
 | Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
@@ -111,6 +111,9 @@ flowchart LR
     APP -->|OTLP| PX[PostHog]
     BOT -->|OTLP · events| PX
     ING -->|OTLP| PX
+    APP -->|OTLP| PH[Phoenix]
+    BOT -->|OTLP| PH
+    ING -->|OTLP| PH
 ```
 
 Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
@@ -482,6 +485,7 @@ Two forms of it:
 
 - **JSONL** (`.sparky/traces/<request_id>.jsonl`): complete local replay records.
 - **PostHog spans**: cross-process traces joined with W3C `traceparent`, exported over OTLP/HTTP to both the traces path and the AI path. Spans carry `gen_ai.*` attributes; each model call becomes an `$ai_generation` with the prompt, reply, model, and usage, tied to the user (`posthog.distinct_id`) and the conversation (`$ai_session_id`). Training export reads these. Retrieval, tool, policy, and scraper spans carry their structured results. The attribute contract is `docs/decisions/0003-posthog.md`.
+- **Phoenix spans**: the same spans, exported to `telemetry.phoenix_url` plus `/v1/traces` with no authentication, read as a trace tree of one conversation. They carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those; see `docs/decisions/0004-phoenix-for-trace-reading.md`. Each destination is independent: either can be off.
 
 Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
 

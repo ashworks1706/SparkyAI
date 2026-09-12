@@ -120,6 +120,8 @@ pub struct Telemetry {
     pub traces_path: String,
     /// Path of the OTLP LLM observability endpoint under host.
     pub ai_path: String,
+    /// Phoenix base URL for the trace UI; unset or empty exports nothing there.
+    pub phoenix_url: Option<String>,
     /// The service.name on exported spans. Defaults to discord.
     pub service_name: Option<String>,
     /// Fraction of traces exported, 0.0 to 1.0.
@@ -137,6 +139,7 @@ impl Default for Telemetry {
             project_token: SecretString::from(String::new()),
             traces_path: "/i/v1/traces".into(),
             ai_path: "/i/v0/ai/otel".into(),
+            phoenix_url: None,
             service_name: None,
             sample_ratio: 1.0,
             export_timeout_secs: 10,

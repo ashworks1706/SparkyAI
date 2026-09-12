@@ -11,7 +11,7 @@ fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Un
         id: id.into(),
         group: match profile {
             Some("model") => Group::Models,
-            Some("posthog" | "metrics" | "gpu-metrics" | "db") | None => Group::Infra,
+            Some("posthog" | "phoenix" | "metrics" | "gpu-metrics" | "db") | None => Group::Infra,
             Some(_) => Group::Tools,
         },
         kind: Kind::Service {
@@ -91,6 +91,12 @@ fn services() -> Vec<Unit> {
             Some("posthog"),
             "PostHog UI and ingestion, brings up the posthog stack",
             Some("http://localhost:8010"),
+        ),
+        service(
+            "phoenix",
+            Some("phoenix"),
+            "trace UI: one conversation, its tool calls and timings",
+            Some("http://localhost:6006"),
         ),
         service(
             "pgweb",

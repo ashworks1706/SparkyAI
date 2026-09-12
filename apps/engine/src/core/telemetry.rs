@@ -1,6 +1,8 @@
-//! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog.
+//! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix.
 //! Every span goes to the traces path and the AI path of the telemetry host, authenticated with
-//! the project token. An empty host or token disables export.
+//! the project token, and to the Phoenix path of phoenix_url without authentication. Each
+//! destination is independent: an empty host or token turns PostHog off, an empty phoenix_url
+//! turns Phoenix off, and export runs while either is set.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -27,31 +29,44 @@ impl Drop for Guard {
     }
 }
 
-/// The host without a trailing slash, or None when it is unset or empty.
-fn host(cfg: &Telemetry) -> Option<&str> {
-    cfg.host
-        .as_deref()
-        .map(|h| h.trim().trim_end_matches('/'))
+/// The OTLP/HTTP traces path, fixed by the protocol. Phoenix serves it under phoenix_url.
+const OTLP_TRACES_PATH: &str = "/v1/traces";
+
+/// A base URL without a trailing slash, or None when it is unset or empty.
+fn base(url: Option<&str>) -> Option<&str> {
+    url.map(|h| h.trim().trim_end_matches('/'))
         .filter(|h| !h.is_empty())
 }
 
-/// Why export is off, or None when the host and the token are both set.
-fn disabled(cfg: &Telemetry) -> Option<&'static str> {
-    if host(cfg).is_none() {
-        return Some("telemetry.host is empty; trace export is off");
-    }
+/// The PostHog endpoints, or None when the host or the token is empty.
+fn posthog_urls(cfg: &Telemetry) -> Option<[String; 2]> {
+    let host = base(cfg.host.as_deref())?;
     if cfg.project_token.expose_secret().trim().is_empty() {
-        return Some("telemetry.project_token is empty; trace export is off");
+        return None;
     }
-    None
+    Some([
+        format!("{host}{}", cfg.traces_path),
+        format!("{host}{}", cfg.ai_path),
+    ])
 }
 
-/// One OTLP/HTTP protobuf exporter to url, carrying the project token as a bearer token.
-fn exporter(cfg: &Telemetry, url: String) -> anyhow::Result<SpanExporter> {
-    let headers = HashMap::from([(
-        "Authorization".to_owned(),
-        format!("Bearer {}", cfg.project_token.expose_secret().trim()),
-    )]);
+/// The Phoenix endpoint, or None when phoenix_url is empty.
+fn phoenix_url(cfg: &Telemetry) -> Option<String> {
+    base(cfg.phoenix_url.as_deref()).map(|url| format!("{url}{OTLP_TRACES_PATH}"))
+}
+
+/// Why export is off, or None when at least one destination is configured.
+fn disabled(cfg: &Telemetry) -> Option<&'static str> {
+    (posthog_urls(cfg).is_none() && phoenix_url(cfg).is_none())
+        .then_some("telemetry.host, telemetry.project_token and telemetry.phoenix_url are unset; trace export is off")
+}
+
+/// One OTLP/HTTP protobuf exporter to url, with the given headers.
+fn exporter(
+    cfg: &Telemetry,
+    url: String,
+    headers: HashMap<String, String>,
+) -> anyhow::Result<SpanExporter> {
     Ok(SpanExporter::builder()
         .with_http()
         .with_protocol(Protocol::HttpBinary)
@@ -61,21 +76,34 @@ fn exporter(cfg: &Telemetry, url: String) -> anyhow::Result<SpanExporter> {
         .build()?)
 }
 
-/// The tracer provider exporting every span to host plus traces_path and host plus ai_path,
-/// or None when export is off. Build it and shut it down outside a tokio runtime.
+/// The bearer header PostHog authenticates with.
+fn bearer(cfg: &Telemetry) -> HashMap<String, String> {
+    HashMap::from([(
+        "Authorization".to_owned(),
+        format!("Bearer {}", cfg.project_token.expose_secret().trim()),
+    )])
+}
+
+/// The tracer provider exporting every span to each configured destination, or None when none
+/// is configured. Build it and shut it down outside a tokio runtime.
 pub fn provider(
     cfg: &Telemetry,
     service: &str,
     env: &str,
 ) -> anyhow::Result<Option<SdkTracerProvider>> {
-    let Some(host) = host(cfg).filter(|_| disabled(cfg).is_none()) else {
+    if disabled(cfg).is_some() {
         return Ok(None);
-    };
-    let traces = exporter(cfg, format!("{host}{}", cfg.traces_path))?;
-    let ai = exporter(cfg, format!("{host}{}", cfg.ai_path))?;
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(traces)
-        .with_batch_exporter(ai)
+    }
+    let mut builder = SdkTracerProvider::builder();
+    if let Some(urls) = posthog_urls(cfg) {
+        for url in urls {
+            builder = builder.with_batch_exporter(exporter(cfg, url, bearer(cfg))?);
+        }
+    }
+    if let Some(url) = phoenix_url(cfg) {
+        builder = builder.with_batch_exporter(exporter(cfg, url, HashMap::new())?);
+    }
+    let provider = builder
         // Ratio sampling keeps whole traces: a sampled root carries its children.
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             cfg.sample_ratio,

@@ -23,6 +23,7 @@ just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio
 just posthog          # self-hosted PostHog on :8010: traces, LLM generations, product events
+just phoenix          # Phoenix trace UI on :6006: one conversation as a tree
 just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper

@@ -108,9 +108,59 @@ fn the_run_span_is_an_agent_invocation() {
     );
     assert_eq!(attr(run, "sparky.output").as_deref(), Some("hello"));
     assert!(attr(run, "sparky.status").is_some());
-    assert!(
-        spans
-            .iter()
-            .all(|s| attr(s, "openinference.span.kind").is_none())
+}
+
+#[test]
+fn every_span_carries_the_openinference_attributes_phoenix_reads() {
+    let spans = spans_of_one_turn();
+    let ctx = ctx();
+    for (name, kind) in [("agent.run", "CHAIN"), ("llm", "LLM")] {
+        let span = spans.iter().find(|s| s.name == name);
+        assert!(
+            span.is_some(),
+            "{:?}",
+            spans.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
+        let Some(span) = span else {
+            return;
+        };
+        assert_eq!(
+            attr(span, "openinference.span.kind").as_deref(),
+            Some(kind),
+            "{name}"
+        );
+        assert_eq!(
+            attr(span, "session.id").as_deref(),
+            attr(span, "$ai_session_id").as_deref(),
+            "{name}"
+        );
+        assert_eq!(attr(span, "user.id").as_deref(), Some(ctx.user_id.as_str()));
+        assert!(
+            attr(span, "input.value").is_some_and(|v| !v.is_empty()),
+            "{name} input"
+        );
+        assert!(
+            attr(span, "output.value").is_some_and(|v| !v.is_empty()),
+            "{name} output"
+        );
+    }
+    let llm = spans.iter().find(|s| s.name == "llm");
+    let Some(llm) = llm else {
+        return;
+    };
+    // The Phoenix keys carry the same values as the gen_ai ones.
+    assert_eq!(attr(llm, "llm.model_name").as_deref(), Some("test"));
+    assert_eq!(attr(llm, "llm.token_count.prompt").as_deref(), Some("10"));
+    assert_eq!(
+        attr(llm, "llm.token_count.completion").as_deref(),
+        Some("5")
+    );
+    assert_eq!(
+        attr(llm, "input.value").as_deref(),
+        attr(llm, "gen_ai.input.messages").as_deref()
+    );
+    assert_eq!(
+        attr(llm, "output.value").as_deref(),
+        attr(llm, "gen_ai.output.messages").as_deref()
     );
 }

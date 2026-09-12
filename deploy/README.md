@@ -38,11 +38,20 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 ## Observability
 
 - Traces, LLM analytics, product events: self-hosted PostHog, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__HOST` (default `http://localhost:8010`; compose sets `http://posthog`) with `SPARKY_TELEMETRY__PROJECT_TOKEN`; an empty token disables export. Model spans become `$ai_generation` events; a Discord conversation is one `$ai_session_id`. Contract: `docs/decisions/0003-posthog.md`.
+- Reading one conversation: Phoenix, below. The same spans also go to `SPARKY_TELEMETRY__PHOENIX_URL` when it is set, and the two destinations are independent. Contract: `docs/decisions/0004-phoenix-for-trace-reading.md`.
 - Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
 - Database: `just db` starts pgweb on http://localhost:8081, loopback only. It browses the same database the engine reads and writes, so a change made there is a change to live data. `chunks.embedding` is a 1024-dimension vector and does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback only. They scrape `llama-server`, which exports Prometheus format on its own port; `chat` and `embed` run with `--metrics`. On a GPU host add `just gpu-metrics` for the utilisation, VRAM and temperature panels. The exporter shells out to `nvidia-smi`, so it runs under the nvidia container runtime with the `utility` driver capability rather than binding the driver library in by path.
 
-PostHog holds one `$ai_generation` per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. Prometheus holds server-side time series: throughput, queue depth, batching.
+PostHog holds one `$ai_generation` per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. Prometheus holds server-side time series: throughput, queue depth, batching. Phoenix holds the same spans as a trace tree: one conversation, its model calls, tool calls and retrievals, in order and with timings.
+
+### Phoenix
+
+```bash
+just phoenix       # trace UI on http://localhost:6006, loopback
+```
+
+One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata` volume, UI and OTLP endpoint on the same port. Export is off until `SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006` is in `.env`, so an app started without Phoenix never retries a dead endpoint. For the compose apps set `SPARKY_PHOENIX_URL=http://phoenix:6006`, which compose passes through. Spans carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those. It has no authentication and holds full prompts and replies, so in production it has no host port; reach it over a tunnel.
 
 ### PostHog
 

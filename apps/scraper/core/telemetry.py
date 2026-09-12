@@ -1,6 +1,7 @@
-"""OpenTelemetry export over OTLP/HTTP protobuf to the PostHog traces endpoint. One span per
-source run and per live query, with sparky attributes. An empty host or project token disables
-export."""
+"""OpenTelemetry export over OTLP/HTTP protobuf to the PostHog traces endpoint and to Phoenix.
+One span per source run and per live query, with sparky attributes. Each destination is
+independent: an empty host or project token turns PostHog off, an empty phoenix_url turns
+Phoenix off."""
 
 from __future__ import annotations
 
@@ -18,6 +19,9 @@ from scraper.core.settings import Telemetry, settings
 
 log = structlog.get_logger()
 
+# The OTLP/HTTP traces path, fixed by the protocol. Phoenix serves it under phoenix_url.
+OTLP_TRACES_PATH = "/v1/traces"
+
 _provider: TracerProvider | None = None
 
 
@@ -31,7 +35,7 @@ class ExportTarget:
 
 
 def export_target(cfg: Telemetry) -> ExportTarget | None:
-    """The traces endpoint and bearer header, or None when host or token is empty."""
+    """The PostHog traces endpoint and bearer header, or None when host or token is empty."""
     host = cfg.host.strip().rstrip("/")
     token = cfg.project_token.get_secret_value().strip()
     if not host or not token:
@@ -42,6 +46,21 @@ def export_target(cfg: Telemetry) -> ExportTarget | None:
         headers={"Authorization": f"Bearer {token}"},
         timeout_secs=cfg.export_timeout_secs,
     )
+
+
+def phoenix_target(cfg: Telemetry) -> ExportTarget | None:
+    """The Phoenix traces endpoint, or None when phoenix_url is empty."""
+    url = cfg.phoenix_url.strip().rstrip("/")
+    if not url:
+        return None
+    return ExportTarget(
+        endpoint=url + OTLP_TRACES_PATH, headers={}, timeout_secs=cfg.export_timeout_secs
+    )
+
+
+def export_targets(cfg: Telemetry) -> list[ExportTarget]:
+    """Every configured destination, in the order spans are exported to them."""
+    return [t for t in (export_target(cfg), phoenix_target(cfg)) if t is not None]
 
 
 def exporter(target: ExportTarget) -> OTLPSpanExporter:
@@ -56,12 +75,16 @@ def init() -> None:
     global _provider
     if _provider is not None:
         return
-    target = export_target(settings().telemetry)
-    if target is None:
-        log.warning("telemetry.disabled", reason="telemetry host or project token is empty")
+    targets = export_targets(settings().telemetry)
+    if not targets:
+        log.warning(
+            "telemetry.disabled",
+            reason="telemetry host, project token and phoenix url are empty",
+        )
         return
     _provider = TracerProvider(resource=Resource.create({"service.name": "scraper"}))
-    _provider.add_span_processor(BatchSpanProcessor(exporter(target)))
+    for target in targets:
+        _provider.add_span_processor(BatchSpanProcessor(exporter(target)))
     trace.set_tracer_provider(_provider)
     atexit.register(shutdown)
 

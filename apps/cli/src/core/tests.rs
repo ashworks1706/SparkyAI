@@ -66,11 +66,19 @@ fn posthog_is_an_infra_service_behind_its_profile() {
                 service: "posthog".into(),
                 profile: Some("posthog".into()),
             }));
-    assert!(
-        units
-            .iter()
-            .all(|u| !u.id.contains("phoenix") && !u.hint.to_lowercase().contains("phoenix"))
-    );
+}
+
+#[test]
+fn phoenix_is_an_infra_service_behind_its_profile() {
+    let units = catalog();
+    let phoenix = units.iter().find(|u| u.id == "phoenix");
+    assert!(phoenix.is_some_and(|u| u.group == Group::Infra
+        && u.url.as_deref() == Some("http://localhost:6006")
+        && u.kind
+            == Kind::Service {
+                service: "phoenix".into(),
+                profile: Some("phoenix".into()),
+            }));
 }
 
 #[test]
