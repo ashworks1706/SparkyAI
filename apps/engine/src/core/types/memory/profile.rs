@@ -1,8 +1,4 @@
-//! ProfileEntity, ProfileNode, ProfileRelation, ProfileFact, ProfileError: the profile graph.
-//! ForgetRequest, ForgetResponse, ListRequest, ListResponse: the /profile wire shapes.
-//!
-//! A fact is what extraction produces from one turn. Storing it writes a node per entity and an
-//! edge for the relation between them, so recall can start from a relation.
+//! The profile graph types and /profile wire shapes; a fact is a node and edge per entity.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

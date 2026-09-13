@@ -1,6 +1,4 @@
 //! What the PostgreSQL adapters share: the pool, the error mapping, and the literal helpers.
-//!
-//! Each adapter lives in a sibling module and is re-exported here.
 
 use std::time::Duration;
 

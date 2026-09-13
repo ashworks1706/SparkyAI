@@ -1,5 +1,4 @@
-# Production override: prebuilt images from GHCR, no build, no host ports except engine.
-# Usage: docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d
+# Production override: GHCR images, no builds, only the engine port published.
 services:
   engine:
     build: !reset null

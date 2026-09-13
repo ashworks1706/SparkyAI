@@ -4,9 +4,7 @@ pub mod knowledge;
 pub mod mcp;
 pub mod sandbox;
 
-/// The structured payload a tool hands back beside its text.
-///
-/// A value that will not serialize logs an error and yields None; the text is still returned.
+/// The structured payload a tool hands back beside its text; unserializable values log, yield None.
 pub fn structured<T: serde::Serialize>(value: &T) -> Option<serde_json::Value> {
     match serde_json::to_value(value) {
         Ok(value) => Some(value),

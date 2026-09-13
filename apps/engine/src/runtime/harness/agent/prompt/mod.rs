@@ -52,8 +52,6 @@ impl From<&crate::core::config::Prompt> for PromptText {
 
 impl PromptText {
     /// Today's date in the configured offset, as the date line renders it.
-    ///
-    /// Config::validate bounds the offset. An out of range offset renders in UTC with a warning.
     pub fn today(&self) -> String {
         const FORMAT: &str = "%A %-d %B %Y";
         let now = chrono::Utc::now();

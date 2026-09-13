@@ -51,8 +51,7 @@ impl Evidence {
         }
     }
 
-    /// One citation per source, best first. Chunks sharing a url, or a source id when there
-    /// is no url, collapse into the first of them.
+    /// One citation per source, best first. Chunks sharing a url or source id collapse into one.
     pub fn citations(evidence: &[Evidence]) -> Vec<Citation> {
         let mut seen = std::collections::HashSet::new();
         evidence

@@ -3,9 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Fixed-window per-user rate limit.
-///
-/// A window is a whole minute and resets for everyone at once.
+/// Fixed-window per-user rate limit. A window is a whole minute and resets for everyone at once.
 #[derive(Clone)]
 pub struct RateLimiter {
     per_min: u32,

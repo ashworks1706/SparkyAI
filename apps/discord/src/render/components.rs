@@ -1,7 +1,4 @@
 //! Buttons the bot puts on its own messages, and the custom_id that identifies them.
-//!
-//! A component is described here as a ButtonSpec and turned into serenity builders at the edge.
-//! Adding a button is a CustomId variant, a row that includes it, and an arm in the bot dispatch.
 
 use serenity::all::{ButtonStyle, CreateActionRow, CreateButton};
 use uuid::Uuid;
@@ -45,8 +42,7 @@ impl Action {
     }
 }
 
-/// Everything a pressed button has to tell the bot. Discord caps custom_id at 100 bytes. Uuids
-/// are written without dashes.
+/// Everything a pressed button has to tell the bot. Discord caps custom_id at 100 bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CustomId {
     /// Answers a held action.
@@ -80,8 +76,7 @@ impl CustomId {
         }
     }
 
-    /// Whether presser may press this button. Forget buttons belong to the user who asked;
-    /// the engine checks the caller of a confirmation itself.
+    /// Whether presser may press this button. Forget buttons belong to the user who asked.
     pub fn may_press(&self, presser: u64) -> bool {
         match self {
             Self::Confirm { .. } => true,
@@ -157,7 +152,6 @@ pub enum ButtonSpec {
 }
 
 /// The buttons a reply should carry: the approval answers, then the sources behind the answer.
-/// Empty when the reply neither asks nor cites anything.
 pub fn rows_for(resp: &ChatResponse) -> Vec<Vec<ButtonSpec>> {
     let mut rows = Vec::new();
     if let Some(confirmation) = &resp.confirmation {

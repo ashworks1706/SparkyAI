@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The Rust apps must not depend on each other; discord and cli talk to engine over HTTP only.
+# Rust apps don't depend on each other; discord and cli talk to engine over HTTP.
 set -euo pipefail
 meta=$(cargo metadata --format-version 1 --no-deps)
 bad=$(jq -r '.packages[] | .name as $n | .dependencies[] | select(.path != null) | "\($n) -> \(.name)"' <<<"$meta")

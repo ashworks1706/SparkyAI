@@ -1,8 +1,4 @@
--- One queue for everything the scraper does: live queries the engine queues, the indexing of
--- their results, and scheduled source runs. A claim takes the highest priority first, then the
--- oldest. The engine inserts at the default priority; the scraper queues its own work below it.
---
--- Adding a column with a constant default does not rewrite jobs.
+-- One queue for everything the scraper does. A claim takes highest priority, then oldest first.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

@@ -1,5 +1,4 @@
-//! A public request loads no personal memory; a private one does, and its answer says which
-//! memories the prompt carried.
+//! A public request loads no personal memory; a private one does and says which memories it used.
 
 use std::sync::Arc;
 
@@ -7,8 +6,7 @@ use crate::core::tests::support::{Known, Recalling, Scripted, agent_recalling, c
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::conversation::Visibility;
 
-/// What one turn recalled: memory store calls, profile graph calls, and the memories the
-/// answer reports.
+/// What one turn recalled: memory store calls, profile graph calls, memories the answer reports.
 async fn recalls(visibility: Visibility, recall_in_public: bool) -> (usize, usize, Vec<String>) {
     let memory = Arc::new(Recalling::default());
     let graph = Arc::new(Known::default());

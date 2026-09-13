@@ -41,8 +41,7 @@ _FIELDS = " | "
 
 
 def extract_text(html: bytes | str, *, main_only: bool = True, keep_forms: bool = False) -> str:
-    """Visible text with one block per line, navigation and boilerplate removed. keep_forms
-    keeps the text of forms, for pages that render their results inside one."""
+    """Visible text, one block per line, nav/boilerplate gone; keep_forms keeps result-page text."""
     soup = BeautifulSoup(html, "lxml")
     dropped = tuple(t for t in _DROP_TAGS if not (keep_forms and t == "form"))
     for tag in soup(dropped):
@@ -83,8 +82,7 @@ def form_page_text(fetched: Fetched) -> str:
 
 
 def plain(line: str) -> str:
-    """One markdown line as readable text: breaks become spaces, images dropped, links
-    reduced to their label."""
+    """One markdown line as text: breaks become spaces, images drop, links keep their label."""
     text = _BREAK.sub(" ", line)
     text = _IMAGE.sub("", text)
     text = _LINK.sub(r"\1", text)
@@ -94,11 +92,7 @@ def plain(line: str) -> str:
 
 
 def table_cells(line: str) -> list[str] | None:
-    """Cells of a markdown table row, or None when the line is not one.
-
-    A row runs from its opening pipe to its closing pipe. Text after the closing pipe is
-    dropped.
-    """
+    """Cells of a markdown table row, or None if not one. Text after the closing pipe is dropped."""
     stripped = line.strip()
     if not stripped.startswith("|"):
         return None

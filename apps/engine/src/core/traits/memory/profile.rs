@@ -46,7 +46,6 @@ pub trait ProfileGraph: Send + Sync {
     /// Removes one node and every relation through it. Returns how many nodes went.
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError>;
 
-    /// Removes everything this user carries: every node and every memories row. Returns how
-    /// many rows went.
+    /// Removes everything this user carries: every node and memories row. Returns rows removed.
     async fn forget_all(&self, ctx: &RequestContext) -> Result<u64, ProfileError>;
 }

@@ -1,5 +1,4 @@
-//! Streaming: reasoning on the thinking line, the answer released block by block, and a draft
-//! withdrawn when it does not become the answer.
+//! Streaming: reasoning on the thinking line, the answer released block by block, drafts withdrawn.
 
 use std::sync::Arc;
 

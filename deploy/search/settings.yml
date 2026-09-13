@@ -1,5 +1,4 @@
-# SearXNG for the scraper's web search. Everything not set here keeps the upstream default,
-# including the engine list. Reached only by apps/scraper, over loopback or the compose network.
+# SearXNG for scraper web search; unset values keep upstream defaults. Scraper-only access.
 use_default_settings: true
 
 general:

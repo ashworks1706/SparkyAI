@@ -1,7 +1,4 @@
-//! Skill, SkillParam, SkillStep, SkillError: saved procedures the model fetches and follows.
-//!
-//! A skill is parameters, an ordered list of steps, and the domain it applies to. Only reviewed
-//! skills are offered, and the model follows one with the capabilities it already has.
+//! Skill, SkillParam, SkillStep, SkillError: saved procedures, reviewed, then fetched and followed.
 
 use serde::{Deserialize, Serialize};
 

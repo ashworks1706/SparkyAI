@@ -1,5 +1,4 @@
-//! Shared foundations: configuration, telemetry, every type, every trait, and the test suite.
-//! Imports nothing else in this crate; everything else may import it.
+//! Shared foundations: config, telemetry, types, traits, and tests. Imports nothing else here.
 
 pub mod config;
 pub mod telemetry;

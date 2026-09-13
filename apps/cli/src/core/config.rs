@@ -1,5 +1,4 @@
-//! Settings from SPARKY_<SECTION>__<KEY> env vars. Every field has a default. The engine .env
-//! is honoured when present.
+//! Settings from SPARKY_<SECTION>__<KEY> env vars. Every field defaults; engine .env is honored.
 
 use std::path::{Path, PathBuf};
 
@@ -63,8 +62,7 @@ pub struct Cli {
     pub log_dir: PathBuf,
     /// Seconds between health probes.
     pub health_interval_secs: u64,
-    /// Milliseconds a port check waits before it calls the port free. A unit whose port is
-    /// already served is not started a second time.
+    /// Milliseconds a port check waits before treating the port as free.
     pub port_check_ms: u64,
 }
 

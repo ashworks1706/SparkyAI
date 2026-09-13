@@ -69,9 +69,6 @@ impl Task {
     }
 
     /// Runs the instructions over input and returns the text.
-    ///
-    /// # Errors
-    /// Returns [ModelError] when the call fails or answers with nothing.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<String, ModelError> {
         let request = ModelRequest {
             messages: vec![

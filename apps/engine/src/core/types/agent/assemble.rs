@@ -6,8 +6,7 @@ use crate::core::types::conversation::message::Message;
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::Memory;
 
-/// Budgets for one assembled prompt, in estimated tokens. Default is implemented in
-/// core::config.
+/// Budgets for one assembled prompt, in estimated tokens. Default is implemented in core::config.
 #[derive(Debug, Clone, Copy)]
 pub struct Budget {
     /// Whole prompt, everything included.
@@ -98,8 +97,7 @@ pub struct Sections<'a> {
     pub evidence: &'a [Evidence],
     /// Prior turns, oldest first.
     pub history: &'a [Message],
-    /// The messages of this request after the input: tool calls and their results, oldest
-    /// first. Always kept, after the input.
+    /// Messages after the input: tool calls and results, oldest first, always kept.
     pub turn: &'a [Message],
     /// What the model may do, rendered. Empty writes no section.
     pub capabilities: &'a str,

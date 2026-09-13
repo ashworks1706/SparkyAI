@@ -14,9 +14,7 @@ pub enum ThinkingMode {
     Auto,
 }
 
-/// The rules that decide thinking per model call, read from agent.thinking.
-///
-/// Default is implemented in core::config.
+/// Rules deciding thinking per model call, read from agent.thinking. Default lives in core::config.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct ThinkingRules {

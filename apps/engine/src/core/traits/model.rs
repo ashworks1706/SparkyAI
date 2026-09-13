@@ -16,8 +16,7 @@ pub trait ModelProvider: Send + Sync {
         req: ModelRequest,
     ) -> Result<ModelResponse, ModelError>;
 
-    /// Runs one completion like generate and sends each piece to deltas as it arrives. The
-    /// response is the whole completion. A provider that cannot stream sends nothing.
+    /// Runs one completion like generate, streaming pieces to deltas; non-streaming sends nothing.
     async fn stream(
         &self,
         ctx: &RequestContext,

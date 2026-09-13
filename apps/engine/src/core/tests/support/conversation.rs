@@ -1,4 +1,4 @@
-//! Conversation store doubles: a recorder and a store that keeps ownership the way the database does.
+//! Conversation store doubles: a recorder and a store that keeps ownership like the database.
 
 use std::sync::Mutex;
 
@@ -28,8 +28,7 @@ pub fn push_row(rows: &mut Vec<Row>, message: Message, covers: Option<i64>) {
     });
 }
 
-/// The history the database returns for rows: the newest summary at the position it covers,
-/// then the newest limit messages after that position, oldest first.
+/// History from the database: newest summary at its position, then newest messages, oldest first.
 pub fn history_of(rows: &[Row], limit: usize) -> Vec<Stored> {
     let summary = rows.iter().rev().find(|r| r.message.role == Role::Summary);
     let from = summary.map_or(0, |s| s.covers.unwrap_or(s.seq));
@@ -121,8 +120,7 @@ struct Room {
     rows: Vec<Row>,
 }
 
-/// A conversation store that keeps ownership, channels, visibility, turns, and ends the way
-/// the database does.
+/// A conversation store that keeps ownership, channels, visibility, turns, ends like the database.
 #[derive(Default)]
 pub struct Rooms {
     state: Mutex<(u64, Vec<Room>)>,

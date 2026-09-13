@@ -9,11 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Source:
-    """A registered public ASU source. A row in sources, never a folder.
-
-    extractor, when set, turns the fetched page into clean text in place of the shared
-    heuristic in ingest/extract.py.
-    """
+    """A public ASU source, a row in sources; extractor can replace the extraction heuristic."""
 
     key: str
     url: str
@@ -25,11 +21,7 @@ class Source:
 
 @dataclass(frozen=True)
 class QueryParam:
-    """One parameter a query source accepts. Published to the engine, checked by the worker.
-
-    choices, when set, are the only values accepted, compared without case. many accepts a
-    comma-separated list of them.
-    """
+    """One param a query source takes; sent to engine, checked by worker. choices restrict input."""
 
     name: str
     description: str
@@ -41,14 +33,7 @@ class QueryParam:
 
 @dataclass(frozen=True)
 class QuerySource:
-    """A source the model queries live with parameters. Not fetched on a schedule.
-
-    Exactly one of to_url and answer is set. to_url turns the model parameters into the one
-    page to fetch, and extractor, when set, turns that page into clean text in place of the
-    shared heuristic. answer does the fetching itself, for a source that reads several
-    endpoints, and returns the URL to cite with the text. A result answers its caller first;
-    when index is set it is then written to the retrieval index under category.
-    """
+    """A source queried live with parameters, not scheduled. One of to_url or answer is set."""
 
     key: str
     description: str
@@ -89,8 +74,7 @@ class Job:
 
 @dataclass(frozen=True)
 class Fetched:
-    """One fetched page. text is set when the fetcher produced clean text (markdown from
-    Firecrawl). When text is None the pipeline extracts it from body."""
+    """One fetched page. text set if fetcher gave clean text; else pipeline extracts from body."""
 
     url: str
     status: int
@@ -121,12 +105,7 @@ class ChunkRow:
 
 @dataclass(frozen=True)
 class TreeNode:
-    """One summary node above the leaves, ready to write.
-
-    children are positions in the node list the tree was built from: 0 to leaves - 1 are the
-    leaf chunks in ordinal order, and everything after them is a summary node in build order.
-    A node always comes after the nodes it covers.
-    """
+    """One summary node above leaves, ready to write. children index positions in the built list."""
 
     level: int
     ordinal: int

@@ -1,5 +1,4 @@
-//! POST /v1/chat/completions and GET /v1/models. The agent behind an OpenAI-compatible API,
-//! which any off-the-shelf chat client can drive.
+//! POST /v1/chat/completions and GET /v1/models: agent behind an OpenAI API for any chat client.
 
 use std::fmt::Write;
 
@@ -39,8 +38,7 @@ pub fn last_user_message(messages: &[ChatMessage]) -> Option<&str> {
         .filter(|text| !text.is_empty())
 }
 
-/// A conversation id that stays put while a chat grows. It is derived from the caller and the
-/// turn that opened the chat.
+/// A conversation id that stays put as a chat grows, derived from the caller and the opening turn.
 pub fn conversation_for(user: &str, first_message: &str) -> Uuid {
     let seed = format!("{user}\u{0}{first_message}");
     Uuid::new_v5(&CONVERSATION_NS, seed.as_bytes())

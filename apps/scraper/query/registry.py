@@ -1,8 +1,4 @@
-"""The registry of live query sources, the checks every query passes, and how one is run.
-
-Distinct from sources/, which are pages fetched on a schedule into the retrieval index. A query
-source is fetched when the model asks, with the parameters it gives, and answers that caller.
-"""
+"""The registry of live query sources, the checks every query passes, and how one is run."""
 
 from __future__ import annotations
 
@@ -48,8 +44,7 @@ QUERY_SOURCES: dict[str, QuerySource] = {m.QUERY.key: m.QUERY for m in _MODULES}
 
 
 def check(source: QuerySource, params: dict[str, str]) -> None:
-    """Raises QueryError when a required parameter is missing, one does not exist, or a value
-    is not among the choices of its parameter."""
+    """Raises QueryError when a required parameter is missing, unknown, or not among its choices."""
     missing = [p.name for p in source.params if p.required and not params.get(p.name, "").strip()]
     if missing:
         raise QueryError(f"{source.key} needs: {', '.join(missing)}")

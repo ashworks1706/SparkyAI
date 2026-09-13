@@ -1,6 +1,4 @@
-//! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog, to the traces path
-//! and the AI path, and to Phoenix. Each destination is independent. One span per interaction,
-//! sharing the engine session id.
+//! Logging and OTLP/HTTP export to PostHog and Phoenix; one span per interaction, shares session.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -70,8 +68,7 @@ pub fn phoenix_target(cfg: &Telemetry) -> Option<String> {
         .map(|url| format!("{url}{OTLP_TRACES_PATH}"))
 }
 
-/// One tracer provider exporting every span to each configured destination: host plus
-/// traces_path, host plus ai_path, and Phoenix. None when no destination is configured.
+/// One tracer provider exporting every span to each destination; None when none is configured.
 pub fn provider(
     cfg: &Telemetry,
     service: &str,
@@ -117,8 +114,7 @@ pub fn provider(
     Ok(Some(provider))
 }
 
-/// A protobuf OTLP/HTTP span exporter to url, with the bearer token when the destination
-/// authenticates.
+/// An OTLP/HTTP span exporter to url, with a bearer token when the destination authenticates.
 fn exporter(
     url: String,
     token: Option<&SecretString>,

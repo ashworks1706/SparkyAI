@@ -77,8 +77,7 @@ impl PgProfileGraph {
     }
 }
 
-/// Reads one relation row selected with subject_kind, subject_label, relation, object_kind,
-/// object_label, and confidence.
+/// Reads one relation row: subject kind/label, relation, object kind/label, and confidence.
 fn row_to_relation(row: &sqlx::postgres::PgRow) -> Result<ProfileRelation, ProfileError> {
     Ok(ProfileRelation {
         subject: ProfileEntity {

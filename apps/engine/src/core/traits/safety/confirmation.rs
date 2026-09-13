@@ -22,10 +22,7 @@ pub trait ConfirmationStore: Send + Sync {
         ttl: Duration,
     ) -> Result<(), StoreError>;
 
-    /// Answers a held confirmation and returns what to run, or None when the token belongs to
-    /// another caller, has already been answered, or has expired.
-    ///
-    /// Implementations resolve in one statement; a token cannot be claimed twice.
+    /// Answers a held confirmation: what to run, or None if unowned, answered, expired; one use.
     async fn claim(
         &self,
         ctx: &RequestContext,

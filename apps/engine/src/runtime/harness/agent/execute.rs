@@ -28,8 +28,7 @@ pub(super) enum HeldError {
 }
 
 impl Agent {
-    /// Runs the calls policy allowed. Repeats are refused and reported, and a step made only
-    /// of repeats stalls the run. Stateful tools force in-order execution.
+    /// Runs allowed calls. Repeats are refused and reported; an all-repeat step stalls the run.
     pub(super) async fn execute(
         &self,
         run: &mut Run<'_>,
@@ -97,8 +96,7 @@ impl Agent {
         Ok(StepOutcome::Continue)
     }
 
-    /// Runs policy over every call before anything executes. Denials are fed back as tool
-    /// results, and the first confirmation stops the run.
+    /// Runs policy over every call first. Denials feed back as tool results; confirmation stops it.
     pub(super) async fn authorize_all(
         &self,
         run: &mut Run<'_>,

@@ -58,8 +58,7 @@ impl App {
             }
         }
     }
-    /// The address a process unit would bind, when something already answers there. None for
-    /// compose services.
+    /// Address a process unit would bind, if free. None for compose services.
     fn taken_port(&self, unit: &Unit) -> Option<String> {
         if !matches!(unit.kind, Kind::Process) || self.runner.owns(&unit.id) {
             return None;

@@ -36,8 +36,7 @@ pub struct ToolDefinition {
     pub parameters: Value,
     /// Risk classification.
     pub risk: RiskClass,
-    /// Holds state between calls. Its calls never run in parallel with other calls in the same
-    /// step.
+    /// Holds state between calls; its calls never run in parallel with other calls in the step.
     #[serde(default)]
     pub sequential: bool,
     /// Overrides agent.tool_timeout_secs for this tool.

@@ -1,5 +1,4 @@
-//! POST /chat takes one user message and returns one answer with citations. POST /chat/stream
-//! runs the same turn and reports each step as it happens before the same answer.
+//! POST /chat: one message, one answer with citations. /chat/stream: same turn, step events too.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -80,8 +79,7 @@ pub fn parse_traceparent(value: &str) -> Option<opentelemetry::Context> {
         .then(|| opentelemetry::Context::new().with_remote_span_context(remote))
 }
 
-/// The span one request runs under, carrying the attributes both trace UIs read. The answer
-/// and the outcome are recorded on it when the turn ends.
+/// The span a request runs under, carrying attributes both trace UIs read. Records answer, outcome.
 macro_rules! route_span {
     ($name:literal, $req:expr) => {
         tracing::info_span!(
@@ -147,8 +145,7 @@ fn record_outcome(span: &tracing::Span, outcome: &Result<ChatResponse, Failure>)
     }
 }
 
-/// Handles one chat turn. Runs under an http.chat span parented to the traceparent of the
-/// caller.
+/// Handles one chat turn. Runs under an http.chat span parented to the traceparent of the caller.
 pub async fn chat(
     State(state): State<ChatState>,
     headers: HeaderMap,
@@ -170,8 +167,7 @@ pub async fn chat(
     }
 }
 
-/// The same turn as chat, reported as it happens. A progress event per step worth showing,
-/// then one answer event with a ChatResponse or an error body, then done.
+/// The same turn as chat, reported live: progress events, then one answer event, then done.
 pub async fn stream(
     State(state): State<ChatState>,
     headers: HeaderMap,
@@ -215,8 +211,7 @@ pub async fn stream(
     Sse::new(progress.chain(tail).map(Ok::<Event, Infallible>)).into_response()
 }
 
-/// One server-sent event. A payload that cannot be serialised is reported to the client as an
-/// error and logged.
+/// One server-sent event. An unserialisable payload becomes a client error and is logged.
 fn sse<T: Serialize>(name: &str, body: &T) -> Event {
     match serde_json::to_string(body) {
         Ok(json) => Event::default().event(name).data(json),
@@ -289,9 +284,7 @@ async fn run_turn(
     }
 }
 
-/// Picks the conversation a turn continues and ensures the caller owns it. A given id is
-/// continued; otherwise continue_channel picks the newest open conversation of the caller in
-/// the channel at the request visibility; otherwise the turn starts a new one.
+/// Picks the conversation a turn continues, checked for ownership; falls back to open, then new.
 async fn open(
     state: &ChatState,
     mut ctx: RequestContext,
@@ -342,9 +335,7 @@ async fn open(
     }
 }
 
-/// Answers a held action. Approving runs it and lets the agent finish; denying drops it.
-///
-/// A token is single use and belongs to the caller who was asked, both enforced by the store.
+/// Answers a held action: approve runs it, deny drops it. Token is single use, tied to the caller.
 pub async fn confirm(
     State(state): State<ChatState>,
     headers: HeaderMap,

@@ -3,8 +3,7 @@
 use std::time::Duration;
 use uuid::Uuid;
 
-/// Wait before retry attempt: doubling from base_ms, capped at cap_ms, spread by a per-request
-/// offset, and never past the deadline.
+/// Wait before retry: doubles from base_ms, capped at cap_ms, jittered, never past the deadline.
 pub fn backoff(
     attempt: u32,
     request_id: Uuid,

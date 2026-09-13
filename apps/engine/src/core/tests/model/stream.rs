@@ -1,5 +1,4 @@
-//! The Rig chat adapter streaming from an OpenAI-compatible server that sends reasoning, text,
-//! a tool call, and usage the way llama-server does.
+//! The Rig chat adapter streaming reasoning, text, a tool call, and usage as llama-server does.
 
 use secrecy::SecretString;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

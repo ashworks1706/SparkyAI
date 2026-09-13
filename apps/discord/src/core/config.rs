@@ -28,8 +28,7 @@ pub struct Config {
 /// The marker the engine policy reads to allow write-side tools, when none is configured.
 pub const WRITE_CAPABILITY: &str = "MANAGE_GUILD";
 
-/// How the bot behaves in the guild. Everything here is presentation and pacing. The engine
-/// decides what may run.
+/// How the bot behaves in the guild: presentation and pacing only. The engine decides what may run.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Bot {
@@ -41,8 +40,7 @@ pub struct Bot {
     pub edit_every_ms: u64,
     /// Seconds one user must wait between questions. 0 removes the limit.
     pub cooldown_secs: u64,
-    /// The role name the engine policy reads to allow write-side tools. Must match
-    /// SPARKY_POLICY__WRITE_ROLES on the engine.
+    /// Role name the policy reads for write-side tools. Must match SPARKY_POLICY__WRITE_ROLES.
     pub write_capability: String,
     /// Minutes of silence before a thread the bot opens archives. One of THREAD_ARCHIVE_MINUTES.
     pub thread_auto_archive_minutes: u16,
@@ -218,8 +216,7 @@ impl Analytics {
 pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
 
 impl Config {
-    /// Loads the TOML layer then SPARKY_* variables, with __ separating nesting. Environment
-    /// values win.
+    /// Loads the TOML layer then SPARKY_* vars, __ separates nesting. Environment values win.
     pub fn load() -> anyhow::Result<Self> {
         let path = match std::env::var("SPARKY_CONFIG_FILE") {
             Ok(path) => path,

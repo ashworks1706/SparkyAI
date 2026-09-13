@@ -23,8 +23,7 @@ pub struct Limits {
     pub concurrency: usize,
 }
 
-/// Cross-origin policy. An origins list holding a single * allows any origin; an empty list
-/// adds no CORS headers.
+/// Cross-origin policy. A single * in origins allows any; an empty list adds no CORS headers.
 pub fn cors(origins: &[String]) -> Option<CorsLayer> {
     if origins.is_empty() {
         return None;

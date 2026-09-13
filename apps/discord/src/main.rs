@@ -1,5 +1,4 @@
-//! SparkyAI Discord bot: slash commands to HTTP calls to the engine to replies with citations.
-//! A client of the engine. Never links it.
+//! SparkyAI Discord bot: slash commands, engine HTTP calls, cited replies. Never links the engine.
 
 mod access;
 mod analytics;

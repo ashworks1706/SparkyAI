@@ -1,5 +1,4 @@
-"""Settings from sparky.toml and SPARKY_* env: postgres, object_store, embedding, summary,
-scraper."""
+"""Settings from sparky.toml and SPARKY_* env: postgres, object_store, embedding, scraper."""
 
 from __future__ import annotations
 
@@ -83,8 +82,7 @@ class Search(BaseModel):
 
 
 class Telemetry(BaseModel):
-    """OTLP/HTTP span export to PostHog and Phoenix. Each destination is independent: an empty
-    host or project token turns PostHog off, an empty phoenix_url turns Phoenix off."""
+    """OTLP/HTTP span export to PostHog and Phoenix. Empty settings turn either export off."""
 
     host: str = "http://localhost:8010"
     project_token: SecretStr = SecretStr("")
@@ -96,33 +94,28 @@ class Telemetry(BaseModel):
 class Scraper(BaseModel):
     # Public ASU content is shared across every guild; the engine reads this tenant for all.
     tenant_id: str = "public"
-    # firecrawl renders JS and returns markdown; http is plain httpx + bs4 (Playwright when
-    # the source needs JS).
+    # firecrawl renders JS to markdown; http is httpx + bs4, with Playwright for JS sources.
     fetcher: Literal["firecrawl", "http"] = "firecrawl"
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
     # Longest live query result handed back to the engine.
     query_max_chars: int = 6_000
-    # Write each live query result into the retrieval index after its caller has the answer,
-    # for query sources that allow it.
+    # Index live query results after the caller has its answer, where the source allows it.
     index_live_results: bool = True
     # Longest a lane of scraper serve waits before looking at the queue again.
     serve_poll_secs: float = 0.5
     # How often scraper serve queues the scheduled runs that have fallen due.
     schedule_every_secs: float = 60.0
-    # A background job running longer than this is taken to be left by a stopped process and
-    # is queued again.
+    # A job running longer than this is treated as abandoned and requeued.
     job_lease_secs: float = 1800.0
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"
-    # Quality floor: a run whose extracted text is below this fraction of the last indexed
-    # version is refused.
+    # A run whose text is below this fraction of the last indexed version is refused.
     quality_floor_ratio: float = 0.5
     # The floor is skipped when the last version was shorter than this.
     quality_floor_min_chars: int = 500
-    # The hierarchical index above the leaf chunks. Each cluster at each level costs one chat
-    # call and one embedding call.
+    # Summary tree over leaf chunks; each cluster costs one chat call and one embedding call.
     tree_enabled: bool = False
     # Highest level built. Level 0 is the leaves, so 3 allows three levels of summary.
     tree_max_level: int = 3

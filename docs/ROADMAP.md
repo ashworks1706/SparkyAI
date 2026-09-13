@@ -2,7 +2,7 @@
 
 ## 3 — Ingestion and answers v0.3
 
-- [ ] Crawl past the landing page: courses, clubs, jobs and scholarships each index one navigation page
+- [ ] Crawl past the landing page on scheduled runs: courses, clubs, jobs and scholarships each index one navigation page. Pages a live search fetches are already indexed
 - [ ] Chunk on document structure instead of fixed character windows
 - [ ] Measure whether the tree earns its model calls, once the eval suite exists
 - [ ] Deduplicate across sources, not only against a source's own previous version

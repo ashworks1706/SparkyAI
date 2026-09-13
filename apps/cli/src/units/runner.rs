@@ -1,6 +1,4 @@
-//! Starts, stops, and streams the output of units. Host processes run under setsid, and a stop
-//! kills the whole tree. Compose services are driven through docker compose and followed with
-//! logs -f.
+//! Starts, stops, streams unit output. Hosts run via setsid; compose runs via docker compose.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -163,8 +161,7 @@ impl Runner {
         cmd
     }
 
-    /// Spawns, streams both outputs as log lines, and reports the exit. The track flag records
-    /// the process group for stop to kill.
+    /// Spawns a process, streams stdout and stderr as log lines, and reports the exit.
     fn spawn_streaming(
         &mut self,
         unit_id: &str,

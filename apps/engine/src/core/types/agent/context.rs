@@ -9,8 +9,7 @@ use uuid::Uuid;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::trace::progress::Progress;
 
-/// Per-request state. Created at the edge (Discord, HTTP) and threaded through every model
-/// call, tool call, and trace event. Never global.
+/// Per-request state, created at the edge and threaded through every model call, tool call, event.
 #[derive(Debug, Clone)]
 pub struct RequestContext {
     /// Unique id for this request; the trace id.

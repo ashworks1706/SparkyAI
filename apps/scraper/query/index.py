@@ -1,9 +1,4 @@
-"""Writing what a live query fetched into the retrieval index, once its caller has the answer.
-
-A page that is also a scheduled source is indexed under that source. Any other page is its own
-source, keyed by the query source and the URL. The same search refreshes the same rows. The
-scheduler does not run such a page; it is refreshed only when searched again.
-"""
+"""Writing what a live query fetched into the retrieval index, once its caller has the answer."""
 
 from __future__ import annotations
 

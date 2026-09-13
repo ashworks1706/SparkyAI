@@ -1,5 +1,4 @@
-"""OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix. One span per source run
-and per live query, with sparky attributes."""
+"""OpenTelemetry export over OTLP/HTTP to PostHog and Phoenix. One span per source run or query."""
 
 from __future__ import annotations
 

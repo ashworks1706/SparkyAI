@@ -254,8 +254,7 @@ async fn defer_private(ctx: &Context, cmd: &CommandInteraction) -> bool {
     }
 }
 
-/// Fills a deferred private response with messages, the first in place and the rest as
-/// private followups.
+/// Fills a deferred private response: first message in place, rest as private followups.
 async fn finish(ctx: &Context, cmd: &CommandInteraction, messages: Vec<String>) {
     let mut messages = messages.into_iter();
     let first = messages.next().unwrap_or_default();

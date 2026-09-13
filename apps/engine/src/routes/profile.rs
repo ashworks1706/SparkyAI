@@ -1,5 +1,4 @@
-//! POST /profile/forget removes what the graph holds about one user. POST /profile/list shows
-//! it.
+//! POST /profile/forget removes what the graph holds about one user. POST /profile/list shows it.
 
 use std::sync::Arc;
 use std::time::Duration;

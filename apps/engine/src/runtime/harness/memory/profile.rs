@@ -1,7 +1,4 @@
 //! The classifier that gates profile extraction, and the graph agent that performs it.
-//!
-//! The classifier runs on every turn and answers one word. The graph agent runs only on the
-//! turns it passes, and answers JSON the profile types parse.
 
 use serde::Deserialize;
 
@@ -57,10 +54,6 @@ impl GraphAgent {
     }
 
     /// Extracts the facts turn states.
-    ///
-    /// # Errors
-    /// Returns [ProfileError::Model] when the model call fails, and
-    /// [ProfileError::Malformed] when the answer is not the extraction shape.
     pub async fn extract(
         &self,
         ctx: &RequestContext,
@@ -105,8 +98,7 @@ pub fn keepable(fact: &ProfileFact, floor: f32) -> bool {
 }
 
 impl ProfileWriter {
-    /// Builds the writer over its two prompted sub-agents and the graph. Facts below
-    /// min_confidence are dropped before they are written.
+    /// Builds the writer over its two prompted sub-agents and the graph.
     pub fn new(
         detector: Arc<dyn FactDetector>,
         agent: GraphAgent,
@@ -126,8 +118,6 @@ impl ProfileWriter {
     }
 
     /// Withdraws the statements a new fact makes false, before the new one is written.
-    ///
-    /// A failed read or reconciler call withdraws nothing for that fact.
     async fn reconcile(&self, ctx: &RequestContext, facts: &[ProfileFact]) {
         let Some(reconciler) = &self.reconciler else {
             return;
@@ -169,8 +159,7 @@ impl ProfileWriter {
         }
     }
 
-    /// Classifies turn, extracts what it states, and writes it under its own context and
-    /// deadline.
+    /// Classifies turn, extracts what it states, and writes it under its own context and deadline.
     pub async fn record(&self, tenant_id: String, user_id: String, turn: String) {
         if !self.detector.carries_fact(&turn) {
             return;
@@ -218,9 +207,6 @@ impl Reconciler {
     }
 
     /// The statements the new fact replaces, by index into existing.
-    ///
-    /// # Errors
-    /// Returns [ProfileError::Model] when the call fails.
     pub async fn superseded(
         &self,
         ctx: &RequestContext,
@@ -243,8 +229,6 @@ impl Reconciler {
 }
 
 /// Reads the reconciler answer as zero-based indices into the list it was shown.
-///
-/// An answer containing none, or no number in range, yields no indices.
 pub fn parse_indices(answer: &str, len: usize) -> Vec<usize> {
     let lowered = answer.trim().to_ascii_lowercase();
     if lowered.contains("none") {

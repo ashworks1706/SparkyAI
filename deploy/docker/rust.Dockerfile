@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# One image for both Rust apps; the compose entrypoint selects the binary.
+# One image for both Rust apps; compose entrypoint selects the binary.
 FROM rust:1.95-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN cargo build --release -p engine -p discord
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/target/release/engine /engine
 COPY --from=builder /app/target/release/discord /discord
-# Settings layer. The working directory is /, and the environment overrides it.
+# Settings layer at /, overridden by environment.
 COPY sparky.toml /sparky.toml
 EXPOSE 8080
 ENTRYPOINT ["/engine"]

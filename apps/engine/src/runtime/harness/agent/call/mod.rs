@@ -1,5 +1,4 @@
-//! One model call: the thinking decision, the request, its span, retries, the relay of what it
-//! writes while it streams, and the thought taken out of the reply.
+//! One model call: thinking decision, request, span, retries, streamed relay, thought split out.
 
 pub mod draft;
 mod relay;
@@ -45,8 +44,7 @@ impl Agent {
         )
     }
 
-    /// Calls the model for one step and splits the thought from the answer. A call that thought
-    /// and left no answer and no tool call is made again without thinking when the rules allow.
+    /// Calls the model, splits thought from answer. Retries without thinking if thought, no answer.
     pub(super) async fn answer_with_thinking(
         &self,
         run: &mut Run<'_>,
@@ -77,8 +75,7 @@ impl Agent {
         Ok((response, thought))
     }
 
-    /// The span of one model call. Full prompt and full reply as JSON, under the gen_ai names
-    /// PostHog reads and the OpenInference names the Phoenix trace UI reads.
+    /// Span of one model call: full prompt and reply as JSON, under gen_ai and OpenInference names.
     fn model_span(
         &self,
         ctx: &RequestContext,

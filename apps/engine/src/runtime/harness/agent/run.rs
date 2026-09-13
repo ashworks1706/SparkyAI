@@ -1,5 +1,4 @@
-//! The per request state the loop carries: what it loaded before the first model call, and
-//! what it accumulates across steps.
+//! Per-request state the loop carries: what loaded before the first call, what steps accumulate.
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -39,14 +38,12 @@ pub(super) struct Run<'a> {
     pub(super) tool_sources: Vec<Citation>,
     /// Set after a step of nothing but repeats. The next model call gets no tools.
     pub(super) force_answer: bool,
-    /// Leading new_turns entries that assembly appends itself, which the prompt must not
-    /// repeat. One for a fresh request, none when resuming after an approval.
+    /// Leading new_turns entries that assembly appends itself, which the prompt must not repeat.
     pub(super) appended_by_assembly: usize,
 }
 
 impl<'a> Run<'a> {
-    /// Fresh state for one request. new_turns holds the turns known before the first step, and
-    /// appended_by_assembly counts the leading ones assembly writes itself.
+    /// Fresh state for one request; new_turns holds the turns known before the first step.
     pub(super) fn new(
         ctx: &'a RequestContext,
         input: &'a str,

@@ -1,9 +1,4 @@
-"""Pull llm spans from PostHog and turn each into a TrainingExample.
-
-The engine records the full prompt and the reply as JSON attributes on the llm span. Spans are
-read from posthog.trace_spans through the HogQL query API, paged by a (timestamp, uuid) keyset
-cursor.
-"""
+"""Pull llm spans from PostHog and convert them to TrainingExamples."""
 
 from __future__ import annotations
 
@@ -123,8 +118,7 @@ def _tool_count(value: Any, row_id: str) -> int:
 
 
 def row_to_example(row: dict[str, Any]) -> TrainingExample | None:
-    """One HogQL result row to an example. Rows that are not llm, or that ended before a reply
-    was recorded, are skipped. A malformed llm row raises."""
+    """Maps a HogQL row to an example; skips non-llm/unfinished rows, raises on malformed ones."""
     row_id = str(row.get("uuid"))
     attrs = _json_value(row.get("attributes"), "attributes", row_id)
     if not isinstance(attrs, dict):

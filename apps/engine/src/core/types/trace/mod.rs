@@ -70,16 +70,14 @@ pub enum TraceEvent {
         /// What it wrote, truncated.
         text: String,
     },
-    /// The answer as written so far, released a block at a time while it streams; never
-    /// recorded.
+    /// The answer as written so far, released a block at a time while it streams; never recorded.
     AnswerDraft {
         /// Loop step.
         step: u32,
         /// The answer so far.
         text: String,
     },
-    /// The draft shown so far is withdrawn: the step called tools, the call failed, or the
-    /// guardrail refused it. Never recorded.
+    /// The draft so far withdraws: tools were called, the call failed, or the guardrail refused it.
     AnswerDraftCleared {
         /// Loop step.
         step: u32,
@@ -312,8 +310,7 @@ impl TraceEvent {
         )
     }
 
-    /// The line this event writes over, or None to append a new line. A tool call shares a slot
-    /// with its start, and model events share the slot of their step.
+    /// Line an event overwrites, or None for a new one. Calls share start slot; events share step.
     pub fn slot(&self) -> Option<String> {
         match self {
             Self::ToolStarted { call_id, .. } | Self::ToolCall { call_id, .. } => {
@@ -415,8 +412,7 @@ pub enum RunStatus {
 }
 
 impl RunStatus {
-    /// What to tell the caller when the loop stopped without the model writing an answer. None
-    /// for Answered and Blocked, which carry their own text.
+    /// What to tell the caller when the loop stopped with no answer. None for Answered and Blocked.
     pub fn explain(&self) -> Option<&'static str> {
         match self {
             Self::Answered | Self::Blocked => None,

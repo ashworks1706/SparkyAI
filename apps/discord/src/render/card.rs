@@ -39,9 +39,7 @@ pub struct Steps {
 }
 
 impl Steps {
-    /// Applies one progress update and says whether what the card shows changed. A draft
-    /// update replaces or withdraws the answer so far; any other writes, replaces, or clears a
-    /// step line.
+    /// Applies one progress update and says whether what the card shows changed.
     pub fn apply(&mut self, progress: &Progress) -> bool {
         if progress.draft {
             if progress.clear {
@@ -65,8 +63,7 @@ impl Steps {
         self.draft.as_deref()
     }
 
-    /// Records a step and says whether the list changed. A step carrying a slot writes over
-    /// the line of that slot. A blank line, or an immediate repeat with no slot, is dropped.
+    /// Records a step and says whether the list changed. A slot writes over the line of that slot.
     pub fn push(&mut self, slot: Option<&str>, text: &str) -> bool {
         let text = text.trim();
         if text.is_empty() {
@@ -107,8 +104,7 @@ impl Steps {
     }
 }
 
-/// Paces edits of the running card: at most one per interval. A change inside the gap waits
-/// for the next slot.
+/// Paces edits of the running card: at most one per interval.
 #[derive(Debug, Clone)]
 pub struct Pacer {
     every: Duration,
@@ -146,9 +142,7 @@ impl Pacer {
     }
 }
 
-/// The message while the turn runs: the steps, then the answer written so far. frame advances
-/// the spinner once per edit. The oldest steps fold into a count when they do not fit, and a
-/// draft that still does not fit keeps its newest part.
+/// The message while the turn runs: steps, then answer so far. frame advances spinner per edit.
 pub fn thinking(steps: &[String], draft: Option<&str>, limit: usize, frame: usize) -> String {
     let limit = clamp(limit);
     let draft = draft.map(str::trim).filter(|d| !d.is_empty());
@@ -190,15 +184,12 @@ fn newest(text: &str, room: usize) -> &str {
     &text[start..]
 }
 
-/// The finished turn: steps, answer, then the footers that have content. Steps fold into a
-/// count first, footers trim next, and only an answer that still does not fit spills into
-/// continuation messages.
+/// The finished turn: steps, answer, then the footers that have content.
 pub fn answer(steps: &[String], resp: &ChatResponse, limit: usize) -> Vec<String> {
     layout(0, steps, resp, limit)
 }
 
-/// The card after an accepted approval: the steps of the old card, a step saying what was
-/// decided, then the resumed answer and its footers. The old prompt and footers are dropped.
+/// The card after an approval: old card's steps, a step for the decision, then the resumed answer.
 pub fn resumed(old: &str, approved: bool, resp: &ChatResponse, limit: usize) -> Vec<String> {
     let (folded, mut steps) = steps_of(old);
     steps.push(if approved { "approved" } else { "declined" }.to_owned());
@@ -308,8 +299,7 @@ fn body(resp: &ChatResponse) -> String {
     body
 }
 
-/// What sits under the answer: the sources with no link of their own, and the memory the answer
-/// drew on. Linked sources are left to the buttons. keep caps each list.
+/// What sits under the answer: unlinked sources and memory the answer drew on. keep caps each list.
 fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
     let mut sections = Vec::new();
     let unlinked: Vec<&str> = resp

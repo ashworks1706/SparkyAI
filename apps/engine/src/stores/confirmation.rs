@@ -66,8 +66,7 @@ impl ConfirmationStore for PgConfirmations {
         token: Uuid,
         approved: bool,
     ) -> Result<Option<PendingAction>, StoreError> {
-        // One statement claims the pending row, and the user join limits it to the caller who
-        // was asked.
+        // One statement claims the pending row; the user join limits it to the caller asked.
         let row = sqlx::query(
             "update confirmations c
                 set status = case when $1 then 'confirmed' else 'denied' end,

@@ -1,5 +1,4 @@
-"""Fetch, hash, snapshot, extract, chunk, embed, index. One run per source, or one page a live
-query already fetched."""
+"""Fetch, hash, snapshot, extract, chunk, embed, index. One run per source or live-query page."""
 
 from __future__ import annotations
 

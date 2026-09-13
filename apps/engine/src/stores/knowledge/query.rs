@@ -15,9 +15,7 @@ use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryParam, QueryRequest, QuerySourceInfo,
 };
 
-/// The registry and job queue the scraper serves.
-///
-/// The engine writes a jobs row and waits for the answer to appear on it.
+/// Registry and job queue the scraper serves; engine writes a jobs row and waits for the answer.
 pub struct PgSourceQueries {
     pool: PgPool,
     poll: Duration,
@@ -31,8 +29,7 @@ const QUERY_JOB_KIND: &str = "source_query";
 const QUERY_CHANNEL: &str = "source_query";
 
 impl PgSourceQueries {
-    /// Polls a queued job every poll interval until it resolves or the request runs out of time.
-    /// A job the scraper does not claim within claim reports that it is not running.
+    /// Polls a queued job every interval; unclaimed by the scraper in claim reports not running.
     pub fn new(pool: PgPool, interval: Duration, claim: Duration) -> Self {
         Self {
             pool,
@@ -57,9 +54,6 @@ impl PgSourceQueries {
 }
 
 /// A query deadline as a Postgres interval, kept to the microseconds an interval holds.
-///
-/// # Errors
-/// Returns [QueryError::Store] when the deadline does not fit an interval.
 pub(crate) fn deadline_interval(remaining: Duration) -> Result<PgInterval, QueryError> {
     let micros = u64::try_from(remaining.as_micros()).unwrap_or(u64::MAX);
     PgInterval::try_from(Duration::from_micros(micros)).map_err(|e| {

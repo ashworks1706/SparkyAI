@@ -118,18 +118,13 @@ pub struct Model {
     /// Sampling parameters sent with every completion.
     #[serde(default)]
     pub sampling: Sampling,
-    /// A JSON object merged into the provider request over sampling. Thinking is set per call by
-    /// agent.thinking.
+    /// Merged into the provider request over sampling as JSON. Thinking is set by agent.thinking.
     #[serde(default)]
     pub extra_params_json: Option<String>,
 }
 
 impl Model {
     /// Provider-specific request fields: sampling, then extra_params_json on top.
-    ///
-    /// # Errors
-    /// Returns [ConfigError::Invalid] when extra_params_json is not a JSON object, or sets the
-    /// chat template kwargs to anything but an object or sets enable_thinking in them.
     pub fn additional_params(&self) -> Result<Value, ConfigError> {
         let mut map = self.sampling.to_json();
         if let Some(raw) = self
@@ -178,11 +173,7 @@ pub struct Postgres {
     pub acquire_timeout_secs: u64,
 }
 
-/// Rejects a model section that leaves a call no room to answer or sets a sampling value that
-/// is not a finite number.
-///
-/// # Errors
-/// Returns [ConfigError::Invalid] naming the setting.
+/// Rejects a model section leaving no room to answer, or with a non-finite sampling value.
 pub fn validate_model(model: &Model) -> Result<(), ConfigError> {
     if model.max_tokens == 0 || model.max_tokens_without_thinking == 0 {
         return Err(ConfigError::Invalid(
@@ -249,8 +240,7 @@ pub struct Telemetry {
     pub sample_ratio: f64,
     /// Budget for one export batch.
     pub export_timeout_secs: u64,
-    /// Only spans whose target starts with this are exported. Defaults to the name of the
-    /// binary.
+    /// Only spans whose target starts with this are exported. Defaults to the name of the binary.
     pub span_target_prefix: Option<String>,
 }
 

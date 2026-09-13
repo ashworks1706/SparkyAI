@@ -1,5 +1,4 @@
-//! One step of the loop: assemble the prompt, call the model, check the response, and run what
-//! it asked for.
+//! One loop step: assemble the prompt, call the model, check the response, run what it asked.
 
 use super::{Agent, StepOutcome};
 use crate::core::types::agent::assemble::Sections;
@@ -103,8 +102,7 @@ impl Agent {
         self.execute(run, runnable).await
     }
 
-    /// Assembles the prompt of the next model call within the budget left once the tool schemas
-    /// are counted, and records what fit.
+    /// Assembles the next prompt within budget left after tool schemas, and records what fit.
     fn prompt_for(&self, run: &mut Run<'_>, inputs: &Inputs) -> Vec<Message> {
         let ctx = run.ctx;
         // The turns of this request after the input, which assembly appends itself.
@@ -162,9 +160,6 @@ impl Agent {
     }
 
     /// Reports what the model was thinking on this step, and says whether anything was shown.
-    ///
-    /// The model's own reasoning when it returned some, and otherwise what it wrote on its way
-    /// to a tool call.
     fn report_thought(
         &self,
         ctx: &RequestContext,

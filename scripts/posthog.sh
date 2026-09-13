@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# Fetches the upstream PostHog files the posthog compose profile mounts.
-# Sparse checkout of the pinned commit into $SPARKY_POSTHOG_DIR/src. Idempotent: a second run
-# with the same pin does nothing.
-# Usage: scripts/posthog.sh
+# Sparse-checks out the pinned PostHog commit for the compose profile; safe to rerun.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

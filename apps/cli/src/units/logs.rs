@@ -111,8 +111,7 @@ impl LogBuffer {
         self.lines.clear();
     }
 
-    /// Index of the next line containing needle, case-insensitive, after from, wrapping
-    /// around. Setting backwards searches toward older lines.
+    /// Index of the next line containing needle, case-insensitive and wrapping.
     pub fn find(&self, needle: &str, from: usize, backwards: bool) -> Option<usize> {
         if needle.is_empty() || self.lines.is_empty() {
             return None;

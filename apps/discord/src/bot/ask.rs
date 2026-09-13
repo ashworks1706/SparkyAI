@@ -98,8 +98,7 @@ impl Handler {
         self.converse(ctx, &dest, &req, span, label).await;
     }
 
-    /// Shows the question as the command response and opens a thread from it. Falls back to
-    /// inline followups when the thread cannot be made.
+    /// Shows the question as the response and opens a thread, or falls back to inline followups.
     async fn open_thread<'a>(
         &self,
         ctx: &Context,
@@ -143,8 +142,7 @@ impl Handler {
         }
     }
 
-    /// Role names the member holds, resolved against the guild, with the capability the
-    /// interaction permissions grant. Fails when the guild roles cannot be fetched.
+    /// Role names the member holds in the guild, plus the capability the interaction grants.
     async fn command_roles(
         &self,
         ctx: &Context,

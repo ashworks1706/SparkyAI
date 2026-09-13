@@ -1,5 +1,4 @@
-//! Wire shapes for the OpenAI-compatible surface. Only the fields the engine honours are
-//! modelled; the rest are ignored on the way in.
+//! Wire shapes for the OpenAI-compatible surface; only fields the engine honours are modelled.
 
 use serde::{Deserialize, Serialize};
 

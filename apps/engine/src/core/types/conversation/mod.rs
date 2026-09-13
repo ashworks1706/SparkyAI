@@ -1,5 +1,4 @@
-//! Visibility, Stored, ResetRequest, ResetResponse: who can read a conversation, what history
-//! holds, and how a conversation ends.
+//! Visibility, Stored, ResetRequest, ResetResponse: who reads history, what it holds, how it ends.
 
 pub mod message;
 
@@ -7,8 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::types::conversation::message::Message;
 
-/// A message loaded from history and its position in the conversation. A summary is positioned
-/// at the last message it stands in for.
+/// A message loaded from history and its position. A summary sits at the last message it replaces.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stored {
     /// Position in the conversation, increasing in the order messages were written.

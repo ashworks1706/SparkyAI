@@ -1,8 +1,4 @@
-//! What a streaming model call has written so far, released a block at a time.
-//!
-//! Reasoning is released as it grows and once more, whole, when the answer begins. Answer text
-//! is released up to the end of its last finished sentence or line, or at a word break once a
-//! run of text grows past the block size.
+//! What a streaming call has written so far, released a block at a time as it grows.
 
 use super::thought;
 use crate::core::types::model::ModelDelta;

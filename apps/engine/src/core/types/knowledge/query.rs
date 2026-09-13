@@ -1,8 +1,4 @@
-//! QuerySourceInfo, QueryRequest, QueryOutcome: live parameterized source queries.
-//!
-//! A query source is an ASU site the scraper fetches on demand with parameters the model
-//! supplies. What comes back answers its caller; the scraper then indexes the page for sources
-//! that allow it.
+//! QuerySourceInfo, QueryRequest, QueryOutcome: live queries the scraper fetches, engine indexes.
 
 use serde::{Deserialize, Serialize};
 
@@ -57,8 +53,7 @@ pub enum QueryError {
     /// The queue could not be reached.
     #[error("query queue: {0}")]
     Store(String),
-    /// The scraper rejected it: an unknown source, a missing parameter, an unreadable page.
-    /// The reason goes back to the model.
+    /// The scraper rejected it: unknown source, bad param, unreadable page. Goes back to the model.
     #[error("{0}")]
     Rejected(String),
     /// The scraper did not claim the query in time, so it is not running.

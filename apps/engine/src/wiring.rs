@@ -45,8 +45,7 @@ use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
 
-/// Default system prompt, used when neither prompt.system_file nor prompt.system is set.
-/// Versioned by content; changes show up in traces via the prompt hash.
+/// Default system prompt, used when neither prompt.system_file nor system is set; hashed in traces.
 pub const SYSTEM_PROMPT: &str = r#"You are Sparky, the assistant of the ASU AI Society, and you
 answer students in Discord. Your subject is Arizona State University: courses, clubs, events,
 library and dining hours, transit, deadlines, campus services, and the society itself.
@@ -354,8 +353,7 @@ fn compactor(cfg: &Config, model: &Arc<dyn ModelProvider>) -> Option<Arc<dyn Com
     Some(Arc::new(ChatCompactor::new(task)))
 }
 
-/// Where traces are recorded, or a sink that drops them when recording is off. Traces older
-/// than the retention window are pruned once here.
+/// Where traces are recorded, or a sink dropping them if off; old traces are pruned here once.
 fn trace_sink(cfg: &Config) -> anyhow::Result<Arc<dyn TraceSink>> {
     if !cfg.trace.enabled {
         tracing::info!("jsonl traces are off");
@@ -385,9 +383,7 @@ fn task_config(cfg: &Config) -> TaskConfig {
     }
 }
 
-/// Fails the boot when the largest prompt and the completion of a call that does not think
-/// cannot fit one slot of the chat server. A server that does not report its context is not
-/// checked.
+/// Fails boot if the biggest prompt plus reply cannot fit one slot; skipped if context unreported.
 async fn fits_the_slot(cfg: &Config) -> anyhow::Result<()> {
     let slot = match props::slot_context(&cfg.model.base_url, &cfg.model.api_key).await {
         Ok(slot) => u64::from(slot),
@@ -424,8 +420,7 @@ async fn fits_the_slot(cfg: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Fails the boot when the tools leave the prompt no room. The capabilities section has to fit
-/// its own budget, and the tool schemas have to leave half the prompt budget for everything else.
+/// Fails boot if tools crowd the prompt: capabilities must fit its budget, schemas leave half free.
 fn fits_the_prompt(cfg: &Config, tools: &ToolSet, capabilities: &str) -> anyhow::Result<()> {
     let cpt = cfg.agent.chars_per_token;
     let listed = estimate(capabilities, cpt);

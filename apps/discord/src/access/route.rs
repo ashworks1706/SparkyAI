@@ -62,8 +62,7 @@ pub fn serves(allow: &[ChannelId], channel: ChannelId, parent: Option<ChannelId>
     allow.is_empty() || allow.contains(&channel) || parent.is_some_and(|p| allow.contains(&p))
 }
 
-/// The visibility a confirmation carries, and whether its result stays ephemeral, from the
-/// flags of the message holding the button.
+/// Visibility and ephemeral-result flag for a confirmation, derived from the message's flags.
 pub fn press_visibility(flags: Option<MessageFlags>) -> (Visibility, bool) {
     if flags.is_some_and(|f| f.contains(MessageFlags::EPHEMERAL)) {
         (Visibility::Private, true)

@@ -8,9 +8,6 @@ use secrecy::{ExposeSecret, SecretString};
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The tokens one slot of the llama-server at base_url holds, prompt and completion together.
-///
-/// # Errors
-/// Returns the reason when the server does not answer or reports no context size.
 pub async fn slot_context(base_url: &str, api_key: &SecretString) -> Result<u32, String> {
     let root = base_url.trim_end_matches('/').trim_end_matches("/v1");
     let client = reqwest::Client::builder()

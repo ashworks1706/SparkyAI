@@ -1,5 +1,4 @@
-//! Product events for PostHog: a bounded queue fed without waiting and a background task
-//! that posts batches to host plus /batch/.
+//! Product events for PostHog: a bounded queue, fed without waiting, drained by a batching task.
 
 use std::time::Duration;
 
@@ -39,8 +38,7 @@ impl Analytics {
         (Self { tx: Some(tx) }, rx)
     }
 
-    /// Starts the background sender. Disabled when settings are off or telemetry has no
-    /// host or project token.
+    /// Starts the background sender, or none when analytics is off or unconfigured.
     pub fn start(settings: &Settings, telemetry: &Telemetry) -> (Self, Option<Flusher>) {
         if !settings.enabled {
             tracing::info!("analytics disabled by analytics.enabled");

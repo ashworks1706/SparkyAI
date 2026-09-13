@@ -15,8 +15,7 @@ use crate::render::components::{self, Action};
 use crate::render::reply;
 
 impl Handler {
-    /// Answers a pressed approval button. The card changes only once the engine accepts the
-    /// presser; anyone else gets a private line and the card keeps its buttons.
+    /// Answers a pressed approval button; card updates only if the engine accepts the presser.
     pub(super) async fn confirm(
         &self,
         ctx: &Context,

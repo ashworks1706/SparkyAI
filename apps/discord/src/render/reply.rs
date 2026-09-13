@@ -4,8 +4,7 @@ use std::fmt::Write;
 
 use crate::core::types::{EngineError, ProfileList};
 
-/// The Discord hard limit on message content. bot.max_message_chars may go below it, never
-/// above.
+/// The Discord hard limit on message content. bot.max_message_chars may go below it, never above.
 pub const MAX_MESSAGE: usize = 2_000;
 
 /// Splits text into messages of at most limit bytes on line, then space, boundaries.
@@ -39,8 +38,7 @@ pub fn chunk(text: &str, limit: usize) -> Vec<String> {
 /// What to say when Sparky cannot be reached or the request could not be served.
 pub const UNAVAILABLE: &str = "Sparky is unavailable right now. Please try again shortly.";
 
-/// What to say when the engine call failed: busy on 503, a closed approval on 409, a lost
-/// conversation on 404, and unavailable otherwise.
+/// What to say when the engine call fails: busy on 503, closed approval on 409, lost chat on 404.
 pub fn failure(e: &EngineError) -> String {
     match e {
         EngineError::Status { status: 503, .. } => {

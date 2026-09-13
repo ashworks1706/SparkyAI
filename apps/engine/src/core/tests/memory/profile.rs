@@ -1,5 +1,4 @@
-//! Profile extraction: what the classifier gates, what the graph agent produces, and what
-//! happens when the model answers with something neither can read.
+//! Profile extraction: what the classifier gates, the graph agent produces, unreadable answers.
 
 use std::sync::Arc;
 

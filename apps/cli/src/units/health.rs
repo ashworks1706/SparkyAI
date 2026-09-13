@@ -1,5 +1,4 @@
-//! Periodic probes of the engine, the chat model server, and PostHog, and the one-shot check
-//! of whether a unit's port is already served.
+//! Health probes for the engine, chat model, and PostHog, plus the port-in-use check.
 
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -87,9 +86,7 @@ async fn probe(http: &reqwest::Client, url: &str) -> Probe {
     }
 }
 
-/// The host and port a unit's url points at, when it names one that can be connected to.
-///
-/// A wildcard host maps to loopback.
+/// The host and port a unit's url names, if reachable. Wildcard host maps to loopback.
 pub fn address_of(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let rest = rest.split(['/', '?', '#']).next()?;

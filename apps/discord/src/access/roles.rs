@@ -9,9 +9,7 @@ pub(crate) fn can_write(permissions: Permissions) -> bool {
     permissions.intersects(Permissions::MANAGE_GUILD | Permissions::ADMINISTRATOR)
 }
 
-/// Guild role names plus capability when the member Discord permissions grant it.
-/// A guild role named like the capability is dropped. Only the permission bits confer
-/// write access.
+/// Guild role plus capability when Discord permissions grant it; a role name alone grants nothing.
 pub(crate) fn authorized_roles(
     names: impl IntoIterator<Item = String>,
     permissions: Option<Permissions>,
@@ -24,8 +22,7 @@ pub(crate) fn authorized_roles(
     roles
 }
 
-/// Guild level permissions of a member: every permission for the guild owner, else the union
-/// of the everyone role and every role held. A role missing from bits adds nothing.
+/// Permissions of a member: all bits for the owner, else union of everyone role and roles held.
 pub(crate) fn member_permissions(
     everyone: RoleId,
     held: &[RoleId],

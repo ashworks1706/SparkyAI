@@ -1,5 +1,4 @@
-//! Chat and embeddings over the OpenAI-compatible client of Rig, pointed at llama-server.
-//! Rig owns the wire format. This module maps between the Rig types and core::types.
+//! Chat and embeddings via Rig's OpenAI client at llama-server. Maps Rig types to core types.
 
 use ::rig_core::client::BearerAuth;
 use ::rig_core::completion::{
@@ -40,14 +39,12 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
 pub struct RigChat {
     model: CompletionModel,
     name: String,
-    /// Provider-specific request fields sent with every completion. The thinking switch is added
-    /// per call.
+    /// Provider-specific request fields sent with every completion.
     additional_params: serde_json::Value,
 }
 
 impl RigChat {
-    /// Wraps model_name on client. additional_params must be a JSON object, sent verbatim
-    /// alongside every completion request.
+    /// Wraps model_name on client. additional_params is sent verbatim with every completion.
     pub fn new(
         client: CompletionsClient,
         model_name: impl Into<String>,
@@ -62,8 +59,7 @@ impl RigChat {
     }
 }
 
-/// The provider request fields for one call: params with the chat template switch set to
-/// thinking. Template arguments already in params are kept.
+/// The provider request fields for one call: params with the chat template switch set to thinking.
 pub(crate) fn with_thinking(params: &serde_json::Value, thinking: bool) -> serde_json::Value {
     let mut params = params.clone();
     if let serde_json::Value::Object(map) = &mut params {
@@ -81,7 +77,6 @@ pub(crate) fn with_thinking(params: &serde_json::Value, thinking: bool) -> serde
 }
 
 /// Splits the flat message list into the Rig preamble plus chat history.
-/// Fails on a tool result that carries no call id or tool name.
 pub(crate) fn to_rig(
     messages: &[Message],
 ) -> Result<(Option<String>, Vec<RigMessage>), ModelError> {
@@ -137,8 +132,7 @@ fn tool_to_rig(t: &ToolDefinition) -> RigTool {
     }
 }
 
-/// Maps Rig response content into core types: the text, the reasoning, and the calls. Media is
-/// dropped.
+/// Maps Rig response content into core types: text, reasoning, and calls. Media is dropped.
 pub(crate) fn from_rig(choice: Vec<AssistantContent>) -> (String, String, Vec<ToolCall>) {
     let mut text = String::new();
     let mut reasoning = String::new();
@@ -249,7 +243,6 @@ impl RigChat {
 }
 
 /// Why a completion stopped: what the provider reported, or else what the response shows.
-/// Tool calls always win, and an empty unreported completion is Unknown.
 pub(crate) fn finish_reason(
     reported: Option<&RigFinish>,
     content: &str,

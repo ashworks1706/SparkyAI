@@ -1,7 +1,4 @@
--- A compacted turn stands in for the turns it replaced.
---
--- The turns it replaced stay in messages. A load returns the newest summary and everything
--- after it, so the summary supersedes what came before without deleting it.
+-- A compacted turn stands in for the turns it replaced; those turns stay in messages.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

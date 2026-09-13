@@ -7,8 +7,7 @@ use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryRequest, QuerySourceInfo,
 };
 
-/// Runs a parameterized source query and reports what the scraper published. The engine never
-/// fetches the page; it meets the scraper only in the database.
+/// Runs a parameterized source query, reports what the scraper published; engine never fetches.
 #[async_trait]
 pub trait SourceQueries: Send + Sync {
     /// Sources currently offered. Read once at boot to build the tool.

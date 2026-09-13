@@ -29,8 +29,7 @@ pub struct ChatRequest {
     /// Who can read the exchange. Public withholds personal memory.
     #[serde(default)]
     pub visibility: Visibility,
-    /// Without a conversation_id, continue the newest open conversation of the caller in this
-    /// channel at this visibility instead of starting one.
+    /// Without conversation_id, continues the caller's newest open conversation at this visibility.
     #[serde(default)]
     pub continue_channel: bool,
     /// The message.

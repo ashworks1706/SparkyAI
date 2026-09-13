@@ -1,7 +1,4 @@
-//! ReadPublic: one search tool per live ASU source, one file per tool.
-//!
-//! Each file names the source, says what it answers, and declares the parameters the model may
-//! pass. A call checks the arguments and queues a job that the scraper worker answers.
+//! ReadPublic: one search tool per live ASU source. A call checks arguments, queues a scraper job.
 
 pub mod campus_map;
 pub mod clubs;
@@ -258,8 +255,7 @@ pub trait LiveSource: Send + Sync {
     /// The parameters it takes.
     fn params(&self) -> &'static [Param];
 
-    /// Checks the normalized arguments beyond what each parameter accepts. Err is shown to the
-    /// model to correct.
+    /// Checks normalized arguments beyond what each parameter accepts. Err is shown to the model.
     fn check(&self, _params: &Map<String, Value>) -> Result<(), String> {
         Ok(())
     }
@@ -326,8 +322,7 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
     Ok(out)
 }
 
-/// Whether the parameters of source match what the scraper published for its key. Err names
-/// the first difference.
+/// Whether source's parameters match what the scraper published for its key. Err names the diff.
 pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<(), String> {
     let name = tool_name(source.key());
     for param in source.params() {

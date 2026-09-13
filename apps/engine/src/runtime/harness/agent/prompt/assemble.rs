@@ -1,8 +1,4 @@
-//! Context assembly. Fixed section order and per-section token budgets.
-//!
-//! Order: system instructions, role line, memory, evidence, history, the input, and the tool
-//! exchange of this request. When over budget, evidence and history are trimmed first. The system
-//! prompt, the input and the tool exchange of this request are never dropped.
+//! Context assembly: fixed order, per-section budgets. Evidence and history trim first; rest kept.
 
 use chrono::{DateTime, Utc};
 
@@ -66,8 +62,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
             messages.push(Message::system(block));
         }
     } else {
-        // Evidence is capped by its own budget and by what remains of the total after the
-        // sections above and the current input.
+        // Evidence is capped by its own budget and by what remains after the sections above.
         let evidence_budget = budget
             .evidence
             .min(budget.total.saturating_sub(used + input_cost));
@@ -111,8 +106,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 }
 
-/// The evidence section: the header and every chunk that fits budget, with the tokens it
-/// spends and how many chunks it holds. Each entry is numbered, so an answer can cite it.
+/// The evidence section: header and every chunk that fits budget. Each entry is numbered to cite.
 fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize, usize) {
     let mut block = format!("{}\n", s.templates.evidence_header.trim());
     let mut spent = estimate(&block, cpt);
@@ -156,8 +150,7 @@ pub(crate) fn age(fetched: DateTime<Utc>, now: DateTime<Utc>) -> String {
     }
 }
 
-/// The memory section: the header and every memory that fits budget, with the tokens it
-/// spends and how many memories it holds. None when there is no memory.
+/// The memory section: the header and every memory that fits budget. None when there is no memory.
 fn memory_block(s: &Sections<'_>, budget: usize, cpt: usize) -> Option<(String, usize, usize)> {
     if s.memory.is_empty() {
         return None;

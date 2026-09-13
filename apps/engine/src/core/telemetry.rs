@@ -1,7 +1,4 @@
 //! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix.
-//! PostHog receives every span with the project token as bearer; Phoenix receives them without
-//! authentication. An empty host or token turns PostHog off, an empty phoenix_url turns Phoenix
-//! off, and export runs while either is set.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -39,8 +36,7 @@ fn base(url: Option<&str>) -> Option<&str> {
         .filter(|h| !h.is_empty())
 }
 
-/// The PostHog endpoints, empty when the host or the token is empty. The AI endpoint is
-/// included only when ai_path is set.
+/// The PostHog endpoints, empty when the host or the token is empty.
 fn posthog_urls(cfg: &Telemetry) -> Vec<String> {
     let Some(host) = base(cfg.host.as_deref()) else {
         return Vec::new();
@@ -89,8 +85,7 @@ fn bearer(cfg: &Telemetry) -> HashMap<String, String> {
     )])
 }
 
-/// The tracer provider exporting every span to each configured destination, or None when none
-/// is configured. Build it and shut it down outside a tokio runtime.
+/// The tracer provider exporting every span to each destination, or None when none is configured.
 pub fn provider(
     cfg: &Telemetry,
     service: &str,
@@ -120,8 +115,7 @@ pub fn provider(
     Ok(Some(provider))
 }
 
-/// Installs the global tracing subscriber with fmt and optional OTLP layers. Call it outside a
-/// tokio runtime.
+/// Installs the global tracing subscriber with fmt and optional OTLP layers; call outside tokio.
 pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let service = cfg
         .service_name

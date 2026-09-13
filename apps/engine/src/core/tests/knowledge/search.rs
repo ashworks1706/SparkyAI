@@ -1,5 +1,4 @@
-//! The search tools: one per live source, their schemas, how arguments are checked before a job
-//! is queued, and the boot check against the registry the scraper publishes.
+//! The search tools: one per live source, their schemas, argument checks, boot check vs registry.
 
 use std::sync::Arc;
 

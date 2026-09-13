@@ -1,11 +1,4 @@
--- Who may see a conversation, and whether it is still open.
---
--- visibility is public for a conversation held where others can read it, and private for one
--- only its owner sees. ended_at is set when the owner resets a channel; an ended conversation
--- is never picked up again by channel, only by its id.
---
--- A column added with a constant default is recorded in the catalog, so neither statement
--- rewrites the table. Every existing row reads as public and open.
+-- visibility is public or private to the owner. ended_at marks a reset; picked up again only by id.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

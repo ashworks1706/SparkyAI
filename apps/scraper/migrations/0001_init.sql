@@ -66,8 +66,7 @@ create table source_versions (
 );
 create index on source_versions (source_id, fetched_at desc);
 
--- Retrieval index: dense (pgvector) and lexical (FTS) over the same rows.
--- Dimension matches Qwen3-Embedding-0.6B; changing the embedding model means a rebuild.
+-- Retrieval index: dense (pgvector), lexical (FTS), same rows; dims match Qwen3-Embedding-0.6B.
 create table chunks (
     id               uuid primary key default gen_random_uuid(),
     tenant_id        text not null,

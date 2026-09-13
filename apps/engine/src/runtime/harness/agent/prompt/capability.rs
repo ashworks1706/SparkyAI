@@ -1,5 +1,4 @@
-//! The capabilities section of the prompt: one list of what the model may do, each entry
-//! labelled with its kind.
+//! The capabilities section of the prompt: a list of what the model may do, each labelled by kind.
 
 use std::fmt::Write as _;
 

@@ -29,8 +29,7 @@ pub fn sanitize_line(s: &str) -> String {
     out
 }
 
-/// Parses docker compose ps --format json: a JSON array on older releases, one object per
-/// line on newer ones. Any other input is an error.
+/// Parses docker compose ps json output, as an array or one object per line.
 pub fn parse_ps(raw: &str) -> Result<HashMap<String, ServiceState>, String> {
     let rows: Vec<ComposePsRow> = if raw.trim().is_empty() {
         Vec::new()

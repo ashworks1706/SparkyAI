@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::safety::guardrail::{Stage, Verdict};
 
-/// The gate every model response passes, on the capability branch and the answer branch.
-/// Decides whether a response proceeds.
+/// The gate every model response passes, on the capability and answer branches, to proceed.
 #[async_trait]
 pub trait Guardrail: Send + Sync {
     /// Checks one response.

@@ -31,8 +31,7 @@ pub struct JsonlSink {
 }
 
 impl JsonlSink {
-    /// Writes under dir, creating it if missing. max_file_bytes caps the trace of one request.
-    /// Zero removes the limit.
+    /// Writes under dir, creating it if missing.
     pub fn new(dir: impl Into<PathBuf>, max_file_bytes: u64) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
@@ -47,8 +46,7 @@ impl JsonlSink {
         self.dir.join(format!("{request_id}.jsonl"))
     }
 
-    /// Deletes trace files last modified more than older_than ago. Returns how many were
-    /// removed. Called once at boot.
+    /// Deletes trace files last modified more than older_than ago. Called once at boot.
     pub fn prune(&self, older_than: Duration) -> std::io::Result<usize> {
         let cutoff = SystemTime::now()
             .checked_sub(older_than)
@@ -124,8 +122,7 @@ impl TraceSink for NullSink {
     fn emit(&self, _ctx: &RequestContext, _event: TraceEvent) {}
 }
 
-/// Records every event through the sink beneath it and, when the caller is watching, forwards
-/// the ones that map to progress.
+/// Records every event through the sink beneath it and forwards progress to a watching caller.
 pub struct Fanout {
     inner: Arc<dyn TraceSink>,
     style: ProgressStyle,

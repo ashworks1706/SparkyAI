@@ -5,10 +5,7 @@ const OPEN: &str = "<think>";
 /// Closing tag of inline reasoning.
 const CLOSE: &str = "</think>";
 
-/// The thought a response carries and the text left for the user.
-///
-/// Reasoning the provider returned in its own field takes precedence. Inline reasoning between
-/// think tags is removed from the text, including an unclosed trailing block.
+/// The thought a response carries and text left for user; provider reasoning wins over inline tags.
 pub fn split(reasoning: &str, content: &str) -> (Option<String>, String) {
     let (inline, visible) = lift(content);
     let thought = [reasoning.trim(), inline.trim()]

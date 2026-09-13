@@ -27,8 +27,7 @@ impl PgConversations {
 #[async_trait]
 impl ConversationStore for PgConversations {
     async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError> {
-        // An id held by another caller, or at another channel or visibility, writes nothing and
-        // reads as not owned. The users row is written only when it is new or its roles change.
+        // An id held by another caller, channel, or visibility writes nothing, reads as not owned.
         let row = sqlx::query(
             "with existing as (
                select c.tenant_id = $2 and u.tenant_id = $2 and u.discord_id = $3

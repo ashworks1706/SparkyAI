@@ -1,9 +1,4 @@
-"""The scraper job queue: what each kind of job does, the lanes that claim them, and the timer
-that queues scheduled runs.
-
-Live queries from the engine run in their own lane, woken by the engine notification. Indexing a
-live result and running a scheduled source share the background lane, highest priority first.
-"""
+"""The scraper job queue: job kinds, the lanes that claim them, and the scheduled-run timer."""
 
 from __future__ import annotations
 
@@ -47,8 +42,7 @@ BACKGROUND_KINDS = (INDEX, RUN)
 
 
 def is_due(row: dict | None, now: datetime) -> bool:
-    """Whether a source should run, from its sources row. A source with no row yet has never
-    been attempted and is due; the first run creates the row from the registered source."""
+    """Whether a source should run, from its sources row. No row means never attempted, so due."""
     if row is None:
         return True
     if not row["enabled"]:
@@ -60,9 +54,7 @@ def is_due(row: dict | None, now: datetime) -> bool:
 
 
 def handle(conn: psycopg.Connection, job: Job) -> dict:
-    """Does one job and returns its result. A live query that allows indexing queues the
-    indexing of its page on conn, committed with the answer. Raises QueryError for a job the
-    caller can correct."""
+    """Does one job and returns its result. Raises QueryError for a job the caller can correct."""
     cfg = settings().scraper
     if job.kind == QUERY:
         result = run_job(job)
@@ -116,8 +108,7 @@ def poll_once(kinds: Sequence[str]) -> bool:
 
 
 def enqueue_due(now: datetime) -> int:
-    """Queues a run of every registered source that is due, and puts back background jobs a
-    stopped process left running. Returns how many runs were queued."""
+    """Queues a run for every due source; requeues jobs a stopped process left running."""
     cfg = settings().scraper
     with postgres.connection() as conn:
         stale = postgres.requeue_stale(conn, BACKGROUND_KINDS, cfg.job_lease_secs)
@@ -134,8 +125,7 @@ def enqueue_due(now: datetime) -> int:
 
 
 def _lane(name: str, kinds: Sequence[str], stop: threading.Event, listen: bool) -> None:
-    """Claims jobs of kinds until stop is set. A listening lane wakes on the engine
-    notification; any lane looks again after poll_secs."""
+    """Claims jobs of kinds until stop is set. A listening lane also wakes on notification."""
     cfg = settings()
     listener = None
     if listen:
@@ -160,8 +150,7 @@ def _lane(name: str, kinds: Sequence[str], stop: threading.Event, listen: bool) 
 
 
 def serve() -> None:
-    """Publishes the query registry, starts the live and background lanes, and queues scheduled
-    runs as they fall due. Blocks until interrupted."""
+    """Publishes the query registry, starts the live and background lanes, and schedules runs."""
     cfg = settings().scraper
     with postgres.connection() as conn:
         count = postgres.upsert_query_sources(conn, list(QUERY_SOURCES.values()))

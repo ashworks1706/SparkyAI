@@ -9,8 +9,7 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::{ResetRequest, ResetResponse};
 use crate::routes::chat::{ChatState, Failure, authorized, too_many};
 
-/// Ends every open conversation of the caller in the channel, at any visibility. The next
-/// turn there starts a new one.
+/// Ends every open conversation of the caller in the channel, any visibility. Next turn starts new.
 pub async fn reset(
     State(state): State<ChatState>,
     headers: HeaderMap,

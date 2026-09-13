@@ -35,8 +35,7 @@ pub struct Profile {
     pub detector: Detector,
     /// Instructions for the graph agent. Empty uses the built-in default.
     pub graph_instructions: Option<String>,
-    /// Withdraw a recorded fact when a new one makes it false. Calls the model only when a new
-    /// fact collides with one already recorded.
+    /// Withdraw a recorded fact when a new one makes it false. Calls the model only on collision.
     pub reconcile: bool,
     /// Instructions for the reconciler. Empty uses the built-in default.
     pub reconcile_instructions: Option<String>,

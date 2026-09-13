@@ -1,5 +1,4 @@
-//! What one request loads before its first model call: history, memory, evidence. A public
-//! request loads no memory unless the settings allow it.
+//! What a request loads before its first model call: history, memory, evidence. Public loads none.
 
 use std::time::Instant;
 
@@ -17,8 +16,7 @@ use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::Inputs;
 use crate::runtime::harness::safety::redact::{json, truncate};
 
-/// How many of the oldest turns do not fit budget, counted from the newest. The newest turn is
-/// always kept.
+/// How many oldest turns overflow budget, counted from newest. Newest turn is always kept.
 fn overflowing(turns: &[Stored], budget: usize, chars_per_token: usize) -> usize {
     let mut spent = 0;
     let mut kept = 0;
@@ -46,10 +44,7 @@ impl Agent {
         Ok(self.compacted(ctx, loaded).await)
     }
 
-    /// Replaces the turns that do not fit the history budget with one stored summary that
-    /// covers them, and returns the history the prompt carries.
-    ///
-    /// A failed compaction returns the turns unchanged.
+    /// Replaces turns over budget with one summary; returns prompt history. Failure keeps turns.
     async fn compacted(&self, ctx: &RequestContext, turns: Vec<Stored>) -> Vec<Message> {
         let Some(compactor) = &self.deps.compactor else {
             return turns.into_iter().map(|s| s.message).collect();
@@ -181,8 +176,7 @@ impl Agent {
         })
     }
 
-    /// Appends the profile nodes and relations of this user to the recalled memories. A failed
-    /// graph read is logged and adds nothing.
+    /// Appends this user's profile nodes and relations to recalled memories. Failed reads add none.
     async fn with_profile(&self, ctx: &RequestContext, mut memory: Vec<Memory>) -> Vec<Memory> {
         let Some(graph) = &self.deps.profile_graph else {
             return memory;

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Checks that every tool the repo needs is installed and prints versions.
+# Check required tools are installed and print versions.
 set -uo pipefail
 ok=0
-need() { # name, command, hint
+need() { # Check tool presence and print version or hint
   if command -v "$2" >/dev/null 2>&1; then printf '  ok   %-8s %s\n' "$1" "$($2 --version 2>/dev/null | head -1)"; else printf '  MISSING %-8s install: %s\n' "$1" "$3"; ok=1; fi
 }
 echo "tools:"

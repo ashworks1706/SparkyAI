@@ -22,8 +22,7 @@ pub async fn live() -> StatusCode {
     StatusCode::OK
 }
 
-/// Returns 200 when Postgres and the model endpoint both answer, and 503 with the report when
-/// either does not.
+/// Returns 200 when Postgres and the model endpoint both answer, 503 with the report otherwise.
 pub async fn ready(State(state): State<HealthState>) -> Response {
     let postgres = match sqlx::query("select 1").execute(&state.pool).await {
         Ok(_) => true,

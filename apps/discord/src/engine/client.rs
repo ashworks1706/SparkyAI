@@ -26,8 +26,7 @@ pub struct EngineClient {
 }
 
 impl EngineClient {
-    /// Builds a client for base_url. The request_timeout must exceed the engine request
-    /// budget.
+    /// Builds a client for base_url. request_timeout must exceed the engine request budget.
     pub fn new(
         base_url: &str,
         token: SecretString,
@@ -61,8 +60,7 @@ impl EngineClient {
         self.post("/profile/list", req).await
     }
 
-    /// Forgets one remembered thing, or everything without a label. 503 when the profile
-    /// graph is off.
+    /// Forgets one remembered thing, or everything without a label. 503 if profile graph is off.
     pub async fn forget(&self, req: &ForgetRequest) -> Result<ForgetResponse, EngineError> {
         self.post("/profile/forget", req).await
     }
@@ -99,8 +97,7 @@ impl EngineClient {
         serde_json::from_str(&body).map_err(|e| EngineError::Transport(format!("bad body: {e}")))
     }
 
-    /// Runs one chat turn, reporting progress on tx until the answer or a failure arrives.
-    /// Exactly one Answer or Failed is sent last.
+    /// Runs one chat turn, reporting progress on tx. Sends exactly one Answer or Failed last.
     pub async fn chat_stream(&self, req: &ChatRequest, tx: UnboundedSender<Update>) {
         // A send error means the watcher has dropped the receiver.
         let mut request = self

@@ -1,5 +1,4 @@
-//! A streaming model call relayed to whoever is watching: the reasoning on the thinking line
-//! and the answer as a draft, each block checked by the guardrail before it is shown.
+//! A streaming model call relayed live: reasoning as thinking, answer as draft, guardrail checked.
 
 use tokio::sync::mpsc::unbounded_channel;
 
@@ -12,8 +11,7 @@ use crate::runtime::harness::agent::Agent;
 use crate::runtime::harness::safety::redact::truncate;
 
 impl Agent {
-    /// Runs one completion. When streaming is on, what the model writes is shown while it
-    /// writes, and a draft that does not become the answer is withdrawn.
+    /// Runs one completion. When streaming, output shows live; a draft not kept withdraws.
     pub(super) async fn relay(
         &self,
         ctx: &RequestContext,
@@ -55,8 +53,7 @@ impl Agent {
         result
     }
 
-    /// Shows one release. An answer block the guardrail refuses withdraws the draft and ends
-    /// the showing of this call.
+    /// Shows one release. A refused answer block withdraws the draft and ends this call's showing.
     async fn show(&self, ctx: &RequestContext, step: u32, draft: &mut Draft, release: Release) {
         let limit = self.cfg.max_span_value_chars;
         let event = match release {

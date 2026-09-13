@@ -15,7 +15,7 @@ use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
 use crate::stores::postgres::{quote_literal, vector_literal};
 
-/// How the two retrieval legs are run and fused. Built from the retrieval section; there is no Default.
+/// How the two retrieval legs run and fuse. Built from the retrieval section; there is no Default.
 #[derive(Debug, Clone)]
 pub struct RetrievalTuning {
     /// Candidates pulled from each leg before fusion.
@@ -102,8 +102,6 @@ const FROM: &str = "from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')";
 
 /// Drops a row whose summary is already in the result, keeping the higher ranked of the two.
-///
-/// Fused order is best first, so the first mention of a pair is the one kept.
 pub(crate) fn collapse(rows: &[(Uuid, Option<Uuid>)]) -> Vec<bool> {
     let mut seen: HashSet<Uuid> = HashSet::new();
     rows.iter()

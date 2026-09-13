@@ -28,8 +28,7 @@ impl Default for ProgressStyle {
     }
 }
 
-/// One line of progress for whoever is watching a run. The engine renders text; a client
-/// displays it for any event kind.
+/// One line of progress for a run's watcher. The engine renders text; a client just displays it.
 #[derive(Debug, Clone, Serialize)]
 pub struct Progress {
     /// Snake-case name of the trace event this came from.

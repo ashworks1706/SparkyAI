@@ -61,8 +61,7 @@ def run(
 
 @app.command()
 def serve() -> None:
-    """Run the scraper: live queries from the engine, the indexing of their results, and every
-    registered source on its interval, from one job queue. Blocks."""
+    """Run the scraper: live queries, result indexing, scheduled sources, one job queue. Blocks."""
     jobs.serve()
 
 

@@ -1,8 +1,4 @@
--- The order messages were written in. The messages of one turn are inserted in one transaction
--- and share created_at; seq is assigned in insert order, and history is read by it.
---
--- Adding the identity column rewrites messages under an exclusive lock. Existing rows are
--- numbered in physical order, the order this append-only table was written in.
+-- Write order of messages. One turn's messages share created_at; seq breaks ties by insert order.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

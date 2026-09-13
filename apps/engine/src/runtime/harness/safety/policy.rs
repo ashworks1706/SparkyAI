@@ -44,8 +44,7 @@ impl From<&crate::core::config::Policy> for RiskPolicy {
 }
 
 impl RiskPolicy {
-    /// Builds the policy. write_roles gates external_write and above. confirm_from is the
-    /// lowest risk class held for approval by the caller.
+    /// Builds the policy over its role and risk gates.
     pub fn new(
         write_roles: Vec<String>,
         allow_authenticated_reads: bool,

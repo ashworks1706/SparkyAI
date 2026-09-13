@@ -1,5 +1,4 @@
-//! The interfaces every adapter implements. Types are in core::types; implementations live
-//! in runtime::harness, runtime::model, runtime::tools, and stores.
+//! Interfaces every adapter implements. Types are in core::types; impls live in runtime and stores.
 
 pub mod conversation;
 pub mod knowledge;

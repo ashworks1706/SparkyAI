@@ -1,8 +1,4 @@
-//! SparkyAI engine. One binary: the agent, its HTTP surface, and the Postgres adapters behind
-//! the harness store traits.
-//! Module boundaries (see docs/ARCHITECTURE.md): core imports nothing else in this crate;
-//! runtime::harness, runtime::model, runtime::tools, and stores import only core, never each other;
-//! routes and wiring compose them.
+//! SparkyAI engine: agent, HTTP surface, and Postgres adapters behind the harness traits.
 
 mod core;
 mod routes;

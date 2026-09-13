@@ -1,8 +1,4 @@
--- The profile graph: the entities one user is tied to, and the relations between them.
---
--- Flat memory rows answer what a user said. A node holds one entity plus an embedding of it,
--- an edge holds one relation between two nodes, so recall can start from a relation instead of
--- from similarity over sentences. The engine reads both; extraction writes them after a turn.
+-- The profile graph: a node holds one entity plus its embedding, an edge holds one relation.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

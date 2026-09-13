@@ -1,5 +1,4 @@
-"""The hierarchical index over one source: cluster a level, summarize each cluster, embed the
-summary, repeat."""
+"""The hierarchical index over one source: cluster a level, summarize, embed, repeat."""
 
 from __future__ import annotations
 
@@ -84,11 +83,7 @@ def build_tree(
     summarize: Summarize | None = None,
     embed: Embed | None = None,
 ) -> list[TreeNode]:
-    """The summary levels above one source's leaves, parents after the nodes they cover.
-
-    Empty when the source has fewer leaves than the floor, or when the first level would not
-    split the leaves into at least MIN_CLUSTERS clusters.
-    """
+    """Summary levels above the leaves, parents after nodes covered. Empty if too few leaves."""
     if len(texts) != len(vectors):
         raise PipelineError(f"{len(texts)} leaf texts against {len(vectors)} leaf vectors")
     summarize = summarize or summarize_cluster

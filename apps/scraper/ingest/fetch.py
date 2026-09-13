@@ -67,8 +67,7 @@ def fetch_rendered(url: str) -> Fetched:
 
 
 def parse_firecrawl(url: str, payload: dict[str, Any]) -> Fetched:
-    """Turns a /v2/scrape response into a page. Anything short of markdown plus a status
-    code is a fetch failure."""
+    """Turns a /v2/scrape response into a page. Missing markdown or code is a fetch failure."""
     if not payload.get("success"):
         raise FetchError(f"firecrawl failed for {url}: {str(payload.get('error'))[:200]}")
     data = payload.get("data")
@@ -126,8 +125,7 @@ def fetch_firecrawl(url: str) -> Fetched:
 
 
 def fetch(url: str, *, needs_js: bool = False) -> Fetched:
-    """Fetches by the configured fetcher. Firecrawl renders JS itself; needs_js applies only
-    on the plain HTTP path."""
+    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path."""
     if settings().scraper.fetcher == "firecrawl":
         return fetch_firecrawl(url)
     return fetch_rendered(url) if needs_js else fetch_http(url)

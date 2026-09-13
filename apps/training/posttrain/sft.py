@@ -1,8 +1,4 @@
-"""SFT with Unsloth QLoRA on the verified examples, then GGUF export.
-
-Heavy imports live inside train. --dry-run validates the config and the dataset and reports
-what a run would do, without a GPU or the train extra.
-"""
+"""SFT with Unsloth QLoRA on verified examples, exported to GGUF."""
 
 from __future__ import annotations
 

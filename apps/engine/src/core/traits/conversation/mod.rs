@@ -13,16 +13,11 @@ use crate::core::types::store::StoreError;
 /// Durable conversation history, scoped by tenant, user, and conversation.
 #[async_trait]
 pub trait ConversationStore: Send + Sync {
-    /// Ensures the conversation row exists for the user of this request, created at the
-    /// visibility of the request.
-    ///
-    /// # Errors
-    /// [StoreError::NotOwned] when the id belongs to another user or tenant.
+    /// Ensures the conversation row exists for this user; errors if the id belongs to another.
     async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError>;
     /// Whether the conversation exists and belongs to the user of this request.
     async fn owns(&self, ctx: &RequestContext) -> Result<bool, StoreError>;
-    /// Loads the history of a conversation the caller owns, oldest first: the newest summary,
-    /// then at most limit of the messages after the last message it covers.
+    /// Loads history oldest first: the newest summary, then up to limit messages after it.
     async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Stored>, StoreError>;
     /// Appends turns in order.
     async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError>;
@@ -33,14 +28,12 @@ pub trait ConversationStore: Send + Sync {
         summary: &Message,
         covers: i64,
     ) -> Result<(), StoreError>;
-    /// The most recently updated open conversation of the caller in channel_id at the
-    /// visibility of the request.
+    /// The caller's most recently updated open conversation in channel_id, at request visibility.
     async fn latest(
         &self,
         ctx: &RequestContext,
         channel_id: &str,
     ) -> Result<Option<Uuid>, StoreError>;
-    /// Ends every open conversation of the caller in channel_id, at any visibility. Returns
-    /// how many ended.
+    /// Ends every open conversation of the caller in channel_id, any visibility; returns the count.
     async fn end(&self, ctx: &RequestContext, channel_id: &str) -> Result<u64, StoreError>;
 }

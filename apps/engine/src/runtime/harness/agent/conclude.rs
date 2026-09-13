@@ -11,8 +11,7 @@ use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::{Run, cited};
 
 impl Agent {
-    /// Keeps the turns, records the outcome, and builds the answer. Every exit from the loop
-    /// goes through here.
+    /// Keeps the turns, records the outcome, builds the answer. Every loop exit goes through here.
     pub(super) async fn conclude(
         &self,
         run: &Run<'_>,

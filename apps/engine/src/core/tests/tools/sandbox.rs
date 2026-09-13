@@ -228,8 +228,7 @@ fn a_session_call_keeps_the_container_and_a_plain_call_does_not() {
     );
 }
 
-/// Live check against the container runtime. Run it with
-/// cargo test -p engine -- --ignored sandbox_runs.
+/// Live check against the container runtime: cargo test -p engine -- --ignored sandbox_runs.
 #[tokio::test]
 #[ignore = "needs a container runtime"]
 async fn a_real_container_computes_and_stays_sealed() {

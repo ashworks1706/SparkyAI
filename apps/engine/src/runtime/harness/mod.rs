@@ -1,5 +1,4 @@
-//! The loop, context assembly, the tool registry, memory, safety, and the trace sinks.
-//! This module imports only core.
+//! The loop, context assembly, tool registry, memory, safety, and trace sinks. Imports only core.
 
 pub mod agent;
 pub mod compact;

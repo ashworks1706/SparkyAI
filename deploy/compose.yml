@@ -1,9 +1,4 @@
-# PostHog, self-hosted: the hobby stack of github.com/PostHog/posthog at the commit in
-# deploy/posthog/VERSION, flattened into the posthog-* services below and cut to what Sparky
-# sends: OTLP traces, product events, and the UI and query API that read them back. Feature
-# flags, surveys, CDP destinations, batch exports, logs and LLM analytics capture are left out.
-# Started by just posthog.
-# Images are pinned here and nowhere else.
+# PostHog images for the posthog profile; pinned here only.
 x-posthog-images:
   app: &posthog-app-image posthog/posthog:6fe2b622617da1dc3b7a1cadae6e100729c861cb@sha256:2010612967fa6cdd030dcd1fef2d586103a4338890f621f084a5a731be4ca325
   node: &posthog-node-image posthog/posthog-node:latest@sha256:863e76e040ad41aef79f605c33ec71f1529bddf94cfd88941c935da9bde97235
@@ -108,7 +103,7 @@ services:
       postgres: { condition: service_healthy }
     restart: unless-stopped
 
-  # Model serving. Started by just model. One llama-server per model.
+  # One llama-server per model. Started by just model.
   chat:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     profiles: [model]
@@ -119,13 +114,12 @@ services:
       - 0.0.0.0
       - --port
       - "8000"
-      # ctx-size is the total across slots: each of --parallel N gets ctx-size / N.
+      # Context size is total across slots: each parallel slot gets ctx-size / N.
       - --ctx-size
       - ${SPARKY_CHAT_CTX:-16384}
       - --parallel
       - ${SPARKY_CHAT_PARALLEL:-2}
-      # 8-bit KV cache; requires flash attention. At the default context it fits beside embed
-      # on a 6 GB card.
+      # 8-bit KV cache with flash attention; fits beside embed on 6 GB.
       - --cache-type-k
       - ${SPARKY_CHAT_KV_TYPE:-q8_0}
       - --cache-type-v
@@ -190,7 +184,7 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
     restart: unless-stopped
 
-  # SearXNG, self-hosted metasearch for the scraper's web search. Started by just search.
+  # Self-hosted metasearch for the scraper's web search. Started by just search.
   searxng:
     image: docker.io/searxng/searxng:2026.9.12-d4f00d15d
     profiles: [search]
@@ -206,8 +200,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Firecrawl, self-hosted. The scraper fetch and extract path. Started by just crawl.
-  # No API key: USE_DB_AUTHENTICATION is off. Five containers, all internal except the API.
+  # Self-hosted Firecrawl for scraper fetch and extract. No API key (USE_DB_AUTHENTICATION off).
   firecrawl:
     image: ghcr.io/firecrawl/firecrawl:latest
     profiles: [crawl]
@@ -222,7 +215,7 @@ services:
       NUQ_RABBITMQ_URL: amqp://firecrawl-rabbitmq:5672
       POSTGRES_HOST: firecrawl-postgres
       POSTGRES_PORT: 5432
-      # nuq-postgres initialises its schema in the default postgres database.
+      # nuq-postgres initializes schema in the default postgres database.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
       POSTGRES_DB: postgres
@@ -271,8 +264,7 @@ services:
       interval: 5s
       retries: 10
 
-  # Browses the retrieval index and the conversation tables: http://localhost:8081.
-  # Started by just db. Read-write against the same database the engine uses.
+  # Browse retrieval index and conversation tables on http://localhost:8081. Started by just db.
   pgweb:
     image: sosedoff/pgweb:latest
     profiles: [db]
@@ -298,9 +290,7 @@ services:
     volumes: [miniodata:/data]
     ports: ["9000:9000", "9001:9001"]
 
-  # Trace UI (Arize Phoenix) on http://localhost:6006, loopback only. Started by just phoenix.
-  # It reads the OpenInference attributes the apps set beside the gen_ai ones. Holds full
-  # prompts and replies and has no authentication.
+  # Trace UI on http://localhost:6006 (loopback only). Started by just phoenix. No authentication.
   phoenix:
     image: arizephoenix/phoenix:version-20.11.0
     profiles: [phoenix]
@@ -310,7 +300,7 @@ services:
     ports: ["127.0.0.1:6006:6006"]
     restart: unless-stopped
 
-  # Metrics store. Scrapes llama-server; ad-hoc queries at http://localhost:9090.
+  # Metrics store from llama-server; query at http://localhost:9090.
   prometheus:
     image: prom/prometheus:v3.1.0
     profiles: [metrics]
@@ -324,7 +314,7 @@ services:
     ports: ["127.0.0.1:9090:9090"]
     restart: unless-stopped
 
-  # Dashboards over Prometheus: http://localhost:3000. The inference dashboard is provisioned.
+  # Dashboards over Prometheus on http://localhost:3000. Inference dashboard is provisioned.
   grafana:
     image: grafana/grafana:11.5.1
     profiles: [metrics]
@@ -341,11 +331,11 @@ services:
     depends_on: [prometheus]
     restart: unless-stopped
 
-  # GPU utilisation and VRAM, read from nvidia-smi. Separate profile: needs a GPU.
+  # GPU utilization and VRAM from nvidia-smi. Separate profile; needs a GPU.
   gpu-exporter:
     image: utkuozdemir/nvidia_gpu_exporter:1.3.2
     profiles: [gpu-metrics]
-    # The exporter runs nvidia-smi, which the nvidia runtime injects under the utility capability.
+    # nvidia-smi runs under the utility capability from the nvidia runtime.
     environment:
       NVIDIA_DRIVER_CAPABILITIES: utility
     ports: ["127.0.0.1:9835:9835"]
@@ -356,13 +346,7 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu, utility] }
     restart: unless-stopped
 
-  # ---------- PostHog (profile posthog) ----------
-  # Each service joins the posthog network under its upstream name. Only posthog joins
-  # the default network: http://posthog from other services, http://localhost:8010 from
-  # the host. Upstream files mount from SPARKY_POSTHOG_DIR (an absolute path), default
-  # ../.sparky/posthog, filled by scripts/posthog.sh.
-
-  # Caddy in front of the UI and every ingestion path. Plain http on port 80.
+  # PostHog proxy: UI and ingestion on port 80, the only service on the default network.
   posthog:
     image: *posthog-caddy-image
     profiles: [posthog]
@@ -434,8 +418,7 @@ services:
     networks:
       default: {}
       posthog: { aliases: [proxy] }
-    # Starting the proxy starts every service behind it and the consumers that write what they
-    # capture.
+    # Starting proxy starts all dependent services.
     depends_on:
       - posthog-web
       - posthog-worker

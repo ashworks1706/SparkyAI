@@ -67,10 +67,7 @@ def migrate(conn: psycopg.Connection) -> list[str]:
 def upsert_source(
     conn: psycopg.Connection, key: str, url: str, category: str, fetch_every_hours: int
 ) -> SourceRow:
-    """Creates or refreshes the sources row and stamps this run as an attempt.
-
-    fetch_every is set on insert only. The scheduler reads the column.
-    """
+    """Creates or refreshes the sources row and stamps this run as an attempt."""
     row = conn.execute(
         """
         insert into sources (key, url, category, fetch_every, last_attempt_at)
@@ -87,8 +84,7 @@ def upsert_source(
 
 
 def latest_version(conn: psycopg.Connection, source_id: uuid.UUID) -> dict | None:
-    """Most recent source_versions row, or None. Only runs that pass the quality floor write a
-    version."""
+    """Most recent source_versions row, or None."""
     return conn.execute(
         """
         select id, content_hash, fetched_at, text_chars, chunk_count from source_versions
@@ -111,8 +107,7 @@ def insert_version(
     text_chars: int,
     chunk_count: int,
 ) -> uuid.UUID:
-    """Records one indexed version. text_chars and chunk_count are what the next run's quality
-    floor compares against."""
+    """Records one indexed version, with counts the next run's quality floor compares against."""
     row = conn.execute(
         """
         insert into source_versions
@@ -147,8 +142,7 @@ def replace_chunks(
     fetched_at: datetime,
     chunks: Sequence[ChunkRow],
 ) -> int:
-    """Drops the previous chunks for the source and writes the new ones. The index reflects the
-    current page; source_versions keeps the history."""
+    """Drops the previous chunks for the source and writes the new ones."""
     conn.execute("delete from chunks where source_id = %s", (source.id,))
     with conn.cursor() as cur:
         cur.executemany(
@@ -194,10 +188,7 @@ def insert_tree(
     leaves: Sequence[uuid.UUID],
     nodes: Sequence[TreeNode],
 ) -> int:
-    """Writes the summary levels above the leaves and points every covered row at its parent.
-
-    nodes come parents last. Every child holds an id before its parent is written.
-    """
+    """Writes the summary levels above the leaves and points every covered row at its parent."""
     ids = list(leaves)
     for node in nodes:
         row = conn.execute(
@@ -231,11 +222,7 @@ def insert_tree(
 
 
 def status_rows(conn: psycopg.Connection) -> list[dict]:
-    """Per-source: the schedule, the last attempt, the last change, and the counts.
-
-    last_attempt is when a run last touched the source; last_fetch is when one last produced a
-    new version. The two differ whenever the page came back unchanged.
-    """
+    """Per-source: the schedule, the last attempt, the last change, and the counts."""
     return conn.execute(
         """
         select s.key, s.category, s.enabled, s.fetch_every,
@@ -250,8 +237,7 @@ def status_rows(conn: psycopg.Connection) -> list[dict]:
 
 
 def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource]) -> int:
-    """Publishes the registry the engine checks its search tools against. Sources no longer in
-    code are disabled, not deleted."""
+    """Publishes the registry the engine checks its search tools against."""
     keys = [s.key for s in sources]
     with conn.cursor() as cur:
         cur.executemany(
@@ -294,8 +280,7 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
 
 
 def claim_job(conn: psycopg.Connection, kinds: Sequence[str]) -> Job | None:
-    """Takes the queued job of one of kinds with the highest priority, oldest first, or None.
-    skip locked lets several lanes and processes claim concurrently."""
+    """Takes the queued job of one of kinds with the highest priority, oldest first, or None."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
@@ -349,8 +334,7 @@ def enqueue_job(conn: psycopg.Connection, kind: str, input: dict, priority: int)
 
 
 def requeue_stale(conn: psycopg.Connection, kinds: Sequence[str], lease_secs: float) -> int:
-    """Puts back jobs of kinds left running longer than lease_secs, as a stopped process leaves
-    them. Returns how many."""
+    """Puts back jobs of kinds left running longer than lease_secs. Returns how many."""
     cursor = conn.execute(
         """
         update jobs set status = 'queued', updated_at = now()

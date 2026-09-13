@@ -1,5 +1,4 @@
-//! The agent loop: model call, policy, tool execution, repeated until final answer, error,
-//! cancel, deadline, or step limit.
+//! The agent loop: model call, policy, tools, repeated until done, error, cancel, or a limit.
 
 pub mod call;
 mod conclude;
@@ -136,8 +135,7 @@ impl Agent {
         self
     }
 
-    /// Runs one user message to completion. One CHAIN span per request, with the conversation
-    /// as the session.
+    /// Runs one user message to completion; one CHAIN span per request, conversation as session.
     pub async fn run(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
         let asked = truncate(input, self.cfg.max_span_value_chars);
         let span = tracing::info_span!(
@@ -166,9 +164,6 @@ impl Agent {
     }
 
     /// Runs an action the caller approved and carries on to an answer.
-    ///
-    /// The question and the tool call it produced are already in history. The tool result is
-    /// the next turn, and the loop continues from it.
     pub async fn resume(
         &self,
         ctx: &RequestContext,

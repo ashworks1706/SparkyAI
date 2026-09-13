@@ -50,8 +50,7 @@ pub struct Query {
     pub timeout_secs: u64,
     /// How often the engine checks whether the scraper has answered.
     pub poll_ms: u64,
-    /// How long a query may wait for the scraper to claim it before the call reports that the
-    /// scraper is not running.
+    /// How long a query may wait for the scraper to claim it before reporting it not running.
     pub claim_secs: u64,
 }
 

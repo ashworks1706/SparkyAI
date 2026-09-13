@@ -1,8 +1,4 @@
-"""Turning the parameters a model passes into the values a search URL takes.
-
-Values reach these helpers after registry.check, so every choice is already one of the keys of
-its mapping.
-"""
+"""Maps model-supplied parameters to search URL values, after registry.check has validated them."""
 
 from __future__ import annotations
 
@@ -11,8 +7,7 @@ from collections.abc import Iterable
 
 from scraper.core.types import QueryError
 
-# ASU term codes are 2 plus the two-digit calendar year plus the session digit.
-# Fall 2026 is 2267.
+# ASU term codes are 2 plus the two-digit calendar year plus the session digit; Fall 2026 is 2267.
 _TERM_DIGIT = {"spring": "1", "summer": "4", "fall": "7"}
 
 

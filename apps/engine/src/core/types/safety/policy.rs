@@ -30,9 +30,7 @@ pub struct ConfirmationRequest {
     pub summary: String,
 }
 
-/// A confirmation the engine is holding, with everything needed to run it once approved.
-///
-/// The caller never sends the arguments back; they are read from here.
+/// A held confirmation with all it needs to run once approved; the caller never resends arguments.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingAction {
     /// Provider call id the tool result must answer.

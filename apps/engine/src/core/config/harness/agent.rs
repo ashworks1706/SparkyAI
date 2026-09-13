@@ -61,8 +61,7 @@ pub struct Agent {
     pub stream_block_chars: usize,
     /// When a model call thinks.
     pub thinking: ThinkingRules,
-    /// Fraction added to the estimated prompt when checking it against the context of a chat
-    /// server slot.
+    /// Fraction added to the estimated prompt when checked against the chat server slot context.
     pub prompt_estimate_headroom: f64,
 }
 
@@ -145,9 +144,6 @@ impl Default for ThinkingRules {
 }
 
 /// Rejects loop limits and budgets that leave the loop unable to run.
-///
-/// # Errors
-/// Returns [ConfigError::Invalid] naming the setting.
 pub fn validate_agent(agent: &Agent) -> Result<(), ConfigError> {
     let invalid = |m: &str| Err(ConfigError::Invalid(m.into()));
     if agent.chars_per_token == 0 {
@@ -166,9 +162,6 @@ pub fn validate_agent(agent: &Agent) -> Result<(), ConfigError> {
 }
 
 /// Rejects a thinking cue that holds no word to match.
-///
-/// # Errors
-/// Returns [ConfigError::Invalid] naming the cue.
 pub fn validate_thinking(rules: &ThinkingRules) -> Result<(), ConfigError> {
     match rules.cues.iter().find(|cue| words(cue).is_empty()) {
         Some(cue) => Err(ConfigError::Invalid(format!(

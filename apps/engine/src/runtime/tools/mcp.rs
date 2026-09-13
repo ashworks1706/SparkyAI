@@ -1,5 +1,4 @@
-//! MCP servers as tools. Each remote tool becomes a Tool with a RiskClass derived from its
-//! name, gated by Policy like any built-in.
+//! MCP servers as tools, each gated by Policy through a RiskClass derived from its name.
 
 use std::sync::Arc;
 
@@ -104,8 +103,7 @@ pub struct McpTool {
     max_output_chars: usize,
 }
 
-/// Risk by name. Reads and inspection run, interactions are drafts, and anything that submits
-/// or is unrecognised must be confirmed.
+/// Risk by name: reads run, interactions are drafts, anything submitting or unknown needs confirm.
 pub fn risk_for(name: &str) -> RiskClass {
     /// Look at the page without changing it.
     const READS: [&str; 10] = [
@@ -144,8 +142,7 @@ pub fn risk_for(name: &str) -> RiskClass {
     RiskClass::ExternalWrite
 }
 
-/// Connects to a Streamable-HTTP MCP server and wraps its tools. allow limits which remote
-/// tools are exposed, and empty means all. The connection lives as long as the process.
+/// Connects to a Streamable-HTTP MCP server, wraps its tools. allow limits exposure; empty is all.
 pub async fn connect(
     url: &str,
     allow: &[String],

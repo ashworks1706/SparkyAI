@@ -80,8 +80,7 @@ async fn a_model_that_answers_with_nothing_is_an_error() {
     assert!(c.compact(&ctx(), &turns).await.is_err());
 }
 
-/// A conversation store preloaded with history, keeping positions and summary coverage the way
-/// the database does.
+/// A conversation store preloaded with history, keeping positions and summary coverage.
 #[derive(Default)]
 struct Loaded {
     rows: std::sync::Mutex<Vec<Row>>,

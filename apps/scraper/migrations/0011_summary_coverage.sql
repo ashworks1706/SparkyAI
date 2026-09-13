@@ -1,6 +1,4 @@
--- The last message a summary stands in for. History loads the newest summary and every message
--- after the position it covers. A summary written before this column has none and covers every
--- message before its own position.
+-- The last message a summary stands in for. History loads the newest summary and later messages.
 
 set lock_timeout = '5s';
 set statement_timeout = '10min';

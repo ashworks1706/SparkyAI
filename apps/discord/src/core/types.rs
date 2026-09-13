@@ -104,10 +104,7 @@ pub struct ErrorFrame {
     pub status: Option<u16>,
 }
 
-/// One line of progress from /chat/stream.
-///
-/// The engine renders the sentence. slot names the line this one writes over. A tool result
-/// carries the slot of its start line.
+/// One line of progress from /chat/stream. slot names the line this one writes over.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Progress {
     /// Ready-to-display sentence.

@@ -17,8 +17,7 @@ def source_of(job: Job) -> QuerySource:
 
 
 def run_job(job: Job) -> QueryResult:
-    """Fetches one live query, with the whole text it produced. Raises QueryError with a reason
-    the model can act on."""
+    """Fetches one live query, with the whole text it produced. Raises QueryError on a bad input."""
     source = source_of(job)
     raw = job.input.get("params")
     if raw is None:

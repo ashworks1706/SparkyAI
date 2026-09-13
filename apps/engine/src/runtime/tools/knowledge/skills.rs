@@ -1,5 +1,4 @@
-//! ReadPublic: fetch one saved procedure for the model to follow. The tool returns steps and
-//! runs nothing.
+//! ReadPublic: fetches one saved procedure for the model to follow; returns steps and runs nothing.
 
 use std::fmt::Write as _;
 use std::sync::Arc;

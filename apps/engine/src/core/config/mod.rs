@@ -1,8 +1,4 @@
-//! Configuration. Every external service and every harness knob is configured here and
-//! nowhere else.
-//!
-//! Two layers, lowest first: an optional TOML file (sparky.toml, or SPARKY_CONFIG_FILE)
-//! and SPARKY_* environment variables. Env values win over file values.
+//! Configuration. Every external service and harness knob is configured here, nowhere else.
 
 pub mod harness;
 pub mod http;
@@ -131,8 +127,7 @@ pub enum ConfigError {
     Invalid(String),
 }
 
-/// Settings that moved to another section. A variable named here fails boot; other unknown
-/// SPARKY_* variables are accepted.
+/// Settings that moved to another section. A variable named here fails boot.
 const RENAMED: [(&str, &str); 4] = [
     ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
     ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
@@ -141,11 +136,7 @@ const RENAMED: [(&str, &str); 4] = [
 ];
 
 impl Config {
-    /// Fails on a variable that has moved, naming what replaced it. is_set reports whether a
-    /// variable is present.
-    ///
-    /// # Errors
-    /// Returns [ConfigError::Invalid] when a renamed variable is still set.
+    /// Fails on a variable that has moved, naming what replaced it.
     pub fn reject_renamed(is_set: impl Fn(&str) -> bool) -> Result<(), ConfigError> {
         match RENAMED.into_iter().find(|(old, _)| is_set(old)) {
             Some((old, new)) => Err(ConfigError::Invalid(format!(
@@ -155,8 +146,7 @@ impl Config {
         }
     }
 
-    /// Loads the TOML layer then SPARKY_* variables, __ separating nesting:
-    /// SPARKY_POSTGRES__URL. Environment values win over the file.
+    /// Loads the TOML layer then SPARKY_* variables, __ separating nesting: SPARKY_POSTGRES__URL.
     pub fn load() -> Result<Self, ConfigError> {
         Self::reject_renamed(|key| std::env::var_os(key).is_some())?;
         let path =

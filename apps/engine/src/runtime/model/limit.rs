@@ -12,9 +12,6 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{ModelDelta, ModelError, ModelRequest, ModelResponse};
 
 /// Admits slots model calls at once and queues the rest for up to max_wait.
-///
-/// slots matches llama-server --parallel. A queued call still honours the request deadline and
-/// cancellation.
 pub struct Limited {
     inner: Arc<dyn ModelProvider>,
     permits: Arc<Semaphore>,

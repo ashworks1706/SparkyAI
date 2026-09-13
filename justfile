@@ -1,5 +1,4 @@
-# SparkyAI monorepo tasks. Running just with no arguments lists them.
-# Units: engine, discord, cli (Rust); scraper, training (Python); web (TypeScript); infra (Compose)
+# SparkyAI monorepo tasks; run just alone to list. Units: Rust, Python, TypeScript, Compose (infra).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -12,7 +11,7 @@ default:
 doctor:
     ./scripts/doctor.sh
 
-# Create .env from the example (no-op if it exists). Settings live in the committed sparky.toml
+# Create .env from the example; settings live in sparky.toml
 env:
     @[ -f .env ] && echo ".env exists" || { cp .env.example .env && echo "created .env, fill in tokens and model URLs"; }
 
@@ -21,7 +20,7 @@ hooks:
     git config core.hooksPath .githooks
     @echo "hooks installed: .githooks/pre-commit"
 
-# Everything a fresh clone needs: tools check, .env, hooks, deps, datastores
+# Everything a fresh clone needs: tools, .env, hooks, deps, datastores
 bootstrap: env hooks setup infra
     @echo "ready: 'just cli' for the console, or 'just engine' / 'just discord' in separate shells, or 'just up' for everything in docker"
 
@@ -52,22 +51,22 @@ clean:
 
 # ---------- rust: engine + discord ----------
 
-# fmt --check, clippy -D warnings, tests, dependency direction
+# Fmt --check, clippy, tests, dependency direction
 check-rust:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace
     ./scripts/check-deps.sh
 
-# Run the engine (needs .env)
+# Run the engine
 engine *ARGS:
     cargo run -p engine -- {{ARGS}}
 
-# Run the discord bot (needs .env)
+# Run the discord bot
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# Developer console: start/stop every unit, tail logs, run tasks
+# Developer console: start/stop units, tail logs, run tasks
 cli:
     cargo run -p cli --release
 
@@ -79,7 +78,7 @@ check-scraper:
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
-# The scraper: just scraper serve (live searches, their indexing, scheduled runs), just scraper run library_hours
+# Scraper: serve (live searches, indexing, scheduled runs) or run a source like library_hours
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
 
@@ -87,7 +86,7 @@ scraper *ARGS:
 migrate:
     cd apps/scraper && uv run scraper migrate
 
-# Training CLIs: just data export|verify|stats; just eval run|baseline|compare; just train sft [--dry-run]
+# Train SFT or other training commands
 train *ARGS:
     cd apps/training && uv run train {{ARGS}}
 
@@ -115,7 +114,7 @@ up *ARGS:
 down:
     docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix down
 
-# Production: prebuilt GHCR images (SPARKY_IMAGE_TAG=main|<sha>), no host ports for datastores
+# Start production with GHCR images; no host ports for datastores
 prod-up *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml pull
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d {{ARGS}}
@@ -126,40 +125,40 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores: postgres, redis, minio. The engine runs on the host. PostHog is just posthog
+# Datastores (postgres, redis, minio) for host-side engine. PostHog: just posthog
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
 
-# PostHog (traces and product events) on http://localhost:8010, loopback. 17 containers
+# PostHog (traces and events) on http://localhost:8010 (loopback); 17 containers
 posthog *ARGS:
     ./scripts/posthog.sh
     docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep -E '^posthog(-|$)')
 
-# Phoenix trace UI on http://localhost:6006, loopback. Set SPARKY_TELEMETRY__PHOENIX_URL to export.
+# Phoenix trace UI on http://localhost:6006 (loopback); set SPARKY_TELEMETRY__PHOENIX_URL to export
 phoenix *ARGS:
     docker compose -f deploy/compose.yml --profile phoenix up -d {{ARGS}} phoenix
 
-# llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
+# llama-server for chat (:8000) and embeddings (:8001); GGUFs download on first run
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
 
-# SearXNG (self-hosted metasearch) for the search_web tool: http://localhost:8888, loopback
+# Self-hosted metasearch for search_web tool on http://localhost:8888 (loopback)
 search *ARGS:
     docker compose -f deploy/compose.yml --profile search up -d {{ARGS}} searxng
 
-# Firecrawl (self-hosted) for the scraper: API on :3002
+# Self-hosted Firecrawl for scraper API on :3002
 crawl *ARGS:
     docker compose -f deploy/compose.yml --profile crawl up -d {{ARGS}} firecrawl
 
-# Browse the database at http://localhost:8081 (pgweb, loopback)
+# Browse database at http://localhost:8081 (pgweb, loopback)
 db *ARGS:
     docker compose -f deploy/compose.yml --profile db up -d {{ARGS}} pgweb
 
-# Prometheus (:9090) and Grafana (:3000, dashboard "SparkyAI inference"). Needs SPARKY_GRAFANA_PASSWORD.
+# Prometheus (:9090) and Grafana (:3000); requires SPARKY_GRAFANA_PASSWORD
 metrics *ARGS:
     docker compose -f deploy/compose.yml --profile metrics up -d {{ARGS}} prometheus grafana
 
-# GPU utilisation and VRAM into Prometheus. Only on a host with an NVIDIA GPU.
+# GPU utilization and VRAM into Prometheus; requires NVIDIA GPU
 gpu-metrics *ARGS:
     docker compose -f deploy/compose.yml --profile gpu-metrics up -d {{ARGS}} gpu-exporter
 

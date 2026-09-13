@@ -1,5 +1,4 @@
-//! The sparky developer console. Runs every unit in the repo, streams its logs, and probes
-//! the engine and its dependencies, from one modal terminal UI.
+//! The sparky developer console: runs units, streams logs, and probes services in one TUI.
 
 mod app;
 mod core;

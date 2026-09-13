@@ -58,8 +58,7 @@ impl Destination<'_> {
         }
     }
 
-    /// Replaces the text of a message this destination posted. Some rows replace its buttons,
-    /// an empty list clears them, and None leaves them.
+    /// Replaces a posted message's text; some rows replace buttons, empty clears, None keeps them.
     pub(super) async fn edit(
         &self,
         http: &Http,

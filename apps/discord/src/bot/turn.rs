@@ -21,8 +21,7 @@ fn turn_event(name: &'static str, req: &ChatRequest) -> AnalyticsEvent {
 }
 
 impl Handler {
-    /// Runs req against the engine and shows the turn on one message in dest. span receives
-    /// the session id and the answer. place names where the question was asked.
+    /// Runs req against the engine, shows the turn in dest. span gets the session id and answer.
     pub(super) async fn converse(
         &self,
         ctx: &Context,
@@ -105,9 +104,7 @@ impl Handler {
         }
     }
 
-    /// Puts the final render on the card, the first message in place and the rest as
-    /// continuations. Buttons go on the first. When the card cannot be edited, the render is
-    /// posted anew and the stale card is deleted.
+    /// Puts the final render on the card; if it cannot be edited, posts anew, deletes stale card.
     async fn show(
         &self,
         ctx: &Context,
@@ -160,7 +157,6 @@ impl Handler {
     }
 
     /// Collects steps while the turn runs and edits the card at most once per edit_every.
-    /// A step that arrives inside the gap is shown on the next edit. Returns the outcome.
     async fn watch(
         &self,
         ctx: &Context,

@@ -1,7 +1,4 @@
-//! Span fields shared by the model calls of the loop and of a task.
-//!
-//! Each model span carries two attribute sets for the same values: gen_ai, which PostHog reads,
-//! and OpenInference, which the Phoenix trace UI reads.
+//! Span fields shared by loop and task model calls: gen_ai for PostHog, OpenInference for Phoenix.
 
 use tracing::Span;
 

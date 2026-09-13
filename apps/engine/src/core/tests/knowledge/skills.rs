@@ -1,5 +1,4 @@
-//! The get_skill tool: what the model is shown, what a fetched skill reads like, and what an
-//! unknown or unreviewed key gets back.
+//! The get_skill tool: what the model sees, a fetched skill's text, unknown/unreviewed key results.
 
 use std::sync::Arc;
 

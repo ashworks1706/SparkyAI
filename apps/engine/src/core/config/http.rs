@@ -12,8 +12,7 @@ pub struct Http {
     pub concurrency_limit: usize,
     /// Requests one user may start per minute. 0 removes the limit.
     pub rate_limit_per_min: u32,
-    /// Origins allowed to call the engine from a browser. A single * allows any; empty adds
-    /// no CORS headers.
+    /// Origins allowed to call the engine from a browser. A single * allows any; empty means none.
     pub cors_origins: Vec<String>,
     /// How long in-flight requests get to finish after a shutdown signal.
     pub shutdown_grace_secs: u64,

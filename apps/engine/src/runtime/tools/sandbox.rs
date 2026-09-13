@@ -1,11 +1,4 @@
-//! A command in an isolated environment, and the tool that offers it.
-//!
-//! The container runs with no network, a read-only root, a memory and process ceiling, and a
-//! non-root user. Nothing it does reaches the host, the database, or the model endpoint.
-//!
-//! A call naming a session runs in a container that outlives it, so what an earlier command
-//! wrote under /tmp is still there. A call naming none starts a container that is removed when
-//! it exits. Session containers are scoped to the tenant and user.
+//! A command in an isolated container: no network, read-only root, capped resources, non-root user.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Stdio;
