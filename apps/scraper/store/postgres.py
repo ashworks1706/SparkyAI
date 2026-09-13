@@ -251,8 +251,8 @@ def status_rows(conn: psycopg.Connection) -> list[dict]:
 
 
 def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource]) -> int:
-    """Publishes the registry the engine reads to build its tool. Sources no longer in code are
-    disabled, not deleted."""
+    """Publishes the registry the engine checks its search tools against. Sources no longer in
+    code are disabled, not deleted."""
     keys = [s.key for s in sources]
     with conn.cursor() as cur:
         cur.executemany(
@@ -276,6 +276,8 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
                                 "description": p.description,
                                 "required": p.required,
                                 "example": p.example,
+                                "choices": list(p.choices),
+                                "many": p.many,
                             }
                             for p in s.params
                         ]

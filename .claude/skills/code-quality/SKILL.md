@@ -114,7 +114,7 @@ as more of the same kind of thing gets added, not just the one that exists now.
   and never make a folder that holds one file.
 - Use one vocabulary across parallel trees. The same domain name appears in
   `core/types/<domain>`, `core/traits/<domain>`, `core/tests/<domain>`,
-  `stores/<domain>`, and `agent/harness/<domain>`, so finding one piece of a
+  `stores/<domain>`, and `runtime/harness/<domain>`, so finding one piece of a
   domain finds the rest.
 - Domain means a concern of the system, never an ASU topic (library, events are
   rows or registry entries) and never a language.
@@ -278,7 +278,7 @@ answer is not.
   clever one only the author understands. If a rename or restructure doesn't move
   toward that, don't do it.
 - **Respect the layering.** Inside `apps/engine`, `core` imports nothing else in
-  the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores`
+  the crate; `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores`
   import only `core`, never each other; `routes` and `wiring` compose them.
   `engine`, `discord`, and `cli` never depend on each other, and
   `scripts/check-deps.sh` rejects a change that makes them.

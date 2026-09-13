@@ -8,11 +8,11 @@ use std::time::Duration;
 
 use uuid::Uuid;
 
-use crate::agent::harness::trace::JsonlSink;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::Usage;
 use crate::core::types::trace::{RunStatus, TraceEvent, TraceRecord};
+use crate::runtime::harness::trace::JsonlSink;
 
 #[test]
 fn jsonl_round_trips() {
@@ -150,9 +150,9 @@ fn kind_matches_the_name_each_event_serialises_under() {
 
 #[test]
 fn a_capped_trace_keeps_the_start_of_the_run_and_drops_the_tail() {
-    use crate::agent::harness::trace::JsonlSink;
     use crate::core::traits::trace::TraceSink;
     use crate::core::types::trace::TraceEvent;
+    use crate::runtime::harness::trace::JsonlSink;
 
     let dir = std::env::temp_dir().join(format!("sparky-trace-cap-{}", uuid::Uuid::new_v4()));
     let Ok(sink) = JsonlSink::new(&dir, 200) else {
@@ -165,7 +165,7 @@ fn a_capped_trace_keeps_the_start_of_the_run_and_drops_the_tail() {
             TraceEvent::ToolStarted {
                 step,
                 call_id: format!("c{step}"),
-                tool: "search_knowledge_base".into(),
+                tool: "search_library_hours".into(),
                 arguments: serde_json::json!({}),
             },
         );
@@ -188,7 +188,7 @@ fn a_capped_trace_keeps_the_start_of_the_run_and_drops_the_tail() {
 
 #[test]
 fn pruning_removes_traces_older_than_the_retention_window() {
-    use crate::agent::harness::trace::JsonlSink;
+    use crate::runtime::harness::trace::JsonlSink;
 
     let dir = std::env::temp_dir().join(format!("sparky-trace-prune-{}", uuid::Uuid::new_v4()));
     let Ok(sink) = JsonlSink::new(&dir, 0) else {

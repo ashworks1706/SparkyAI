@@ -188,7 +188,7 @@ fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
         !steps.push(None, "thinking"),
         "an immediate repeat is dropped"
     );
-    assert!(steps.push(None, "searching the knowledge base"));
+    assert!(steps.push(None, "searching live courses"));
     assert!(steps.push(None, "thinking"), "a repeat later on is kept");
     assert!(!steps.push(None, "   "));
     assert_eq!(steps.lines().len(), 3);
@@ -198,7 +198,7 @@ fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
     let shown = thinking(&steps.lines(), 2_000, 0);
     assert_eq!(
         shown,
-        format!("{head}\n-# thinking\n-# searching the knowledge base\n-# thinking")
+        format!("{head}\n-# thinking\n-# searching live courses\n-# thinking")
     );
     assert_ne!(
         thinking(&[], 2_000, 1),
@@ -248,7 +248,7 @@ fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
     resp.memories = vec!["You study CSE.".into()];
     let steps = vec![
         "\u{1f914} thinking".to_owned(),
-        "\u{2705} `search_knowledge_base` \u{2192} three passages".to_owned(),
+        "\u{2705} `search_courses` \u{2192} three passages".to_owned(),
     ];
 
     let out = answer(&steps, &resp, 2_000);
@@ -257,7 +257,7 @@ fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
     assert!(!card.contains(THINKING), "the header goes once answered");
     let order = [
         "-# \u{1f914} thinking",
-        "-# \u{2705} `search_knowledge_base`",
+        "-# \u{2705} `search_courses`",
         "Hayden closes at 2am.",
         "Also from** desk note",
         "Memory used**\n- You study CSE.",

@@ -133,10 +133,11 @@ pub enum ConfigError {
 /// An unknown SPARKY_* variable is not rejected: the apps share one .env, so the engine sees
 /// the scraper keys and the scraper sees the engine keys. A variable named here is a boot
 /// failure that reports where it went.
-const RENAMED: [(&str, &str); 3] = [
+const RENAMED: [(&str, &str); 4] = [
     ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
     ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
     ("SPARKY_MODEL__THINKING", "SPARKY_AGENT__THINKING__MODE"),
+    ("SPARKY_TOOLS__QUERY_SOURCE", "SPARKY_TOOLS__SEARCH"),
 ];
 
 impl Config {
@@ -237,7 +238,7 @@ impl Config {
         if self.compaction.enabled && self.compaction.max_tokens == 0 {
             return invalid("compaction.max_tokens must be at least 1".into());
         }
-        if self.tools.query_source && self.query.poll_ms == 0 {
+        if self.tools.search && self.query.poll_ms == 0 {
             return invalid("query.poll_ms must be at least 1".into());
         }
         if self.retrieval.candidates < 1 {

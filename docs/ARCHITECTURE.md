@@ -9,8 +9,8 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 | Layer | Choice | Where |
 |---|---|---|
 | Engine, Discord bot | tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client. | `apps/engine/src/agent/model/rig_openai.rs` |
-| MCP | `rmcp` (official SDK) | `apps/engine/src/agent/tools/mcp.rs` |
+| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client. | `apps/engine/src/runtime/model/rig_openai.rs` |
+| MCP | `rmcp` (official SDK) | `apps/engine/src/runtime/tools/mcp.rs` |
 | Scraper | psycopg, boto3, httpx | `apps/scraper` |
 | Fetch + extract | Firecrawl, self-hosted; httpx + BeautifulSoup | `deploy/compose.yml` profile `crawl` |
 | Web | Vite + React + TypeScript + shadcn | `apps/web` |
@@ -35,7 +35,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 - The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
 - Every request carries its own `RequestContext`. No global mutable state.
 - Every replaceable dependency is a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
-- The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `agent/model`.
+- The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `runtime/model`.
 - Model output is never written back as retrieval evidence.
 - Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
 - Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
@@ -46,7 +46,7 @@ This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md);
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
-    src/agent/      harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
+    src/runtime/    harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
     src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs, skills), memory (memories, profile graph)
     src/routes/     chat (JSON and SSE), conversation, profile, openai (/v1), health
     src/wiring.rs
@@ -122,9 +122,9 @@ Only the scraper touches the web. The engine and the scraper meet only in Postgr
 ```mermaid
 flowchart TD
     ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["agent::harness<br/>agent/{loop,step,inputs,execute,conclude,run,task}<br/>agent/call/{retry,spans,thinking,thought}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
-    MODEL["agent::model<br/>rig_openai · limit"]
-    TOOLS["agent::tools<br/>knowledge/{search,query,skills} · mcp · sandbox"]
+    HARNESS["runtime::harness<br/>agent/{loop,step,inputs,execute,conclude,run,task}<br/>agent/call/{retry,spans,thinking,thought}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
+    MODEL["runtime::model<br/>rig_openai · limit"]
+    TOOLS["runtime::tools<br/>knowledge/search/one file per source · knowledge/skills · mcp · sandbox"]
     STORES["stores<br/>postgres · conversation · confirmation<br/>knowledge/{retrieval,query,skills} · memory/{memories,profile}"]
     CORE["core<br/>config/{services,http} · config/harness by domain<br/>types · traits · tests, each split by domain"]
 
@@ -139,7 +139,7 @@ flowchart TD
     STORES --> CORE
 ```
 
-`core` imports nothing else in the crate. `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Folders nest by domain, and the same names repeat across `core/types`, `core/traits`, `core/tests`, `agent/harness`, `agent/tools`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat instead of a one-file folder. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
+`core` imports nothing else in the crate. `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Folders nest by domain, and the same names repeat across `core/types`, `core/traits`, `core/tests`, `runtime/harness`, `runtime/tools`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat instead of a one-file folder. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
 
 ## Inside `scraper`
 
@@ -177,7 +177,7 @@ Citations are built from `Evidence`, not parsed out of generated text.
 
 ## Traits
 
-All in `engine/src/core/traits`, implemented in `agent::harness`, `agent::model`, `agent::tools`, and `stores`. Inputs and outputs are owned Sparky types from `core/types`.
+All in `engine/src/core/traits`, implemented in `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores`. Inputs and outputs are owned Sparky types from `core/types`.
 
 ```rust
 #[async_trait]
@@ -306,11 +306,11 @@ The harness runs more than one prompt. The loop is one of them; compaction and p
 | Chat | the context window fills | the turns being replaced | one compacted turn |
 | Graph | after a turn is appended, when the classifier finds something | the turn | the profile graph |
 
-`agent::harness::task` is what they share: a prompt, one model call, no tools, a typed result. The loop is not built on it, because the loop is the thing with tools and stopping conditions.
+`runtime::harness::agent::task` is what they share: a prompt, one model call, no tools, a typed result. The loop is not built on it, because the loop is the thing with tools and stopping conditions.
 
 ## Capabilities
 
-What the model may do is one list, not several. `agent::harness::capability` renders the `<capabilities>` section of the prompt and each entry names its kind.
+What the model may do is one list, not several. `runtime::harness::agent::prompt::capability` renders the `<capabilities>` section of the prompt and each entry names its kind.
 
 | Kind | Executed by | Risk |
 |---|---|---|
@@ -519,18 +519,22 @@ No mechanism. The browser MCP server that Phase 8 assumed is gone: no browser, n
 
 ## Live source queries
 
-Two ways to answer a question about an ASU page. `search_knowledge_base` reads the index the scraper wrote on a schedule. `query_source` runs a page **now**, with parameters the model supplies, for spaces too large to enumerate: every term x subject x level of the class catalog, or a scholarship search filtered by the student's own situation.
+Two ways to answer a question about an ASU page. The index the scraper wrote on a schedule is retrieved before the first model call and handed to the model as evidence; the model has no tool over it. When that evidence does not answer, the model calls the `search_<source>` tool for the topic, which runs that source **now** with the parameters it supplies: a term, subject and level of the class catalog, a scholarship search filtered by the student's own situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, or a plain refetch of this week's library hours.
 
 The engine never fetches that page. The scraper owns fetching, and the two meet in the database, so a query is a `jobs` row:
 
 ```
-model ──► query_source(source, params)
+model ──► search_<source>(params)
 engine ──► insert jobs(kind='source_query', input, deadline) ──► poll
 scraper worker ──► claim (for update skip locked) ──► fetch ──► result | error
 engine ──► reads the row, hands the text back to the model
 ```
 
-`query_sources` is the registry: key, description, and the parameters each accepts. `just worker` publishes it on start and the engine reads it at boot to build one tool over every source. Adding a source is a scraper change — a module and a registry row — so the model's schema cost stays constant no matter how many exist. An empty registry means no tool, rather than a tool advertising sources that do not exist.
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, is the tool: its description, the parameters the model may pass and what each accepts (text, one or any of fixed choices, a date, a flag), and any check beyond those. Arguments are checked and normalized there, so a bad call is corrected by the model without queueing a job. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker API, the campus map layers, news and video feeds).
+
+`query_sources` is the registry: key and the parameters the worker accepts, with their choices. `just worker` publishes it on start. At boot the engine registers the tool of every source the worker serves and refuses to boot when a tool and the worker disagree on a parameter name, whether it is required, whether it takes a list, or a choice. Adding a source is a file on each side and an entry in each catalog. Every source adds a schema to every request, so the engine refuses to boot when the schemas take over half of `agent.prompt_budget_tokens` or the capabilities section overflows its budget. An empty registry means no search tools, rather than tools advertising sources that do not exist.
+
+Not covered: X and Instagram posts (the public X timeline endpoint serves posts years old, Instagram requires a login) and anything behind a student login, such as Workday jobs. A live page the model read is cited with the answer beside the evidence (`Answer.sources`).
 
 A worker refusal (unknown source, missing parameter, unreadable page) comes back as `InvalidArguments`, which the loop feeds to the model to correct, not as a failed run. **Nothing a live query returns is written to `chunks`.** It answers one caller; the index is the scraper's alone.
 

@@ -22,17 +22,16 @@ use tracing::Instrument;
 use tracing::field::Empty;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::agent::harness::agent::Agent;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::AgentError;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
-use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::ModelError;
 use crate::core::types::store::StoreError;
 use crate::core::types::trace::progress::Progress;
 use crate::routes::rate_limit::RateLimiter;
+use crate::runtime::harness::agent::Agent;
 use uuid::Uuid;
 
 /// What the chat route needs.
@@ -244,7 +243,7 @@ async fn run_turn(
         Ok(answer) => Ok(ChatResponse {
             request_id: id,
             conversation_id: ctx.conversation_id,
-            citations: Evidence::citations(&answer.evidence),
+            citations: answer.citations(),
             text: answer.text,
             confirmation: answer.confirmation,
             status: answer.status,
@@ -411,7 +410,7 @@ pub async fn confirm(
         Ok(answer) => Json(ChatResponse {
             request_id: ctx.request_id,
             conversation_id: ctx.conversation_id,
-            citations: Evidence::citations(&answer.evidence),
+            citations: answer.citations(),
             text: answer.text,
             confirmation: answer.confirmation,
             status: answer.status,

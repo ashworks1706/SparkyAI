@@ -64,17 +64,6 @@ impl PgRetriever {
             tuning,
         }
     }
-
-    /// The categories the scraper has published, sorted. Empty when nothing is indexed.
-    ///
-    /// # Errors
-    /// Returns [RetrievalError::Store] when the query fails.
-    pub async fn categories(&self) -> Result<Vec<String>, RetrievalError> {
-        sqlx::query_scalar("select distinct category from sources order by category")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| RetrievalError::Store(e.to_string()))
-    }
 }
 
 #[derive(Clone)]
@@ -106,8 +95,7 @@ const SELECT: &str =
     "select c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, c.fetched_at,
             c.parent_id
     from chunks c join sources s on s.id = c.source_id
-    where (c.tenant_id = $1 or c.tenant_id = 'public')
-      and (cardinality($2::text[]) = 0 or c.category = any($2))";
+    where (c.tenant_id = $1 or c.tenant_id = 'public')";
 
 /// Drops a row whose summary is already in the result, keeping the higher ranked of the two.
 ///
@@ -167,10 +155,9 @@ impl Retriever for PgRetriever {
                     self.embedder.dim()
                 )));
             }
-            let sql = format!("{SELECT} order by c.embedding <=> $3::vector limit $4");
+            let sql = format!("{SELECT} order by c.embedding <=> $2::vector limit $3");
             let rows = sqlx::query(&sql)
                 .bind(&ctx.tenant_id)
-                .bind(&query.categories)
                 .bind(vector_literal(&vector))
                 .bind(self.tuning.candidates)
                 .fetch_all(&self.pool)
@@ -190,12 +177,11 @@ impl Retriever for PgRetriever {
             // parameter. It is quoted as a literal and validated at load.
             let cfg = quote_literal(&self.tuning.text_search_config);
             let sql = format!(
-                "{SELECT} and c.tsv @@ websearch_to_tsquery({cfg}, $3)
-                 order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $3)) desc limit $4"
+                "{SELECT} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
+                 order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $2)) desc limit $3"
             );
             let rows = sqlx::query(&sql)
                 .bind(&ctx.tenant_id)
-                .bind(&query.categories)
                 .bind(&query.text)
                 .bind(self.tuning.candidates)
                 .fetch_all(&self.pool)

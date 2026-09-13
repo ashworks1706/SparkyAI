@@ -3,23 +3,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::agent::prompt::capability;
-use crate::agent::harness::agent::task::{Task, TaskConfig};
-use crate::agent::harness::agent::{Agent, AgentDeps, PromptText};
-use crate::agent::harness::compact::{self, ChatCompactor};
-use crate::agent::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
-use crate::agent::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
-use crate::agent::harness::safety::guardrail::{RuleGuardrail, Rules};
-use crate::agent::harness::safety::policy::RiskPolicy;
-use crate::agent::harness::tools::ToolSet;
-use crate::agent::harness::trace::{Fanout, JsonlSink, NullSink};
-use crate::agent::model::limit::Limited;
-use crate::agent::model::rig_openai::{self, RigChat, RigEmbedder};
-use crate::agent::tools::knowledge::query::QuerySourceTool;
-use crate::agent::tools::knowledge::search::KnowledgeSearch;
-use crate::agent::tools::knowledge::skills::GetSkillTool;
-use crate::agent::tools::mcp::{self, McpLimits};
-use crate::agent::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
 use crate::core::config::Config;
 use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::traits::knowledge::query::SourceQueries;
@@ -33,11 +16,28 @@ use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
+use crate::core::types::model::tokens::estimate;
 use crate::routes::Limits;
 use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
 use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
+use crate::runtime::harness::agent::prompt::capability;
+use crate::runtime::harness::agent::task::{Task, TaskConfig};
+use crate::runtime::harness::agent::{Agent, AgentDeps, PromptText};
+use crate::runtime::harness::compact::{self, ChatCompactor};
+use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
+use crate::runtime::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
+use crate::runtime::harness::safety::guardrail::{RuleGuardrail, Rules};
+use crate::runtime::harness::safety::policy::RiskPolicy;
+use crate::runtime::harness::tools::ToolSet;
+use crate::runtime::harness::trace::{Fanout, JsonlSink, NullSink};
+use crate::runtime::model::limit::Limited;
+use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
+use crate::runtime::tools::knowledge::search;
+use crate::runtime::tools::knowledge::skills::GetSkillTool;
+use crate::runtime::tools::mcp::{self, McpLimits};
+use crate::runtime::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
 use crate::stores::knowledge::skills::PgSkills;
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::postgres::{
@@ -65,12 +65,14 @@ library and dining hours, transit, deadlines, campus services, and the society i
   first value in the row answers a different question.
 
 ## Using your capabilities
-The results were retrieved for you before you were called. Read them first, and call a tool
-only for what they do not cover.
-- search_knowledge_base: the indexed ASU pages. Use it with a short keyword query when the
-  results in this prompt missed the topic.
-- query_source: one live fetch of an ASU page. Use it for a value that changes within the day,
-  such as today's hours or the next shuttle.
+The knowledge base results were retrieved for you before you were called. Read them first.
+- Each search_ tool fetches one ASU source live, now, with the arguments you give: courses,
+  scholarships, events, clubs, news, the library catalog, library hours, study rooms, sports
+  schedules, sports news, live shuttle times, the campus map, official social media posts, and
+  student jobs. Call one only when the results in this prompt do not answer, are missing the
+  detail asked for, or the answer must be current, such as open seats, the next shuttle, or
+  study room slots.
+- Call the one search_ tool that matches the topic, with the fewest arguments that narrow it.
 - An empty result means the answer is not held. Say so rather than calling the same tool again
   with reworded arguments.
 - An action that needs approval waits for the user to press the button. Never say you did
@@ -79,9 +81,13 @@ only for what they do not cover.
 Examples of the judgement wanted:
 - "when does hayden close tonight", library hours in the results: answer from them, cite them,
   call nothing.
-- "any AI club meetings this week", nothing relevant in the results: one search_knowledge_base
-  call for club meetings, then answer from what came back.
-- "is the tempe shuttle running right now": query_source for the live page, then answer.
+- "any AI clubs", nothing relevant in the results: search_clubs with keywords artificial
+  intelligence, then answer from what came back.
+- "does CSE 310 have open seats this fall": search_courses with term Fall 2026, keywords
+  CSE 310, open_only true, then answer.
+- "when is the next shuttle to Poly": search_shuttles with route polytechnic-tempe, then answer
+  with the stop and the time.
+- "where is BYENG": search_campus_map with place BYENG, then answer with the map link.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
 
 ## Never
@@ -137,12 +143,12 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
-    let (tools, mcp_names) =
-        build_tools(&cfg, &pool, retriever.clone(), source_queries(&cfg, &pool)).await?;
+    let (tools, mcp_names) = build_tools(&cfg, &pool, source_queries(&cfg, &pool)).await?;
     let capabilities = capability::render(&capability::from_definitions(
         &tools.definitions(),
         &mcp_names,
     ));
+    fits_the_prompt(&cfg, &tools, &capabilities)?;
 
     let agent_cfg = agent_config(&cfg);
 
@@ -371,6 +377,29 @@ fn task_config(cfg: &Config) -> TaskConfig {
     }
 }
 
+/// Fails the boot when the tools leave the prompt no room. The capabilities section has to fit
+/// its own budget, and the tool schemas have to leave half the prompt budget for everything else.
+fn fits_the_prompt(cfg: &Config, tools: &ToolSet, capabilities: &str) -> anyhow::Result<()> {
+    let cpt = cfg.agent.chars_per_token;
+    let listed = estimate(capabilities, cpt);
+    if listed > cfg.agent.capabilities_budget_tokens {
+        anyhow::bail!(
+            "the capabilities section needs about {listed} tokens but \
+             agent.capabilities_budget_tokens is {}; raise it or disable tools",
+            cfg.agent.capabilities_budget_tokens
+        );
+    }
+    let schemas = tools.estimated_tokens(cpt);
+    if schemas > cfg.agent.prompt_budget_tokens / 2 {
+        anyhow::bail!(
+            "the tool schemas need about {schemas} tokens, over half of \
+             agent.prompt_budget_tokens ({}); raise it or disable tools",
+            cfg.agent.prompt_budget_tokens
+        );
+    }
+    Ok(())
+}
+
 /// The loop limits and budgets, gathered from the sections that own them.
 fn agent_config(cfg: &Config) -> AgentConfig {
     AgentConfig {
@@ -408,46 +437,41 @@ fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
 async fn build_tools(
     cfg: &Config,
     pool: &sqlx::PgPool,
-    retriever: Arc<PgRetriever>,
     queries: Arc<dyn SourceQueries>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
     let mut mcp_names = Vec::new();
-    if cfg.tools.knowledge_search {
-        // The categories name what the scraper has published. The tool offers them as the
-        // only values the filter accepts.
-        let categories = retriever.categories().await?;
-        if categories.is_empty() {
-            tracing::info!("nothing indexed; search_knowledge_base is not offered");
-        } else {
-            let search: Arc<dyn Tool> = Arc::new(KnowledgeSearch::new(
-                retriever,
-                cfg.retrieval.top_k,
-                categories.clone(),
-            ));
-            if !disabled(&search.definition().name) {
-                tracing::info!(?categories, "knowledge search registered");
-                tools = tools.with(search);
-            }
+    if cfg.tools.search {
+        // A source the worker has not published is not offered. One it publishes with other
+        // parameters than the tool declares fails the boot.
+        let published = queries.sources().await?;
+        if published.is_empty() {
+            tracing::info!("no live sources registered; run `just worker` to publish them");
         }
-    }
-    if cfg.tools.query_source {
-        // An empty registry means the scraper has published no sources.
-        let sources = queries.sources().await?;
-        if sources.is_empty() {
-            tracing::info!("no query sources registered; run `just worker` to publish them");
-        } else {
-            let tool: Arc<dyn Tool> = Arc::new(QuerySourceTool::new(
-                queries,
-                &sources,
+        let mut registered = 0;
+        for source in search::catalog() {
+            let Some(served) = published.iter().find(|p| p.key == source.key()) else {
+                if !published.is_empty() {
+                    tracing::warn!(
+                        source = source.key(),
+                        "the worker does not serve this source"
+                    );
+                }
+                continue;
+            };
+            search::conforms(source.as_ref(), served).map_err(|e| anyhow::anyhow!(e))?;
+            let tool: Arc<dyn Tool> = Arc::new(search::Search::new(
+                source,
+                Arc::clone(&queries),
                 cfg.query.timeout_secs,
             ));
             if !disabled(&tool.definition().name) {
-                tracing::info!(count = sources.len(), "query sources registered");
                 tools = tools.with(tool);
+                registered += 1;
             }
         }
+        tracing::info!(count = registered, "search tools registered");
     }
     if cfg.tools.get_skill {
         // An empty registry means review has offered nothing. Registering the tool anyway

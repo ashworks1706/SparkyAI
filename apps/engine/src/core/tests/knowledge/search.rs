@@ -1,99 +1,250 @@
-//! The category filter of search_knowledge_base: what it offers and what it refuses.
+//! The search tools: one per live source, their schemas, how arguments are checked before a job
+//! is queued, and the boot check against the registry the worker publishes.
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use async_trait::async_trait;
-use chrono::Utc;
-use uuid::Uuid;
+use serde_json::{Value, json};
 
-use crate::agent::tools::knowledge::search::KnowledgeSearch;
-use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::tests::support::{FakeQueries, ctx};
 use crate::core::traits::tools::Tool;
-use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::evidence::Evidence;
-use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
-use crate::core::types::tools::ToolError;
+use crate::core::types::knowledge::query::{QueryParam, QuerySourceInfo};
+use crate::core::types::tools::{RiskClass, ToolError};
+use crate::runtime::tools::knowledge::search::courses::Courses;
+use crate::runtime::tools::knowledge::search::library_hours::LibraryHours;
+use crate::runtime::tools::knowledge::search::study_rooms::StudyRooms;
+use crate::runtime::tools::knowledge::search::{
+    Accepts, LiveSource, Search, arguments, catalog, conforms, definition, tool_name,
+};
 
-fn ctx() -> RequestContext {
-    RequestContext::new("g", "u", Duration::from_secs(5))
-}
-
-/// Answers every query with one chunk, whatever was asked for.
-struct Always;
-
-#[async_trait]
-impl Retriever for Always {
-    async fn retrieve(
-        &self,
-        _ctx: &RequestContext,
-        _query: &RetrievalQuery,
-    ) -> Result<Vec<Evidence>, RetrievalError> {
-        Ok(vec![Evidence {
-            source_id: Uuid::new_v4(),
-            chunk_id: Uuid::new_v4(),
-            title: "ASU Library hours".into(),
-            content: "Sep 11 Friday 7am - 10pm".into(),
-            url: None,
-            fetched_at: Utc::now(),
-            score: 1.0,
-        }])
+/// The registry entry a worker would publish for source.
+fn published(source: &dyn LiveSource) -> QuerySourceInfo {
+    QuerySourceInfo {
+        key: source.key().into(),
+        params: source
+            .params()
+            .iter()
+            .map(|p| {
+                let (choices, many): (&[&str], bool) = match p.accepts {
+                    Accepts::OneOf(c) => (c, false),
+                    Accepts::AnyOf(c) => (c, true),
+                    Accepts::Flag => (&["true", "false"], false),
+                    Accepts::Text | Accepts::Date => (&[], false),
+                };
+                QueryParam {
+                    name: p.name.into(),
+                    required: p.required,
+                    choices: choices.iter().map(|c| (*c).to_owned()).collect(),
+                    many,
+                }
+            })
+            .collect(),
     }
 }
 
-fn tool() -> KnowledgeSearch {
-    KnowledgeSearch::new(Arc::new(Always), 3, vec!["events".into(), "library".into()])
+fn refused(source: &dyn LiveSource, args: Value) -> String {
+    match arguments(source, args) {
+        Err(message) => message,
+        Ok(params) => unreachable!("expected a refusal, got {params:?}"),
+    }
 }
 
 #[test]
-fn the_indexed_categories_are_the_only_values_the_filter_offers() {
-    let d = tool().definition();
-    let values = &d.parameters["properties"]["categories"]["items"]["enum"];
-    assert_eq!(values, &serde_json::json!(["events", "library"]));
-    // A model that cannot see the categories guesses one, and a guess matches nothing.
-    assert!(
-        d.description.contains("events, library"),
-        "{}",
-        d.description
-    );
-}
-
-#[tokio::test]
-async fn a_category_the_index_does_not_hold_is_refused_with_the_ones_it_does() {
-    // Returning no results for a category that does not exist reads as an absent fact.
-    let out = tool()
-        .call(
-            &ctx(),
-            serde_json::json!({"query": "hours", "categories": ["library_hours"]}),
-        )
-        .await;
-    let Err(ToolError::InvalidArguments(message)) = out else {
-        unreachable!("a category that does not exist is a correctable mistake, got {out:?}")
-    };
-    assert!(message.contains("library_hours"), "{message}");
-    assert!(message.contains("events, library"), "{message}");
-}
-
-#[tokio::test]
-async fn an_indexed_category_searches_and_case_does_not_matter() {
-    for asked in ["library", "Library"] {
-        let out = tool()
-            .call(
-                &ctx(),
-                serde_json::json!({"query": "hours", "categories": [asked]}),
-            )
-            .await;
-        let Ok(out) = out else {
-            unreachable!("{asked} is indexed, got {out:?}")
-        };
-        assert!(out.content.contains("Sep 11 Friday"), "{}", out.content);
+fn every_source_is_its_own_tool_with_a_unique_name() {
+    let sources = catalog();
+    let mut names: Vec<String> = sources.iter().map(|s| tool_name(s.key())).collect();
+    assert_eq!(names.len(), 14);
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), 14, "no two sources share a key");
+    for source in &sources {
+        let d = definition(source.as_ref(), 90);
+        assert!(d.name.starts_with("search_"), "{}", d.name);
+        assert!(
+            !d.description.trim().is_empty(),
+            "{} says what it answers",
+            d.name
+        );
+        assert_eq!(d.risk, RiskClass::ReadPublic);
+        assert_eq!(
+            d.timeout_secs,
+            Some(90),
+            "a live fetch outlives the default tool budget"
+        );
     }
 }
 
+#[test]
+fn choices_become_enums_and_a_flag_a_boolean_in_the_schema() {
+    let d = definition(&Courses, 90);
+    let props = &d.parameters["properties"];
+    assert_eq!(d.name, "search_courses");
+    assert_eq!(d.parameters["required"], json!(["term"]));
+    assert_eq!(
+        props["term"]["description"],
+        "Term to search: spring, summer or fall and a year. e.g. Fall 2026"
+    );
+    assert_eq!(props["days"]["type"], "array");
+    assert!(
+        props["days"]["items"]["enum"]
+            .as_array()
+            .is_some_and(|e| e.contains(&json!("monday")))
+    );
+    assert_eq!(props["session"]["enum"], json!(["a", "b", "c", "other"]));
+    assert_eq!(props["open_only"]["type"], "boolean");
+    let rooms = definition(&StudyRooms, 90);
+    assert_eq!(rooms.parameters["properties"]["date"]["format"], "date");
+    let hours = definition(&LibraryHours, 90);
+    assert_eq!(hours.parameters["properties"], json!({}));
+}
+
+#[test]
+fn arguments_are_normalized_into_the_strings_the_worker_takes() {
+    let params = arguments(
+        &Courses,
+        json!({"term": " Fall 2026 ", "days": ["Monday", "wednesday"], "session": "B", "open_only": true, "keywords": null}),
+    );
+    let Ok(params) = params else {
+        unreachable!("valid arguments, got {params:?}")
+    };
+    assert_eq!(params["term"], "Fall 2026");
+    assert_eq!(
+        params["days"], "monday,wednesday",
+        "choices keep their declared spelling"
+    );
+    assert_eq!(params["session"], "b");
+    assert_eq!(params["open_only"], "true");
+    assert!(
+        !params.contains_key("keywords"),
+        "an absent value is not sent"
+    );
+    assert!(arguments(&LibraryHours, Value::Null).is_ok_and(|p| p.is_empty()));
+}
+
+#[test]
+fn a_bad_argument_is_refused_with_what_would_be_accepted() {
+    assert!(refused(&Courses, json!({})).contains("needs term"));
+    let unknown = refused(&Courses, json!({"term": "Fall 2026", "subject": "CSE"}));
+    assert!(
+        unknown.contains("no parameter subject") && unknown.contains("keywords"),
+        "{unknown}"
+    );
+    let day = refused(&Courses, json!({"term": "Fall 2026", "days": ["Funday"]}));
+    assert!(
+        day.contains("\"Funday\" is not one of") && day.contains("monday"),
+        "{day}"
+    );
+    assert!(
+        refused(&Courses, json!({"term": "Autumn 26"})).contains("term must look like Fall 2026")
+    );
+    assert!(
+        refused(&Courses, json!({"term": "Fall 2026", "open_only": "maybe"}))
+            .contains("true or false")
+    );
+    let date = refused(&StudyRooms, json!({"library": "hayden", "date": "Sep 14"}));
+    assert!(date.contains("2026-09-14"), "{date}");
+    assert!(refused(&LibraryHours, json!({"library": "hayden"})).contains("it takes: nothing"));
+    assert!(refused(&Courses, json!(["Fall 2026"])).contains("must be an object"));
+}
+
+#[test]
+fn a_tool_that_matches_what_the_worker_publishes_conforms() {
+    for source in catalog() {
+        let served = published(source.as_ref());
+        assert_eq!(
+            conforms(source.as_ref(), &served),
+            Ok(()),
+            "{}",
+            source.key()
+        );
+    }
+}
+
+#[test]
+fn a_tool_that_drifts_from_the_worker_is_named_at_boot() {
+    let mut served = published(&Courses);
+    served.params.retain(|p| p.name != "session");
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("session")));
+
+    let mut served = published(&Courses);
+    served.params.push(QueryParam {
+        name: "campus".into(),
+        required: false,
+        choices: Vec::new(),
+        many: false,
+    });
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("campus")));
+
+    let mut served = published(&Courses);
+    if let Some(days) = served.params.iter_mut().find(|p| p.name == "days") {
+        days.choices.retain(|c| c != "sunday");
+    }
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("sunday")));
+
+    let mut served = published(&Courses);
+    if let Some(term) = served.params.iter_mut().find(|p| p.name == "term") {
+        term.required = false;
+    }
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("required")));
+
+    let mut served = published(&Courses);
+    if let Some(days) = served.params.iter_mut().find(|p| p.name == "days") {
+        days.many = false;
+    }
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("list")));
+}
+
 #[tokio::test]
-async fn omitting_the_filter_searches_every_category() {
-    let out = tool()
-        .call(&ctx(), serde_json::json!({"query": "hours"}))
+async fn a_call_queues_its_own_source_and_cites_the_page() {
+    let queries = FakeQueries::new(vec![published(&Courses)]).answering("courses", "CSE 310 open");
+    let sent = queries.sent();
+    let tool = Search::new(Box::new(Courses), Arc::new(queries), 90);
+    let out = tool
+        .call(&ctx(), json!({"term": "Fall 2026", "keywords": "CSE 310"}))
         .await;
-    assert!(out.is_ok(), "{out:?}");
+    let Ok(output) = out else {
+        unreachable!("the source answered, got {out:?}")
+    };
+    assert!(
+        output.content.contains("CSE 310 open"),
+        "{}",
+        output.content
+    );
+    assert!(
+        output.content.contains("https://example.test/courses"),
+        "{}",
+        output.content
+    );
+    assert_eq!(output.sources.len(), 1);
+    assert_eq!(
+        output.sources[0].url.as_deref(),
+        Some("https://example.test/courses")
+    );
+    let requests = sent.lock().map(|r| r.clone()).unwrap_or_default();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].source, "courses");
+    assert_eq!(requests[0].params["keywords"], "CSE 310");
+}
+
+#[tokio::test]
+async fn a_bad_argument_never_reaches_the_queue() {
+    let queries = FakeQueries::new(vec![published(&Courses)]);
+    let sent = queries.sent();
+    let tool = Search::new(Box::new(Courses), Arc::new(queries), 90);
+    let out = tool.call(&ctx(), json!({"keywords": "CSE 310"})).await;
+    assert!(
+        matches!(out, Err(ToolError::InvalidArguments(_))),
+        "{out:?}"
+    );
+    assert!(sent.lock().is_ok_and(|r| r.is_empty()));
+}
+
+#[tokio::test]
+async fn a_worker_refusal_comes_back_as_something_the_model_can_fix() {
+    let queries = FakeQueries::new(vec![published(&Courses)])
+        .rejecting("courses", "courses returned a page with no readable text");
+    let tool = Search::new(Box::new(Courses), Arc::new(queries), 90);
+    match tool.call(&ctx(), json!({"term": "Fall 2026"})).await {
+        Err(ToolError::InvalidArguments(reason)) => assert!(reason.contains("no readable text")),
+        other => unreachable!("expected a correctable refusal, got {other:?}"),
+    }
 }

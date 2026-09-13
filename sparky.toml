@@ -28,8 +28,10 @@ recall_in_public = false
 
 # Prompt budgets in estimated tokens. A section budget above the total is rejected at boot.
 # chars_per_token is what makes an estimate an estimate. Lower it for a tokenizer that splits
-# URLs and course codes finely.
-prompt_budget_tokens = 3000
+# URLs and course codes finely. The tool schemas come out of prompt_budget_tokens; the engine
+# refuses to boot when they take over half of it. The prompt and model.max_tokens share one
+# llama-server slot: ctx-size 16384 over --parallel 2 is 8192 a slot.
+prompt_budget_tokens = 4000
 evidence_budget_tokens = 1200
 history_budget_tokens = 1000
 memory_budget_tokens = 300
@@ -66,7 +68,7 @@ role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
 evidence_header = "Knowledge base results for this question, closest match first. These were retrieved for you before you were called. Answer from them and from tool output only, and cite the bracketed number of every entry you use."
-no_evidence_line = "The knowledge base returned nothing for this question. Search it with a tool before you answer, or say you do not have it."
+no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly. Evidence rows carry a day or date label; without today's
 # date the model cannot tell which one a question means.
@@ -128,8 +130,7 @@ confirm_from = "external_write"
 
 [tools]
 disabled = []
-knowledge_search = true
-query_source = true
+search = true                  # one search_<source> tool per live source the worker publishes
 
 # The classifier and the graph agent. Detached from the request that produced the turn.
 # Off until the graph is wanted; every turn otherwise costs two extra model calls.

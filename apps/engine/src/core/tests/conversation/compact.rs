@@ -3,13 +3,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::agent::task::{Task, TaskConfig};
-use crate::agent::harness::compact::{ChatCompactor, transcript};
 use crate::core::tests::support::{Scripted, text};
 use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role, ToolCall};
 use crate::core::types::model::ModelError;
+use crate::runtime::harness::agent::task::{Task, TaskConfig};
+use crate::runtime::harness::compact::{ChatCompactor, transcript};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -34,16 +34,16 @@ fn the_transcript_names_who_said_what_and_keeps_tool_calls() {
             "",
             vec![ToolCall {
                 id: "1".into(),
-                name: "search_knowledge_base".into(),
+                name: "search_library_hours".into(),
                 arguments: serde_json::json!({"query": "hayden hours"}),
             }],
         ),
-        Message::tool_result("1", "search_knowledge_base", "2am on weekdays"),
+        Message::tool_result("1", "search_library_hours", "2am on weekdays"),
         Message::assistant("Hayden closes at 2am on weekdays."),
     ];
     let out = transcript(&turns);
     assert!(out.contains("User: when does hayden close"), "{out}");
-    assert!(out.contains("Sparky called search_knowledge_base"), "{out}");
+    assert!(out.contains("Sparky called search_library_hours"), "{out}");
     assert!(out.contains("Tool result: 2am on weekdays"), "{out}");
     assert!(out.contains("Sparky: Hayden closes"), "{out}");
 }
@@ -139,12 +139,12 @@ impl crate::core::traits::conversation::ConversationStore for Loaded {
 
 #[tokio::test]
 async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
-    use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::safety::policy::RiskPolicy;
-    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
     use crate::core::types::agent::assemble::Budget;
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
 
     let store = Arc::new(Loaded::default());
     if let Ok(mut turns) = store.turns.lock() {
@@ -200,12 +200,12 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
 
 #[tokio::test]
 async fn a_failed_compaction_leaves_the_run_working() {
-    use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::safety::policy::RiskPolicy;
-    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
     use crate::core::types::agent::assemble::Budget;
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
 
     let store = Arc::new(Loaded::default());
     if let Ok(mut turns) = store.turns.lock() {

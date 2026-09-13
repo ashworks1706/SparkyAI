@@ -1,9 +1,9 @@
 //! The capabilities section: what the model is told it can do, and how each entry is kinded.
 
-use crate::agent::harness::agent::prompt::capability::{
+use crate::core::types::tools::{RiskClass, ToolDefinition};
+use crate::runtime::harness::agent::prompt::capability::{
     Capability, Kind, from_definitions, kind_of, render,
 };
-use crate::core::types::tools::{RiskClass, ToolDefinition};
 
 fn definition(name: &str, risk: RiskClass) -> ToolDefinition {
     ToolDefinition {
@@ -22,7 +22,7 @@ fn a_remote_tool_is_kinded_by_the_server_it_came_from() {
     assert_eq!(kind_of("remote_lookup", &mcp), Kind::Mcp);
     // A built-in of the same name is still a built-in when no server offers it.
     assert_eq!(kind_of("remote_lookup", &[]), Kind::Tool);
-    assert_eq!(kind_of("search_knowledge_base", &mcp), Kind::Tool);
+    assert_eq!(kind_of("search_library_hours", &mcp), Kind::Tool);
     assert_eq!(kind_of("get_skill", &mcp), Kind::Skill);
     assert_eq!(kind_of("run_sandbox", &mcp), Kind::Sandbox);
 }
@@ -30,12 +30,12 @@ fn a_remote_tool_is_kinded_by_the_server_it_came_from() {
 #[test]
 fn every_offered_tool_becomes_one_line_naming_its_kind() {
     let defs = vec![
-        definition("search_knowledge_base", RiskClass::ReadPublic),
+        definition("search_library_hours", RiskClass::ReadPublic),
         definition("remote_lookup", RiskClass::ExternalWrite),
     ];
     let caps = from_definitions(&defs, &["remote_lookup".to_owned()]);
     let text = render(&caps);
-    assert!(text.contains("search_knowledge_base (tool)"), "{text}");
+    assert!(text.contains("search_library_hours (tool)"), "{text}");
     assert!(text.contains("remote_lookup (mcp)"), "{text}");
     assert_eq!(
         text.lines().count(),
@@ -62,12 +62,12 @@ fn nothing_offered_writes_no_section() {
 
 #[test]
 fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
-    use crate::agent::harness::agent::prompt::assemble::assemble;
     use crate::core::tests::support::ctx;
     use crate::core::types::agent::assemble::{Budget, Sections};
+    use crate::runtime::harness::agent::prompt::assemble::assemble;
 
     let caps = vec![Capability {
-        name: "search_knowledge_base".into(),
+        name: "search_library_hours".into(),
         kind: Kind::Tool,
         description: "search the index".into(),
         risk: RiskClass::ReadPublic,
@@ -86,7 +86,7 @@ fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
         Budget::default(),
     );
     let joined: String = out.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(joined.contains("search_knowledge_base (tool)"), "{joined}");
+    assert!(joined.contains("search_library_hours (tool)"), "{joined}");
 
     // A section that does not fit is left out whole rather than truncated into a half list.
     let tight = assemble(
@@ -104,5 +104,5 @@ fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
         },
     );
     let joined: String = tight.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(!joined.contains("search_knowledge_base (tool)"), "{joined}");
+    assert!(!joined.contains("search_library_hours (tool)"), "{joined}");
 }

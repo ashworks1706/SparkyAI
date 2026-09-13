@@ -40,10 +40,12 @@ _LABEL = re.compile(
 _FIELDS = " | "
 
 
-def extract_text(html: bytes | str, *, main_only: bool = True) -> str:
-    """Visible text with one block per line, navigation and boilerplate removed."""
+def extract_text(html: bytes | str, *, main_only: bool = True, keep_forms: bool = False) -> str:
+    """Visible text with one block per line, navigation and boilerplate removed. keep_forms
+    keeps the text of forms, for pages that render their results inside one."""
     soup = BeautifulSoup(html, "lxml")
-    for tag in soup(_DROP_TAGS):
+    dropped = tuple(t for t in _DROP_TAGS if not (keep_forms and t == "form"))
+    for tag in soup(dropped):
         tag.decompose()
     root = soup
     if main_only:
@@ -70,6 +72,13 @@ def title_of(html: bytes | str) -> str | None:
 def page_text(fetched: Fetched) -> str:
     """The markdown a fetcher produced, or text pulled out of the raw body."""
     return fetched.text if fetched.text is not None else extract_text(fetched.body)
+
+
+def form_page_text(fetched: Fetched) -> str:
+    """page_text for a page that renders its results inside a form."""
+    if fetched.text is not None:
+        return fetched.text
+    return extract_text(fetched.body, keep_forms=True)
 
 
 def plain(line: str) -> str:

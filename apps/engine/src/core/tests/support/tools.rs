@@ -25,7 +25,7 @@ impl Tool for Echo {
         }
     }
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        Ok(ToolOutput::text(args.to_string()))
+        Ok(output(args.to_string()))
     }
 }
 
@@ -46,7 +46,7 @@ impl Tool for Slow {
     }
     async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        Ok(ToolOutput::text("late"))
+        Ok(output("late"))
     }
 }
 
@@ -68,7 +68,7 @@ impl Tool for Ordered {
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
         let n = args["n"].as_u64().unwrap_or(0);
         tokio::time::sleep(Duration::from_millis(40 * (4 - n))).await;
-        Ok(ToolOutput::text(n.to_string()))
+        Ok(output(n.to_string()))
     }
 }
 
@@ -94,5 +94,14 @@ impl Tool for Boom {
         _args: serde_json::Value,
     ) -> Result<ToolOutput, ToolError> {
         Err(ToolError::Failed("nope".into()))
+    }
+}
+
+/// Text-only tool output.
+fn output(content: impl Into<String>) -> ToolOutput {
+    ToolOutput {
+        content: content.into(),
+        data: None,
+        sources: Vec::new(),
     }
 }

@@ -24,7 +24,7 @@ fn tool_call_arguments_are_counted_on_top_of_the_content() {
     let mut with_call = Message::assistant("");
     with_call.tool_calls = vec![crate::core::types::conversation::message::ToolCall {
         id: "1".into(),
-        name: "search_knowledge_base".into(),
+        name: "search_library_hours".into(),
         arguments: serde_json::json!({"query": "library hours"}),
     }];
     assert!(with_call.estimated_tokens(4) > Message::assistant("").estimated_tokens(4));

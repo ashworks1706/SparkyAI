@@ -13,8 +13,7 @@ import structlog
 from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import Job, QueryError, QueryResult
-from scraper.ingest import extract, fetch
-from scraper.query.registry import QUERY_SOURCES, url_for
+from scraper.query.registry import QUERY_SOURCES, run
 from scraper.store import postgres
 
 log = structlog.get_logger()
@@ -37,16 +36,12 @@ def run_job(job: Job) -> QueryResult:
         raise QueryError("params must be an object")
     params = {k: str(v) for k, v in raw.items() if v is not None}
 
-    url = url_for(source, params)
     with telemetry.tracer().start_as_current_span(
         "scrape.query",
-        attributes={
-            "sparky.input": url,
-            "sparky.source": source.key,
-        },
+        attributes={"sparky.source": source.key},
     ) as span:
-        fetched = fetch.fetch(url, needs_js=source.needs_js)
-        text = fetched.text if fetched.text is not None else extract.extract_text(fetched.body)
+        url, text = run(source, params)
+        span.set_attribute("sparky.input", url)
         text = text.strip()
         if not text:
             raise QueryError(f"{source.key} returned a page with no readable text")

@@ -57,8 +57,8 @@ pub const EVIDENCE_HEADER: &str = "Knowledge base results for this question, clo
                                    bracketed number of every entry you use.";
 /// Default line written when retrieval found nothing.
 pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
-                                    Search it with a tool before you answer, or say you do not \
-                                    have it.";
+                                    Call the search_ tool for the topic before you answer, or \
+                                    say you do not have it.";
 /// Default heading above what the model may do.
 pub const CAPABILITIES_HEADER: &str = "What you can do. Each line is a name, how it runs, and \
                                        what it does.";

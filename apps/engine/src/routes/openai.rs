@@ -18,7 +18,6 @@ use crate::core::types::http::openai::{
     ChatMessage, Choice, CompletionRequest, CompletionResponse, CompletionUsage, ModelCard,
     ModelList,
 };
-use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::model::ModelError;
 use crate::core::types::store::StoreError;
 use crate::core::types::trace::RunStatus;
@@ -71,9 +70,10 @@ pub fn transcript(answer: &Answer) -> String {
             .collect();
         let _ = write!(out, "\n\nTools: {}", ran.join(" \u{2192} "));
     }
-    if !answer.evidence.is_empty() {
+    let citations = answer.citations();
+    if !citations.is_empty() {
         out.push_str("\n\nSources");
-        for (i, source) in Evidence::citations(&answer.evidence).iter().enumerate() {
+        for (i, source) in citations.iter().enumerate() {
             let _ = write!(out, "\n{}. {}", i + 1, source.line());
         }
     }

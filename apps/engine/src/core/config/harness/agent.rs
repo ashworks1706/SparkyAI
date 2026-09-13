@@ -72,7 +72,7 @@ impl Default for Agent {
             history_turns: 20,
             memory_recall_limit: 10,
             recall_in_public: false,
-            prompt_budget_tokens: 3_000,
+            prompt_budget_tokens: 4_000,
             evidence_budget_tokens: 1_200,
             history_budget_tokens: 1_000,
             memory_budget_tokens: 300,

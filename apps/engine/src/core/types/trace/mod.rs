@@ -199,7 +199,7 @@ impl TraceEvent {
                 "\u{1f527} `{}`{} \u{2014} {}",
                 tool,
                 call_arguments(arguments, detail),
-                friendly(tool).map_or("running", |(started, _)| started)
+                running(tool)
             )),
             Self::ToolCall {
                 tool,
@@ -313,14 +313,14 @@ fn clip(text: &str, limit: usize) -> String {
     format!("{}\u{2026}", kept.trim_end())
 }
 
-/// What a tool is shown as: the line while it runs, and its name once it is done. None for a
-/// tool with no wording, which is shown by its own name.
-fn friendly(tool: &str) -> Option<(&'static str, &'static str)> {
-    match tool {
-        "search_knowledge_base" => Some(("searching the knowledge base", "knowledge base search")),
-        "query_source" => Some(("checking a live ASU page", "live ASU page check")),
-        "get_skill" => Some(("reading a saved procedure", "saved procedure")),
-        _ => None,
+/// What a tool is shown as while it runs. A search tool names what it searches.
+fn running(tool: &str) -> String {
+    if tool == "get_skill" {
+        return "reading a saved procedure".to_owned();
+    }
+    match tool.strip_prefix("search_") {
+        Some(source) => format!("searching live {}", source.replace('_', " ")),
+        None => "running".to_owned(),
     }
 }
 

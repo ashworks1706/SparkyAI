@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
-use crate::agent::harness::agent::task::{Task, TaskConfig};
-use crate::agent::harness::memory::profile::{GRAPH_INSTRUCTIONS, GraphAgent};
 use crate::core::tests::support::{Scripted, ctx, text};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::profile::ProfileError;
 use crate::core::types::model::{ModelError, ModelResponse};
+use crate::runtime::harness::agent::task::{Task, TaskConfig};
+use crate::runtime::harness::memory::profile::{GRAPH_INSTRUCTIONS, GraphAgent};
 
 fn graph_agent(replies: Vec<Result<ModelResponse, ModelError>>) -> GraphAgent {
     GraphAgent::new(Task::new(
@@ -282,7 +282,7 @@ async fn forgetting_without_the_token_is_refused() {
 
 #[test]
 fn a_reconciler_answer_names_statements_to_withdraw() {
-    use crate::agent::harness::memory::profile::parse_indices;
+    use crate::runtime::harness::memory::profile::parse_indices;
 
     assert_eq!(parse_indices("2", 3), vec![1]);
     assert_eq!(parse_indices("1, 3", 3), vec![0, 2]);
@@ -295,7 +295,7 @@ fn a_reconciler_answer_names_statements_to_withdraw() {
 
 #[test]
 fn anything_unreadable_withdraws_nothing() {
-    use crate::agent::harness::memory::profile::parse_indices;
+    use crate::runtime::harness::memory::profile::parse_indices;
 
     // Keeping a stale fact is recoverable. Removing a true one is not, so a misparse keeps.
     for answer in [
@@ -420,10 +420,10 @@ async fn record(
     use std::sync::Arc;
     use std::time::Duration;
 
-    use crate::agent::harness::agent::task::{Task, TaskConfig};
-    use crate::agent::harness::memory::detect::RuleDetector;
-    use crate::agent::harness::memory::profile::{GraphAgent, ProfileWriter, Reconciler};
     use crate::core::tests::support::{Scripted, text};
+    use crate::runtime::harness::agent::task::{Task, TaskConfig};
+    use crate::runtime::harness::memory::detect::RuleDetector;
+    use crate::runtime::harness::memory::profile::{GraphAgent, ProfileWriter, Reconciler};
 
     let graph = Arc::new(Recorded {
         existing,
@@ -457,8 +457,8 @@ async fn record(
 
 #[test]
 fn a_fact_with_an_empty_label_or_low_confidence_is_not_keepable() {
-    use crate::agent::harness::memory::profile::keepable;
     use crate::core::types::memory::profile::{ProfileEntity, ProfileFact};
+    use crate::runtime::harness::memory::profile::keepable;
 
     let fact = |object: &str, confidence: f32| ProfileFact {
         subject: ProfileEntity {

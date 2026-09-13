@@ -40,7 +40,7 @@ def test_redaction_reaches_tool_call_arguments():
         tool_calls=[
             {
                 "id": "c1",
-                "name": "search_knowledge_base",
+                "name": "search_courses",
                 "arguments": '{"query": "email me at student@asu.edu"}',
             }
         ],
@@ -50,4 +50,4 @@ def test_redaction_reaches_tool_call_arguments():
 
     assert "student@asu.edu" not in str(out.tool_calls)
     assert "[email]" in str(out.tool_calls)
-    assert out.tool_calls[0]["name"] == "search_knowledge_base", "only values are rewritten"
+    assert out.tool_calls[0]["name"] == "search_courses", "only values are rewritten"

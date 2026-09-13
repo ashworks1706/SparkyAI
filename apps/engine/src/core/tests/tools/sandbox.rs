@@ -3,13 +3,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::tools::sandbox::{ContainerSandbox, Limits, SandboxTool};
 use crate::core::config::SandboxSettings;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
 use crate::core::types::tools::{RiskClass, ToolError};
+use crate::runtime::tools::sandbox::{ContainerSandbox, Limits, SandboxTool};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -170,7 +170,7 @@ async fn arguments_that_do_not_carry_a_command_are_a_correctable_refusal() {
 
 #[test]
 fn a_session_container_is_scoped_to_the_caller() {
-    use crate::agent::tools::sandbox::ContainerSandbox;
+    use crate::runtime::tools::sandbox::ContainerSandbox;
 
     let mine = RequestContext::new("guild", "me", Duration::from_secs(5));
     let yours = RequestContext::new("guild", "you", Duration::from_secs(5));
@@ -214,7 +214,7 @@ fn a_session_name_that_could_reach_another_container_is_refused() {
 
 #[test]
 fn a_session_call_keeps_the_container_and_a_plain_call_does_not() {
-    use crate::agent::tools::sandbox::ContainerSandbox;
+    use crate::runtime::tools::sandbox::ContainerSandbox;
 
     let s = ContainerSandbox::new(Limits::default());
     // Without a session the container is removed when the command exits.

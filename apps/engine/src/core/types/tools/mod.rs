@@ -5,7 +5,7 @@ pub mod sandbox;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::evidence::Citation;
 
 /// What a tool can do to the world. Drives Policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -53,20 +53,9 @@ pub struct ToolOutput {
     /// Structured payload for the trace and the client, when the tool has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
-    /// Indexed evidence this call found. Cited alongside what retrieval supplied.
+    /// Pages this call read. Cited alongside the evidence retrieval supplied.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub evidence: Vec<Evidence>,
-}
-
-impl ToolOutput {
-    /// Text-only output.
-    pub fn text(content: impl Into<String>) -> Self {
-        Self {
-            content: content.into(),
-            data: None,
-            evidence: Vec::new(),
-        }
-    }
+    pub sources: Vec<Citation>,
 }
 
 /// Tool failures. Reported to the model as text.

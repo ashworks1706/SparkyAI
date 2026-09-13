@@ -43,21 +43,21 @@ A change is not done until `just check` passes.
 One repo. Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, agent/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
+apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. Exports one span per interaction and product events to PostHog.
 apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
-apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. Also the worker answering the engine's live `query_source` jobs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run to PostHog.
+apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. Also the worker answering the engine's live `search_<source>` jobs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run to PostHog.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `query_source` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `search_<source>` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`agent/model/rig_openai.rs`), and the only inference path. Never `rig::Agent` — the loop is ours.
+- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`runtime/model/rig_openai.rs`), and the only inference path. Never `rig::Agent` — the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - Everything else in the harness module (loop, policy, context assembly, memory, tracing, replay) is written here.
 
@@ -69,7 +69,7 @@ Two layers, lowest first: `sparky.toml`, which is committed, and `SPARKY_<SECTIO
 
 ## Rules
 
-- Inside `apps/engine`: `core` imports nothing else in the crate; `agent::harness`, `agent::model`, `agent::tools`, and `stores` import only `core`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine`, `discord`, and `cli` never depend on each other — enforced by `scripts/check-deps.sh`.
+- Inside `apps/engine`: `core` imports nothing else in the crate; `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores` import only `core`, never each other; `routes`/`wiring` compose them. Convention, checked in review. Between apps: `engine`, `discord`, and `cli` never depend on each other — enforced by `scripts/check-deps.sh`.
 - Workspace lints are the law: no `unwrap`/`expect`/`panic`/`todo!`/`unimplemented!`/`dbg!`/`println!`, no wildcard imports, docs on every public item. Enforced by `[workspace.lints]` in `Cargo.toml`.
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.

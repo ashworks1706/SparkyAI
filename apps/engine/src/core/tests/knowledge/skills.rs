@@ -6,12 +6,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::json;
 
-use crate::agent::tools::knowledge::skills::{GetSkillTool, describe};
 use crate::core::tests::support::ctx;
 use crate::core::traits::knowledge::skills::SkillStore;
 use crate::core::traits::tools::Tool;
 use crate::core::types::knowledge::skill::{Skill, SkillError, SkillParam, SkillStep};
 use crate::core::types::tools::{RiskClass, ToolError};
+use crate::runtime::tools::knowledge::skills::{GetSkillTool, describe};
 
 /// A skill store holding reviewed and unreviewed skills, offering only the reviewed ones.
 struct FakeSkills {
@@ -69,7 +69,7 @@ fn add_drop() -> Skill {
         steps: vec![
             SkillStep {
                 title: "Confirm the deadline for the term".into(),
-                detail: Some("query_source academic_calendar".into()),
+                detail: Some("search_courses Fall 2026".into()),
             },
             SkillStep {
                 title: "Check the enrollment holds".into(),

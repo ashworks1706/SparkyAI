@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::safety::policy::{RiskPolicy, payload_hash};
 use crate::core::traits::safety::policy::Policy;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::safety::policy::{Decision, ProposedAction};
 use crate::core::types::tools::RiskClass;
+use crate::runtime::harness::safety::policy::{RiskPolicy, payload_hash};
 
 fn ctx(roles: &[&str]) -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))

@@ -12,6 +12,7 @@ use crate::core::types::knowledge::query::{
 pub struct FakeQueries {
     sources: Vec<QuerySourceInfo>,
     answers: std::collections::HashMap<String, Result<QueryOutcome, String>>,
+    sent: std::sync::Arc<std::sync::Mutex<Vec<QueryRequest>>>,
 }
 
 impl FakeQueries {
@@ -20,7 +21,13 @@ impl FakeQueries {
         Self {
             sources,
             answers: std::collections::HashMap::new(),
+            sent: std::sync::Arc::default(),
         }
+    }
+
+    /// The requests this double is sent, readable after it moves into a tool.
+    pub fn sent(&self) -> std::sync::Arc<std::sync::Mutex<Vec<QueryRequest>>> {
+        std::sync::Arc::clone(&self.sent)
     }
 
     /// Answers source with this page text.
@@ -55,6 +62,9 @@ impl SourceQueries for FakeQueries {
         _ctx: &RequestContext,
         request: &QueryRequest,
     ) -> Result<QueryOutcome, QueryError> {
+        if let Ok(mut sent) = self.sent.lock() {
+            sent.push(request.clone());
+        }
         match self.answers.get(&request.source) {
             Some(Ok(outcome)) => Ok(outcome.clone()),
             Some(Err(reason)) => Err(QueryError::Rejected(reason.clone())),

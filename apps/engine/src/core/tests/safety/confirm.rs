@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{
     Echo, Held, Recording, Scripted, agent_holding, calls, ctx, text,
 };
 use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::RunStatus;
+use crate::runtime::harness::tools::ToolSet;
 
 fn moderator() -> crate::core::types::agent::context::RequestContext {
     ctx().with_roles(vec!["MANAGE_GUILD".into()])

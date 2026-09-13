@@ -4,9 +4,9 @@ use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use tracing_subscriber::layer::SubscriberExt;
 
-use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{Scripted, agent, ctx, text};
 use crate::core::types::agent::AgentConfig;
+use crate::runtime::harness::tools::ToolSet;
 
 fn attr(span: &SpanData, key: &str) -> Option<String> {
     span.attributes

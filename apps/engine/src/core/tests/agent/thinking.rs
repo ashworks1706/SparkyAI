@@ -4,14 +4,14 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::json;
 
-use crate::agent::harness::agent::call::thinking::{StepSignals, decide};
-use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{Echo, Scripted, agent, calls, ctx, only_thought, text};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::thinking::{ThinkingMode, ThinkingReason, ThinkingRules};
 use crate::core::types::model::ModelRequest;
 use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::{RunStatus, TraceEvent};
+use crate::runtime::harness::agent::call::thinking::{StepSignals, decide};
+use crate::runtime::harness::tools::ToolSet;
 
 fn rules() -> ThinkingRules {
     AgentConfig::default().thinking

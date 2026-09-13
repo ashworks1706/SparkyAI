@@ -17,7 +17,7 @@ just cli          # from anywhere inside the repo
 │  ● postgres     :5432  ││ 12:01:09    Compiling engine v0.1.0                    │
 │  ● redis        :6379  ││ 12:01:31 INFO engine: listening addr=0.0.0.0:8080      │
 │  ○ minio        :9001  ││ 12:01:40 INFO engine::routes::chat: request_id=…       │
-│  ● posthog       :8010 ││ 12:01:44 INFO engine::agent: tool search_knowledge_base 412 ms │
+│  ● posthog       :8010 ││ 12:01:44 INFO engine::runtime: tool search_courses 412 ms │
 │  ● prometheus   :9090  ││ 12:01:47 INFO engine::routes::chat: answered 2 steps   │
 │  ● grafana      :3000  ││                                                        │
 │ models                 ││                                                        │

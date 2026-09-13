@@ -12,7 +12,6 @@ use axum::response::Response;
 use secrecy::SecretString;
 use serde_json::{Value, json};
 
-use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{Held, Rooms, Scripted, agent_with_store, ctx, text};
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::AgentConfig;
@@ -22,6 +21,7 @@ use crate::core::types::store::StoreError;
 use crate::routes::chat::{ChatState, chat, confirm};
 use crate::routes::conversation::reset;
 use crate::routes::rate_limit::RateLimiter;
+use crate::runtime::harness::tools::ToolSet;
 
 fn state(rooms: Arc<Rooms>) -> ChatState {
     let replies = (0..16).map(|_| Ok(text("ok"))).collect();

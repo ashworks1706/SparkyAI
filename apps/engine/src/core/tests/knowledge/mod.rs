@@ -1,5 +1,4 @@
-//! Knowledge tools: search, live source queries, and skills.
+//! Knowledge tools: live source search and skills.
 
-mod query;
 mod search;
 mod skills;

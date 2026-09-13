@@ -6,7 +6,6 @@ use std::time::Duration;
 use serde_json::json;
 use tokio::sync::mpsc;
 
-use crate::agent::harness::trace::Fanout;
 use crate::core::tests::support::{MemorySink, ctx};
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
@@ -14,6 +13,7 @@ use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::policy::Decision;
 use crate::core::types::trace::progress::{Progress, ProgressStyle};
 use crate::core::types::trace::{RunStatus, TraceEvent};
+use crate::runtime::harness::trace::Fanout;
 
 /// A tool start, as the loop emits it.
 fn started(tool: &str, arguments: serde_json::Value) -> TraceEvent {
@@ -45,12 +45,12 @@ fn line(event: &TraceEvent) -> Option<String> {
 #[test]
 fn events_the_caller_should_see_carry_their_own_wording() {
     let search = line(&started(
-        "search_knowledge_base",
+        "search_library_hours",
         json!({"query": "hayden hours"}),
     ))
     .unwrap_or_default();
     assert!(
-        search.contains("`search_knowledge_base`"),
+        search.contains("`search_library_hours`"),
         "the line names the tool: {search}"
     );
     assert!(
@@ -58,7 +58,7 @@ fn events_the_caller_should_see_carry_their_own_wording() {
         "and what it was asked: {search}"
     );
     assert!(
-        search.contains("searching the knowledge base"),
+        search.contains("searching live library hours"),
         "in wording a student understands: {search}"
     );
 
@@ -98,24 +98,24 @@ fn events_the_caller_should_see_carry_their_own_wording() {
 #[test]
 fn a_finished_tool_call_carries_its_result_and_a_failed_one_its_error() {
     let ok = line(&finished(
-        "search_knowledge_base",
+        "search_library_hours",
         Ok("three passages about Hayden".into()),
     ))
     .unwrap_or_default();
     assert!(ok.contains("three passages about Hayden"), "{ok}");
-    assert!(ok.contains("`search_knowledge_base`"), "{ok}");
+    assert!(ok.contains("`search_library_hours`"), "{ok}");
 
     let failed =
-        line(&finished("query_source", Err("upstream said 500".into()))).unwrap_or_default();
+        line(&finished("search_courses", Err("upstream said 500".into()))).unwrap_or_default();
     assert!(failed.contains("upstream said 500"), "{failed}");
 
-    let empty = line(&finished("query_source", Ok(String::new()))).unwrap_or_default();
+    let empty = line(&finished("search_courses", Ok(String::new()))).unwrap_or_default();
     assert!(empty.contains("nothing came back"), "{empty}");
 }
 
 #[test]
 fn detail_is_held_to_what_the_style_allows() {
-    let long = finished("search_knowledge_base", Ok("x".repeat(4_000)));
+    let long = finished("search_library_hours", Ok("x".repeat(4_000)));
     let short = long
         .progress(ProgressStyle { detail_chars: 40 })
         .unwrap_or_default();
@@ -184,8 +184,8 @@ fn the_thinking_line_resolves_into_the_thought_or_the_answer() {
 
 #[test]
 fn a_tool_result_replaces_the_line_its_own_start_wrote() {
-    let start = started("search_knowledge_base", json!({}));
-    let end = finished("search_knowledge_base", Ok("three passages".into()));
+    let start = started("search_library_hours", json!({}));
+    let end = finished("search_library_hours", Ok("three passages".into()));
     assert_eq!(start.slot(), end.slot(), "one line, twice written");
     assert_eq!(
         TraceEvent::ModelStarted { step: 2 }.slot(),
@@ -231,7 +231,7 @@ fn bookkeeping_events_stay_out_of_the_callers_way() {
 
 #[test]
 fn the_wire_form_reads_without_knowing_the_variant() {
-    let event = started("query_source", json!({"source": "library"}));
+    let event = started("search_courses", json!({"term": "Fall 2026"}));
     let Some(progress) = Progress::of(&event, ProgressStyle::default()) else {
         unreachable!("ToolStarted is user-visible")
     };
@@ -245,7 +245,7 @@ fn the_wire_form_reads_without_knowing_the_variant() {
         wire["text"]
             .as_str()
             .unwrap_or_default()
-            .contains("checking a live ASU page"),
+            .contains("searching live courses"),
         "{wire}"
     );
 }
@@ -257,7 +257,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
     let fanout = Fanout::new(sink.clone());
     let listening = ctx().listening_to(tx);
 
-    fanout.emit(&listening, started("search_knowledge_base", json!({})));
+    fanout.emit(&listening, started("search_library_hours", json!({})));
     fanout.emit(
         &listening,
         TraceEvent::ContextAssembled {
@@ -274,7 +274,7 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
         .ok()
         .map(|p: Progress| p.text)
         .unwrap_or_default();
-    assert!(seen.contains("searching the knowledge base"), "{seen}");
+    assert!(seen.contains("searching live library hours"), "{seen}");
     assert!(rx.try_recv().is_err(), "only user-visible events are sent");
 }
 

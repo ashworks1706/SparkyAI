@@ -45,7 +45,7 @@ fn one_chat_keeps_one_conversation_and_two_chats_do_not_share() {
 #[test]
 fn tools_and_citations_ride_along_in_the_content() {
     use crate::core::types::agent::Answer;
-    use crate::core::types::knowledge::evidence::Evidence;
+    use crate::core::types::knowledge::evidence::{Citation, Evidence};
     use crate::core::types::model::Usage;
     use crate::core::types::tools::ToolRun;
     use crate::core::types::trace::RunStatus;
@@ -61,11 +61,15 @@ fn tools_and_citations_ride_along_in_the_content() {
             fetched_at: chrono::Utc::now(),
             score: 1.0,
         }],
+        sources: vec![Citation {
+            title: "courses".into(),
+            url: Some("https://catalog.apps.asu.edu/catalog/classes/classlist?term=2267".into()),
+        }],
         confirmation: None,
         status: RunStatus::Answered,
         steps: 2,
         tool_runs: vec![ToolRun {
-            tool: "search_knowledge_base".into(),
+            tool: "search_courses".into(),
             ok: true,
         }],
         memories: Vec::new(),
@@ -76,8 +80,12 @@ fn tools_and_citations_ride_along_in_the_content() {
     let out = transcript(&answer);
 
     assert!(out.starts_with("Open 7am to 2am."));
-    assert!(out.contains("search_knowledge_base"), "{out}");
+    assert!(out.contains("search_courses"), "{out}");
     assert!(out.contains("lib.asu.edu/hours"), "{out}");
+    assert!(
+        out.contains("catalog.apps.asu.edu"),
+        "a page a tool read is cited with the evidence: {out}"
+    );
 }
 
 #[test]
@@ -89,6 +97,7 @@ fn a_bare_answer_carries_no_footers() {
     let answer = Answer {
         text: "No idea.".into(),
         evidence: Vec::new(),
+        sources: Vec::new(),
         confirmation: None,
         status: RunStatus::Answered,
         steps: 1,

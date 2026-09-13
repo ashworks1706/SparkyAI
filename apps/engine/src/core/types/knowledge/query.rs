@@ -1,32 +1,31 @@
 //! QuerySourceInfo, QueryRequest, QueryOutcome: live parameterized source queries.
 //!
-//! A query source is a page the scraper fetches on demand with parameters the model supplies.
-//! What comes back answers one caller and is never retrieval evidence.
+//! A query source is an ASU site the scraper fetches on demand with parameters the model
+//! supplies. What comes back answers one caller and is never retrieval evidence.
 
 use serde::{Deserialize, Serialize};
 
-/// One parameter a query source accepts, as the scraper published it.
+/// One parameter a query source accepts, as the scraper worker published it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryParam {
-    /// Parameter name the model passes.
+    /// Parameter name.
     pub name: String,
-    /// What it means, for the model.
-    pub description: String,
     /// Whether the query fails without it.
     #[serde(default)]
     pub required: bool,
-    /// An example value.
+    /// The only values the worker accepts, compared without case. Empty accepts any text.
     #[serde(default)]
-    pub example: Option<String>,
+    pub choices: Vec<String>,
+    /// Whether a comma-separated list of choices is accepted.
+    #[serde(default)]
+    pub many: bool,
 }
 
-/// A query source the engine may offer, read from the registry the scraper publishes.
+/// A query source the scraper worker serves, read from the registry it publishes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuerySourceInfo {
-    /// Registry key the model names.
+    /// Registry key.
     pub key: String,
-    /// What it answers, for the model.
-    pub description: String,
     /// Parameters it accepts.
     pub params: Vec<QueryParam>,
 }

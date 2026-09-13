@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::agent::thinking::ThinkingRules;
-use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::evidence::{Citation, Evidence};
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::tools::ToolRun;
@@ -68,6 +68,9 @@ pub struct Answer {
     pub text: String,
     /// Evidence the answer was grounded in, best first.
     pub evidence: Vec<Evidence>,
+    /// Pages the tools read while answering, in the order they read them.
+    #[serde(default)]
+    pub sources: Vec<Citation>,
     /// Set when the loop stopped to ask the user.
     pub confirmation: Option<ConfirmationRequest>,
     /// How it ended.
@@ -83,6 +86,19 @@ pub struct Answer {
     pub usage: Usage,
     /// Estimated cost in USD.
     pub cost_usd: f64,
+}
+
+impl Answer {
+    /// One citation per page the answer rests on: the evidence first, then what the tools read.
+    pub fn citations(&self) -> Vec<Citation> {
+        let mut out = Evidence::citations(&self.evidence);
+        for source in &self.sources {
+            if !out.iter().any(|c| c.url.is_some() && c.url == source.url) {
+                out.push(source.clone());
+            }
+        }
+        out
+    }
 }
 
 /// Loop failures. Everything recoverable has already been fed back to the model.

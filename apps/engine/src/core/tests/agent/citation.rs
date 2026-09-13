@@ -8,16 +8,16 @@ use chrono::Utc;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use crate::agent::harness::safety::redact::redact_text;
 use crate::core::tests::support::{agent, calls, text};
 use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::evidence::{Citation, Evidence};
 use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::runtime::harness::safety::redact::redact_text;
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -49,8 +49,8 @@ impl Retriever for Flood {
     }
 }
 
-/// A tool that finds one indexed chunk.
-struct Finder(Evidence);
+/// A tool that reads one live page.
+struct Finder(Citation);
 
 #[async_trait]
 impl Tool for Finder {
@@ -68,17 +68,17 @@ impl Tool for Finder {
         Ok(ToolOutput {
             content: "found one".into(),
             data: None,
-            evidence: vec![self.0.clone()],
+            sources: vec![self.0.clone()],
         })
     }
 }
 
 #[tokio::test]
 async fn a_chunk_that_did_not_fit_the_prompt_is_not_cited() {
-    use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::safety::policy::RiskPolicy;
-    use crate::agent::harness::tools::ToolSet;
     use crate::core::tests::support::{MemorySink, Scripted};
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
 
     let flood: Vec<Evidence> = (0..20)
         .map(|i| evidence(&format!("doc {i}"), 400))
@@ -117,14 +117,17 @@ async fn a_chunk_that_did_not_fit_the_prompt_is_not_cited() {
 }
 
 #[tokio::test]
-async fn a_chunk_a_tool_found_is_cited() {
-    use crate::agent::harness::agent::{Agent, AgentDeps};
-    use crate::agent::harness::safety::policy::RiskPolicy;
-    use crate::agent::harness::tools::ToolSet;
+async fn a_page_a_tool_read_is_cited() {
     use crate::core::tests::support::{MemorySink, Scripted};
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
 
-    let found = evidence("from the tool", 10);
-    let wanted = found.chunk_id;
+    let found = Citation {
+        title: "courses".into(),
+        url: Some("https://catalog.apps.asu.edu/catalog/classes/classlist".into()),
+    };
+    let wanted = found.clone();
     let deps = AgentDeps {
         model: Arc::new(Scripted::new(vec![
             Ok(calls(vec![("1", "finder", json!({}))])),
@@ -149,8 +152,13 @@ async fn a_chunk_a_tool_found_is_cited() {
         unreachable!("the run answered")
     };
     assert!(
-        answer.evidence.iter().any(|e| e.chunk_id == wanted),
-        "what a tool found is cited too"
+        answer.evidence.is_empty(),
+        "a live page is not retrieval evidence"
+    );
+    assert_eq!(
+        answer.citations(),
+        vec![wanted],
+        "what a tool read is cited"
     );
 }
 
@@ -158,7 +166,7 @@ async fn a_chunk_a_tool_found_is_cited() {
 async fn nothing_retrieved_cites_nothing() {
     let (a, _sink) = agent(
         crate::core::tests::support::Scripted::new(vec![Ok(text("hello"))]),
-        crate::agent::harness::tools::ToolSet::new(),
+        crate::runtime::harness::tools::ToolSet::new(),
         AgentConfig::default(),
     );
     let Ok(answer) = a.run(&ctx(), "hi").await else {

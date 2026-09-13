@@ -11,14 +11,14 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::agent::harness::safety::redact::redact;
-use crate::agent::harness::tools::ToolSet;
 use crate::core::tests::support::{Boom, Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
 use crate::core::types::safety::policy::Decision;
 use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::{RunStatus, TraceEvent};
+use crate::runtime::harness::safety::redact::redact;
+use crate::runtime::harness::tools::ToolSet;
 
 #[tokio::test]
 async fn text_reply_is_the_answer() {
@@ -339,7 +339,7 @@ async fn stateful_tools_run_in_order() {
 fn backoff_grows_and_spreads_retries_across_requests() {
     use uuid::Uuid;
 
-    use crate::agent::harness::agent::call::backoff;
+    use crate::runtime::harness::agent::call::backoff;
 
     let id = Uuid::from_u128(0);
     let plenty = Duration::from_mins(1);

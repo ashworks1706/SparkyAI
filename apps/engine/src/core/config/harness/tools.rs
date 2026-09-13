@@ -8,10 +8,8 @@ use serde::Deserialize;
 pub struct Tools {
     /// Tool names never registered, whatever their source.
     pub disabled: Vec<String>,
-    /// Register the built-in retrieval tool.
-    pub knowledge_search: bool,
-    /// Register the live source-query tool, when the scraper has published a registry.
-    pub query_source: bool,
+    /// Register one search tool per live source the scraper has published.
+    pub search: bool,
     /// Register the get_skill tool, when a reviewed skill exists.
     pub get_skill: bool,
 }
@@ -20,8 +18,7 @@ impl Default for Tools {
     fn default() -> Self {
         Self {
             disabled: Vec::new(),
-            knowledge_search: true,
-            query_source: true,
+            search: true,
             get_skill: true,
         }
     }

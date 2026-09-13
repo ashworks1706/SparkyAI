@@ -25,27 +25,42 @@ class Source:
 
 @dataclass(frozen=True)
 class QueryParam:
-    """One parameter a query source accepts. Shown to the model, checked by the worker."""
+    """One parameter a query source accepts. Published to the engine, checked by the worker.
+
+    choices, when set, are the only values accepted, compared without case. many accepts a
+    comma-separated list of them.
+    """
 
     name: str
     description: str
     required: bool = False
     example: str | None = None
+    choices: tuple[str, ...] = ()
+    many: bool = False
 
 
 @dataclass(frozen=True)
 class QuerySource:
     """A source the model queries live with parameters. Not fetched on a schedule.
 
-    to_url turns the model parameters into the URL to fetch. Results answer one caller and
-    are never written to the retrieval index.
+    Exactly one of to_url and answer is set. to_url turns the model parameters into the one
+    page to fetch, and extractor, when set, turns that page into clean text in place of the
+    shared heuristic. answer does the fetching itself, for a source that reads several
+    endpoints, and returns the URL to cite with the text. Results answer one caller and are
+    never written to the retrieval index.
     """
 
     key: str
     description: str
     params: tuple[QueryParam, ...]
-    to_url: Callable[[dict[str, str]], str]
+    to_url: Callable[[dict[str, str]], str] | None = None
     needs_js: bool = False
+    extractor: Callable[[Fetched], str] | None = None
+    answer: Callable[[dict[str, str]], tuple[str, str]] | None = None
+
+    def __post_init__(self) -> None:
+        if (self.to_url is None) == (self.answer is None):
+            raise ValueError(f"query source {self.key} sets exactly one of to_url and answer")
 
 
 @dataclass(frozen=True)

@@ -11,15 +11,15 @@ mod trace;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::agent::harness::agent::{Agent, AgentDeps};
-use crate::agent::harness::safety::policy::RiskPolicy;
-use crate::agent::harness::tools::ToolSet;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::context::RequestContext;
+use crate::runtime::harness::agent::{Agent, AgentDeps};
+use crate::runtime::harness::safety::policy::RiskPolicy;
+use crate::runtime::harness::tools::ToolSet;
 
 pub use self::conversation::{Recording, Rooms};
 pub use self::knowledge::FakeQueries;

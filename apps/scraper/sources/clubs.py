@@ -45,7 +45,7 @@ def _is_category(line: str) -> bool:
 
 SOURCE = Source(
     key="clubs",
-    url="https://asu.campuslabs.com/engage/organizations",
+    url="https://sundevilcentral.eoss.asu.edu/club_signup?view=all",
     category="clubs",
     fetch_every_hours=168,
     needs_js=True,

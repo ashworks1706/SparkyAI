@@ -3,12 +3,12 @@
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::agent::harness::agent::prompt::assemble::assemble;
 use crate::core::tests::support::ctx;
 use crate::core::types::agent::assemble::{Budget, Sections, Templates};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryKind};
+use crate::runtime::harness::agent::prompt::assemble::assemble;
 
 fn evidence(n: usize) -> Vec<Evidence> {
     (0..n)
@@ -248,7 +248,7 @@ fn the_capabilities_heading_is_written_around_the_rendered_list() {
         &ctx(),
         &Sections {
             system: "s",
-            capabilities: "- search_knowledge_base (tool): finds ASU pages",
+            capabilities: "- search_library_hours (tool): finds ASU pages",
             input: "q",
             templates: Templates {
                 capabilities_header: "WHAT YOU CAN DO",
@@ -260,7 +260,7 @@ fn the_capabilities_heading_is_written_around_the_rendered_list() {
     );
     let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
     assert!(
-        text.contains("WHAT YOU CAN DO\n- search_knowledge_base (tool)"),
+        text.contains("WHAT YOU CAN DO\n- search_library_hours (tool)"),
         "{text}"
     );
 }
@@ -330,7 +330,7 @@ fn no_date_writes_no_date_line() {
 
 #[test]
 fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
-    use crate::agent::harness::agent::call::thought::split;
+    use crate::runtime::harness::agent::call::thought::split;
 
     let (thought, visible) = split(
         "",

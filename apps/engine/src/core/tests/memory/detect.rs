@@ -1,8 +1,8 @@
 //! The gate on profile extraction. Rules, so it costs no model call on a greeting.
 
-use crate::agent::harness::memory::detect::{RuleDetector, Rules};
 use crate::core::config;
 use crate::core::traits::memory::detector::FactDetector;
+use crate::runtime::harness::memory::detect::{RuleDetector, Rules};
 
 fn detector() -> RuleDetector {
     RuleDetector::default()

@@ -37,6 +37,7 @@ packages = [
     "scraper.core",
     "scraper.ingest",
     "scraper.query",
+    "scraper.query.sources",
     "scraper.sources",
     "scraper.store",
 ]
