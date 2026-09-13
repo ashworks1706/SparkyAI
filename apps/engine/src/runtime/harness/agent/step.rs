@@ -128,6 +128,7 @@ impl Agent {
                 capabilities: &self.capabilities,
                 input: run.input,
                 date: &self.prompt.today(),
+                now: Some(chrono::Utc::now()),
                 templates: self.prompt.templates(),
             },
             budget,

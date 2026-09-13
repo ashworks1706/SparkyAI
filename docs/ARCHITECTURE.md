@@ -312,7 +312,7 @@ Each step assembles the prompt in a fixed order:
 1. System instructions, the role line, and today's date.
 2. The capabilities section, if it fits `agent.capabilities_budget_tokens`.
 3. Memory, within `agent.memory_budget_tokens`.
-4. Evidence, numbered for citation, within `agent.evidence_budget_tokens`. With no evidence, `prompt.no_evidence_line` tells the model to call a search tool or say it does not know.
+4. Evidence, numbered for citation, within `agent.evidence_budget_tokens`. Each entry is labelled a stored copy with its fetch date and age, and `prompt.evidence_header` tells the model to call the matching search tool when the question needs current information or the entries do not answer it. With no evidence, `prompt.no_evidence_line` tells the model to call a search tool or say it does not know.
 5. History, newest first within `agent.history_budget_tokens`, never starting on an orphaned tool result.
 6. The user's input, then the model and tool turns of this request.
 
@@ -471,7 +471,7 @@ flowchart TD
     Q["question"] --> EMB["embed"]
     EMB --> DIM{"dimension matches<br/>the index?"}
     DIM -->|no| ERR(["RetrievalError"])
-    DIM -->|yes| DENSE["dense leg<br/>cosine distance, HNSW"]
+    DIM -->|yes| DENSE["dense leg<br/>cosine distance, HNSW<br/>drop past retrieval.max_distance"]
     DIM -->|yes| LEX["lexical leg<br/>websearch_to_tsquery, ts_rank_cd, GIN"]
     DENSE --> RRF["reciprocal rank fusion<br/>retrieval.rrf_k"]
     LEX --> RRF
@@ -481,7 +481,7 @@ flowchart TD
     TOPK --> EV["Evidence"]
 ```
 
-Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. Fusion combines ranks, not the legs' incompatible raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
+Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. The dense leg drops a row farther than `retrieval.max_distance` from the question, so a question the index does not cover gets no evidence. Fusion combines ranks, not the legs' incompatible raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
 
 ### Hierarchical index
 

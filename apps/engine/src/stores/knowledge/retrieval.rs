@@ -30,6 +30,8 @@ pub struct RetrievalTuning {
     pub lexical: bool,
     /// Drop fused results below this score.
     pub min_score: f32,
+    /// Drop dense matches farther than this cosine distance.
+    pub max_distance: f32,
     /// Drop a chunk when the summary covering it is already in the result.
     pub collapse_tree: bool,
 }
@@ -43,6 +45,7 @@ impl From<&crate::core::config::Retrieval> for RetrievalTuning {
             dense: cfg.dense,
             lexical: cfg.lexical,
             min_score: cfg.min_score,
+            max_distance: cfg.max_distance,
             collapse_tree: cfg.collapse_tree,
         }
     }
@@ -90,11 +93,12 @@ fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Erro
     })
 }
 
+/// The candidate columns of a chunk.
+const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, \
+                       c.fetched_at, c.parent_id";
+
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
-const SELECT: &str =
-    "select c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, c.fetched_at,
-            c.parent_id
-    from chunks c join sources s on s.id = c.source_id
+const FROM: &str = "from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')";
 
 /// Drops a row whose summary is already in the result, keeping the higher ranked of the two.
@@ -170,11 +174,17 @@ impl PgRetriever {
                 self.embedder.dim()
             )));
         }
-        let sql = format!("{SELECT} order by c.embedding <=> $2::vector limit $3");
+        let sql = format!(
+            "select * from (
+                select {COLUMNS}, c.embedding <=> $2::vector as distance {FROM}
+                order by distance limit $3
+            ) nearest where distance <= $4"
+        );
         sqlx::query(&sql)
             .bind(&ctx.tenant_id)
             .bind(vector_literal(&vector))
             .bind(self.tuning.candidates)
+            .bind(f64::from(self.tuning.max_distance))
             .fetch_all(&self.pool)
             .await
             .map_err(store)
@@ -189,7 +199,7 @@ impl PgRetriever {
         // The text search configuration is validated at load and quoted as a literal.
         let cfg = quote_literal(&self.tuning.text_search_config);
         let sql = format!(
-            "{SELECT} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
+            "select {COLUMNS} {FROM} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
              order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $2)) desc limit $3"
         );
         sqlx::query(&sql)

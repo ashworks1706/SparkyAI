@@ -20,6 +20,8 @@ pub struct Retrieval {
     pub lexical: bool,
     /// Drop fused results below this score. Zero keeps everything.
     pub min_score: f32,
+    /// Cosine distance past which a dense match is dropped. 2.0 keeps everything.
+    pub max_distance: f32,
     /// Drop a chunk when the summary covering it is already in the result.
     pub collapse_tree: bool,
 }
@@ -34,6 +36,7 @@ impl Default for Retrieval {
             dense: true,
             lexical: true,
             min_score: 0.0,
+            max_distance: 0.6,
             collapse_tree: true,
         }
     }

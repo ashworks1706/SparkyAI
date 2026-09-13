@@ -76,7 +76,7 @@ retry_without = true
 role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
-evidence_header = "Knowledge base results for this question, closest match first. These were retrieved for you before you were called. Answer from them and from tool output only, and cite the bracketed number of every entry you use."
+evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, or these entries do not answer it, call the matching search_ tool first. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
 no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
@@ -132,6 +132,7 @@ text_search_config = "english"
 dense = true
 lexical = true
 min_score = 0.0
+max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
 
 # ---------------------------------------------------------------- what may run
 # Risk classes in order: read_public, read_authenticated, prepare_write, external_write,

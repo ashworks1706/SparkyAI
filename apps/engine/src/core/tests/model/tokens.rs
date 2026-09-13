@@ -78,6 +78,7 @@ fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
         dense: true,
         lexical: false,
         min_score: 0.01,
+        max_distance: 0.5,
         collapse_tree: true,
         top_k: 9,
     };
@@ -88,4 +89,5 @@ fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
     assert!(tuning.dense);
     assert!(!tuning.lexical);
     assert!((tuning.min_score - 0.01).abs() < f32::EPSILON);
+    assert!((tuning.max_distance - 0.5).abs() < f32::EPSILON);
 }

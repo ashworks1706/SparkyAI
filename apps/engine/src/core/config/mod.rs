@@ -219,6 +219,12 @@ impl Config {
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
         }
+        if !(self.retrieval.max_distance > 0.0 && self.retrieval.max_distance <= 2.0) {
+            return invalid(format!(
+                "retrieval.max_distance must be above 0 and at most 2, got {}",
+                self.retrieval.max_distance
+            ));
+        }
         if self.retrieval.rrf_k < 0.0 {
             return invalid("retrieval.rrf_k must not be negative".into());
         }

@@ -1,5 +1,7 @@
 //! Budget, Sections, and Assembled are the inputs and output of context assembly.
 
+use chrono::{DateTime, Utc};
+
 use crate::core::types::conversation::message::Message;
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::Memory;
@@ -51,10 +53,14 @@ pub const MEMORY_HEADER: &str = "What you remember about this user:";
 pub const DATE_LINE: &str = "Today is {date}. Evidence rows are labelled by day or date; read \
                              the label the question asks for, never the first value in a row.";
 /// Default heading above retrieved evidence.
-pub const EVIDENCE_HEADER: &str = "Knowledge base results for this question, closest match \
-                                   first. These were retrieved for you before you were called. \
-                                   Answer from them and from tool output only, and cite the \
-                                   bracketed number of every entry you use.";
+pub const EVIDENCE_HEADER: &str = "Stored copies of pages from the knowledge base, closest match \
+                                   first, each with when it was fetched. They may be out of date \
+                                   or may not answer the question. When the question needs current \
+                                   information, such as hours today, shuttles, events, news or \
+                                   scores, or these entries do not answer it, call the matching \
+                                   search_ tool first. Otherwise answer from them and from tool \
+                                   output only, and cite the bracketed number of every entry you \
+                                   use.";
 /// Default line written when retrieval found nothing.
 pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
                                     Call the search_ tool for the topic before you answer, or \
@@ -101,6 +107,8 @@ pub struct Sections<'a> {
     pub input: &'a str,
     /// Today's date as the model should read it. Empty writes no date line.
     pub date: &'a str,
+    /// When the prompt is built. None writes no age on evidence entries.
+    pub now: Option<DateTime<Utc>>,
     /// Wording written around the sections.
     pub templates: Templates<'a>,
 }

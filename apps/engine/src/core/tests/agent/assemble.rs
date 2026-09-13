@@ -1,6 +1,6 @@
 //! Context assembly: ordering and budget trimming.
 
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use uuid::Uuid;
 
 use crate::core::tests::support::ctx;
@@ -8,7 +8,7 @@ use crate::core::types::agent::assemble::{Budget, Sections, Templates};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::memory::{Memory, MemoryKind};
-use crate::runtime::harness::agent::prompt::assemble::assemble;
+use crate::runtime::harness::agent::prompt::assemble::{age, assemble};
 
 fn evidence(n: usize) -> Vec<Evidence> {
     (0..n)
@@ -128,6 +128,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             capabilities: "",
             input: "",
             date: "Friday 11 September 2026",
+            now: None,
             templates: Templates::default(),
         },
         Budget::default(),
@@ -239,7 +240,7 @@ fn an_evidence_entry_carries_its_number_its_page_and_its_date() {
         text.contains("[1] Doc 0 - https://lib.asu.edu/hours"),
         "{text}"
     );
-    assert!(text.contains("(fetched "), "{text}");
+    assert!(text.contains("(stored copy, fetched "), "{text}");
 }
 
 #[test]
@@ -404,4 +405,37 @@ fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_trimmed()
         out.evidence_used, 0,
         "evidence gives way to the result of this turn when the budget is tight"
     );
+}
+
+#[test]
+fn every_evidence_entry_says_it_is_a_stored_copy_and_how_old_it_is() {
+    let now = Utc::now();
+    let mut ev = evidence(1);
+    if let Some(first) = ev.first_mut() {
+        first.fetched_at = now - Duration::days(3);
+    }
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            evidence: &ev,
+            input: "q",
+            now: Some(now),
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
+    assert!(text.contains("(stored copy, fetched "), "{text}");
+    assert!(text.contains(", 3 days ago)"), "{text}");
+    assert!(text.contains("call the matching search_ tool"), "{text}");
+}
+
+#[test]
+fn a_page_age_reads_in_hours_under_two_days_and_in_days_after() {
+    let now = Utc::now();
+    assert_eq!(age(now - Duration::minutes(10), now), "under an hour ago");
+    assert_eq!(age(now - Duration::minutes(90), now), "1 hour ago");
+    assert_eq!(age(now - Duration::hours(30), now), "30 hours ago");
+    assert_eq!(age(now - Duration::hours(50), now), "2 days ago");
 }

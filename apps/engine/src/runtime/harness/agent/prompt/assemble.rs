@@ -4,6 +4,8 @@
 //! exchange of this request. When over budget, evidence and history are trimmed first. The system
 //! prompt, the input and the tool exchange of this request are never dropped.
 
+use chrono::{DateTime, Utc};
+
 use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role};
@@ -121,8 +123,12 @@ fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize
             .as_deref()
             .map(|url| format!(" - {url}"))
             .unwrap_or_default();
+        let age = s
+            .now
+            .map(|now| format!(", {}", age(e.fetched_at, now)))
+            .unwrap_or_default();
         let entry = format!(
-            "\n[{}] {}{page} (fetched {})\n{}\n",
+            "\n[{}] {}{page} (stored copy, fetched {}{age})\n{}\n",
             i + 1,
             e.title,
             e.fetched_at.format("%Y-%m-%d"),
@@ -137,6 +143,17 @@ fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize
         count += 1;
     }
     (block, spent, count)
+}
+
+/// How long before now a page was fetched, in hours under two days and in days after.
+pub(crate) fn age(fetched: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let hours = (now - fetched).num_hours();
+    match hours {
+        ..1 => "under an hour ago".to_owned(),
+        1 => "1 hour ago".to_owned(),
+        2..48 => format!("{hours} hours ago"),
+        _ => format!("{} days ago", hours / 24),
+    }
 }
 
 /// The memory section: the header and every memory that fits budget, with the tokens it

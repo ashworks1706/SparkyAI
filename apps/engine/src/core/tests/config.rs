@@ -87,6 +87,14 @@ fn turning_off_both_retrieval_legs_is_rejected() {
 }
 
 #[test]
+fn a_dense_distance_cutoff_outside_the_cosine_range_is_rejected() {
+    let e = err("[retrieval]\nmax_distance = 0.0\n");
+    assert!(e.contains("retrieval.max_distance"), "{e}");
+    let e = err("[retrieval]\nmax_distance = 2.5\n");
+    assert!(e.contains("retrieval.max_distance"), "{e}");
+}
+
+#[test]
 fn a_section_budget_above_the_prompt_budget_is_rejected() {
     let e = err("[agent]\nprompt_budget_tokens = 1000\nevidence_budget_tokens = 4000\n");
     assert!(e.contains("evidence_budget_tokens"), "{e}");
