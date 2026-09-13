@@ -34,7 +34,12 @@ impl Handler {
         let started = Instant::now();
         let limit = self.max_message_chars;
         let posted = dest
-            .send(&ctx.http, card::thinking(&[], limit, 0), Vec::new(), true)
+            .send(
+                &ctx.http,
+                card::thinking(&[], None, limit, 0),
+                Vec::new(),
+                true,
+            )
             .await;
         let card_id = match posted {
             Ok(message) => Some(message.id),
@@ -166,25 +171,26 @@ impl Handler {
     ) -> Option<Result<ChatResponse, EngineError>> {
         let mut outcome = None;
         let mut pacer = Pacer::new(self.edit_every, Instant::now());
-        // The spinner turns once per edit, so a running turn reads as alive without costing
-        // an edit of its own.
+        // The spinner frame advances once per progress edit.
         let mut frame = 0usize;
         loop {
             let wait = pacer.wait(Instant::now()).filter(|_| outcome.is_none());
             tokio::select! {
                 update = rx.recv() => match update {
                     None => break,
-                    Some(Update::Progress(p)) => pacer.mark(match (p.clear, p.slot.as_deref()) {
-                        (true, Some(slot)) => steps.clear(slot),
-                        (_, slot) => steps.push(slot, &p.text),
-                    }),
+                    Some(Update::Progress(p)) => pacer.mark(steps.apply(&p)),
                     Some(Update::Answer(answer)) => outcome = Some(Ok(*answer)),
                     Some(Update::Failed(e)) => outcome = Some(Err(e)),
                 },
                 () = tokio::time::sleep(wait.unwrap_or_default()), if wait.is_some() => {
                     if let Some(id) = card_id {
                         frame = frame.wrapping_add(1);
-                        let text = card::thinking(&steps.lines(), self.max_message_chars, frame);
+                        let text = card::thinking(
+                            &steps.lines(),
+                            steps.draft(),
+                            self.max_message_chars,
+                            frame,
+                        );
                         if let Err(e) = dest.edit(&ctx.http, id, text, None).await {
                             tracing::warn!(error = %e, "progress edit failed");
                         }

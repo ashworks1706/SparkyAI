@@ -71,7 +71,7 @@ pub struct SandboxSettings {
     pub timeout_secs: u64,
     /// Longest stdout or stderr handed back to the model.
     pub max_output_chars: usize,
-    /// Risk class the tool declares, which is what Policy gates it by.
+    /// Risk class the tool declares to Policy.
     pub risk: RiskClass,
     /// How long a session container stays up with nothing running in it.
     pub session_idle_secs: u64,

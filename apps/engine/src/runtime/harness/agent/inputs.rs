@@ -17,8 +17,8 @@ use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::Inputs;
 use crate::runtime::harness::safety::redact::{json, truncate};
 
-/// Counts from the newest backwards, the way assembly spends the budget, and never returns
-/// every turn: compacting the whole history leaves the current exchange with no context.
+/// How many of the oldest turns do not fit budget, counted from the newest. The newest turn is
+/// always kept.
 fn overflowing(turns: &[Message], budget: usize, chars_per_token: usize) -> usize {
     let mut spent = 0;
     let mut kept = 0;
@@ -34,6 +34,7 @@ fn overflowing(turns: &[Message], budget: usize, chars_per_token: usize) -> usiz
 }
 
 impl Agent {
+    /// The stored history of the conversation, compacted when it overflows its budget.
     pub(super) async fn history(&self, ctx: &RequestContext) -> Result<Vec<Message>, AgentError> {
         let Some(store) = &self.deps.conversations else {
             return Ok(Vec::new());
@@ -44,10 +45,10 @@ impl Agent {
             .map_err(|error| AgentError::Store(error.to_string()))?;
         Ok(self.compacted(ctx, loaded).await)
     }
-    /// Replaces the turns that do not fit the history budget with one compacted turn, and keeps
-    /// it so the next request starts from it.
+
+    /// Replaces the turns that do not fit the history budget with one stored compacted turn.
     ///
-    /// A compaction that fails leaves the history trimmed the way it always was.
+    /// A failed compaction returns turns unchanged.
     async fn compacted(&self, ctx: &RequestContext, turns: Vec<Message>) -> Vec<Message> {
         let Some(compactor) = &self.deps.compactor else {
             return turns;
@@ -74,7 +75,7 @@ impl Agent {
         if let Some(store) = &self.deps.conversations
             && let Err(error) = store.append(ctx, std::slice::from_ref(&summary)).await
         {
-            // The prompt still gets the summary. Only the saving of it failed.
+            // The prompt still gets the summary.
             tracing::warn!(error = %error, "compacted turn was not stored");
         }
         let mut out = Vec::with_capacity(kept.len() + 1);
@@ -82,6 +83,8 @@ impl Agent {
         out.extend_from_slice(kept);
         out
     }
+
+    /// Loads the history, memory, and evidence of one request.
     pub(super) async fn load(
         &self,
         ctx: &RequestContext,
@@ -138,34 +141,32 @@ impl Agent {
                     .instrument(span.clone())
                     .await
                     .map_err(|error| AgentError::Store(format!("retrieval: {error}")))?;
-                {
-                    let listing: Vec<serde_json::Value> = found
-                        .iter()
-                        .map(|e| {
-                            serde_json::json!({
-                                "chunk_id": e.chunk_id,
-                                "source_id": e.source_id,
-                                "title": e.title,
-                                "score": e.score,
-                                "content": truncate(&e.content, 1_000),
-                            })
+                let listing: Vec<serde_json::Value> = found
+                    .iter()
+                    .map(|e| {
+                        serde_json::json!({
+                            "chunk_id": e.chunk_id,
+                            "source_id": e.source_id,
+                            "title": e.title,
+                            "score": e.score,
+                            "content": truncate(&e.content, 1_000),
                         })
-                        .collect();
-                    let shown = truncate(&json(&listing), self.cfg.max_span_value_chars);
-                    span.record("sparky.output", shown.as_str());
-                    span.record("output.value", shown.as_str());
-                    span.record("otel.status_code", "OK");
-                    deps.trace.emit(
-                        ctx,
-                        TraceEvent::Retrieval {
-                            step: 0,
-                            query: input.to_owned(),
-                            chunk_ids: found.iter().map(|item| item.chunk_id).collect(),
-                            duration_ms: ms(started),
-                        },
-                    );
-                    found
-                }
+                    })
+                    .collect();
+                let shown = truncate(&json(&listing), self.cfg.max_span_value_chars);
+                span.record("sparky.output", shown.as_str());
+                span.record("output.value", shown.as_str());
+                span.record("otel.status_code", "OK");
+                deps.trace.emit(
+                    ctx,
+                    TraceEvent::Retrieval {
+                        step: 0,
+                        query: input.to_owned(),
+                        chunk_ids: found.iter().map(|item| item.chunk_id).collect(),
+                        duration_ms: ms(started),
+                    },
+                );
+                found
             }
             None => Vec::new(),
         };
@@ -175,8 +176,9 @@ impl Agent {
             evidence,
         })
     }
-    /// Appends what the graph knows about this user to the memories recalled. A graph that
-    /// cannot be read leaves the prompt with the memories alone.
+
+    /// Appends the profile nodes and relations of this user to the recalled memories. A failed
+    /// graph read is logged and adds nothing.
     async fn with_profile(&self, ctx: &RequestContext, mut memory: Vec<Memory>) -> Vec<Memory> {
         let Some(graph) = &self.deps.profile_graph else {
             return memory;
@@ -186,7 +188,6 @@ impl Agent {
             Ok(nodes) => memory.extend(nodes.iter().map(Memory::from)),
             Err(error) => tracing::warn!(error = %error, "profile graph recall failed"),
         }
-        // A node says what the user is connected to. A relation says how.
         match graph.relations(ctx, limit).await {
             Ok(relations) => memory.extend(relations.iter().map(Memory::from)),
             Err(error) => tracing::warn!(error = %error, "profile relation recall failed"),

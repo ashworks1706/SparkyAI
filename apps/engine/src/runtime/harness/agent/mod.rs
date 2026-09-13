@@ -10,7 +10,6 @@ mod run;
 mod step;
 pub mod task;
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -93,13 +92,13 @@ fn record_outcome(span: &tracing::Span, result: &Result<Answer, AgentError>, lim
     }
 }
 
-/// The loop. Cheap to clone, holding only Arcs.
+/// The agent loop over its dependencies and configuration.
 #[derive(Clone)]
 pub struct Agent {
     deps: Arc<AgentDeps>,
     cfg: AgentConfig,
     system_prompt: Arc<str>,
-    /// Wording written around the prompt sections. Owned, and sourced from configuration.
+    /// Wording written around the prompt sections.
     prompt: Arc<PromptText>,
     /// The capabilities section, rendered once at boot.
     capabilities: Arc<str>,
@@ -208,21 +207,7 @@ impl Agent {
         ctx: &RequestContext,
         pending: PendingAction,
     ) -> Result<Answer, AgentError> {
-        let mut run = Run {
-            ctx,
-            input: "",
-            started: Instant::now(),
-            steps: 0,
-            usage: Usage::default(),
-            new_turns: Vec::new(),
-            seen_calls: HashSet::new(),
-            tool_runs: Vec::new(),
-            evidence_in_prompt: 0,
-            memories_in_prompt: Vec::new(),
-            tool_sources: Vec::new(),
-            force_answer: false,
-            appended_by_assembly: 0,
-        };
+        let mut run = Run::new(ctx, "", Vec::new(), 0);
         let call = ToolCall {
             id: pending.call_id,
             name: pending.action.tool,
@@ -247,21 +232,7 @@ impl Agent {
     }
 
     async fn run_inner(&self, ctx: &RequestContext, input: &str) -> Result<Answer, AgentError> {
-        let mut run = Run {
-            ctx,
-            input,
-            started: Instant::now(),
-            steps: 0,
-            usage: Usage::default(),
-            new_turns: vec![Message::user(input)],
-            seen_calls: HashSet::new(),
-            tool_runs: Vec::new(),
-            evidence_in_prompt: 0,
-            memories_in_prompt: Vec::new(),
-            tool_sources: Vec::new(),
-            force_answer: false,
-            appended_by_assembly: 1,
-        };
+        let mut run = Run::new(ctx, input, vec![Message::user(input)], 1);
         self.deps.trace.emit(
             ctx,
             TraceEvent::RequestStarted {
@@ -289,38 +260,14 @@ impl Agent {
             }
             run.steps += 1;
 
-            match self.step(run, inputs).await {
-                Ok(StepOutcome::Continue) => {}
-                Ok(StepOutcome::Stop(status, text, confirmation)) => {
-                    return self
-                        .conclude(run, status, text, inputs.evidence.clone(), confirmation)
-                        .await;
-                }
-                Err(ModelError::Cancelled) => {
-                    return self
-                        .conclude(
-                            run,
-                            RunStatus::Cancelled,
-                            String::new(),
-                            inputs.evidence.clone(),
-                            None,
-                        )
-                        .await;
-                }
-                Err(ModelError::Timeout) => {
-                    return self
-                        .conclude(
-                            run,
-                            RunStatus::Deadline,
-                            String::new(),
-                            inputs.evidence.clone(),
-                            None,
-                        )
-                        .await;
-                }
+            let (status, text, confirmation) = match self.step(run, inputs).await {
+                Ok(StepOutcome::Continue) => continue,
+                Ok(StepOutcome::Stop(status, text, confirmation)) => (status, text, confirmation),
+                Err(ModelError::Cancelled) => (RunStatus::Cancelled, String::new(), None),
+                Err(ModelError::Timeout) => (RunStatus::Deadline, String::new(), None),
                 Err(error) => {
-                    // The turns are still kept. A failed request is part of the conversation.
-                    let _ = self
+                    // The turns of a failed request are still kept.
+                    if let Err(kept) = self
                         .conclude(
                             run,
                             RunStatus::Error,
@@ -328,13 +275,20 @@ impl Agent {
                             inputs.evidence.clone(),
                             None,
                         )
-                        .await;
+                        .await
+                    {
+                        tracing::error!(error = %kept, "turns of a failed request were not kept");
+                    }
                     return Err(error.into());
                 }
-            }
+            };
+            return self
+                .conclude(run, status, text, inputs.evidence.clone(), confirmation)
+                .await;
         }
     }
 
+    /// The status the loop stops with before the next step, if any.
     fn check_limits(&self, run: &Run<'_>) -> Option<RunStatus> {
         if run.ctx.cancel.is_cancelled() {
             Some(RunStatus::Cancelled)
@@ -347,6 +301,7 @@ impl Agent {
         }
     }
 
+    /// The dollar cost of usage at the configured rates.
     fn cost(&self, usage: Usage) -> f64 {
         (f64::from(usage.prompt_tokens) * self.cfg.usd_per_m_prompt
             + f64::from(usage.completion_tokens) * self.cfg.usd_per_m_completion)
@@ -354,6 +309,7 @@ impl Agent {
     }
 }
 
+/// Milliseconds elapsed since since.
 fn ms(since: Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }

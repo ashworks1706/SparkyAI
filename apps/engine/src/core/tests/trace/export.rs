@@ -59,7 +59,7 @@ fn a_span_reaches_both_paths_with_the_bearer_token() {
     let cfg = Telemetry {
         host: Some(format!("http://{addr}/")),
         project_token: SecretString::from("phc_test"),
-        // Off by default; set here to prove it is still reachable when it is configured.
+        // Off by default; set here.
         ai_path: "/i/v0/ai/otel".into(),
         ..Telemetry::default()
     };

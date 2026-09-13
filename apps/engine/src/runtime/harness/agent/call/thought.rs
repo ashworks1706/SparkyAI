@@ -7,9 +7,8 @@ const CLOSE: &str = "</think>";
 
 /// The thought a response carries and the text left for the user.
 ///
-/// Reasoning the provider returned in a field of its own is believed first. A model that
-/// writes its thinking inline between think tags has it lifted out of the answer, including
-/// when the closing tag never arrived.
+/// Reasoning the provider returned in its own field takes precedence. Inline reasoning between
+/// think tags is removed from the text, including an unclosed trailing block.
 pub fn split(reasoning: &str, content: &str) -> (Option<String>, String) {
     let (inline, visible) = lift(content);
     let thought = [reasoning.trim(), inline.trim()]
@@ -28,7 +27,7 @@ fn lift(content: &str) -> (String, String) {
         visible.push_str(&rest[..open]);
         let after = &rest[open + OPEN.len()..];
         let Some(close) = after.find(CLOSE) else {
-            // The step ran out of room mid-thought. What there is of it is still a thought.
+            // An unclosed tag runs to the end of the content.
             push_line(&mut thought, after);
             return (thought, visible.trim().to_owned());
         };

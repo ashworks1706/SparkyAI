@@ -13,8 +13,7 @@ pub struct PgSkills {
     pool: PgPool,
 }
 
-/// Maps a sqlx error to a SkillError. Takes the error by value for use as a map_err function
-/// pointer.
+/// Maps a sqlx error to a SkillError.
 #[allow(clippy::needless_pass_by_value)]
 fn db(e: sqlx::Error) -> SkillError {
     SkillError::Store(e.to_string())

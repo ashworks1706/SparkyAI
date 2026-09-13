@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# One image for both Rust apps; select the binary with `command:`.
+# One image for both Rust apps; the compose entrypoint selects the binary.
 FROM rust:1.95-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app

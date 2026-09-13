@@ -23,6 +23,7 @@ from scraper.query.sources import (
     sports,
     sports_news,
     study_rooms,
+    web,
 )
 
 _MODULES = (
@@ -40,6 +41,7 @@ _MODULES = (
     campus_map,
     social_media,
     jobs,
+    web,
 )
 
 QUERY_SOURCES: dict[str, QuerySource] = {m.QUERY.key: m.QUERY for m in _MODULES}
@@ -80,8 +82,8 @@ def url_for(source: QuerySource, params: dict[str, str]) -> str:
 
 def run(source: QuerySource, params: dict[str, str]) -> tuple[str, str]:
     """Checks the parameters and fetches the source. Returns the URL to cite and the text."""
-    check(source, params)
     if source.answer is not None:
+        check(source, params)
         return source.answer(params)
     url = url_for(source, params)
     fetched = fetch.fetch(url, needs_js=source.needs_js)

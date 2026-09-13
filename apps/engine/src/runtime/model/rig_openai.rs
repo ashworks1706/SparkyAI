@@ -4,13 +4,16 @@
 use ::rig_core::client::BearerAuth;
 use ::rig_core::completion::{
     AssistantContent, CompletionError, CompletionModel as _, CompletionRequest,
-    ToolDefinition as RigTool,
+    FinishReason as RigFinish, ToolDefinition as RigTool,
 };
 use ::rig_core::embeddings::EmbeddingModel as _;
 use ::rig_core::message::{Message as RigMessage, ReasoningContent, ToolChoice, UserContent};
 use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericEmbeddingModel};
+use ::rig_core::streaming::StreamedAssistantContent;
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use secrecy::{ExposeSecret, SecretString};
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::config::{CHAT_TEMPLATE_KWARGS, ENABLE_THINKING};
 use crate::core::traits::knowledge::retrieval::Embedder;
@@ -18,7 +21,9 @@ use crate::core::traits::model::ModelProvider;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role, ToolCall};
 use crate::core::types::knowledge::retrieval::RetrievalError;
-use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse, Usage};
+use crate::core::types::model::{
+    FinishReason, ModelDelta, ModelError, ModelRequest, ModelResponse, Usage,
+};
 use crate::core::types::tools::ToolDefinition;
 
 /// Builds a Rig client for one OpenAI-compatible base URL (ending in /v1).
@@ -35,8 +40,8 @@ pub fn client(base_url: &str, api_key: &SecretString) -> Result<CompletionsClien
 pub struct RigChat {
     model: CompletionModel,
     name: String,
-    /// Provider-specific request fields sent with every completion. Built once from
-    /// configuration; the thinking switch is added per call.
+    /// Provider-specific request fields sent with every completion. The thinking switch is added
+    /// per call.
     additional_params: serde_json::Value,
 }
 
@@ -85,8 +90,7 @@ pub(crate) fn to_rig(
     for m in messages {
         match m.role {
             Role::System => preamble.push(m.content.clone()),
-            // No provider has a summary role. It reaches the model as operator context, which
-            // keeps it out of the transcript nobody said.
+            // A summary joins the preamble as operator context.
             Role::Summary => preamble.push(format!("Summary of earlier turns: {}", m.content)),
             Role::User => history.push(RigMessage::user(&m.content)),
             Role::Assistant => {
@@ -200,16 +204,12 @@ fn map_error(e: CompletionError) -> ModelError {
     }
 }
 
-#[async_trait]
-impl ModelProvider for RigChat {
-    async fn generate(
-        &self,
-        _ctx: &RequestContext,
-        req: ModelRequest,
-    ) -> Result<ModelResponse, ModelError> {
+impl RigChat {
+    /// The Rig request for req.
+    fn request(&self, req: &ModelRequest) -> Result<CompletionRequest, ModelError> {
         let (preamble, chat_history) = to_rig(&req.messages)?;
         let tools: Vec<RigTool> = req.tools.iter().map(tool_to_rig).collect();
-        let request = CompletionRequest {
+        Ok(CompletionRequest {
             model: None,
             preamble,
             chat_history,
@@ -222,29 +222,96 @@ impl ModelProvider for RigChat {
             additional_params: Some(with_thinking(&self.additional_params, req.thinking)),
             output_schema: None,
             record_telemetry_content: false,
-        };
-        let response = self.model.completion(request).await.map_err(map_error)?;
-        let (content, reasoning, tool_calls) = from_rig(response.choice);
-        // Rig does not surface the finish reason of the provider. Tool calls and text are the
-        // two cases readable off the response. An empty completion stays Unknown.
-        let finish_reason = if !tool_calls.is_empty() {
-            FinishReason::ToolCalls
-        } else if content.trim().is_empty() {
-            FinishReason::Unknown
-        } else {
-            FinishReason::Stop
-        };
-        Ok(ModelResponse {
+        })
+    }
+
+    /// The core response for a Rig choice, its usage, and the finish reason the provider gave.
+    fn response(
+        &self,
+        choice: Vec<AssistantContent>,
+        usage: ::rig_core::completion::Usage,
+        reported: Option<&RigFinish>,
+    ) -> ModelResponse {
+        let (content, reasoning, tool_calls) = from_rig(choice);
+        let finish_reason = finish_reason(reported, &content, &tool_calls);
+        ModelResponse {
             content,
             reasoning,
             tool_calls,
             finish_reason,
             usage: Usage {
-                prompt_tokens: u32::try_from(response.usage.input_tokens).unwrap_or(u32::MAX),
-                completion_tokens: u32::try_from(response.usage.output_tokens).unwrap_or(u32::MAX),
+                prompt_tokens: u32::try_from(usage.input_tokens).unwrap_or(u32::MAX),
+                completion_tokens: u32::try_from(usage.output_tokens).unwrap_or(u32::MAX),
             },
             model: self.name.clone(),
-        })
+        }
+    }
+}
+
+/// Why a completion stopped: what the provider reported, or else what the response shows.
+/// Tool calls always win, and an empty unreported completion is Unknown.
+pub(crate) fn finish_reason(
+    reported: Option<&RigFinish>,
+    content: &str,
+    tool_calls: &[ToolCall],
+) -> FinishReason {
+    match reported {
+        _ if !tool_calls.is_empty() => FinishReason::ToolCalls,
+        Some(RigFinish::Length) => FinishReason::Length,
+        Some(RigFinish::ToolCalls) => FinishReason::ToolCalls,
+        Some(RigFinish::ContentFilter | RigFinish::Other(_)) => FinishReason::Other,
+        None if content.trim().is_empty() => FinishReason::Unknown,
+        Some(RigFinish::Stop) | None => FinishReason::Stop,
+    }
+}
+
+#[async_trait]
+impl ModelProvider for RigChat {
+    async fn generate(
+        &self,
+        _ctx: &RequestContext,
+        req: ModelRequest,
+    ) -> Result<ModelResponse, ModelError> {
+        let request = self.request(&req)?;
+        let response = self.model.completion(request).await.map_err(map_error)?;
+        Ok(self.response(response.choice, response.usage, None))
+    }
+
+    async fn stream(
+        &self,
+        _ctx: &RequestContext,
+        req: ModelRequest,
+        deltas: UnboundedSender<ModelDelta>,
+    ) -> Result<ModelResponse, ModelError> {
+        let request = self.request(&req)?;
+        let mut stream = self.model.stream(request).await.map_err(map_error)?;
+        let mut usage = ::rig_core::completion::Usage::new();
+        let mut reported = None;
+        let mut finished = false;
+        while let Some(item) = stream.next().await {
+            // A closed receiver means nobody is watching; the completion continues.
+            match item.map_err(map_error)? {
+                StreamedAssistantContent::ReasoningDelta { reasoning, .. } => {
+                    let _ = deltas.send(ModelDelta::Reasoning(reasoning));
+                }
+                StreamedAssistantContent::Text(text) => {
+                    let _ = deltas.send(ModelDelta::Text(text.text));
+                }
+                StreamedAssistantContent::Final(last) => {
+                    usage = last.usage;
+                    reported = last.finish_reason;
+                    finished = true;
+                }
+                _ => {}
+            }
+        }
+        if !finished {
+            return Err(ModelError::Transport(
+                "the model stream ended before the completion finished".into(),
+            ));
+        }
+        let choice = std::mem::take(&mut stream.choice);
+        Ok(self.response(choice, usage, reported.as_ref()))
     }
 }
 
@@ -292,7 +359,7 @@ impl Embedder for RigEmbedder {
                     self.dim
                 )));
             }
-            // f64 to f32 narrowing is intended. The index stores f32.
+            // The index stores f32.
             #[allow(clippy::cast_possible_truncation)]
             out.push(e.vec.into_iter().map(|x| x as f32).collect());
         }

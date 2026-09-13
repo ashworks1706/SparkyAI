@@ -144,7 +144,7 @@ impl Handler {
     }
 
     /// Role names the member holds, resolved against the guild, with the capability the
-    /// interaction permissions grant. A lookup failure is an error, not an empty list.
+    /// interaction permissions grant. Fails when the guild roles cannot be fetched.
     async fn command_roles(
         &self,
         ctx: &Context,

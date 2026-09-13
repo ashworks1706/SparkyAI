@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -24,7 +25,7 @@ def load_cases(cases_dir: Path | None = None) -> list[EvalCase]:
     return cases
 
 
-def read_trace(request_id: str, traces_dir: Path | None = None) -> list[dict]:
+def read_trace(request_id: str, traces_dir: Path | None = None) -> list[dict[str, Any]]:
     path = (traces_dir or settings().training.traces_dir) / f"{request_id}.jsonl"
     if not path.exists():
         raise RunnerError(
@@ -65,18 +66,22 @@ def ask(
     latency_ms = int((time.monotonic() - started) * 1000)
     if r.status_code != 200:
         raise RunnerError(f"engine returned {r.status_code}: {r.text[:200]}")
-    d = r.json()
-    return TurnResult(
-        request_id=d["request_id"],
-        conversation_id=d["conversation_id"],
-        status=d["status"],
-        text=d["text"],
-        citations=d["citations"],
-        steps=d["steps"],
-        tokens=d["tokens"],
-        latency_ms=latency_ms,
-        events=read_trace(d["request_id"]),
-    )
+    try:
+        d = r.json()
+        turn = TurnResult(
+            request_id=d["request_id"],
+            conversation_id=d["conversation_id"],
+            status=d["status"],
+            text=d["text"],
+            citations=d["citations"],
+            steps=d["steps"],
+            tokens=d["tokens"],
+            latency_ms=latency_ms,
+            events=[],
+        )
+    except (ValueError, KeyError, TypeError) as e:
+        raise RunnerError(f"unexpected engine response shape: {e}") from e
+    return turn.model_copy(update={"events": read_trace(turn.request_id)})
 
 
 def run_case(case: EvalCase, engine_url: str | None = None) -> list[TurnResult]:

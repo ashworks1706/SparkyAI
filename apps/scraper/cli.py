@@ -1,16 +1,15 @@
-"""scraper run <source>|--all, scraper schedule, scraper status, scraper migrate."""
+"""scraper run <source>|--all, scraper serve, scraper status, scraper migrate."""
 
 from __future__ import annotations
 
-import time
-from datetime import UTC, datetime
+from datetime import datetime
 
 import structlog
 import typer
 
+from scraper import jobs
 from scraper.core import telemetry
 from scraper.ingest import pipeline
-from scraper.query import worker
 from scraper.sources import SOURCES
 from scraper.store import postgres
 
@@ -60,50 +59,19 @@ def run(
         raise typer.Exit(1)
 
 
-@app.command(name="worker")
-def run_worker(
-    poll_secs: float = typer.Option(0.5, help="How often to look for a queued job."),
-) -> None:
-    """Answer live query jobs the engine queues. Publishes the source registry, then blocks."""
-    worker.serve(poll_secs=poll_secs)
-
-
-def is_due(row: dict | None, now: datetime) -> bool:
-    """Whether a source should run, from its sources row. A source with no row yet has never
-    been attempted and is due; the first run creates the row from the registered source."""
-    if row is None:
-        return True
-    if not row["enabled"]:
-        return False
-    last = row["last_attempt"]
-    if last is None:
-        return True
-    return now - last >= row["fetch_every"]
-
-
 @app.command()
-def schedule(poll_secs: int = typer.Option(300, help="How often to check what is due.")) -> None:
-    """Runs each source when its fetch_every interval has elapsed since the last attempt,
-    changed content or not. Blocks forever."""
-    while True:
-        with postgres.connection() as conn:
-            rows = {r["key"]: r for r in postgres.status_rows(conn)}
-        now = datetime.now(UTC)
-        for key, src in SOURCES.items():
-            if not is_due(rows.get(key), now):
-                continue
-            try:
-                pipeline.run_source(src)
-            except Exception as e:  # the attempt is recorded, so the retry waits out the interval
-                log.error("scheduled run failed", source=key, error=str(e))
-        time.sleep(poll_secs)
+def serve() -> None:
+    """Run the scraper: live queries from the engine, the indexing of their results, and every
+    registered source on its interval, from one job queue. Blocks."""
+    jobs.serve()
 
 
 @app.command()
 def status() -> None:
-    """Last attempt, last change, version count, and chunk count per source."""
+    """Last attempt, last change, version count, and chunk count per source, then the queue."""
     with postgres.connection() as conn:
         rows = postgres.status_rows(conn)
+        queue = postgres.queue_counts(conn)
     if not rows:
         typer.echo("no sources yet; run `scraper run --all`")
         return
@@ -118,6 +86,11 @@ def status() -> None:
             f"{r['key']:<16}{r['category']:<14}{attempt:<22}{change:<22}"
             f"{r['versions']:>9}{r['chunks']:>8}"
         )
+
+    if queue:
+        typer.echo(f"\n{'job kind':<16}{'status':<14}{'jobs':>8}")
+        for q in queue:
+            typer.echo(f"{q['kind']:<16}{q['status']:<14}{q['jobs']:>8}")
 
 
 def _stamp(at: datetime | None) -> str:

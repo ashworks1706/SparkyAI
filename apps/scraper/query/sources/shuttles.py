@@ -76,4 +76,6 @@ QUERY = QuerySource(
     description="Live next-bus times at every stop of the ASU intercampus shuttles.",
     params=(QueryParam("route", "Shuttle route.", choices=tuple(_ROUTES)),),
     answer=answer,
+    category="transit",
+    index=False,
 )

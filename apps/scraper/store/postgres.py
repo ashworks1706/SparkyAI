@@ -69,8 +69,7 @@ def upsert_source(
 ) -> SourceRow:
     """Creates or refreshes the sources row and stamps this run as an attempt.
 
-    fetch_every is seeded from the registered source and then left alone; the column is what
-    the scheduler reads, so an operator can change the interval in place.
+    fetch_every is set on insert only. The scheduler reads the column.
     """
     row = conn.execute(
         """
@@ -88,8 +87,8 @@ def upsert_source(
 
 
 def latest_version(conn: psycopg.Connection, source_id: uuid.UUID) -> dict | None:
-    """Most recent source_versions row, or None. Only runs that passed the quality floor are
-    written, so this is the last good version."""
+    """Most recent source_versions row, or None. Only runs that pass the quality floor write a
+    version."""
     return conn.execute(
         """
         select id, content_hash, fetched_at, text_chars, chunk_count from source_versions
@@ -167,7 +166,7 @@ def replace_chunks(
                     source.category,
                     c.ordinal,
                     c.content,
-                    "[" + ",".join(repr(float(x)) for x in c.embedding) + "]",
+                    _vector(c.embedding),
                     fetched_at,
                 )
                 for c in chunks
@@ -197,7 +196,7 @@ def insert_tree(
 ) -> int:
     """Writes the summary levels above the leaves and points every covered row at its parent.
 
-    nodes come parents-last, so a node's children already hold an id by the time it is written.
+    nodes come parents last. Every child holds an id before its parent is written.
     """
     ids = list(leaves)
     for node in nodes:
@@ -216,7 +215,7 @@ def insert_tree(
                 source.category,
                 node.ordinal,
                 node.content,
-                "[" + ",".join(repr(float(x)) for x in node.embedding) + "]",
+                _vector(node.embedding),
                 fetched_at,
                 node.level,
             ),
@@ -294,24 +293,24 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
     return len(keys)
 
 
-def claim_job(conn: psycopg.Connection, kind: str) -> Job | None:
-    """Takes the oldest queued job of kind, or None. skip locked lets several workers run
-    concurrently."""
+def claim_job(conn: psycopg.Connection, kinds: Sequence[str]) -> Job | None:
+    """Takes the queued job of one of kinds with the highest priority, oldest first, or None.
+    skip locked lets several lanes and processes claim concurrently."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
             update jobs set status = 'running', attempts = attempts + 1, updated_at = now()
             where id = (
                 select id from jobs
-                where status = 'queued' and kind = %s
+                where status = 'queued' and kind = any(%s)
                   and (deadline is null or deadline > now())
-                order by created_at
+                order by priority desc, created_at
                 for update skip locked
                 limit 1
             )
             returning id, kind, input
             """,
-            (kind,),
+            (list(kinds),),
         )
         row = cur.fetchone()
     if row is None:
@@ -333,3 +332,46 @@ def fail_job(conn: psycopg.Connection, job_id: uuid.UUID, error: str) -> None:
         "update jobs set status = 'failed', error = %s, updated_at = now() where id = %s",
         (error[:2000], job_id),
     )
+
+
+def enqueue_job(conn: psycopg.Connection, kind: str, input: dict, priority: int) -> bool:
+    """Queues a job. Returns False when a unique queue rule already holds an equal one."""
+    row = conn.execute(
+        """
+        insert into jobs (kind, status, input, priority)
+        values (%s, 'queued', %s::jsonb, %s)
+        on conflict do nothing
+        returning id
+        """,
+        (kind, json.dumps(input), priority),
+    ).fetchone()
+    return row is not None
+
+
+def requeue_stale(conn: psycopg.Connection, kinds: Sequence[str], lease_secs: float) -> int:
+    """Puts back jobs of kinds left running longer than lease_secs, as a stopped process leaves
+    them. Returns how many."""
+    cursor = conn.execute(
+        """
+        update jobs set status = 'queued', updated_at = now()
+        where status = 'running' and kind = any(%s)
+          and updated_at < now() - make_interval(secs => %s)
+        """,
+        (list(kinds), lease_secs),
+    )
+    return cursor.rowcount
+
+
+def _vector(values: Sequence[float]) -> str:
+    """A pgvector text literal."""
+    return "[" + ",".join(repr(float(x)) for x in values) + "]"
+
+
+def queue_counts(conn: psycopg.Connection) -> list[dict]:
+    """Jobs by kind and status."""
+    return conn.execute(
+        """
+        select kind, status, count(*) as jobs from jobs
+        group by kind, status order by kind, status
+        """
+    ).fetchall()

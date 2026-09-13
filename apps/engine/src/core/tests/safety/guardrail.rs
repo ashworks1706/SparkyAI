@@ -73,7 +73,7 @@ async fn a_zero_ceiling_removes_the_length_rule() {
 
 #[tokio::test]
 async fn an_empty_denied_phrase_matches_nothing() {
-    // An empty string is contained in every string. Left unguarded it blocks every response.
+    // An empty phrase blocks nothing.
     let g = RuleGuardrail::new(rules(&[""], 0));
     assert_eq!(
         g.check(&ctx(), Stage::Answer, "a perfectly ordinary answer")

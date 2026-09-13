@@ -14,6 +14,7 @@ use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::profile::{
     ForgetRequest, ForgetResponse, ListRequest, ListResponse, ListedNode, ListedRelation,
+    ProfileError,
 };
 use crate::routes::chat::{authorized, too_many};
 use crate::routes::rate_limit::RateLimiter;
@@ -57,8 +58,7 @@ pub async fn forget(
     if req.user_id.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "user_id is empty").into_response();
     }
-    // The context is what scopes the delete. A caller names only their own user id, and the
-    // interface cannot express a delete for anyone else.
+    // The request context scopes the delete to the caller.
     let tenant = req
         .tenant_id
         .unwrap_or_else(|| state.default_tenant.clone());
@@ -105,13 +105,12 @@ pub async fn list(
         .tenant_id
         .unwrap_or_else(|| state.default_tenant.clone());
     let ctx = RequestContext::new(tenant, req.user_id, state.request_budget);
-    let listed = match graph.recall(&ctx, state.list_limit).await {
-        Ok(nodes) => graph
-            .relations(&ctx, state.list_limit)
-            .await
-            .map(|relations| (nodes, relations)),
-        Err(error) => Err(error),
-    };
+    let listed = async {
+        let nodes = graph.recall(&ctx, state.list_limit).await?;
+        let relations = graph.relations(&ctx, state.list_limit).await?;
+        Ok::<_, ProfileError>((nodes, relations))
+    }
+    .await;
     match listed {
         Ok((nodes, relations)) => Json(ListResponse {
             nodes: nodes.into_iter().map(ListedNode::from).collect(),

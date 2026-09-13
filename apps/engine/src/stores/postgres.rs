@@ -1,6 +1,6 @@
 //! What the PostgreSQL adapters share: the pool, the error mapping, and the literal helpers.
 //!
-//! The adapters themselves live one per trait in the sibling modules and are re-exported here.
+//! Each adapter lives in a sibling module and is re-exported here.
 
 use std::time::Duration;
 
@@ -35,13 +35,12 @@ pub async fn connect(
 /// Most rows any single query returns.
 const MAX_ROWS: i64 = 1_000;
 
-/// A row limit no caller can turn into an unbounded query.
+/// Clamps a row limit to MAX_ROWS.
 pub(crate) fn row_limit(limit: usize) -> i64 {
     i64::try_from(limit).unwrap_or(MAX_ROWS).min(MAX_ROWS)
 }
 
-/// Maps a sqlx error to a StoreError. Takes the error by value for use as a map_err function
-/// pointer.
+/// Maps a sqlx error to a StoreError.
 #[allow(clippy::needless_pass_by_value)]
 pub(crate) fn db(e: sqlx::Error) -> StoreError {
     StoreError::Database(e.to_string())

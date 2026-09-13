@@ -6,7 +6,6 @@ import { BrandMark } from "@/components/brand/BrandLogo";
 const Hero = () => {
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden pt-20" id="hero">
-      {/* Background Elements */}
       <div className="absolute inset-0 bg-hero-pattern opacity-30 z-0"></div>
       <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-sparky-gold/10 rounded-full filter blur-3xl z-0 animate-pulse-slow"></div>
       <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-sparky-maroon/10 rounded-full filter blur-3xl z-0 animate-pulse-slow animation-delay-400"></div>

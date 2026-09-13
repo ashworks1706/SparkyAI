@@ -8,38 +8,27 @@ import Agents from "@/components/sections/Agents";
 import Architecture from "@/components/sections/Architecture";
 import Contact from "@/components/sections/Contact";
 
+const scrollToElement = (element: Element) =>
+  element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
 const Legacy = () => {
   useEffect(() => {
     const handleAnchorClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest('a[href^="#"]');
-      
-      if (anchor) {
-        e.preventDefault();
-        const targetId = anchor.getAttribute('href');
-        if (targetId && targetId !== '#') {
-          const targetElement = document.querySelector(targetId);
-          if (targetElement) {
-            targetElement.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start',
-            });
-          }
-        }
-      }
+      const anchor = (e.target as HTMLElement).closest('a[href^="#"]');
+      if (!anchor) return;
+      e.preventDefault();
+      const targetId = anchor.getAttribute('href');
+      if (!targetId || targetId === '#') return;
+      const targetElement = document.querySelector(targetId);
+      if (targetElement) scrollToElement(targetElement);
     };
 
     document.addEventListener('click', handleAnchorClick);
-    
+
     if (window.location.hash) {
       const targetElement = document.querySelector(window.location.hash);
       if (targetElement) {
-        setTimeout(() => {
-          targetElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          });
-        }, 100);
+        setTimeout(() => scrollToElement(targetElement), 100);
       }
     }
 

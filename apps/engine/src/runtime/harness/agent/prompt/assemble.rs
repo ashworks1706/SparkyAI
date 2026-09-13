@@ -1,8 +1,8 @@
 //! Context assembly. Fixed section order and per-section token budgets.
 //!
-//! Order: system instructions, role line, memory, evidence, history, current turn.
-//! When over budget, evidence and history are trimmed first. The system prompt and the
-//! current turn are never dropped.
+//! Order: system instructions, role line, memory, evidence, history, the input, and the tool
+//! exchange of this request. When over budget, evidence and history are trimmed first. The system
+//! prompt, the input and the tool exchange of this request are never dropped.
 
 use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
 use crate::core::types::agent::context::RequestContext;
@@ -55,7 +55,8 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 
     let mut evidence_used = 0;
-    let input_cost = estimate(s.input, cpt);
+    let turn_cost: usize = s.turn.iter().map(|m| m.estimated_tokens(cpt)).sum();
+    let input_cost = estimate(s.input, cpt) + turn_cost;
     if s.evidence.is_empty() {
         if !s.templates.no_evidence_line.trim().is_empty() {
             let block = s.templates.no_evidence_line.trim().to_owned();
@@ -95,9 +96,10 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     messages.extend(kept.into_iter().cloned());
 
     if !s.input.is_empty() {
-        used += input_cost;
         messages.push(Message::user(s.input));
     }
+    used += input_cost;
+    messages.extend(s.turn.iter().cloned());
 
     Assembled {
         messages,

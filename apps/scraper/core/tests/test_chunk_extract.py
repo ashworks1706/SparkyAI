@@ -42,9 +42,7 @@ def test_long_paragraph_is_split() -> None:
 
 
 def test_a_divider_row_with_a_caption_after_it_is_still_a_divider() -> None:
-    # lib.asu.edu/hours emits the table caption after the closing pipe of the divider row.
-    # Read as a cell it stops the row looking like a divider, and the divider becomes the
-    # header row: every column then reads as dashes and the day names become data.
+    # lib.asu.edu/hours puts the table caption after the closing pipe of the divider row.
     cells = table_cells("| --- | --- | --- |Display of Opening hours")
     assert cells == ["---", "---", "---"]
     assert is_divider(cells)
@@ -62,8 +60,6 @@ def test_a_line_break_tag_becomes_a_space() -> None:
 
 
 def test_overlap_starts_on_a_line_boundary() -> None:
-    # A chunk that opens mid-row starts with a fragment no reader can attribute, so the
-    # overlap is cut back to the newest whole lines that fit.
     row = "Library {}: Monday 7am - 2am; Tuesday 7am - 2am; Sunday 10am - 6pm"
     rows = [row.format(i) for i in range(20)]
     chunks = chunk_text("\n".join(rows), max_chars=400, overlap_chars=120)

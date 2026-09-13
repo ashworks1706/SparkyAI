@@ -33,6 +33,7 @@ use crate::runtime::harness::safety::policy::RiskPolicy;
 use crate::runtime::harness::tools::ToolSet;
 use crate::runtime::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::runtime::model::limit::Limited;
+use crate::runtime::model::props;
 use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::skills::GetSkillTool;
@@ -68,8 +69,8 @@ library and dining hours, transit, deadlines, campus services, and the society i
 The knowledge base results were retrieved for you before you were called. Read them first.
 - Each search_ tool fetches one ASU source live, now, with the arguments you give: courses,
   scholarships, events, clubs, news, the library catalog, library hours, study rooms, sports
-  schedules, sports news, live shuttle times, the campus map, official social media posts, and
-  student jobs. Call one only when the results in this prompt do not answer, are missing the
+  schedules, sports news, live shuttle times, the campus map, official social media posts,
+  student jobs, and search_web for the open web. Call one only when the results in this prompt do not answer, are missing the
   detail asked for, or the answer must be current, such as open seats, the next shuttle, or
   study room slots.
 - Call the one search_ tool that matches the topic, with the fewest arguments that narrow it.
@@ -88,13 +89,18 @@ Examples of the judgement wanted:
 - "when is the next shuttle to Poly": search_shuttles with route polytechnic-tempe, then answer
   with the stop and the time.
 - "where is BYENG": search_campus_map with place BYENG, then answer with the map link.
+- "what was the score of the ASU game last night": search_web with that query and time_range
+  day, then answer from the results and cite them. Use search_web only when no search_ tool for
+  an ASU source fits.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
 
 ## Never
 - Never guess a date, room, price, deadline, policy, or person.
 - Never repeat a tool call that already returned nothing.
 - Never quote a result you were not given.
-- Never tell the user to check the official site when you have just cited it."#;
+- Never tell the user to check the official site when you have just cited it.
+- Never use run_sandbox to fetch a page or reach a site: it has no network. Use the search_ tool
+  for the topic."#;
 
 /// Serves until shutdown.
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
@@ -105,6 +111,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         &cfg.model.name,
         cfg.model.additional_params()?,
     ));
+    fits_the_slot(&cfg).await?;
     let model: Arc<dyn ModelProvider> = if cfg.agent.model_slots == 0 {
         chat
     } else {
@@ -192,6 +199,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let (signalled, wait) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router).with_graceful_shutdown(async move {
         shutdown().await;
+        // The receiver is gone only when the server has already stopped.
         let _ = signalled.send(());
     });
     // The grace period bounds how long in-flight requests may finish.
@@ -275,7 +283,7 @@ fn profile_writer(
             .unwrap_or(fallback)
             .to_owned()
     };
-    // The gate runs on every turn, so it is rules rather than a model call.
+    // The gate is rule based.
     let detector: Arc<dyn FactDetector> = Arc::new(RuleDetector::new(DetectorRules::from(
         &cfg.profile.detector,
     )));
@@ -377,6 +385,45 @@ fn task_config(cfg: &Config) -> TaskConfig {
     }
 }
 
+/// Fails the boot when the largest prompt and the completion of a call that does not think
+/// cannot fit one slot of the chat server. A server that does not report its context is not
+/// checked.
+async fn fits_the_slot(cfg: &Config) -> anyhow::Result<()> {
+    let slot = match props::slot_context(&cfg.model.base_url, &cfg.model.api_key).await {
+        Ok(slot) => u64::from(slot),
+        Err(error) => {
+            tracing::warn!(%error, "could not read the chat server context; the prompt budget is not checked against it");
+            return Ok(());
+        }
+    };
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    let prompt = (cfg.agent.prompt_budget_tokens as f64
+        * (1.0 + cfg.agent.prompt_estimate_headroom))
+        .ceil() as u64;
+    let plain = prompt + u64::from(cfg.model.max_tokens_without_thinking);
+    if plain > slot {
+        anyhow::bail!(
+            "one chat server slot holds {slot} tokens, but a prompt of up to {prompt} tokens \
+             (agent.prompt_budget_tokens with agent.prompt_estimate_headroom) and \
+             model.max_tokens_without_thinking need {plain}; raise SPARKY_CHAT_CTX or lower \
+             SPARKY_CHAT_PARALLEL, or lower those settings"
+        );
+    }
+    let thinking = prompt + u64::from(cfg.model.max_tokens);
+    if thinking > slot {
+        tracing::warn!(
+            slot,
+            needed = thinking,
+            "a call that thinks can run out of room before it answers"
+        );
+    }
+    Ok(())
+}
+
 /// Fails the boot when the tools leave the prompt no room. The capabilities section has to fit
 /// its own budget, and the tool schemas have to leave half the prompt budget for everything else.
 fn fits_the_prompt(cfg: &Config, tools: &ToolSet, capabilities: &str) -> anyhow::Result<()> {
@@ -410,6 +457,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         tool_timeout: Duration::from_secs(cfg.agent.tool_timeout_secs),
         confirmation_ttl: Duration::from_secs(cfg.agent.confirmation_ttl_secs),
         max_tokens: cfg.model.max_tokens,
+        max_tokens_without_thinking: cfg.model.max_tokens_without_thinking,
         temperature: cfg.agent.temperature,
         retrieval_top_k: cfg.retrieval.top_k,
         history_turns: cfg.agent.history_turns,
@@ -422,14 +470,17 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         usd_per_m_completion: cfg.model.usd_per_m_completion,
         budget: cfg.agent.budget(),
         thinking: cfg.agent.thinking.clone(),
+        stream: cfg.agent.stream,
+        stream_block_chars: cfg.agent.stream_block_chars,
     }
 }
 
-/// The registry and queue the scraper worker serves.
+/// The registry and queue the scraper serves.
 fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
     Arc::new(PgSourceQueries::new(
         pool.clone(),
         Duration::from_millis(cfg.query.poll_ms),
+        Duration::from_secs(cfg.query.claim_secs),
     ))
 }
 
@@ -443,24 +494,24 @@ async fn build_tools(
     let mut tools = ToolSet::new();
     let mut mcp_names = Vec::new();
     if cfg.tools.search {
-        // A source the worker has not published is not offered. One it publishes with other
-        // parameters than the tool declares fails the boot.
+        // Every catalog tool is offered; a mismatch with the published registry is logged.
         let published = queries.sources().await?;
-        if published.is_empty() {
-            tracing::info!("no live sources registered; run `just worker` to publish them");
-        }
         let mut registered = 0;
         for source in search::catalog() {
-            let Some(served) = published.iter().find(|p| p.key == source.key()) else {
-                if !published.is_empty() {
+            if let Some(served) = published.iter().find(|p| p.key == source.key()) {
+                if let Err(difference) = search::conforms(source.as_ref(), served) {
                     tracing::warn!(
                         source = source.key(),
-                        "the worker does not serve this source"
+                        %difference,
+                        "the tool and the scraper registry disagree; restart `just scraper serve` if it runs older code"
                     );
                 }
-                continue;
-            };
-            search::conforms(source.as_ref(), served).map_err(|e| anyhow::anyhow!(e))?;
+            } else {
+                tracing::warn!(
+                    source = source.key(),
+                    "the scraper has not published this source; run `just scraper serve`"
+                );
+            }
             let tool: Arc<dyn Tool> = Arc::new(search::Search::new(
                 source,
                 Arc::clone(&queries),
@@ -474,8 +525,7 @@ async fn build_tools(
         tracing::info!(count = registered, "search tools registered");
     }
     if cfg.tools.get_skill {
-        // An empty registry means review has offered nothing. Registering the tool anyway
-        // would name procedures that do not exist.
+        // get_skill registers only when reviewed skills exist.
         let skills = PgSkills::new(pool.clone());
         let offered = skills.list().await?;
         if offered.is_empty() {
@@ -534,14 +584,21 @@ async fn build_tools(
 /// Resolves on Ctrl-C or SIGTERM.
 async fn shutdown() {
     let ctrl_c = async {
-        let _ = tokio::signal::ctrl_c().await;
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "could not listen for ctrl-c");
+            std::future::pending::<()>().await;
+        }
     };
     #[cfg(unix)]
     let terminate = async {
-        if let Ok(mut sig) =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        {
-            sig.recv().await;
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(%error, "could not listen for SIGTERM");
+                std::future::pending::<()>().await;
+            }
         }
     };
     #[cfg(not(unix))]

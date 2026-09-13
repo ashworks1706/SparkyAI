@@ -15,7 +15,8 @@ use crate::runtime::harness::safety::redact::truncate;
 
 /// The outcome of a step that asked for no capabilities.
 fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
-    if !response.content.trim().is_empty() {
+    let written_call = force_answer && is_call_text(&response.content);
+    if !response.content.trim().is_empty() && !written_call {
         return StepOutcome::Stop(RunStatus::Answered, response.content.clone(), None);
     }
     let (status, text) = if force_answer {
@@ -26,7 +27,6 @@ fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
     } else if response.finish_reason == FinishReason::Length
         || !response.reasoning.trim().is_empty()
     {
-        // Reasoning that leaves no room for an answer spends the whole completion budget.
         (
             RunStatus::Answered,
             "I ran out of room before finishing the answer.",
@@ -38,6 +38,12 @@ fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
         )
     };
     StepOutcome::Stop(status, text.to_owned(), None)
+}
+
+/// Whether text is a tool call written out as JSON rather than an answer.
+fn is_call_text(text: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(text.trim())
+        .is_ok_and(|v| v.get("name").is_some() && v.get("arguments").is_some())
 }
 
 impl Agent {
@@ -68,8 +74,7 @@ impl Agent {
         }
 
         if response.tool_calls.is_empty() {
-            // Replaces the thinking line of a step that thought nothing worth showing. A step
-            // that did keeps the thought.
+            // A step that showed a thought keeps it in place of the answered line.
             if !thought_shown {
                 self.deps
                     .trace
@@ -81,7 +86,6 @@ impl Agent {
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
             Ok(calls) => calls,
             Err(HeldError::Store(error)) => {
-                // An action that cannot be approved later is not offered for approval.
                 return Err(ModelError::Transport(format!(
                     "could not hold the action for approval: {error}"
                 )));
@@ -103,10 +107,11 @@ impl Agent {
     /// are counted, and records what fit.
     fn prompt_for(&self, run: &mut Run<'_>, inputs: &Inputs) -> Vec<Message> {
         let ctx = run.ctx;
-        // Prompt history is prior turns plus the turns of this request so far, minus the
-        // current input, which assembly appends itself.
-        let mut prompt_history = inputs.history.clone();
-        prompt_history.extend(run.new_turns.iter().skip(run.appended_by_assembly).cloned());
+        // The turns of this request after the input, which assembly appends itself.
+        let turn = run
+            .new_turns
+            .get(run.appended_by_assembly..)
+            .unwrap_or_default();
         let cpt = self.cfg.budget.chars_per_token;
         // Tool schemas ride along with every request and come out of the same budget.
         let tool_tokens = self.deps.tools.estimated_tokens(cpt);
@@ -118,7 +123,8 @@ impl Agent {
                 system: &self.system_prompt,
                 memory: &inputs.memory,
                 evidence: &inputs.evidence,
-                history: &prompt_history,
+                history: &inputs.history,
+                turn,
                 capabilities: &self.capabilities,
                 input: run.input,
                 date: &self.prompt.today(),
@@ -147,7 +153,11 @@ impl Agent {
                     .collect(),
             },
         );
-        assembled.messages
+        let mut messages = assembled.messages;
+        if run.force_answer {
+            messages.push(Message::system(self.prompt.answer_only_line.clone()));
+        }
+        messages
     }
 
     /// Reports what the model was thinking on this step, and says whether anything was shown.
@@ -187,7 +197,7 @@ impl Agent {
         text: &str,
     ) -> Option<StepOutcome> {
         let guardrail = self.deps.guardrail.as_ref()?;
-        // An empty capability branch has no text to check and every step would pay for it.
+        // An empty capability branch is not checked.
         if stage == Stage::Capability && text.trim().is_empty() {
             return None;
         }

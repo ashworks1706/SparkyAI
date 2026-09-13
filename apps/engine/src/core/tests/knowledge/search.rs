@@ -1,5 +1,5 @@
 //! The search tools: one per live source, their schemas, how arguments are checked before a job
-//! is queued, and the boot check against the registry the worker publishes.
+//! is queued, and the boot check against the registry the scraper publishes.
 
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ use crate::runtime::tools::knowledge::search::{
     Accepts, LiveSource, Search, arguments, catalog, conforms, definition, tool_name,
 };
 
-/// The registry entry a worker would publish for source.
+/// The registry entry the scraper would publish for source.
 fn published(source: &dyn LiveSource) -> QuerySourceInfo {
     QuerySourceInfo {
         key: source.key().into(),
@@ -52,10 +52,10 @@ fn refused(source: &dyn LiveSource, args: Value) -> String {
 fn every_source_is_its_own_tool_with_a_unique_name() {
     let sources = catalog();
     let mut names: Vec<String> = sources.iter().map(|s| tool_name(s.key())).collect();
-    assert_eq!(names.len(), 14);
+    assert_eq!(names.len(), 15);
     names.sort();
     names.dedup();
-    assert_eq!(names.len(), 14, "no two sources share a key");
+    assert_eq!(names.len(), 15, "no two sources share a key");
     for source in &sources {
         let d = definition(source.as_ref(), 90);
         assert!(d.name.starts_with("search_"), "{}", d.name);
@@ -98,7 +98,7 @@ fn choices_become_enums_and_a_flag_a_boolean_in_the_schema() {
 }
 
 #[test]
-fn arguments_are_normalized_into_the_strings_the_worker_takes() {
+fn arguments_are_normalized_into_the_strings_the_scraper_takes() {
     let params = arguments(
         &Courses,
         json!({"term": " Fall 2026 ", "days": ["Monday", "wednesday"], "session": "B", "open_only": true, "keywords": null}),
@@ -147,7 +147,7 @@ fn a_bad_argument_is_refused_with_what_would_be_accepted() {
 }
 
 #[test]
-fn a_tool_that_matches_what_the_worker_publishes_conforms() {
+fn a_tool_that_matches_what_the_scraper_publishes_conforms() {
     for source in catalog() {
         let served = published(source.as_ref());
         assert_eq!(
@@ -160,7 +160,7 @@ fn a_tool_that_matches_what_the_worker_publishes_conforms() {
 }
 
 #[test]
-fn a_tool_that_drifts_from_the_worker_is_named_at_boot() {
+fn a_tool_that_drifts_from_the_scraper_is_named_at_boot() {
     let mut served = published(&Courses);
     served.params.retain(|p| p.name != "session");
     assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("session")));
@@ -239,7 +239,7 @@ async fn a_bad_argument_never_reaches_the_queue() {
 }
 
 #[tokio::test]
-async fn a_worker_refusal_comes_back_as_something_the_model_can_fix() {
+async fn a_scraper_refusal_comes_back_as_something_the_model_can_fix() {
     let queries = FakeQueries::new(vec![published(&Courses)])
         .rejecting("courses", "courses returned a page with no readable text");
     let tool = Search::new(Box::new(Courses), Arc::new(queries), 90);

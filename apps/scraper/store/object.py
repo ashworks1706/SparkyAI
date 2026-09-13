@@ -14,6 +14,7 @@ from scraper.core.settings import settings
 
 @lru_cache(maxsize=1)
 def client() -> Any:
+    """Process-wide S3 client for the configured object store."""
     s = settings().object_store
     return boto3.client(
         "s3",

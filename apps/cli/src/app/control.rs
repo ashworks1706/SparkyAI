@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use super::{App, UnitState};
-use crate::core::types::{Command, Focus, Kind, Status};
+use crate::core::types::{Command, Focus, Kind, Status, Unit};
 use crate::units;
 use crate::units::health;
 
@@ -58,9 +58,9 @@ impl App {
             }
         }
     }
-    /// The address a process unit would bind, when something already answers there. A compose
-    /// service is left alone: bringing one up that is already up changes nothing.
-    fn taken_port(&self, unit: &crate::core::types::Unit) -> Option<String> {
+    /// The address a process unit would bind, when something already answers there. None for
+    /// compose services.
+    fn taken_port(&self, unit: &Unit) -> Option<String> {
         if !matches!(unit.kind, Kind::Process) || self.runner.owns(&unit.id) {
             return None;
         }

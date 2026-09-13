@@ -18,11 +18,10 @@ from scraper.ingest import embed as embedding
 
 log = structlog.get_logger()
 
-# A level is built only when the level below splits into at least this many clusters. One
-# cluster would summarize a level into a copy of itself.
+# A level is built only when the level below splits into at least this many clusters.
 MIN_CLUSTERS = 2
 
-# k-means is seeded, so the same leaves cluster the same way on every run.
+# Fixed k-means seed. The same leaves cluster the same way on every run.
 RANDOM_STATE = 0
 N_INIT = 10
 

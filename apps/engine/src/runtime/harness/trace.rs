@@ -12,6 +12,7 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::trace::progress::{Progress, ProgressStyle};
 use crate::core::types::trace::{TraceEvent, TraceRecord};
 
+/// The trace record of event under the ids of ctx.
 fn record(ctx: &RequestContext, event: TraceEvent) -> TraceRecord {
     TraceRecord {
         request_id: ctx.request_id,
@@ -62,8 +63,18 @@ impl JsonlSink {
                 .metadata()
                 .and_then(|m| m.modified())
                 .is_ok_and(|modified| modified < cutoff);
-            if stale && std::fs::remove_file(entry.path()).is_ok() {
-                removed += 1;
+            if !stale {
+                continue;
+            }
+            match std::fs::remove_file(entry.path()) {
+                Ok(()) => removed += 1,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        path = %entry.path().display(),
+                        "stale trace not removed"
+                    );
+                }
             }
         }
         Ok(removed)
@@ -73,8 +84,19 @@ impl JsonlSink {
 impl TraceSink for JsonlSink {
     fn emit(&self, ctx: &RequestContext, event: TraceEvent) {
         use std::io::Write;
-        let Ok(line) = serde_json::to_string(&record(ctx, event)) else {
+        if event.is_transient() {
             return;
+        }
+        let line = match serde_json::to_string(&record(ctx, event)) {
+            Ok(line) => line,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    request_id = %ctx.request_id,
+                    "trace event would not serialize"
+                );
+                return;
+            }
         };
         let path = self.path_for(ctx.request_id);
         let result = std::fs::OpenOptions::new()
@@ -82,7 +104,7 @@ impl TraceSink for JsonlSink {
             .append(true)
             .open(&path)
             .and_then(|mut f| {
-                // The cap drops the tail of the trace, keeping the start of the run.
+                // Past the cap, later events are dropped.
                 if self.max_file_bytes > 0 && f.metadata()?.len() >= self.max_file_bytes {
                     return Ok(());
                 }
@@ -131,7 +153,7 @@ impl TraceSink for Fanout {
         if let Some(tx) = &ctx.progress
             && let Some(progress) = Progress::of(&event, self.style)
         {
-            // A dropped receiver means the caller stopped watching. The trace still lands.
+            // A closed receiver means the caller stopped watching.
             let _ = tx.send(progress);
         }
         self.inner.emit(ctx, event);

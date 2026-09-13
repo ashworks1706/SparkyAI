@@ -56,12 +56,33 @@ pub enum TraceEvent {
         /// Retry index, 0 for the first attempt.
         attempt: u32,
     },
-    /// The model wrote something on a step that ended in tool calls.
+    /// The model has reasoned this far on a step. Sent while it streams; never recorded.
+    ModelReasoning {
+        /// Loop step.
+        step: u32,
+        /// The reasoning so far.
+        text: String,
+    },
+    /// What the model reasoned on a step, or wrote on its way to a tool call.
     ModelThought {
         /// Loop step.
         step: u32,
         /// What it wrote, truncated.
         text: String,
+    },
+    /// The answer as written so far, released a block at a time while it streams; never
+    /// recorded.
+    AnswerDraft {
+        /// Loop step.
+        step: u32,
+        /// The answer so far.
+        text: String,
+    },
+    /// The draft shown so far is withdrawn: the step called tools, the call failed, or the
+    /// guardrail refused it. Never recorded.
+    AnswerDraftCleared {
+        /// Loop step.
+        step: u32,
     },
     /// The model wrote the answer and the loop is done.
     ModelAnswered {
@@ -160,14 +181,17 @@ pub enum TraceEvent {
 }
 
 impl TraceEvent {
-    /// The snake-case name this event serialises under, for clients that switch on the kind.
+    /// The snake case name this event serializes under.
     pub fn kind(&self) -> &'static str {
         match self {
             Self::RequestStarted { .. } => "request_started",
             Self::ContextAssembled { .. } => "context_assembled",
             Self::ModelStarted { .. } => "model_started",
             Self::ModelCall { .. } => "model_call",
+            Self::ModelReasoning { .. } => "model_reasoning",
             Self::ModelThought { .. } => "model_thought",
+            Self::AnswerDraft { .. } => "answer_draft",
+            Self::AnswerDraftCleared { .. } => "answer_draft_cleared",
             Self::ModelAnswered { .. } => "model_answered",
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
@@ -182,16 +206,21 @@ impl TraceEvent {
     }
 
     /// What to show someone waiting on this run, or None when the event is bookkeeping.
-    ///
-    /// Every line opens with an emoji so a client can show it as it arrives. The match is
-    /// exhaustive: a new event must decide whether it is shown.
     pub fn progress(&self, style: ProgressStyle) -> Option<String> {
         let detail = style.detail_chars;
         match self {
             Self::ModelStarted { .. } => Some("\u{1f914} thinking".to_owned()),
+            Self::ModelReasoning { text, .. } => {
+                let so_far = tail(&one_line(text), style.thought_chars);
+                (!so_far.is_empty()).then(|| format!("\u{1f914} {so_far}"))
+            }
             Self::ModelThought { text, .. } => {
-                let thought = clip(&one_line(text), detail);
+                let thought = clip(&one_line(text), style.thought_chars);
                 (!thought.is_empty()).then(|| format!("\u{1f4ad} {thought}"))
+            }
+            Self::AnswerDraft { text, .. } => {
+                let draft = text.trim();
+                (!draft.is_empty()).then(|| draft.to_owned())
             }
             Self::ToolStarted {
                 tool, arguments, ..
@@ -251,31 +280,52 @@ impl TraceEvent {
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }
             | Self::ModelAnswered { .. }
+            | Self::AnswerDraftCleared { .. }
             | Self::ModelError { .. }
             | Self::Completed { .. } => None,
         }
     }
 
     /// Whether this event removes the line of its slot instead of writing one.
-    ///
-    /// A step that answered without thinking anything worth showing takes its thinking line
-    /// back rather than leaving it standing.
     pub fn clears_slot(&self) -> bool {
-        matches!(self, Self::ModelAnswered { .. })
+        matches!(
+            self,
+            Self::ModelAnswered { .. } | Self::AnswerDraftCleared { .. }
+        )
     }
 
-    /// The line this event writes over, or None to append a new line.
-    ///
-    /// A tool result replaces the line its own start wrote, and a thought replaces the
-    /// thinking line of its step.
+    /// Whether this event carries the answer being written rather than a step.
+    pub fn is_draft(&self) -> bool {
+        matches!(
+            self,
+            Self::AnswerDraft { .. } | Self::AnswerDraftCleared { .. }
+        )
+    }
+
+    /// Whether this event is sent only to watchers and left out of the recorded trace.
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            Self::ModelReasoning { .. }
+                | Self::AnswerDraft { .. }
+                | Self::AnswerDraftCleared { .. }
+        )
+    }
+
+    /// The line this event writes over, or None to append a new line. A tool call shares a slot
+    /// with its start, and model events share the slot of their step.
     pub fn slot(&self) -> Option<String> {
         match self {
             Self::ToolStarted { call_id, .. } | Self::ToolCall { call_id, .. } => {
                 Some(format!("tool:{call_id}"))
             }
             Self::ModelStarted { step }
+            | Self::ModelReasoning { step, .. }
             | Self::ModelThought { step, .. }
             | Self::ModelAnswered { step } => Some(format!("model:{step}")),
+            Self::AnswerDraft { .. } | Self::AnswerDraftCleared { .. } => {
+                Some(ANSWER_SLOT.to_owned())
+            }
             _ => None,
         }
     }
@@ -297,6 +347,19 @@ fn call_arguments(arguments: &Value, limit: usize) -> String {
         return String::new();
     }
     format!(" ({})", clip(&one_line(&shown.join(", ")), limit))
+}
+
+/// The slot the answer draft is written to.
+pub const ANSWER_SLOT: &str = "answer";
+
+/// The last limit characters of text, with an ellipsis in front when it was cut.
+fn tail(text: &str, limit: usize) -> String {
+    let count = text.chars().count();
+    if count <= limit {
+        return text.to_owned();
+    }
+    let kept: String = text.chars().skip(count - limit.saturating_sub(1)).collect();
+    format!("\u{2026}{}", kept.trim_start())
 }
 
 /// Text as one line, with runs of whitespace collapsed.
@@ -352,13 +415,10 @@ pub enum RunStatus {
 }
 
 impl RunStatus {
-    /// What to tell the caller when the loop stopped without the model writing an answer.
-    ///
-    /// None only for Answered, where the model text is the answer. The match is exhaustive.
+    /// What to tell the caller when the loop stopped without the model writing an answer. None
+    /// for Answered and Blocked, which carry their own text.
     pub fn explain(&self) -> Option<&'static str> {
         match self {
-            // Answered carries the model text. Blocked carries the replacement the guardrail
-            // supplied. Neither needs a stand-in here.
             Self::Answered | Self::Blocked => None,
             Self::AwaitingConfirmation => Some("I stopped to ask you first."),
             Self::StepLimit => Some("I could not finish within the allowed number of steps."),

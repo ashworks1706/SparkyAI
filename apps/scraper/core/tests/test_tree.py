@@ -82,7 +82,7 @@ def test_parents_summarize_the_leaves_they_cover() -> None:
     assert len(first.embedding) == DIM
     # A parent's content is what the model returned for exactly the rows it covers.
     assert first.content == fake_summarize([texts[i] for i in first.children])
-    # Ordinals continue past the leaves, so nothing collides on (version_id, ordinal).
+    # Ordinals continue past the leaves; (version_id, ordinal) stays unique.
     assert [n.ordinal for n in nodes] == list(range(len(texts), len(texts) + len(nodes)))
 
 

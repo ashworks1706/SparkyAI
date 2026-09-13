@@ -43,6 +43,7 @@ class Embedding(BaseModel):
     name: str = "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0"
     dim: int = 1024
     batch_size: int = 32
+    timeout_secs: float = 120.0
 
 
 class Summary(BaseModel):
@@ -54,8 +55,7 @@ class Summary(BaseModel):
     max_tokens: int = 512
     temperature: float = 0.2
     timeout_secs: float = 120.0
-    # Qwen3-style reasoning before the summary. On, it spends the token budget and the answer
-    # comes back empty.
+    # Qwen3-style reasoning before the summary. On, it can spend max_tokens and leave no summary.
     thinking: bool = False
 
 
@@ -63,9 +63,23 @@ class Firecrawl(BaseModel):
     base_url: str = "http://localhost:3002"
     api_key: SecretStr = SecretStr("")
     timeout_ms: int = 60_000
-    # ASU pages fill in content after load; wait before extracting.
+    # Wait after page load before extracting.
     wait_for_ms: int = 5_000
     only_main_content: bool = True
+
+
+class Search(BaseModel):
+    """SearXNG, the metasearch engine behind the web search query source."""
+
+    base_url: str = "http://localhost:8888"
+    # Upstream engines asked on every search, comma-separated. SearXNG merges their results.
+    engines: str = "google,brave,bing"
+    language: str = "en-US"
+    # 0 off, 1 moderate, 2 strict.
+    safesearch: int = 1
+    max_results: int = 8
+    # Characters of each result snippet kept.
+    snippet_chars: int = 300
 
 
 class Telemetry(BaseModel):
@@ -88,18 +102,27 @@ class Scraper(BaseModel):
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
     # Longest live query result handed back to the engine.
-    query_max_chars: int = 12_000
+    query_max_chars: int = 6_000
+    # Write each live query result into the retrieval index after its caller has the answer,
+    # for query sources that allow it.
+    index_live_results: bool = True
+    # Longest a lane of scraper serve waits before looking at the queue again.
+    serve_poll_secs: float = 0.5
+    # How often scraper serve queues the scheduled runs that have fallen due.
+    schedule_every_secs: float = 60.0
+    # A background job running longer than this is taken to be left by a stopped process and
+    # is queued again.
+    job_lease_secs: float = 1800.0
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"
     # Quality floor: a run whose extracted text is below this fraction of the last indexed
-    # version is refused rather than written over the index.
+    # version is refused.
     quality_floor_ratio: float = 0.5
-    # The floor is skipped when the last version was shorter than this, where a swing of a few
-    # hundred characters is ordinary.
+    # The floor is skipped when the last version was shorter than this.
     quality_floor_min_chars: int = 500
-    # The hierarchical index above the leaf chunks. Off by default: every cluster at every
-    # level costs one chat call plus one embedding call.
+    # The hierarchical index above the leaf chunks. Each cluster at each level costs one chat
+    # call and one embedding call.
     tree_enabled: bool = False
     # Highest level built. Level 0 is the leaves, so 3 allows three levels of summary.
     tree_max_level: int = 3
@@ -127,6 +150,7 @@ class Settings(BaseSettings):
     embedding: Embedding = Embedding()
     summary: Summary = Summary()
     firecrawl: Firecrawl = Firecrawl()
+    search: Search = Search()
     telemetry: Telemetry = Telemetry()
     scraper: Scraper = Scraper()
 

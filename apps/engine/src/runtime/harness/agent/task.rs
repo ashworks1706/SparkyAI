@@ -1,7 +1,4 @@
-//! A prompted sub-agent. One prompt, one model call, no tools, a typed result.
-//!
-//! The loop is not built on this. The loop has tools and stopping conditions; a task has one
-//! instruction and one answer.
+//! A prompted sub-agent: one prompt, one model call, no tools.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,7 +35,6 @@ impl Default for TaskConfig {
         let agent = AgentConfig::default();
         Self {
             max_tokens: 512,
-            // A task rewrites or classifies. Sampling wide serves neither.
             temperature: 0.0,
             timeout: Duration::from_secs(30),
             provider_name: agent.provider_name,

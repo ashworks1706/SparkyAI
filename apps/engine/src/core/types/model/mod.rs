@@ -22,6 +22,15 @@ pub struct ModelRequest {
     pub thinking: bool,
 }
 
+/// One piece of a completion as it streams.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelDelta {
+    /// Reasoning text, in the order it was produced.
+    Reasoning(String),
+    /// Answer text, in the order it was produced.
+    Text(String),
+}
+
 /// Why the model stopped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,13 +59,15 @@ pub struct Usage {
 impl Usage {
     /// Sum of both sides.
     pub fn total(self) -> u32 {
-        self.prompt_tokens + self.completion_tokens
+        self.prompt_tokens.saturating_add(self.completion_tokens)
     }
 
     /// Adds the usage of another call into this one.
     pub fn add(&mut self, other: Usage) {
-        self.prompt_tokens += other.prompt_tokens;
-        self.completion_tokens += other.completion_tokens;
+        self.prompt_tokens = self.prompt_tokens.saturating_add(other.prompt_tokens);
+        self.completion_tokens = self
+            .completion_tokens
+            .saturating_add(other.completion_tokens);
     }
 }
 

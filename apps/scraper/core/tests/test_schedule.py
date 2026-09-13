@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from scraper.cli import is_due
+from scraper.jobs import is_due
 
 NOW = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
 
@@ -32,8 +32,7 @@ def test_an_attempt_past_the_interval_is_due() -> None:
 
 
 def test_unchanged_content_still_holds_the_source_off_until_the_interval_elapses() -> None:
-    # The regression: last_attempt advances even when no new version was written, so a page
-    # returning the same bytes is not refetched on the very next poll.
+    # last_attempt advances even when no new version was written.
     unchanged = row(last_attempt=NOW - timedelta(minutes=5))
     assert not is_due(unchanged, NOW)
     assert is_due(row(last_attempt=NOW - timedelta(hours=7)), NOW)

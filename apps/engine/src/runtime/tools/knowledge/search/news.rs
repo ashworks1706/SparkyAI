@@ -5,9 +5,11 @@ use super::{LiveSource, Param};
 /// The ASU News search.
 pub struct News;
 
-const PARAMS: &[Param] = &[Param::text("keywords", "What the story is about.")
-    .required()
-    .example("robotics")];
+const PARAMS: &[Param] = &[Param::text(
+    "keywords",
+    "Topic to search for. Leave out for the newest stories.",
+)
+.example("robotics")];
 
 impl LiveSource for News {
     fn key(&self) -> &'static str {
@@ -15,7 +17,7 @@ impl LiveSource for News {
     }
 
     fn description(&self) -> &'static str {
-        "Search ASU News for recent stories."
+        "The newest ASU News stories, or a search of ASU News by topic."
     }
 
     fn params(&self) -> &'static [Param] {

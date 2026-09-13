@@ -136,6 +136,12 @@ fn services() -> Vec<Unit> {
             Some("http://localhost:8001"),
         ),
         service(
+            "searxng",
+            Some("search"),
+            "self-hosted metasearch behind search_web",
+            Some("http://localhost:8888"),
+        ),
+        service(
             "firecrawl",
             Some("crawl"),
             "self-hosted Firecrawl for the scraper",
@@ -159,9 +165,9 @@ fn processes() -> Vec<Unit> {
             None,
         ),
         process(
-            "worker",
-            &["worker"],
-            "answers the engine's live source queries",
+            "scraper",
+            &["scraper", "serve"],
+            "live searches, their indexing, and scheduled runs, from one queue",
             None,
         ),
         process(
@@ -180,15 +186,7 @@ fn tasks() -> Vec<Unit> {
         task_static(&["migrate"], "apply scraper migrations"),
         task_static(
             &["scraper", "status"],
-            "every source, its schedule and last run",
-        ),
-        task_static(
-            &["scraper", "schedule"],
-            "run every source that is due, forever",
-        ),
-        task_static(
-            &["scraper", "worker"],
-            "answer the engine's live source queries",
+            "every source, its last run, and the job queue",
         ),
         task_static(&["check"], "fmt, lint, test every unit"),
         task_static(

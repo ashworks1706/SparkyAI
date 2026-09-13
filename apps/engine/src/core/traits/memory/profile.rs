@@ -7,9 +7,7 @@ use crate::core::types::memory::profile::{
     ProfileError, ProfileFact, ProfileNode, ProfileRelation,
 };
 
-/// The entity graph for one user in one tenant.
-///
-/// Scope comes from the request context alone, so no caller can name another user's graph.
+/// The entity graph for one user in one tenant. Scope comes from the request context alone.
 #[async_trait]
 pub trait ProfileGraph: Send + Sync {
     /// Writes facts as nodes and the edges between them, updating what is already there.
@@ -31,9 +29,6 @@ pub trait ProfileGraph: Send + Sync {
     ) -> Result<Vec<ProfileRelation>, ProfileError>;
 
     /// The relations already recorded for this subject and relation.
-    ///
-    /// Reconciliation compares a new fact against these rather than against everything, so two
-    /// statements about different things are never weighed against each other.
     async fn matching(
         &self,
         ctx: &RequestContext,

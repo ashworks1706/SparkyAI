@@ -2,7 +2,7 @@
 
 The engine records the full prompt and the reply as JSON attributes on the llm span. Spans are
 read from posthog.trace_spans through the HogQL query API, paged by a (timestamp, uuid) keyset
-cursor. The JSONL trace holds events, not prompts, and is read by evals.
+cursor.
 """
 
 from __future__ import annotations

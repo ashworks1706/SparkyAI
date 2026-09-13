@@ -1,7 +1,5 @@
-//! ReadPublic: fetch one saved procedure so the model can follow it.
-//!
-//! The tool returns steps, not results. Whatever the steps call for is done with the
-//! capabilities the model already has, under their own risk classes.
+//! ReadPublic: fetch one saved procedure for the model to follow. The tool returns steps and
+//! runs nothing.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -85,31 +83,32 @@ impl GetSkillTool {
     /// Builds the tool over the skills review currently offers.
     pub fn new(skills: Arc<dyn SkillStore>, offered: &[Skill]) -> Self {
         let keys: Vec<String> = offered.iter().map(|s| s.key.clone()).collect();
+        let definition = ToolDefinition {
+            name: "get_skill".into(),
+            description: describe(offered),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "enum": keys,
+                        "description": "Which skill to fetch."
+                    }
+                },
+                "required": ["key"]
+            }),
+            risk: RiskClass::ReadPublic,
+            sequential: false,
+            timeout_secs: None,
+        };
         Self {
             skills,
-            keys: keys.clone(),
-            definition: ToolDefinition {
-                name: "get_skill".into(),
-                description: describe(offered),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "key": {
-                            "type": "string",
-                            "enum": keys,
-                            "description": "Which skill to fetch."
-                        }
-                    },
-                    "required": ["key"]
-                }),
-                risk: RiskClass::ReadPublic,
-                sequential: false,
-                timeout_secs: None,
-            },
+            keys,
+            definition,
         }
     }
 
-    /// The refusal an unknown key gets: the keys that do exist, so the model can correct itself.
+    /// The refusal for an unknown key, listing the keys that exist.
     fn unknown(&self, key: &str) -> ToolError {
         if self.keys.is_empty() {
             return ToolError::InvalidArguments(format!("no skill named {key}; none are offered"));

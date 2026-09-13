@@ -60,8 +60,7 @@ impl GraphAgent {
     ///
     /// # Errors
     /// Returns [ProfileError::Model] when the model call fails, and
-    /// [ProfileError::Malformed] when the answer is not the extraction shape. An answer that
-    /// cannot be read is never an empty extraction.
+    /// [ProfileError::Malformed] when the answer is not the extraction shape.
     pub async fn extract(
         &self,
         ctx: &RequestContext,
@@ -77,7 +76,7 @@ impl GraphAgent {
     }
 }
 
-/// The outermost JSON object in text, so a fenced or prefaced answer still parses.
+/// The outermost JSON object in text, ignoring any fence or preface around it.
 fn json_object(text: &str) -> Option<&str> {
     let start = text.find('{')?;
     let end = text.rfind('}')?;
@@ -87,10 +86,7 @@ fn json_object(text: &str) -> Option<&str> {
     text.get(start..=end)
 }
 
-/// The classifier, the graph agent, and the graph they write to.
-///
-/// Extraction never runs in the request path. The loop hands a finished turn over and returns;
-/// what happens after that is detached from the answer the user is waiting for.
+/// The classifier, the graph agent, and the graph they write to. Runs detached from the request.
 pub struct ProfileWriter {
     detector: Arc<dyn FactDetector>,
     agent: GraphAgent,
@@ -131,8 +127,7 @@ impl ProfileWriter {
 
     /// Withdraws the statements a new fact makes false, before the new one is written.
     ///
-    /// A reconciler that cannot be reached leaves what is recorded alone. Keeping a stale fact
-    /// is recoverable; removing a true one is not.
+    /// A failed read or reconciler call withdraws nothing for that fact.
     async fn reconcile(&self, ctx: &RequestContext, facts: &[ProfileFact]) {
         let Some(reconciler) = &self.reconciler else {
             return;
@@ -149,7 +144,7 @@ impl ProfileWriter {
                     continue;
                 }
             };
-            // A statement the person just repeated is already there and replaces nothing.
+            // A repeated statement replaces nothing.
             let candidates: Vec<ProfileRelation> = existing
                 .into_iter()
                 .filter(|e| !e.object.label.eq_ignore_ascii_case(&fact.object.label))
@@ -174,10 +169,9 @@ impl ProfileWriter {
         }
     }
 
-    /// Classifies turn, extracts what it states, and writes it. Detached from the request, so
-    /// it builds its own context with its own deadline.
+    /// Classifies turn, extracts what it states, and writes it under its own context and
+    /// deadline.
     pub async fn record(&self, tenant_id: String, user_id: String, turn: String) {
-        // The gate runs on every turn. A model call here would cost one on every greeting.
         if !self.detector.carries_fact(&turn) {
             return;
         }
@@ -204,10 +198,6 @@ impl ProfileWriter {
 }
 
 /// Default instructions for the reconciler.
-///
-/// Scoped statements are the trap. mem0 reports that a fact extractor which strips scope turns
-/// two compatible preferences into a contradiction, so the scope stays in the text the model
-/// reads and the instructions name the case.
 pub const RECONCILE_INSTRUCTIONS: &str = "A person stated something new. Some of what is \
 already recorded about them may now be wrong. Decide which recorded statements the new one \
 replaces. A statement is replaced only when the new one makes it false: a changed major, a \
@@ -252,10 +242,9 @@ impl Reconciler {
     }
 }
 
-/// Reads the reconciler answer as indices into the list it was shown.
+/// Reads the reconciler answer as zero-based indices into the list it was shown.
 ///
-/// Anything unreadable is read as none. Removing a statement on a misparse is the one outcome
-/// that loses what a person said.
+/// An answer containing none, or no number in range, yields no indices.
 pub fn parse_indices(answer: &str, len: usize) -> Vec<usize> {
     let lowered = answer.trim().to_ascii_lowercase();
     if lowered.contains("none") {

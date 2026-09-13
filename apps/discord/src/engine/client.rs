@@ -15,7 +15,7 @@ use crate::core::types::{
     ChatRequest, ChatResponse, ConfirmRequest, EngineError, ErrorFrame, ForgetRequest,
     ForgetResponse, ProfileList, ProfileRequest, Progress, ResetRequest, ResetResponse, Update,
 };
-use crate::engine::sse::drain_frames;
+use crate::engine::sse::{drain_frames, take_complete};
 
 /// HTTP client bound to one engine.
 #[derive(Debug, Clone)]
@@ -102,6 +102,7 @@ impl EngineClient {
     /// Runs one chat turn, reporting progress on tx until the answer or a failure arrives.
     /// Exactly one Answer or Failed is sent last.
     pub async fn chat_stream(&self, req: &ChatRequest, tx: UnboundedSender<Update>) {
+        // A send error means the watcher has dropped the receiver.
         let mut request = self
             .http
             .post(format!("{}/chat/stream", self.base_url))
@@ -119,7 +120,10 @@ impl EngineClient {
         };
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("unreadable body: {e}"));
             let _ = tx.send(Update::Failed(EngineError::Status {
                 status: status.as_u16(),
                 body: body.chars().take(300).collect(),
@@ -127,7 +131,7 @@ impl EngineClient {
             return;
         }
 
-        let mut buf = String::new();
+        let mut pending = Vec::new();
         let mut body = response.bytes_stream();
         let mut answered = false;
         while let Some(chunk) = body.next().await {
@@ -140,14 +144,15 @@ impl EngineClient {
                     return;
                 }
             };
-            buf.push_str(&String::from_utf8_lossy(&chunk));
-            for (name, data) in drain_frames(&mut buf) {
+            pending.extend_from_slice(&chunk);
+            let mut complete = take_complete(&mut pending);
+            for (name, data) in drain_frames(&mut complete) {
                 match name.as_str() {
                     "progress" => match serde_json::from_str::<Progress>(&data) {
                         Ok(p) => {
                             let _ = tx.send(Update::Progress(p));
                         }
-                        Err(e) => tracing::debug!(error = %e, "unreadable progress frame"),
+                        Err(e) => tracing::warn!(error = %e, "unreadable progress frame"),
                     },
                     "answer" => match serde_json::from_str::<ChatResponse>(&data) {
                         Ok(answer) => {
@@ -164,10 +169,12 @@ impl EngineClient {
                     "error" => {
                         answered = true;
                         // The frame carries the status the JSON route would have used.
-                        let frame = serde_json::from_str::<ErrorFrame>(&data);
-                        let (status, body) = match &frame {
-                            Ok(f) => (f.status.unwrap_or(502), f.error.clone()),
-                            Err(_) => (502, data.chars().take(300).collect()),
+                        let (status, body) = match serde_json::from_str::<ErrorFrame>(&data) {
+                            Ok(f) => (f.status.unwrap_or(502), f.error),
+                            Err(e) => {
+                                tracing::warn!(error = %e, "unreadable error frame");
+                                (502, data.chars().take(300).collect())
+                            }
                         };
                         let _ = tx.send(Update::Failed(EngineError::Status { status, body }));
                     }
@@ -186,7 +193,8 @@ impl EngineClient {
 /// W3C traceparent for the current span, if tracing is exporting.
 pub fn current_traceparent() -> Option<String> {
     let cx = tracing::Span::current().context();
-    let sc = cx.span().span_context().clone();
+    let span = cx.span();
+    let sc = span.span_context();
     sc.is_valid().then(|| {
         format!(
             "00-{}-{}-{:02x}",

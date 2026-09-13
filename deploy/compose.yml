@@ -1,16 +1,16 @@
 # PostHog, self-hosted: the hobby stack of github.com/PostHog/posthog at the commit in
-# deploy/posthog/VERSION, flattened into the posthog-* services below. Started by just posthog.
+# deploy/posthog/VERSION, flattened into the posthog-* services below and cut to what Sparky
+# sends: OTLP traces, product events, and the UI and query API that read them back. Feature
+# flags, surveys, CDP destinations, batch exports, logs and LLM analytics capture are left out.
+# Started by just posthog.
 # Images are pinned here and nowhere else.
 x-posthog-images:
   app: &posthog-app-image posthog/posthog:6fe2b622617da1dc3b7a1cadae6e100729c861cb@sha256:2010612967fa6cdd030dcd1fef2d586103a4338890f621f084a5a731be4ca325
   node: &posthog-node-image posthog/posthog-node:latest@sha256:863e76e040ad41aef79f605c33ec71f1529bddf94cfd88941c935da9bde97235
   capture: &posthog-capture-image ghcr.io/posthog/posthog/capture:master@sha256:9b166761f1e282880a76fb4f3e66afad9ba954fe383581dc5e0074a729c5c99e
   capture-logs: &posthog-capture-logs-image ghcr.io/posthog/posthog/capture-logs:master@sha256:cd328b86a9e04f168fcbaef1d3bddf8f8a5c1f5ca2527231f7bf2946c459e833
-  property-defs-rs: &posthog-property-defs-image ghcr.io/posthog/posthog/property-defs-rs:master@sha256:f114a4c8218eb31cd8bbf21bf62067908a64987a8de1c6ccb34af226cbe0fc90
-  feature-flags: &posthog-feature-flags-image ghcr.io/posthog/posthog/feature-flags:master@sha256:b18bbe7ee20276cf0395cc649fe9d90c2c7d0ef836dd30c8789b3a09de73a8cc
   personhog-replica: &posthog-personhog-replica-image ghcr.io/posthog/posthog/personhog-replica:master@sha256:b4a9dd4e5a25e90fd2c2d3e7e0adbf807b10c28f834cb719c22da67b74e64dbe
   personhog-router: &posthog-personhog-router-image ghcr.io/posthog/posthog/personhog-router:master@sha256:437c4b698ae32614ce5e7b106f6f7555a08e765442dcce545514a1c371126754
-  hypercache-server: &posthog-hypercache-image ghcr.io/posthog/posthog/hypercache-server:master@sha256:f247133dfff4073a65df38eb04589683c6f43cf1f4f41272152a5d2d5b07ebcd
   caddy: &posthog-caddy-image caddy:latest@sha256:13ba145cba2f3e28fa801994876e4c086d1b95d5aa2a520a734765ffb6b12017
 
 # PostHog secrets. The defaults are for a loopback-only local stack; set real values in .env.
@@ -25,7 +25,7 @@ x-posthog-logging: &posthog-logging
     max-size: "50m"
     max-file: "3"
 
-# Environment shared by the Django services: web, worker, temporal-django-worker, asyncmigrationscheck.
+# Environment shared by the Django services: web and worker.
 x-posthog-django-env: &posthog-django-env
   DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
   PGHOST: db
@@ -52,7 +52,6 @@ x-posthog-django-env: &posthog-django-env
   OTEL_SDK_DISABLED: "true"
   API_QUERIES_PER_TEAM: '{"1": 100}'
   DEPLOYMENT: hobby
-  CDP_API_URL: http://plugins:6738
   PERSONS_DB_WRITER_URL: postgres://posthog:posthog@db:5432/posthog
   PERSONS_DB_READER_URL: postgres://posthog:posthog@db:5432/posthog
   SITE_URL: *posthog-site-url
@@ -94,7 +93,7 @@ services:
 
   scraper:
     build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
-    command: ["schedule"]
+    command: ["serve"]
     env_file:
       - { path: ../.env, required: false }
     environment:
@@ -102,6 +101,7 @@ services:
       SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
+      SPARKY_SEARCH__BASE_URL: http://searxng:8080
       SPARKY_TELEMETRY__HOST: http://posthog
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
     depends_on:
@@ -124,6 +124,14 @@ services:
       - ${SPARKY_CHAT_CTX:-16384}
       - --parallel
       - ${SPARKY_CHAT_PARALLEL:-2}
+      # 8-bit KV cache; requires flash attention. At the default context it fits beside embed
+      # on a 6 GB card.
+      - --cache-type-k
+      - ${SPARKY_CHAT_KV_TYPE:-q8_0}
+      - --cache-type-v
+      - ${SPARKY_CHAT_KV_TYPE:-q8_0}
+      - --flash-attn
+      - "on"
       - --n-gpu-layers
       - ${SPARKY_CHAT_NGL:-99}
       - --jinja
@@ -180,6 +188,22 @@ services:
         reservations:
           devices:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
+    restart: unless-stopped
+
+  # SearXNG, self-hosted metasearch for the scraper's web search. Started by just search.
+  searxng:
+    image: docker.io/searxng/searxng:2026.9.12-d4f00d15d
+    profiles: [search]
+    environment:
+      SEARXNG_SECRET: ${SPARKY_SEARXNG_SECRET:-local-only-change-me-0000000000000000}
+    volumes:
+      - ./search/settings.yml:/etc/searxng/settings.yml:ro
+    ports: ["127.0.0.1:8888:8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   # Firecrawl, self-hosted. The scraper fetch and extract path. Started by just crawl.
@@ -321,8 +345,7 @@ services:
   gpu-exporter:
     image: utkuozdemir/nvidia_gpu_exporter:1.3.2
     profiles: [gpu-metrics]
-    # The exporter shells out to nvidia-smi. The nvidia container runtime injects the binary
-    # and the driver libraries; the utility capability is the one that carries nvidia-smi.
+    # The exporter runs nvidia-smi, which the nvidia runtime injects under the utility capability.
     environment:
       NVIDIA_DRIVER_CAPABILITIES: utility
     ports: ["127.0.0.1:9835:9835"]
@@ -353,12 +376,6 @@ services:
         }
         http:// {
 
-            @capture-ai {
-                path /i/v0/ai
-                path /i/v0/ai/
-                path /i/v0/ai/*
-            }
-
             @capture {
                 path /e
                 path /e/
@@ -388,60 +405,12 @@ services:
                 path /i/v1/metrics/*
             }
 
-            @flags {
-                path /flags
-                path /flags/
-                path /flags/*
-                path /api/feature_flag/local_evaluation
-                path /api/feature_flag/local_evaluation/
-                path /api/feature_flag/local_evaluation/*
-            }
-
-            @surveys {
-                path /surveys
-                path /surveys/
-                path /api/surveys
-                path /api/surveys/
-            }
-
-            @remote-config {
-                path /array/*
-            }
-
-            @webhooks {
-                path /public/webhooks
-                path /public/webhooks/
-                path /public/webhooks/*
-                path /public/m/
-                path /public/m/*
-            }
-
-            handle @capture-ai {
-                reverse_proxy capture-ai:3000
-            }
-
             handle @capture {
                 reverse_proxy capture:3000
             }
 
             handle @capture-logs {
                 reverse_proxy capture-logs:4318
-            }
-
-            handle @flags {
-                reverse_proxy feature-flags:3001
-            }
-
-            handle @surveys {
-                reverse_proxy hypercache-server:3002
-            }
-
-            handle @remote-config {
-                reverse_proxy hypercache-server:3002
-            }
-
-            handle @webhooks {
-                reverse_proxy plugins:6738
             }
 
             @objectstorage {
@@ -465,7 +434,15 @@ services:
     networks:
       default: {}
       posthog: { aliases: [proxy] }
-    depends_on: [posthog-web]
+    # Starting the proxy starts every service behind it and the consumers that write what they
+    # capture.
+    depends_on:
+      - posthog-web
+      - posthog-worker
+      - posthog-capture
+      - posthog-capture-logs
+      - posthog-ingestion-general
+      - posthog-ingestion-traces
 
   posthog-db:
     image: postgres:15.12-alpine
@@ -498,19 +475,6 @@ services:
       retries: 10
     volumes: [posthog-redis7-data:/data]
     networks: { posthog: { aliases: [redis7] } }
-
-  posthog-valkey:
-    image: valkey/valkey:8.1-alpine
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    command: valkey-server --maxmemory-policy allkeys-lru --maxmemory 200mb
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 3s
-      timeout: 10s
-      retries: 10
-    networks: { posthog: { aliases: [valkey] } }
 
   posthog-clickhouse:
     image: clickhouse/clickhouse-server:26.6.2.158
@@ -706,7 +670,6 @@ services:
       CSP_REPORT_ENDPOINT: ""
       PERSONHOG_ADDR: personhog-router:50052
       PERSONHOG_ENABLED: "true"
-      FEATURE_FLAGS_SERVICE_URL: http://feature-flags:3001
       CLICKHOUSE_LOGS_CLUSTER_HOST: clickhouse
       CLICKHOUSE_LOGS_CLUSTER_SECURE: "false"
       ANTHROPIC_API_KEY: ""
@@ -740,7 +703,6 @@ services:
       POSTHOG_SKIP_MIGRATION_CHECKS: "1"
       PERSONHOG_ADDR: personhog-router:50052
       PERSONHOG_ENABLED: "true"
-      FEATURE_FLAGS_SERVICE_URL: http://feature-flags:3001
       CLICKHOUSE_LOGS_CLUSTER_HOST: clickhouse
       CLICKHOUSE_LOGS_CLUSTER_SECURE: "false"
       ANTHROPIC_API_KEY: ""
@@ -753,66 +715,6 @@ services:
       posthog-web: { condition: service_started }
       posthog-personhog-router: { condition: service_started }
     networks: { posthog: { aliases: [worker] } }
-
-  posthog-asyncmigrationscheck:
-    image: *posthog-app-image
-    profiles: [posthog]
-    command: python manage.py run_async_migrations --check
-    restart: "no"
-    logging: *posthog-logging
-    deploy:
-      replicas: 0
-    environment:
-      <<: *posthog-django-env
-      SKIP_ASYNC_MIGRATIONS_SETUP: 0
-    networks: { posthog: { aliases: [asyncmigrationscheck] } }
-
-  posthog-plugins:
-    image: *posthog-node-image
-    profiles: [posthog]
-    command: node nodejs/dist/index.js
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      PERSONS_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      BEHAVIORAL_COHORTS_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      KAFKA_HOSTS: kafka:9092
-      REDIS_URL: redis://redis7:6379/
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_DATABASE: posthog
-      CLICKHOUSE_SECURE: "false"
-      CLICKHOUSE_VERIFY: "false"
-      SITE_URL: *posthog-site-url
-      SECRET_KEY: *posthog-secret
-      OBJECT_STORAGE_ACCESS_KEY_ID: object_storage_root_user
-      OBJECT_STORAGE_SECRET_ACCESS_KEY: object_storage_root_password
-      OBJECT_STORAGE_ENDPOINT: http://objectstorage:19000
-      OBJECT_STORAGE_PUBLIC_ENDPOINT: *posthog-site-url
-      OBJECT_STORAGE_ENABLED: "true"
-      CDP_REDIS_HOST: redis7
-      CDP_REDIS_PORT: 6379
-      LOGS_REDIS_HOST: redis7
-      LOGS_REDIS_PORT: 6379
-      LOGS_REDIS_TLS: "false"
-      TRACES_REDIS_HOST: redis7
-      TRACES_REDIS_PORT: 6379
-      TRACES_REDIS_TLS: "false"
-      CDP_VALKEY_HOST: valkey
-      CDP_VALKEY_PORT: 6379
-      ENCRYPTION_SALT_KEYS: *posthog-salt
-      OTEL_EXPORTER_OTLP_ENDPOINT: ""
-    volumes:
-      - ${SPARKY_POSTHOG_DIR:-../.sparky/posthog}/share:/share
-    depends_on:
-      - posthog-db
-      - posthog-redis7
-      - posthog-valkey
-      - posthog-clickhouse
-      - posthog-kafka
-      - posthog-objectstorage
-      - posthog-seaweedfs
-    networks: { posthog: { aliases: [plugins] } }
 
   posthog-ingestion-general:
     image: *posthog-node-image
@@ -853,24 +755,6 @@ services:
       - posthog-personhog-router
     networks: { posthog: { aliases: [ingestion-general] } }
 
-  posthog-ingestion-logs:
-    image: *posthog-node-image
-    profiles: [posthog]
-    command: node nodejs/dist/index.js
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      PLUGIN_SERVER_MODE: ingestion-logs
-      DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      KAFKA_HOSTS: kafka:9092
-      REDIS_URL: redis://redis7:6379/
-      LOGS_REDIS_HOST: redis7
-      LOGS_REDIS_TLS: "false"
-      CDP_REDIS_HOST: redis7
-      ENCRYPTION_SALT_KEYS: *posthog-salt
-    depends_on: [posthog-db, posthog-redis7, posthog-kafka]
-    networks: { posthog: { aliases: [ingestion-logs] } }
-
   posthog-ingestion-traces:
     image: *posthog-node-image
     profiles: [posthog]
@@ -886,80 +770,6 @@ services:
       TRACES_REDIS_TLS: "false"
     depends_on: [posthog-db, posthog-redis7, posthog-kafka]
     networks: { posthog: { aliases: [ingestion-traces] } }
-
-  posthog-temporal:
-    image: temporalio/auto-setup:1.26.2
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      DB: postgres12
-      DB_PORT: 5432
-      POSTGRES_USER: posthog
-      POSTGRES_PWD: posthog
-      POSTGRES_SEEDS: db
-      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-      ENABLE_ES: "false"
-      ES_SEEDS: elasticsearch
-      ES_VERSION: v7
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z $$(hostname) 7233"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 300s
-    volumes:
-      - ${SPARKY_POSTHOG_DIR:-../.sparky/posthog}/src/docker/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
-    depends_on:
-      posthog-db: { condition: service_healthy }
-      posthog-elasticsearch: { condition: service_healthy }
-    networks: { posthog: { aliases: [temporal] } }
-
-  posthog-elasticsearch:
-    image: elasticsearch:7.17.28
-    profiles: [posthog]
-    logging: *posthog-logging
-    environment:
-      - cluster.routing.allocation.disk.threshold_enabled=true
-      - cluster.routing.allocation.disk.watermark.low=512mb
-      - cluster.routing.allocation.disk.watermark.high=256mb
-      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms256m -Xmx256m
-      - xpack.security.enabled=false
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 60s
-    volumes: [posthog-elasticsearch-data:/var/lib/elasticsearch/data]
-    networks: { posthog: { aliases: [elasticsearch] } }
-
-  posthog-temporal-django-worker:
-    image: *posthog-app-image
-    profiles: [posthog]
-    command: /compose/temporal-django-worker
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      <<: *posthog-django-env
-      TEMPORAL_HOST: temporal
-      FEATURE_FLAGS_SERVICE_URL: http://feature-flags:3001
-      CLICKHOUSE_LOGS_CLUSTER_HOST: clickhouse
-      CLICKHOUSE_LOGS_CLUSTER_SECURE: "false"
-      ANTHROPIC_API_KEY: ""
-      OPENAI_API_KEY: ""
-    volumes: [./posthog/compose:/compose]
-    depends_on:
-      - posthog-db
-      - posthog-redis7
-      - posthog-clickhouse
-      - posthog-kafka
-      - posthog-objectstorage
-      - posthog-seaweedfs
-      - posthog-temporal
-    networks: { posthog: { aliases: [temporal-django-worker] } }
 
   posthog-capture:
     image: *posthog-capture-image
@@ -985,21 +795,6 @@ services:
       CAPTURE_V1_SINK_MSK_KAFKA_TOPIC_CLIENT_INGESTION_WARNING: ingestion-clientwarnings-main-1
     networks: { posthog: { aliases: [capture] } }
 
-  # Serves /i/v0/ai/*, the LLM analytics OTLP endpoint. From the upstream base file.
-  posthog-capture-ai:
-    image: *posthog-capture-image
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      ADDRESS: 0.0.0.0:3000
-      KAFKA_TOPIC: events_plugin_ingestion_ai
-      KAFKA_HOSTS: kafka:9092
-      REDIS_URL: redis://redis7:6379/
-      CAPTURE_MODE: ai
-      RUST_LOG: info,rdkafka=warn
-    networks: { posthog: { aliases: [capture-ai] } }
-
   posthog-capture-logs:
     image: *posthog-capture-logs-image
     profiles: [posthog]
@@ -1015,22 +810,6 @@ services:
       KAFKA_TOPIC: logs_ingestion
       KAFKA_METRICS_TOPIC: metrics_ingestion
     networks: { posthog: { aliases: [capture-logs] } }
-
-  posthog-property-defs-rs:
-    image: *posthog-property-defs-image
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    environment:
-      DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      KAFKA_HOSTS: kafka:9092
-      SKIP_WRITES: "false"
-      SKIP_READS: "false"
-      FILTER_MODE: opt-out
-    depends_on:
-      posthog-kafka-init: { condition: service_completed_successfully }
-      posthog-db: { condition: service_healthy }
-    networks: { posthog: { aliases: [property-defs-rs] } }
 
   posthog-personhog-replica:
     image: *posthog-personhog-replica-image
@@ -1060,51 +839,6 @@ services:
     depends_on: [posthog-personhog-replica]
     networks: { posthog: { aliases: [personhog-router] } }
 
-  posthog-feature-flags:
-    image: *posthog-feature-flags-image
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/_readiness"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
-    environment:
-      WRITE_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      READ_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      PERSONS_WRITE_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      PERSONS_READ_DATABASE_URL: postgres://posthog:posthog@db:5432/posthog
-      MAXMIND_DB_PATH: /share/GeoLite2-City.mmdb
-      REDIS_URL: redis://redis7:6379/
-      ADDRESS: 0.0.0.0:3001
-      RUST_LOG: info
-      COOKIELESS_REDIS_HOST: redis7
-      COOKIELESS_REDIS_PORT: 6379
-    volumes:
-      - ${SPARKY_POSTHOG_DIR:-../.sparky/posthog}/share:/share
-    depends_on: [posthog-db, posthog-redis7]
-    networks: { posthog: { aliases: [feature-flags] } }
-
-  posthog-hypercache-server:
-    image: *posthog-hypercache-image
-    profiles: [posthog]
-    restart: on-failure
-    logging: *posthog-logging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/_readiness"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
-    environment:
-      REDIS_URL: redis://redis7:6379/
-      ADDRESS: 0.0.0.0:3002
-      RUST_LOG: info
-    depends_on: [posthog-redis7]
-    networks: { posthog: { aliases: [hypercache-server] } }
-
 networks:
   posthog: {}
 
@@ -1127,6 +861,5 @@ volumes:
   posthog-redpanda-data:
   posthog-objectstorage:
   posthog-seaweedfs:
-  posthog-elasticsearch-data:
   posthog-caddy-data:
   posthog-caddy-config:

@@ -1,4 +1,5 @@
-"""Fetch, hash, snapshot, extract, chunk, embed, index. One run per source."""
+"""Fetch, hash, snapshot, extract, chunk, embed, index. One run per source, or one page a live
+query already fetched."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import structlog
 
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.core.types import ChunkRow, PipelineError, RunResult, Source, SourceRow
+from scraper.core.types import ChunkRow, Fetched, PipelineError, RunResult, Source, SourceRow
 from scraper.ingest import chunk, embed, extract, fetch, tree
 from scraper.store import object as objects
 from scraper.store import postgres
@@ -30,10 +31,21 @@ def run_source(source: Source, *, force: bool = False) -> RunResult:
         },
     ) as span:
         result = _run_source(source, force=force)
-        span.set_attribute(
-            "sparky.output",
-            f"{'indexed' if result.changed else 'unchanged'}: {result.chunks} chunks",
-        )
+        span.set_attribute("sparky.output", _outcome(result))
+        return result
+
+
+def index_page(source: Source, fetched: Fetched, *, force: bool = False) -> RunResult:
+    """Indexes a page that was already fetched, under source, the way a scheduled run would."""
+    with telemetry.tracer().start_as_current_span(
+        "scrape.index",
+        attributes={
+            "sparky.input": fetched.url,
+            "sparky.source": source.key,
+        },
+    ) as span:
+        result = _index(source, _register(source), fetched, force=force)
+        span.set_attribute("sparky.output", _outcome(result))
         return result
 
 
@@ -53,16 +65,29 @@ def check_quality_floor(
 
 
 def _run_source(source: Source, *, force: bool) -> RunResult:
-    cfg = settings()
-    # The attempt is committed before the fetch so a source that fails, or comes back byte for
-    # byte the same, still backs off to its interval instead of being retried on every poll.
+    # The attempt is committed before the fetch. A failed or unchanged run still counts as one.
+    row = _register(source)
+    fetched = fetch.fetch(source.url, needs_js=source.needs_js)
+    return _index(source, row, fetched, force=force)
+
+
+def _register(source: Source) -> SourceRow:
+    """Upserts the sources row, stamps the attempt, and commits."""
     with postgres.connection() as conn:
         row = postgres.upsert_source(
             conn, source.key, source.url, source.category, source.fetch_every_hours
         )
         conn.commit()
+    return row
 
-    fetched = fetch.fetch(source.url, needs_js=source.needs_js)
+
+def _outcome(result: RunResult) -> str:
+    return f"{'indexed' if result.changed else 'unchanged'}: {result.chunks} chunks"
+
+
+def _index(source: Source, row: SourceRow, fetched: Fetched, *, force: bool) -> RunResult:
+    """Everything after the fetch: hash, snapshot, extract, chunk, embed, write, tree."""
+    cfg = settings()
     content_hash = hashlib.sha256(fetched.body).hexdigest()
     fetched_at = datetime.now(UTC)
 

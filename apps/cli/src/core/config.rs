@@ -85,8 +85,11 @@ pub const DEFAULT_CONFIG_FILE: &str = "sparky.toml";
 
 /// Loads settings from the TOML layer then the environment, which wins.
 pub fn load() -> anyhow::Result<Config> {
-    let path =
-        std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());
+    let path = match std::env::var("SPARKY_CONFIG_FILE") {
+        Ok(path) => path,
+        Err(std::env::VarError::NotPresent) => DEFAULT_CONFIG_FILE.to_owned(),
+        Err(e) => return Err(anyhow::anyhow!("SPARKY_CONFIG_FILE: {e}")),
+    };
     Figment::new()
         .merge(Toml::file(path))
         .merge(Env::prefixed("SPARKY_").split("__"))

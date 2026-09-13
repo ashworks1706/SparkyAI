@@ -4,10 +4,7 @@ use async_trait::async_trait;
 
 use crate::core::types::knowledge::skill::{Skill, SkillError};
 
-/// Reads the skills the model may follow.
-///
-/// Only reviewed skills are offered: nothing here writes, and a skill is never promoted from a
-/// trace without a person in the loop.
+/// Reads the reviewed skills the model may follow. Read-only.
 #[async_trait]
 pub trait SkillStore: Send + Sync {
     /// Skills currently offered, by key. Read once at boot to build the tool.

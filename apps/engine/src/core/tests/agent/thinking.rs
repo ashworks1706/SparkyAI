@@ -133,6 +133,8 @@ async fn the_loop_sends_the_decision_with_each_call() {
             after_tools: false,
             ..rules()
         },
+        max_tokens: 4096,
+        max_tokens_without_thinking: 512,
         ..AgentConfig::default()
     };
     let (agent, _) = agent(model, tools, cfg);
@@ -141,6 +143,15 @@ async fn the_loop_sends_the_decision_with_each_call() {
         thinking_sent(&sent),
         vec![true, false],
         "no evidence thinks, then tool results with after_tools off do not"
+    );
+    let budgets: Vec<u32> = sent
+        .lock()
+        .map(|r| r.iter().map(|q| q.max_tokens).collect())
+        .unwrap_or_default();
+    assert_eq!(
+        budgets,
+        vec![4096, 512],
+        "a call that does not think gets the smaller completion budget"
     );
 }
 

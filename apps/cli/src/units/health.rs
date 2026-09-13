@@ -32,12 +32,22 @@ impl Targets {
 
 /// Probes forever on the configured interval, sending each result to the UI.
 pub async fn poll(targets: Targets, tx: UnboundedSender<Event>) {
-    let Ok(http) = reqwest::Client::builder()
+    let http = match reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(2))
         .timeout(Duration::from_secs(4))
         .build()
-    else {
-        return;
+    {
+        Ok(http) => http,
+        Err(e) => {
+            let failed = Probe::Degraded(format!("health client: {e}"));
+            // A send error means the UI has exited.
+            let _ = tx.send(Event::Health(Health {
+                engine: failed.clone(),
+                model: failed.clone(),
+                posthog: failed,
+            }));
+            return;
+        }
     };
     loop {
         let (engine, model, posthog) = tokio::join!(
@@ -64,7 +74,10 @@ async fn probe(http: &reqwest::Client, url: &str) -> Probe {
         Ok(r) if r.status().is_success() => Probe::Up,
         Ok(r) => {
             let status = r.status();
-            let body = r.text().await.unwrap_or_default();
+            let body = r
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("unreadable body: {e}"));
             Probe::Degraded(format!(
                 "{status}: {}",
                 body.chars().take(120).collect::<String>()
@@ -76,7 +89,7 @@ async fn probe(http: &reqwest::Client, url: &str) -> Probe {
 
 /// The host and port a unit's url points at, when it names one that can be connected to.
 ///
-/// A wildcard host is read as loopback, which is where a unit started here would be reached.
+/// A wildcard host maps to loopback.
 pub fn address_of(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let rest = rest.split(['/', '?', '#']).next()?;

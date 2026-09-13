@@ -1,6 +1,8 @@
-//! One model call: the thinking decision, the request, its span, retries, and the thought taken
-//! out of the reply.
+//! One model call: the thinking decision, the request, its span, retries, the relay of what it
+//! writes while it streams, and the thought taken out of the reply.
 
+pub mod draft;
+mod relay;
 mod retry;
 mod spans;
 pub mod thinking;
@@ -22,8 +24,7 @@ use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::{Inputs, Run};
 use crate::runtime::harness::safety::redact::{json, truncate};
 
-/// Takes the thought out of a response and returns it. Thinking belongs to the trace, not to
-/// the answer or the history.
+/// Takes the thought out of the content of a response and returns it.
 fn lift_thought(response: &mut ModelResponse) -> Option<String> {
     let (thought, visible) = thought::split(&response.reasoning, &response.content);
     response.content = visible;
@@ -123,6 +124,7 @@ impl Agent {
         )
     }
 
+    /// One model call with retries, under cancellation and the request deadline.
     async fn call_model(
         &self,
         ctx: &RequestContext,
@@ -141,7 +143,11 @@ impl Agent {
                 } else {
                     deps.tools.definitions()
                 },
-                max_tokens: self.cfg.max_tokens,
+                max_tokens: if thinking.on {
+                    self.cfg.max_tokens
+                } else {
+                    self.cfg.max_tokens_without_thinking
+                },
                 temperature: self.cfg.temperature,
                 thinking: thinking.on,
             };
@@ -150,7 +156,7 @@ impl Agent {
             let span = self.model_span(ctx, step, attempt, &request, thinking.reason);
             let result = tokio::select! {
                 () = ctx.cancel.cancelled() => Err(ModelError::Cancelled),
-                outcome = tokio::time::timeout(ctx.remaining(), deps.model.generate(ctx, request).instrument(span.clone())) => {
+                outcome = tokio::time::timeout(ctx.remaining(), self.relay(ctx, step, request).instrument(span.clone())) => {
                     outcome.unwrap_or(Err(ModelError::Timeout))
                 }
             };

@@ -1,5 +1,5 @@
 # SparkyAI monorepo tasks. Running just with no arguments lists them.
-# Units: engine, discord, cli (Rust) · scraper, training (Python) · web (TypeScript) · infra (Compose)
+# Units: engine, discord, cli (Rust); scraper, training (Python); web (TypeScript); infra (Compose)
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -79,19 +79,15 @@ check-scraper:
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
-# Scraper worker: just scraper run library_hours
+# The scraper: just scraper serve (live searches, their indexing, scheduled runs), just scraper run library_hours
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
-
-# Answer the engine's live source queries; publishes the source registry on start
-worker *ARGS:
-    cd apps/scraper && uv run scraper worker {{ARGS}}
 
 # Apply migrations
 migrate:
     cd apps/scraper && uv run scraper migrate
 
-# Training CLIs: just data export|verify|stats · just eval run|baseline|compare · just train sft [--dry-run]
+# Training CLIs: just data export|verify|stats; just eval run|baseline|compare; just train sft [--dry-run]
 train *ARGS:
     cd apps/training && uv run train {{ARGS}}
 
@@ -134,7 +130,7 @@ prod-logs *ARGS:
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
 
-# PostHog (traces, LLM analytics, product events) on http://localhost:8010, loopback. About 16 GB of memory
+# PostHog (traces and product events) on http://localhost:8010, loopback. 17 containers
 posthog *ARGS:
     ./scripts/posthog.sh
     docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep -E '^posthog(-|$)')
@@ -146,6 +142,10 @@ phoenix *ARGS:
 # llama-server for chat (:8000) and embeddings (:8001). GGUFs download on first run.
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
+
+# SearXNG (self-hosted metasearch) for the search_web tool: http://localhost:8888, loopback
+search *ARGS:
+    docker compose -f deploy/compose.yml --profile search up -d {{ARGS}} searxng
 
 # Firecrawl (self-hosted) for the scraper: API on :3002
 crawl *ARGS:

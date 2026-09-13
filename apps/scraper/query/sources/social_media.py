@@ -67,4 +67,5 @@ QUERY = QuerySource(
         QueryParam("keywords", "Words in the post.", example="football"),
     ),
     answer=answer,
+    category="social",
 )

@@ -99,4 +99,5 @@ QUERY = QuerySource(
         QueryParam("keywords", "Words in the headline.", example="Texas A&M"),
     ),
     answer=answer,
+    category="sports",
 )

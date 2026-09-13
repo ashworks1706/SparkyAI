@@ -1,6 +1,5 @@
-//! Agent runtime behaviour: the loop, context assembly, the tool registry, the default policy,
-//! and the trace sinks. Types are in core::types, interfaces in core::traits. This module
-//! imports only core.
+//! The loop, context assembly, the tool registry, memory, safety, and the trace sinks.
+//! This module imports only core.
 
 pub mod agent;
 pub mod compact;

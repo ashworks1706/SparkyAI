@@ -35,8 +35,7 @@ impl RateLimiter {
             return true;
         }
         let Ok(mut state) = self.state.lock() else {
-            // A poisoned lock means a panic elsewhere. The limit opens and the event is
-            // logged at error level.
+            // A poisoned lock opens the limit.
             tracing::error!(
                 user,
                 "rate limiter lock poisoned; requests are unlimited until restart"

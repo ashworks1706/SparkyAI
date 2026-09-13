@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 pub struct SandboxRequest {
     /// The command, run through a shell inside the sandbox.
     pub command: String,
-    /// Session to run in. A new name starts one; a name already running is resumed, so a file
-    /// written under /tmp by an earlier command is still there. Absent runs with no session.
+    /// Session to run in. A new name starts one, a running name resumes it with its files, and
+    /// absent runs with no session.
     #[serde(default)]
     pub session: Option<String>,
 }
@@ -44,7 +44,7 @@ pub enum SandboxError {
 /// A session name that can be part of a container name.
 ///
 /// # Errors
-/// Returns [`SandboxError::Refused`] when the name is empty, too long, or carries anything but
+/// Returns [SandboxError::Refused] when the name is empty, too long, or carries anything but
 /// letters, digits, hyphen and underscore.
 pub fn session_name(raw: &str) -> Result<String, SandboxError> {
     let name = raw.trim();

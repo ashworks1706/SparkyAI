@@ -50,4 +50,6 @@ QUERY = QuerySource(
     to_url=to_url,
     needs_js=True,
     extractor=form_page_text,
+    category="library",
+    index=False,
 )

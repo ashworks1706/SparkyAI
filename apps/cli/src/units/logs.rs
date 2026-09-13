@@ -1,5 +1,6 @@
-//! Bounded per-unit log buffer with search.
+//! Per-unit log files and the bounded log buffer with search.
 
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
@@ -27,16 +28,15 @@ impl LogWriter {
 
     /// Appends and flushes one line to the unit log file.
     pub fn append(&mut self, unit: &str, line: &LogLine) -> std::io::Result<()> {
-        let name = log_name(unit);
-        if !self.files.contains_key(&name) {
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(self.dir.join(&name))?;
-            self.files.insert(name.clone(), BufWriter::new(file));
-        }
-        let Some(file) = self.files.get_mut(&name) else {
-            return Err(std::io::Error::other("log file was not opened"));
+        let file = match self.files.entry(log_name(unit)) {
+            Entry::Occupied(open) => open.into_mut(),
+            Entry::Vacant(slot) => {
+                let file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(self.dir.join(slot.key()))?;
+                slot.insert(BufWriter::new(file))
+            }
         };
         let stream = match line.stream {
             Stream::Out => "out",

@@ -18,4 +18,5 @@ QUERY = QuerySource(
     to_url=to_url,
     needs_js=HOURS.needs_js,
     extractor=HOURS.extractor,
+    category="library",
 )

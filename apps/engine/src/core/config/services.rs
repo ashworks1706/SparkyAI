@@ -31,8 +31,7 @@ pub struct Discord {
     pub guild_id: u64,
 }
 
-/// Provider sampling parameters. Every field is optional; only what is set is sent. The server
-/// defaults apply to the rest.
+/// Provider sampling parameters. Only the fields that are set are sent.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Sampling {
@@ -63,45 +62,31 @@ impl Sampling {
                 map.insert(key.to_owned(), value);
             }
         };
-        put(
-            "top_p",
-            self.top_p
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number),
-        );
-        put("top_k", self.top_k.map(|v| Value::Number(v.into())));
-        put(
-            "min_p",
-            self.min_p
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number),
-        );
-        put(
-            "repeat_penalty",
-            self.repeat_penalty
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number),
-        );
-        put(
-            "presence_penalty",
-            self.presence_penalty
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number),
-        );
-        put(
-            "frequency_penalty",
-            self.frequency_penalty
-                .and_then(serde_json::Number::from_f64)
-                .map(Value::Number),
-        );
-        put("seed", self.seed.map(|v| Value::Number(v.into())));
-        if !self.stop.is_empty() {
-            map.insert(
-                "stop".to_owned(),
-                Value::Array(self.stop.iter().map(|s| Value::String(s.clone())).collect()),
+        for (key, value) in self.floats() {
+            put(
+                key,
+                value
+                    .and_then(serde_json::Number::from_f64)
+                    .map(Value::Number),
             );
         }
+        put("top_k", self.top_k.map(|v| Value::Number(v.into())));
+        put("seed", self.seed.map(|v| Value::Number(v.into())));
+        if !self.stop.is_empty() {
+            map.insert("stop".to_owned(), Value::from(self.stop.clone()));
+        }
         map
+    }
+
+    /// The floating point fields by request key.
+    fn floats(&self) -> [(&'static str, Option<f64>); 5] {
+        [
+            ("top_p", self.top_p),
+            ("min_p", self.min_p),
+            ("repeat_penalty", self.repeat_penalty),
+            ("presence_penalty", self.presence_penalty),
+            ("frequency_penalty", self.frequency_penalty),
+        ]
     }
 }
 
@@ -119,8 +104,11 @@ pub struct Model {
     pub api_key: SecretString,
     /// Model name as served.
     pub name: String,
-    /// Default completion budget.
+    /// Completion budget of a call that thinks: room for the reasoning and the answer.
     pub max_tokens: u32,
+    /// Completion budget of a call that does not think.
+    #[serde(default = "default_max_tokens_without_thinking")]
+    pub max_tokens_without_thinking: u32,
     /// USD per million prompt tokens; zero for local serving.
     #[serde(default)]
     pub usd_per_m_prompt: f64,
@@ -130,8 +118,8 @@ pub struct Model {
     /// Sampling parameters sent with every completion.
     #[serde(default)]
     pub sampling: Sampling,
-    /// A JSON object merged into the provider request, for anything sampling does not name.
-    /// Set keys win over sampling. Thinking is set per call by agent.thinking.
+    /// A JSON object merged into the provider request over sampling. Thinking is set per call by
+    /// agent.thinking.
     #[serde(default)]
     pub extra_params_json: Option<String>,
 }
@@ -190,6 +178,34 @@ pub struct Postgres {
     pub acquire_timeout_secs: u64,
 }
 
+/// Rejects a model section that leaves a call no room to answer or sets a sampling value that
+/// is not a finite number.
+///
+/// # Errors
+/// Returns [ConfigError::Invalid] naming the setting.
+pub fn validate_model(model: &Model) -> Result<(), ConfigError> {
+    if model.max_tokens == 0 || model.max_tokens_without_thinking == 0 {
+        return Err(ConfigError::Invalid(
+            "model.max_tokens and model.max_tokens_without_thinking must be at least 1".into(),
+        ));
+    }
+    if let Some((key, _)) = model
+        .sampling
+        .floats()
+        .into_iter()
+        .find(|(_, value)| value.is_some_and(|v| !v.is_finite()))
+    {
+        return Err(ConfigError::Invalid(format!(
+            "model.sampling.{key} must be a finite number"
+        )));
+    }
+    Ok(())
+}
+
+fn default_max_tokens_without_thinking() -> u32 {
+    1_024
+}
+
 fn default_max_connections() -> u32 {
     8
 }
@@ -211,7 +227,7 @@ pub struct Embedding {
     pub dim: u32,
 }
 
-/// Trace export to PostHog. An empty host or project token disables it.
+/// Trace export to PostHog and Phoenix.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {

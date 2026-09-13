@@ -18,4 +18,5 @@ QUERY = QuerySource(
     to_url=to_url,
     needs_js=JOBS.needs_js,
     extractor=JOBS.extractor,
+    category="jobs",
 )

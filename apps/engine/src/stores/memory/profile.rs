@@ -14,11 +14,9 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::profile::{
     ProfileEntity, ProfileError, ProfileFact, ProfileNode, ProfileRelation,
 };
-use crate::stores::postgres::row_limit;
-use crate::stores::postgres::vector_literal;
+use crate::stores::postgres::{row_limit, vector_literal};
 
-/// Maps a sqlx error to a ProfileError. Takes the error by value for use as a map_err function
-/// pointer.
+/// Maps a sqlx error to a ProfileError.
 #[allow(clippy::needless_pass_by_value)]
 fn db(e: sqlx::Error) -> ProfileError {
     ProfileError::Store(e.to_string())
@@ -77,6 +75,23 @@ impl PgProfileGraph {
         }
         Ok(keys.into_iter().zip(vectors).collect())
     }
+}
+
+/// Reads one relation row selected with subject_kind, subject_label, relation, object_kind,
+/// object_label, and confidence.
+fn row_to_relation(row: &sqlx::postgres::PgRow) -> Result<ProfileRelation, ProfileError> {
+    Ok(ProfileRelation {
+        subject: ProfileEntity {
+            kind: row.try_get("subject_kind").map_err(db)?,
+            label: row.try_get("subject_label").map_err(db)?,
+        },
+        relation: row.try_get("relation").map_err(db)?,
+        object: ProfileEntity {
+            kind: row.try_get("object_kind").map_err(db)?,
+            label: row.try_get("object_label").map_err(db)?,
+        },
+        confidence: row.try_get("confidence").map_err(db)?,
+    })
 }
 
 /// Inserts or refreshes one node and returns its id.
@@ -228,22 +243,7 @@ impl ProfileGraph for PgProfileGraph {
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;
-        let mut out = Vec::with_capacity(rows.len());
-        for row in &rows {
-            out.push(ProfileRelation {
-                subject: ProfileEntity {
-                    kind: row.try_get("subject_kind").map_err(db)?,
-                    label: row.try_get("subject_label").map_err(db)?,
-                },
-                relation: row.try_get("relation").map_err(db)?,
-                object: ProfileEntity {
-                    kind: row.try_get("object_kind").map_err(db)?,
-                    label: row.try_get("object_label").map_err(db)?,
-                },
-                confidence: row.try_get("confidence").map_err(db)?,
-            });
-        }
-        Ok(out)
+        rows.iter().map(row_to_relation).collect()
     }
 
     async fn matching(
@@ -270,22 +270,7 @@ impl ProfileGraph for PgProfileGraph {
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;
-        let mut out = Vec::with_capacity(rows.len());
-        for row in &rows {
-            out.push(ProfileRelation {
-                subject: ProfileEntity {
-                    kind: row.try_get("subject_kind").map_err(db)?,
-                    label: row.try_get("subject_label").map_err(db)?,
-                },
-                relation: row.try_get("relation").map_err(db)?,
-                object: ProfileEntity {
-                    kind: row.try_get("object_kind").map_err(db)?,
-                    label: row.try_get("object_label").map_err(db)?,
-                },
-                confidence: row.try_get("confidence").map_err(db)?,
-            });
-        }
-        Ok(out)
+        rows.iter().map(row_to_relation).collect()
     }
 
     async fn drop_relation(
@@ -293,7 +278,7 @@ impl ProfileGraph for PgProfileGraph {
         ctx: &RequestContext,
         relation: &ProfileRelation,
     ) -> Result<bool, ProfileError> {
-        // The nodes stay. Only the statement joining them is withdrawn.
+        // Deletes the edge and leaves both nodes.
         let done = sqlx::query(
             "delete from profile_edges e
              using profile_nodes s, profile_nodes o, users u
@@ -314,7 +299,7 @@ impl ProfileGraph for PgProfileGraph {
     }
 
     async fn forget(&self, ctx: &RequestContext, label: &str) -> Result<u64, ProfileError> {
-        // Edges cascade from the node, so removing the node removes what ran through it.
+        // Edges cascade with the node.
         let done = sqlx::query(
             "delete from profile_nodes n using users u
              where n.user_id = u.id and n.tenant_id = $1 and u.discord_id = $2 and n.label = $3",

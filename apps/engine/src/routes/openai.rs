@@ -49,6 +49,7 @@ pub fn conversation_for(user: &str, first_message: &str) -> Uuid {
 /// The answer as one block of text, with tool runs and citations following it.
 pub fn transcript(answer: &Answer) -> String {
     let mut out = answer.text.trim().to_owned();
+    // Writing to a String cannot fail.
     if let Some(c) = &answer.confirmation {
         let _ = write!(
             out,
@@ -80,11 +81,31 @@ pub fn transcript(answer: &Answer) -> String {
     out
 }
 
+/// The OpenAI finish_reason for how a run ended.
 fn finish_reason(status: &RunStatus) -> &'static str {
     match status {
         RunStatus::StepLimit => "length",
         _ => "stop",
     }
+}
+
+/// A streamed completion holding the whole answer as one delta, then the finish reason.
+fn single_delta(id: &str, created: i64, content: &str, reason: &str) -> Response {
+    let first = json!({
+        "id": id, "object": "chat.completion.chunk", "created": created, "model": MODEL,
+        "choices": [{"index": 0, "delta": {"role": "assistant", "content": content},
+                     "finish_reason": Value::Null}],
+    });
+    let last = json!({
+        "id": id, "object": "chat.completion.chunk", "created": created, "model": MODEL,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": reason}],
+    });
+    let events = [
+        Ok::<Event, std::convert::Infallible>(Event::default().data(first.to_string())),
+        Ok(Event::default().data(last.to_string())),
+        Ok(Event::default().data("[DONE]")),
+    ];
+    Sse::new(futures::stream::iter(events)).into_response()
 }
 
 /// Lists the one model the engine answers as.
@@ -121,7 +142,7 @@ pub async fn completions(
         .map_or(input.as_str(), |m| m.content.trim())
         .to_owned();
 
-    // Conversation and memory are keyed by caller identity, so the request must carry one.
+    // Conversation and memory are keyed by the caller named in user.
     let Some(user) = req.user.as_deref().map(str::trim).filter(|u| !u.is_empty()) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -174,22 +195,7 @@ pub async fn completions(
     let created = chrono::Utc::now().timestamp();
 
     if req.stream {
-        // The engine does not stream tokens. The answer arrives as a single delta.
-        let first = json!({
-            "id": id, "object": "chat.completion.chunk", "created": created, "model": MODEL,
-            "choices": [{"index": 0, "delta": {"role": "assistant", "content": content},
-                         "finish_reason": Value::Null}],
-        });
-        let last = json!({
-            "id": id, "object": "chat.completion.chunk", "created": created, "model": MODEL,
-            "choices": [{"index": 0, "delta": {}, "finish_reason": reason}],
-        });
-        let events = vec![
-            Ok::<Event, std::convert::Infallible>(Event::default().data(first.to_string())),
-            Ok(Event::default().data(last.to_string())),
-            Ok(Event::default().data("[DONE]")),
-        ];
-        return Sse::new(futures::stream::iter(events)).into_response();
+        return single_delta(&id, created, &content, reason);
     }
 
     Json(CompletionResponse {

@@ -39,7 +39,9 @@ impl Drop for Guard {
         };
         // The blocking HTTP client must not be dropped on a tokio thread.
         let done = std::thread::spawn(move || {
-            let _ = provider.shutdown();
+            if let Err(e) = provider.shutdown() {
+                tracing::warn!(error = %e, "telemetry shutdown failed");
+            }
         })
         .join();
         if done.is_err() {
@@ -88,8 +90,7 @@ pub fn provider(
             Some(token),
             timeout,
         )?);
-        // The self-hosted capture-ai service takes PostHog's own event payload, not OTLP, so
-        // the AI endpoint is off unless ai_path says otherwise.
+        // An empty ai_path disables the AI exporter.
         if !cfg.ai_path.trim().is_empty() {
             builder = builder.with_batch_exporter(exporter(
                 format!("{host}{}", cfg.ai_path),
@@ -102,7 +103,7 @@ pub fn provider(
         builder = builder.with_batch_exporter(exporter(url, None, timeout)?);
     }
     let provider = builder
-        // Ratio sampling keeps whole traces. A sampled root carries its children.
+        // Samples whole traces by trace id; children follow the root decision.
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             cfg.sample_ratio,
         ))))

@@ -44,4 +44,5 @@ QUERY = QuerySource(
     ),
     to_url=to_url,
     needs_js=True,
+    category="library",
 )

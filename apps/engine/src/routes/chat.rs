@@ -24,8 +24,8 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
-use crate::core::types::agent::AgentError;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::agent::{AgentError, Answer};
 use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
 use crate::core::types::model::ModelError;
 use crate::core::types::store::StoreError;
@@ -98,6 +98,37 @@ macro_rules! route_span {
     };
 }
 
+/// Parents span to the traceparent header of the caller, when it carries a valid one.
+fn adopt_parent(span: &tracing::Span, headers: &HeaderMap) {
+    let Some(value) = headers.get("traceparent") else {
+        return;
+    };
+    let Some(parent) = value.to_str().ok().and_then(parse_traceparent) else {
+        tracing::debug!("traceparent unreadable; ignored");
+        return;
+    };
+    if let Err(e) = span.set_parent(parent) {
+        tracing::debug!(error = %e, "traceparent ignored");
+    }
+}
+
+/// The response body for a finished run.
+fn chat_response(request_id: Uuid, conversation_id: Uuid, answer: Answer) -> ChatResponse {
+    ChatResponse {
+        request_id,
+        conversation_id,
+        citations: answer.citations(),
+        text: answer.text,
+        confirmation: answer.confirmation,
+        status: answer.status,
+        steps: answer.steps,
+        tools: answer.tool_runs,
+        memories: answer.memories,
+        tokens: answer.usage.total(),
+        cost_usd: answer.cost_usd,
+    }
+}
+
 /// Records how a turn ended on the span it ran under.
 fn record_outcome(span: &tracing::Span, outcome: &Result<ChatResponse, Failure>) {
     match outcome {
@@ -130,14 +161,7 @@ pub async fn chat(
         return too_many(&req.user_id);
     }
     let span = route_span!("http.chat", req);
-    if let Some(parent) = headers
-        .get("traceparent")
-        .and_then(|v| v.to_str().ok())
-        .and_then(parse_traceparent)
-        && let Err(e) = span.set_parent(parent)
-    {
-        tracing::debug!(error = %e, "traceparent ignored");
-    }
+    adopt_parent(&span, &headers);
     let outcome = run_turn(state, req, None).instrument(span.clone()).await;
     record_outcome(&span, &outcome);
     match outcome {
@@ -160,14 +184,7 @@ pub async fn stream(
         return too_many(&req.user_id);
     }
     let span = route_span!("http.chat.stream", req);
-    if let Some(parent) = headers
-        .get("traceparent")
-        .and_then(|v| v.to_str().ok())
-        .and_then(parse_traceparent)
-        && let Err(e) = span.set_parent(parent)
-    {
-        tracing::debug!(error = %e, "traceparent ignored");
-    }
+    adopt_parent(&span, &headers);
 
     let (progress_tx, progress_rx) = mpsc::unbounded_channel();
     let (answer_tx, answer_rx) = oneshot::channel();
@@ -176,6 +193,7 @@ pub async fn stream(
         async move {
             let outcome = run_turn(state, req, Some(progress_tx)).await;
             record_outcome(&outcome_span, &outcome);
+            // The receiver is gone only when the client has disconnected.
             let _ = answer_tx.send(outcome);
         }
         .instrument(span),
@@ -186,7 +204,10 @@ pub async fn stream(
         match answer_rx.await {
             Ok(Ok(answer)) => sse("answer", &answer),
             Ok(Err(failure)) => sse("error", &failure.body),
-            Err(e) => sse("error", &json!({ "error": e.to_string() })),
+            Err(e) => {
+                tracing::error!(error = %e, "the turn ended without an answer");
+                sse("error", &json!({ "error": e.to_string() }))
+            }
         }
     })
     .chain(stream::once(async { sse("done", &json!({})) }));
@@ -240,19 +261,7 @@ async fn run_turn(
     }
     let id = ctx.request_id;
     match state.agent.run(&ctx, &req.message).await {
-        Ok(answer) => Ok(ChatResponse {
-            request_id: id,
-            conversation_id: ctx.conversation_id,
-            citations: answer.citations(),
-            text: answer.text,
-            confirmation: answer.confirmation,
-            status: answer.status,
-            steps: answer.steps,
-            tools: answer.tool_runs,
-            memories: answer.memories,
-            tokens: answer.usage.total(),
-            cost_usd: answer.cost_usd,
-        }),
+        Ok(answer) => Ok(chat_response(id, ctx.conversation_id, answer)),
         Err(AgentError::Model(ModelError::Busy)) => {
             tracing::warn!(request_id = %id, "model at capacity");
             Err(Failure::new(
@@ -407,20 +416,9 @@ pub async fn confirm(
         .into_response();
     }
     match state.agent.resume(&ctx, pending).await {
-        Ok(answer) => Json(ChatResponse {
-            request_id: ctx.request_id,
-            conversation_id: ctx.conversation_id,
-            citations: answer.citations(),
-            text: answer.text,
-            confirmation: answer.confirmation,
-            status: answer.status,
-            steps: answer.steps,
-            tools: answer.tool_runs,
-            memories: answer.memories,
-            tokens: answer.usage.total(),
-            cost_usd: answer.cost_usd,
-        })
-        .into_response(),
+        Ok(answer) => {
+            Json(chat_response(ctx.request_id, ctx.conversation_id, answer)).into_response()
+        }
         Err(AgentError::Model(e)) => {
             tracing::error!(error = %e, "model failed after approval");
             Failure::new(
@@ -449,6 +447,7 @@ pub(crate) struct Failure {
 }
 
 impl Failure {
+    /// A failure with this status and message for the request.
     pub(crate) fn new(status: StatusCode, request_id: Uuid, error: &str) -> Self {
         Self {
             status,
@@ -467,10 +466,25 @@ impl IntoResponse for Failure {
     }
 }
 
+/// Whether the headers carry the service bearer token.
 pub(crate) fn authorized(headers: &HeaderMap, token: &SecretString) -> bool {
     headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|presented| presented == token.expose_secret())
+        .is_some_and(|presented| {
+            same_secret(presented.as_bytes(), token.expose_secret().as_bytes())
+        })
+}
+
+/// Whether two secrets are equal, in time that depends only on their lengths.
+pub(crate) fn same_secret(presented: &[u8], expected: &[u8]) -> bool {
+    if presented.len() != expected.len() {
+        return false;
+    }
+    presented
+        .iter()
+        .zip(expected)
+        .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+        == 0
 }

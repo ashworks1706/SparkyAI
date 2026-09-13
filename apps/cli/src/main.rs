@@ -59,7 +59,7 @@ async fn run(
     terminal.draw(|f| app::ui::draw(f, app))?;
     while let Some(event) = rx.recv().await {
         app.handle(event);
-        // Drain whatever else is queued. A burst of log lines costs one redraw.
+        // Drains every queued event before the next redraw.
         while let Ok(more) = rx.try_recv() {
             app.handle(more);
         }

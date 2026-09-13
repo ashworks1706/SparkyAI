@@ -27,7 +27,7 @@ pub(super) struct Run<'a> {
     pub(super) usage: Usage,
     /// Turns produced during this request, persisted at the end. First is the user input.
     pub(super) new_turns: Vec<Message>,
-    /// Every (tool, arguments) already executed this request, to catch loops.
+    /// Every tool and arguments pair already executed this request.
     pub(super) seen_calls: HashSet<String>,
     /// Tools that ran, in order, for the answer and the client.
     pub(super) tool_runs: Vec<ToolRun>,
@@ -42,6 +42,33 @@ pub(super) struct Run<'a> {
     /// Leading new_turns entries that assembly appends itself, which the prompt must not
     /// repeat. One for a fresh request, none when resuming after an approval.
     pub(super) appended_by_assembly: usize,
+}
+
+impl<'a> Run<'a> {
+    /// Fresh state for one request. new_turns holds the turns known before the first step, and
+    /// appended_by_assembly counts the leading ones assembly writes itself.
+    pub(super) fn new(
+        ctx: &'a RequestContext,
+        input: &'a str,
+        new_turns: Vec<Message>,
+        appended_by_assembly: usize,
+    ) -> Self {
+        Self {
+            ctx,
+            input,
+            started: Instant::now(),
+            steps: 0,
+            usage: Usage::default(),
+            new_turns,
+            seen_calls: HashSet::new(),
+            tool_runs: Vec::new(),
+            evidence_in_prompt: 0,
+            memories_in_prompt: Vec::new(),
+            tool_sources: Vec::new(),
+            force_answer: false,
+            appended_by_assembly,
+        }
+    }
 }
 
 /// What an answer may cite from retrieval: the chunks that fit the prompt.

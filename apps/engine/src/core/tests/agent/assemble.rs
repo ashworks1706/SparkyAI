@@ -112,8 +112,7 @@ fn history_never_starts_with_a_tool_result() {
 
 #[test]
 fn a_resumed_run_appends_no_input_of_its_own() {
-    // Resuming after an approval has no new user turn: the question and the tool call are
-    // already in history, and the tool result comes next.
+    // A resumed run adds no user turn after the history.
     let history = vec![
         Message::user("ban that spammer"),
         Message::assistant("working on it"),
@@ -125,6 +124,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             memory: &[],
             evidence: &[],
             history: &history,
+            turn: &[],
             capabilities: "",
             input: "",
             date: "Friday 11 September 2026",
@@ -267,8 +267,7 @@ fn the_capabilities_heading_is_written_around_the_rendered_list() {
 
 #[test]
 fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
-    // Two characters per token prices the same prompt at roughly twice as many tokens, and
-    // less evidence survives the same budget.
+    // Two characters per token fits less evidence than eight in the same budget.
     let ev = evidence(20);
     let count = |chars_per_token: usize| {
         assemble(
@@ -293,8 +292,7 @@ fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
 
 #[test]
 fn the_date_reaches_the_prompt_so_today_is_answerable() {
-    // Evidence rows are labelled by day. Without the date the model cannot tell which label
-    // the question means, and it reads the first value in the row.
+    // The date appears in the assembled prompt.
     let a = assemble(
         &ctx(),
         &Sections {
@@ -358,4 +356,52 @@ fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
     let (none, visible) = split("", "Hayden closes at 2am.");
     assert!(none.is_none());
     assert_eq!(visible, "Hayden closes at 2am.");
+}
+
+#[test]
+fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_trimmed() {
+    use crate::core::types::conversation::message::ToolCall;
+
+    let call = Message::assistant_tool_calls(
+        "",
+        vec![ToolCall {
+            id: "c1".into(),
+            name: "search_news".into(),
+            arguments: serde_json::json!({"keywords": "robotics"}),
+        }],
+    );
+    let result = Message::tool_result("c1", "search_news", "x".repeat(4_000));
+    let turn = [call, result];
+    let ev = evidence(20);
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            evidence: &ev,
+            input: "latest news",
+            turn: &turn,
+            date: "Friday 11 September 2026",
+            ..Sections::default()
+        },
+        Budget {
+            total: 1_200,
+            ..Budget::default()
+        },
+    );
+    let roles: Vec<Role> = out.messages.iter().map(|m| m.role).collect();
+    let asked = out.messages.iter().position(|m| m.content == "latest news");
+    let answered = out.messages.iter().position(|m| m.role == Role::Tool);
+    assert!(
+        asked.is_some() && answered > asked,
+        "the result comes after the question: {roles:?}"
+    );
+    assert_eq!(
+        out.messages.last().map(|m| m.role),
+        Some(Role::Tool),
+        "the tool result is the last thing the model reads"
+    );
+    assert_eq!(
+        out.evidence_used, 0,
+        "evidence gives way to the result of this turn when the budget is tight"
+    );
 }

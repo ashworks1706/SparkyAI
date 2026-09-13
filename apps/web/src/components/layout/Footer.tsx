@@ -33,9 +33,7 @@ const Footer = () => {
           <div>
             <h3 className="font-medium text-gray-900 mb-4">Resources</h3>
             <ul className="space-y-3">
-              {/* <li><a href="#" className="text-gray-600 hover:text-sparky-maroon transition-colors">Documentation</a></li> */}
               <li><a href="https://github.com/somwrks/SparkyAI" className="text-gray-600 hover:text-sparky-maroon transition-colors">GitHub</a></li>
-              {/* <li><a href="#" className="text-gray-600 hover:text-sparky-maroon transition-colors">Blog</a></li> */}
             </ul>
           </div>
         </div>

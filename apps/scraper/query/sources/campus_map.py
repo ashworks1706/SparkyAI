@@ -72,4 +72,5 @@ QUERY = QuerySource(
     description="Find a building or place on the ASU campus map, with a map link.",
     params=(QueryParam("place", "Building name, code or place.", required=True, example="Hayden"),),
     answer=answer,
+    category="campus",
 )

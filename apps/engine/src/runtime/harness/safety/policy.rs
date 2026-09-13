@@ -12,7 +12,7 @@ use crate::core::types::tools::RiskClass;
 /// Stable hash of the canonical JSON of arguments. A changed payload needs a new confirmation.
 pub fn payload_hash(arguments: &Value) -> String {
     use std::hash::{Hash, Hasher};
-    // serde_json sorts map keys when preserve_order is off, and the string is canonical.
+    // Without preserve_order, serde_json serializes map keys in sorted order.
     let canonical = arguments.to_string();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     canonical.hash(&mut hasher);

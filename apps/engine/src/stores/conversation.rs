@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::conversation::message::Message;
+use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::store::StoreError;
 use crate::stores::postgres::{db, row_limit};
 
@@ -92,19 +92,18 @@ impl ConversationStore for PgConversations {
     }
 
     async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError> {
-        // A summary stands in for everything before it. Loading past one would carry the turns
-        // it replaced as well as the turn that replaced them.
+        // Loading stops at the newest summary, which stands in for every turn before it.
         let rows = sqlx::query(
             "select m.content from messages m
              join conversations c on c.id = m.conversation_id
              join users u on u.id = c.user_id
              where m.conversation_id = $1 and c.tenant_id = $2
                and u.tenant_id = $2 and u.discord_id = $4
-               and m.created_at >= coalesce(
-                 (select max(s.created_at) from messages s
+               and m.seq >= coalesce(
+                 (select max(s.seq) from messages s
                   where s.conversation_id = $1 and s.role = 'summary'),
-                 m.created_at)
-             order by m.created_at desc limit $3",
+                 m.seq)
+             order by m.seq desc limit $3",
         )
         .bind(ctx.conversation_id)
         .bind(&ctx.tenant_id)
@@ -193,12 +192,13 @@ impl ConversationStore for PgConversations {
     }
 }
 
+/// The messages.role value of a message.
 fn role_str(m: &Message) -> &'static str {
     match m.role {
-        crate::core::types::conversation::message::Role::System => "system",
-        crate::core::types::conversation::message::Role::User => "user",
-        crate::core::types::conversation::message::Role::Assistant => "assistant",
-        crate::core::types::conversation::message::Role::Tool => "tool",
-        crate::core::types::conversation::message::Role::Summary => "summary",
+        Role::System => "system",
+        Role::User => "user",
+        Role::Assistant => "assistant",
+        Role::Tool => "tool",
+        Role::Summary => "summary",
     }
 }

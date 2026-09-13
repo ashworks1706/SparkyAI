@@ -110,7 +110,7 @@ fn the_description_names_every_offered_skill_by_key_and_domain() {
     assert!(text.contains("`draft_grade_appeal`"), "{text}");
     assert!(text.contains("advising"), "{text}");
 
-    // A skill is picked by key, so adding one must not add a schema.
+    // The schema holds one key parameter however many skills are offered.
     let definition = tool(FakeSkills::new(vec![(add_drop(), true)])).definition();
     let props = &definition.parameters["properties"];
     assert_eq!(props.as_object().map(serde_json::Map::len), Some(1));
@@ -127,7 +127,7 @@ async fn a_known_key_comes_back_as_steps_in_order() {
         unreachable!("the skill is offered")
     };
     let text = output.content;
-    // Order is the procedure: a skill read out of order is a different procedure.
+    // Steps come back numbered in order.
     let Some(first) = text.find("1. Confirm the deadline") else {
         unreachable!("step one is numbered: {text}")
     };
@@ -148,7 +148,7 @@ async fn a_known_key_comes_back_as_steps_in_order() {
 async fn an_unknown_key_is_refused_with_the_keys_that_exist() {
     let store = FakeSkills::new(vec![(add_drop(), true), (draft_appeal(), true)]);
     let err = tool(store).call(&ctx(), json!({"key": "made_up"})).await;
-    // InvalidArguments is fed back for the model to correct, so it must carry the real keys.
+    // InvalidArguments carries the keys that exist.
     match err {
         Err(ToolError::InvalidArguments(reason)) => {
             assert!(reason.contains("add_drop_a_class"), "{reason}");

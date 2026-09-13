@@ -1,2 +1,0 @@
-#!/bin/bash
-./bin/temporal-django-worker

@@ -1,8 +1,7 @@
 //! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix.
-//! Every span goes to the traces path and the AI path of the telemetry host, authenticated with
-//! the project token, and to the Phoenix path of phoenix_url without authentication. Each
-//! destination is independent: an empty host or token turns PostHog off, an empty phoenix_url
-//! turns Phoenix off, and export runs while either is set.
+//! PostHog receives every span with the project token as bearer; Phoenix receives them without
+//! authentication. An empty host or token turns PostHog off, an empty phoenix_url turns Phoenix
+//! off, and export runs while either is set.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,8 +22,10 @@ pub struct Guard {
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        if let Some(p) = self.otel.take() {
-            let _ = p.shutdown();
+        if let Some(p) = self.otel.take()
+            && let Err(error) = p.shutdown()
+        {
+            tracing::warn!(%error, "trace export shutdown failed");
         }
     }
 }
@@ -38,10 +39,8 @@ fn base(url: Option<&str>) -> Option<&str> {
         .filter(|h| !h.is_empty())
 }
 
-/// The PostHog endpoints, empty when the host or the token is empty.
-///
-/// The AI endpoint is only included when ai_path is set. The self-hosted capture-ai service
-/// takes PostHog's own event payload, not OTLP, so exporting spans there fails every batch.
+/// The PostHog endpoints, empty when the host or the token is empty. The AI endpoint is
+/// included only when ai_path is set.
 fn posthog_urls(cfg: &Telemetry) -> Vec<String> {
     let Some(host) = base(cfg.host.as_deref()) else {
         return Vec::new();
@@ -108,7 +107,6 @@ pub fn provider(
         builder = builder.with_batch_exporter(exporter(cfg, url, HashMap::new())?);
     }
     let provider = builder
-        // Ratio sampling keeps whole traces: a sampled root carries its children.
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             cfg.sample_ratio,
         ))))
@@ -138,7 +136,13 @@ pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyho
         opentelemetry::global::set_tracer_provider(p.clone());
     }
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+    let filter = match std::env::var("RUST_LOG") {
+        Ok(spec) => {
+            EnvFilter::try_new(&spec).map_err(|e| anyhow::anyhow!("RUST_LOG {spec:?}: {e}"))?
+        }
+        Err(_) => EnvFilter::try_new(log_level)
+            .map_err(|e| anyhow::anyhow!("app.log_level {log_level:?}: {e}"))?,
+    };
     let fmt = if env == "development" {
         tracing_subscriber::fmt::layer().pretty().boxed()
     } else {

@@ -46,8 +46,8 @@ class QuerySource:
     Exactly one of to_url and answer is set. to_url turns the model parameters into the one
     page to fetch, and extractor, when set, turns that page into clean text in place of the
     shared heuristic. answer does the fetching itself, for a source that reads several
-    endpoints, and returns the URL to cite with the text. Results answer one caller and are
-    never written to the retrieval index.
+    endpoints, and returns the URL to cite with the text. A result answers its caller first;
+    when index is set it is then written to the retrieval index under category.
     """
 
     key: str
@@ -57,6 +57,8 @@ class QuerySource:
     needs_js: bool = False
     extractor: Callable[[Fetched], str] | None = None
     answer: Callable[[dict[str, str]], tuple[str, str]] | None = None
+    category: str = "live"
+    index: bool = True
 
     def __post_init__(self) -> None:
         if (self.to_url is None) == (self.answer is None):

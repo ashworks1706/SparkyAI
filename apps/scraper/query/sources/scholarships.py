@@ -66,4 +66,5 @@ QUERY = QuerySource(
         QueryParam("focus", "Field of focus.", choices=choices(_FOCUS)),
     ),
     to_url=to_url,
+    category="scholarships",
 )

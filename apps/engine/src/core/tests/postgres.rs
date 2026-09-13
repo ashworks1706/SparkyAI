@@ -28,7 +28,7 @@ fn a_chunk_its_own_summary_already_covers_is_dropped() {
     let child = Uuid::new_v4();
     let other = Uuid::new_v4();
 
-    // Fused order is best first. The summary outranks its chunk, so the chunk is covered.
+    // The summary ranks above its chunk, so the chunk is dropped.
     let keep = collapse(&[(parent, None), (child, Some(parent)), (other, None)]);
     assert_eq!(keep, vec![true, false, true]);
 }
@@ -42,7 +42,7 @@ fn a_chunk_that_outranks_its_summary_keeps_them_both() {
     let parent = Uuid::new_v4();
     let child = Uuid::new_v4();
 
-    // The chunk scored higher, so it is the specific answer and the summary is the context.
+    // The chunk ranks above its summary, so both are kept.
     let keep = collapse(&[(child, Some(parent)), (parent, None)]);
     assert_eq!(keep, vec![true, true]);
 }
@@ -53,7 +53,19 @@ fn a_flat_index_is_left_alone() {
 
     use crate::stores::postgres::collapse;
 
-    // Nothing has a parent until a tree is built, so collapsing must change nothing.
+    // Rows with no parent are all kept.
     let rows: Vec<(Uuid, Option<Uuid>)> = (0..5).map(|_| (Uuid::new_v4(), None)).collect();
     assert_eq!(collapse(&rows), vec![true; 5]);
+}
+
+#[test]
+fn a_query_deadline_with_nanoseconds_is_kept_to_microseconds() {
+    use crate::stores::knowledge::query::deadline_interval;
+
+    let remaining = std::time::Duration::from_nanos(88_100_127_552);
+    let Ok(interval) = deadline_interval(remaining) else {
+        unreachable!("a deadline with nanoseconds is a valid interval")
+    };
+    assert_eq!(interval.microseconds, 88_100_127);
+    assert_eq!((interval.months, interval.days), (0, 0));
 }

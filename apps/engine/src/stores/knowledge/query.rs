@@ -1,4 +1,4 @@
-//! Source query registry and the jobs queue the scraper worker serves.
+//! Source query registry and the jobs queue the scraper serves.
 
 use std::time::Duration;
 
@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use sqlx::Row;
 use sqlx::postgres::PgPool;
+use sqlx::postgres::types::PgInterval;
 use uuid::Uuid;
 
 use crate::core::traits::knowledge::query::SourceQueries;
@@ -14,27 +15,33 @@ use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryParam, QueryRequest, QuerySourceInfo,
 };
 
-/// The registry and job queue the scraper worker serves.
+/// The registry and job queue the scraper serves.
 ///
 /// The engine writes a jobs row and waits for the answer to appear on it.
 pub struct PgSourceQueries {
     pool: PgPool,
     poll: Duration,
+    claim: Duration,
 }
 
-/// The jobs.kind the scraper worker claims.
+/// The jobs.kind the scraper claims.
 const QUERY_JOB_KIND: &str = "source_query";
+
+/// The channel the scraper listens on for queued jobs.
+const QUERY_CHANNEL: &str = "source_query";
 
 impl PgSourceQueries {
     /// Polls a queued job every poll interval until it resolves or the request runs out of time.
-    pub fn new(pool: PgPool, interval: Duration) -> Self {
+    /// A job the scraper does not claim within claim reports that it is not running.
+    pub fn new(pool: PgPool, interval: Duration, claim: Duration) -> Self {
         Self {
             pool,
             poll: interval,
+            claim,
         }
     }
 
-    /// Marks a job cancelled so a worker that has not started it drops it.
+    /// Marks a job cancelled so the scraper drops it if it has not started it.
     async fn cancel(&self, job_id: Uuid) {
         let result = sqlx::query(
             "update jobs set status = 'cancelled', updated_at = now()
@@ -47,6 +54,19 @@ impl PgSourceQueries {
             tracing::warn!(error = %e, %job_id, "could not cancel query job");
         }
     }
+}
+
+/// A query deadline as a Postgres interval, kept to the microseconds an interval holds.
+///
+/// # Errors
+/// Returns [QueryError::Store] when the deadline does not fit an interval.
+pub(crate) fn deadline_interval(remaining: Duration) -> Result<PgInterval, QueryError> {
+    let micros = u64::try_from(remaining.as_micros()).unwrap_or(u64::MAX);
+    PgInterval::try_from(Duration::from_micros(micros)).map_err(|e| {
+        QueryError::Store(format!(
+            "deadline {remaining:?} is not a valid interval: {e}"
+        ))
+    })
 }
 
 #[async_trait]
@@ -86,17 +106,19 @@ impl SourceQueries for PgSourceQueries {
         .bind(QUERY_JOB_KIND)
         .bind(&ctx.user_id)
         .bind(&input)
-        .bind(
-            sqlx::postgres::types::PgInterval::try_from(remaining).map_err(|e| {
-                QueryError::Store(format!(
-                    "deadline {remaining:?} is not a valid interval: {e}"
-                ))
-            })?,
-        )
+        .bind(deadline_interval(remaining)?)
         .fetch_one(&self.pool)
         .await
         .map_err(store)?;
+        // The scraper wakes on the notification; without one it finds the job on its next poll.
+        sqlx::query("select pg_notify($1, $2)")
+            .bind(QUERY_CHANNEL)
+            .bind(job_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(store)?;
 
+        let queued = std::time::Instant::now();
         loop {
             if ctx.cancel.is_cancelled() {
                 self.cancel(job_id).await;
@@ -124,11 +146,21 @@ impl SourceQueries for PgSourceQueries {
                 "failed" => {
                     let error: Option<String> = row.try_get("error").map_err(store)?;
                     return Err(QueryError::Rejected(
-                        error.unwrap_or_else(|| "the source worker gave no reason".into()),
+                        error.unwrap_or_else(|| "the scraper gave no reason".into()),
                     ));
                 }
                 "cancelled" => return Err(QueryError::Cancelled),
-                _ => {}
+                "queued" if queued.elapsed() >= self.claim => {
+                    self.cancel(job_id).await;
+                    return Err(QueryError::NoWorker(request.source.clone()));
+                }
+                "queued" | "running" => {}
+                other => {
+                    self.cancel(job_id).await;
+                    return Err(QueryError::Store(format!(
+                        "job {job_id} has unknown status {other}"
+                    )));
+                }
             }
             // The sleep never runs past the deadline.
             tokio::time::sleep(self.poll.min(ctx.remaining())).await;

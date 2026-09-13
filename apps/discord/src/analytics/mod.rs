@@ -99,6 +99,7 @@ impl Analytics {
 impl Flusher {
     /// Sends what is queued and stops, waiting at most within.
     pub async fn finish(self, within: Duration) {
+        // A send error means the drain task has already ended.
         let _ = self.stop.send(());
         if tokio::time::timeout(within, self.task).await.is_err() {
             tracing::warn!("analytics flush timed out; events dropped");

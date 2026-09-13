@@ -20,7 +20,9 @@ def embed_texts(texts: Sequence[str]) -> list[list[float]]:
     if key:
         headers["Authorization"] = f"Bearer {key}"
     out: list[list[float]] = []
-    with httpx.Client(base_url=cfg.base_url.rstrip("/"), headers=headers, timeout=120.0) as http:
+    with httpx.Client(
+        base_url=cfg.base_url.rstrip("/"), headers=headers, timeout=cfg.timeout_secs
+    ) as http:
         for start in range(0, len(texts), cfg.batch_size):
             batch = list(texts[start : start + cfg.batch_size])
             r = http.post("/embeddings", json={"model": cfg.name, "input": batch})

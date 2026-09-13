@@ -26,8 +26,7 @@ fn filling_a_page_in_is_a_draft() {
 
 #[test]
 fn anything_that_can_commit_the_page_needs_confirmation() {
-    // A form is committed by clicking a button or pressing Enter, and evaluate runs arbitrary
-    // script wherever the server runs it.
+    // Clicks, key presses, uploads, dialogs, and script evaluation are external writes.
     for name in [
         "click",
         "press_key",

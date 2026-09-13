@@ -4,6 +4,7 @@ mod assemble;
 mod capability;
 mod citation;
 mod context;
+mod stream;
 mod thinking;
 
 use std::sync::Arc;
@@ -291,6 +292,59 @@ async fn a_repeated_call_forces_a_tool_free_answer() {
 }
 
 #[tokio::test]
+async fn the_tool_free_step_is_told_to_answer_in_plain_text() {
+    let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
+    let same = || Ok(calls(vec![("c", "echo", json!({"q": 1}))]));
+    let model = Scripted::new(vec![same(), same(), Ok(text("from the result"))]);
+    let sent = model.sent();
+    let (agent, _) = agent(model, tools, AgentConfig::default());
+    assert!(agent.run(&ctx(), "loop").await.is_ok());
+    let requests = sent.lock().map(|r| r.clone()).unwrap_or_default();
+    let last = requests.last();
+    assert!(
+        last.is_some_and(|r| r.tools.is_empty()),
+        "the third call offers no tools"
+    );
+    let told = last.is_some_and(|r| {
+        r.messages
+            .iter()
+            .any(|m| m.content.contains("no tools on this step"))
+    });
+    assert!(told, "the tool-free call carries the answer-only line");
+    assert!(
+        !requests[0]
+            .messages
+            .iter()
+            .any(|m| m.content.contains("no tools on this step")),
+        "a call with tools does not"
+    );
+}
+
+#[tokio::test]
+async fn a_tool_call_written_as_text_on_the_tool_free_step_is_not_the_answer() {
+    let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
+    let same = || Ok(calls(vec![("c", "echo", json!({"q": 1}))]));
+    let (agent, _) = agent(
+        Scripted::new(vec![
+            same(),
+            same(),
+            Ok(text(r#"{"name": "echo", "arguments": {"q": 1}}"#)),
+        ]),
+        tools,
+        AgentConfig::default(),
+    );
+    let out = agent.run(&ctx(), "loop").await.ok();
+    assert_eq!(
+        out.as_ref().map(|a| a.status.clone()),
+        Some(RunStatus::Stalled)
+    );
+    assert!(
+        out.is_some_and(|a| !a.text.contains("\"name\"")),
+        "the user never sees the call as text"
+    );
+}
+
+#[tokio::test]
 async fn repeating_even_without_tools_stalls() {
     let tools = ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic)));
     let same = || Ok(calls(vec![("c", "echo", json!({"q": 1}))]));
@@ -361,7 +415,7 @@ fn backoff_grows_and_spreads_retries_across_requests() {
         Duration::from_millis(5)
     );
 
-    // The cap is configuration, not a constant.
+    // The cap comes from the arguments.
     assert!(backoff(6, id, plenty, 250, 1_000) <= Duration::from_secs(1));
     assert!(backoff(6, id, plenty, 1_000, 30_000) > Duration::from_secs(8));
 }

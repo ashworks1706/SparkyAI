@@ -25,8 +25,14 @@ pub async fn live() -> StatusCode {
 /// Returns 200 when Postgres and the model endpoint both answer, and 503 with the report when
 /// either does not.
 pub async fn ready(State(state): State<HealthState>) -> Response {
-    let postgres = sqlx::query("select 1").execute(&state.pool).await.is_ok();
-    let model = reqwest::Client::new()
+    let postgres = match sqlx::query("select 1").execute(&state.pool).await {
+        Ok(_) => true,
+        Err(error) => {
+            tracing::warn!(%error, "readiness: postgres did not answer");
+            false
+        }
+    };
+    let model = match reqwest::Client::new()
         .get(format!(
             "{}/models",
             state.model_base_url.trim_end_matches('/')
@@ -34,7 +40,17 @@ pub async fn ready(State(state): State<HealthState>) -> Response {
         .timeout(std::time::Duration::from_secs(5))
         .send()
         .await
-        .is_ok_and(|r| r.status().is_success());
+    {
+        Ok(r) if r.status().is_success() => true,
+        Ok(r) => {
+            tracing::warn!(status = %r.status(), "readiness: model endpoint refused");
+            false
+        }
+        Err(error) => {
+            tracing::warn!(%error, "readiness: model endpoint did not answer");
+            false
+        }
+    };
     let report = Readiness { postgres, model };
     let status = if postgres && model {
         StatusCode::OK

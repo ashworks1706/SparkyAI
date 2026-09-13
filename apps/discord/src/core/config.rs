@@ -161,7 +161,7 @@ impl Telemetry {
             ("traces_path", &self.traces_path),
             ("ai_path", &self.ai_path),
         ] {
-            // An empty ai_path is how the AI endpoint is turned off.
+            // An empty ai_path disables the AI endpoint.
             if path.is_empty() && name == "ai_path" {
                 continue;
             }
@@ -221,8 +221,11 @@ impl Config {
     /// Loads the TOML layer then SPARKY_* variables, with __ separating nesting. Environment
     /// values win.
     pub fn load() -> anyhow::Result<Self> {
-        let path =
-            std::env::var("SPARKY_CONFIG_FILE").unwrap_or_else(|_| DEFAULT_CONFIG_FILE.to_owned());
+        let path = match std::env::var("SPARKY_CONFIG_FILE") {
+            Ok(path) => path,
+            Err(std::env::VarError::NotPresent) => DEFAULT_CONFIG_FILE.to_owned(),
+            Err(e) => anyhow::bail!("SPARKY_CONFIG_FILE: {e}"),
+        };
         let cfg: Self = Figment::new()
             .merge(Toml::file(path))
             .merge(Env::prefixed("SPARKY_").split("__"))

@@ -59,6 +59,10 @@ pub const EVIDENCE_HEADER: &str = "Knowledge base results for this question, clo
 pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
                                     Call the search_ tool for the topic before you answer, or \
                                     say you do not have it.";
+/// Default line added to a call that is offered no tools.
+pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the user now in plain \
+                                    text from what you already have, or say what you could not \
+                                    find. Do not write a tool call.";
 /// Default heading above what the model may do.
 pub const CAPABILITIES_HEADER: &str = "What you can do. Each line is a name, how it runs, and \
                                        what it does.";
@@ -86,8 +90,11 @@ pub struct Sections<'a> {
     pub memory: &'a [Memory],
     /// Retrieved evidence, best first.
     pub evidence: &'a [Evidence],
-    /// Prior turns and the tool exchanges of this request, oldest first.
+    /// Prior turns, oldest first.
     pub history: &'a [Message],
+    /// The messages of this request after the input: tool calls and their results, oldest
+    /// first. Always kept, after the input.
+    pub turn: &'a [Message],
     /// What the model may do, rendered. Empty writes no section.
     pub capabilities: &'a str,
     /// The current message from the user.

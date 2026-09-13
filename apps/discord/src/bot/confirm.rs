@@ -30,6 +30,7 @@ impl Handler {
             return;
         }
         let Some(guild_id) = press.guild_id else {
+            tracing::warn!(user = %press.user.id, "approval pressed outside a guild");
             return;
         };
         let approve = action == Action::Approve;

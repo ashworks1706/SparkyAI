@@ -1,7 +1,5 @@
-//! The capabilities section of the prompt. What the model may do is one list, not several.
-//!
-//! Each entry names its kind, so a tool, a remote MCP tool, a skill and a sandbox command are
-//! distinguishable to the model rather than arriving as an undifferentiated pile of schemas.
+//! The capabilities section of the prompt: one list of what the model may do, each entry
+//! labelled with its kind.
 
 use std::fmt::Write as _;
 
@@ -45,7 +43,7 @@ pub struct Capability {
     pub risk: RiskClass,
 }
 
-/// Names of MCP tools, so a definition can be told from a built-in.
+/// The kind of the tool named name, given the names of the MCP tools.
 pub fn kind_of(name: &str, mcp_names: &[String]) -> Kind {
     if name == "get_skill" {
         return Kind::Skill;
@@ -72,8 +70,7 @@ pub fn from_definitions(definitions: &[ToolDefinition], mcp_names: &[String]) ->
         .collect()
 }
 
-/// Renders the list. Empty when nothing is offered, so assembly writes no section for it. The
-/// heading above it is configured wording and is written by assembly.
+/// Renders the list, or an empty string when nothing is offered. Assembly writes the heading.
 pub fn render(capabilities: &[Capability]) -> String {
     if capabilities.is_empty() {
         return String::new();

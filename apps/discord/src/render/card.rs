@@ -3,11 +3,14 @@
 use std::fmt::Write;
 use std::time::{Duration, Instant};
 
-use crate::core::types::ChatResponse;
+use crate::core::types::{ChatResponse, Progress};
 use crate::render::reply::{MAX_MESSAGE, chunk};
 
 /// Header of the message while a turn runs, after the spinner frame.
 pub const THINKING: &str = "**Sparky is working on it…**";
+
+/// Header of the message once the answer is being written.
+pub const ANSWERING: &str = "**Sparky is answering…**";
 
 /// Frames the header spinner cycles through, one per edit of the running card.
 const SPINNER: [&str; 4] = ["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"];
@@ -28,16 +31,42 @@ struct Step {
     text: String,
 }
 
-/// The steps the engine reported for one turn, in order.
+/// The steps the engine reported for one turn, in order, and the answer written so far.
 #[derive(Debug, Default, Clone)]
 pub struct Steps {
     lines: Vec<Step>,
+    draft: Option<String>,
 }
 
 impl Steps {
+    /// Applies one progress update and says whether what the card shows changed. A draft
+    /// update replaces or withdraws the answer so far; any other writes, replaces, or clears a
+    /// step line.
+    pub fn apply(&mut self, progress: &Progress) -> bool {
+        if progress.draft {
+            if progress.clear {
+                return self.draft.take().is_some();
+            }
+            let text = progress.text.trim();
+            if text.is_empty() || self.draft.as_deref() == Some(text) {
+                return false;
+            }
+            self.draft = Some(text.to_owned());
+            return true;
+        }
+        match (progress.clear, progress.slot.as_deref()) {
+            (true, Some(slot)) => self.clear(slot),
+            (_, slot) => self.push(slot, &progress.text),
+        }
+    }
+
+    /// The answer written so far, when there is one.
+    pub fn draft(&self) -> Option<&str> {
+        self.draft.as_deref()
+    }
+
     /// Records a step and says whether the list changed. A step carrying a slot writes over
-    /// the line of that slot, so a tool result lands on the line its own start wrote. A blank
-    /// line, or an immediate repeat with no slot, is dropped.
+    /// the line of that slot. A blank line, or an immediate repeat with no slot, is dropped.
     pub fn push(&mut self, slot: Option<&str>, text: &str) -> bool {
         let text = text.trim();
         if text.is_empty() {
@@ -78,8 +107,8 @@ impl Steps {
     }
 }
 
-/// Paces edits of the running card: at most one per interval, and a change inside the gap
-/// waits for the next slot instead of being dropped.
+/// Paces edits of the running card: at most one per interval. A change inside the gap waits
+/// for the next slot.
 #[derive(Debug, Clone)]
 pub struct Pacer {
     every: Duration,
@@ -117,11 +146,15 @@ impl Pacer {
     }
 }
 
-/// The message while the turn runs. frame advances the spinner once per edit, and the oldest
-/// steps fold into a count when they do not fit.
-pub fn thinking(steps: &[String], limit: usize, frame: usize) -> String {
+/// The message while the turn runs: the steps, then the answer written so far. frame advances
+/// the spinner once per edit. The oldest steps fold into a count when they do not fit, and a
+/// draft that still does not fit keeps its newest part.
+pub fn thinking(steps: &[String], draft: Option<&str>, limit: usize, frame: usize) -> String {
     let limit = clamp(limit);
-    let header = format!("{} {THINKING}", SPINNER[frame % SPINNER.len()]);
+    let draft = draft.map(str::trim).filter(|d| !d.is_empty());
+    let title = if draft.is_some() { ANSWERING } else { THINKING };
+    let header = format!("{} {title}", SPINNER[frame % SPINNER.len()]);
+    let mut top = header.clone();
     for hidden in 0..=steps.len() {
         let mut out = header.clone();
         if hidden > 0 {
@@ -131,11 +164,30 @@ pub fn thinking(steps: &[String], limit: usize, frame: usize) -> String {
             out.push('\n');
             out.push_str(&bullet(step));
         }
-        if out.len() <= limit {
-            return out;
+        let full = match draft {
+            Some(text) => format!("{out}\n\n{text}"),
+            None => out.clone(),
+        };
+        if full.len() <= limit {
+            return full;
         }
+        top = out;
     }
-    fit(header, limit)
+    let Some(text) = draft else {
+        return fit(header, limit);
+    };
+    // Every step is folded and the draft still overflows. Keeps its newest part.
+    let room = limit.saturating_sub(top.len() + "\n\n\u{2026}".len());
+    format!("{top}\n\n\u{2026}{}", newest(text, room).trim_start())
+}
+
+/// The last bytes of text that fit in room, starting at a character boundary.
+fn newest(text: &str, room: usize) -> &str {
+    let mut start = text.len().saturating_sub(room);
+    while !text.is_char_boundary(start) {
+        start += 1;
+    }
+    &text[start..]
 }
 
 /// The finished turn: steps, answer, then the footers that have content. Steps fold into a
@@ -171,7 +223,7 @@ pub fn steps_of(card: &str) -> (usize, Vec<String>) {
         let Some(rest) = line.strip_prefix(BULLET) else {
             continue;
         };
-        // A count of folded steps shares the prefix, so it is read first.
+        // A folded step count shares the bullet prefix and is matched first.
         if let Some(n) = rest
             .strip_suffix(" steps")
             .or_else(|| rest.strip_suffix(" step"))
@@ -257,7 +309,7 @@ fn body(resp: &ChatResponse) -> String {
 }
 
 /// What sits under the answer: the sources with no link of their own, and the memory the answer
-/// drew on. Sources that carry a link are buttons, not text. keep caps each list.
+/// drew on. Linked sources are left to the buttons. keep caps each list.
 fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
     let mut sections = Vec::new();
     let unlinked: Vec<&str> = resp
@@ -268,7 +320,7 @@ fn footers(resp: &ChatResponse, keep: Option<usize>) -> String {
         .collect();
     if !unlinked.is_empty() {
         let shown = kept(&unlinked, keep).join(", ");
-        // Not subtext: a step line carries that prefix and is read back out of the card.
+        // The subtext prefix is reserved for step lines read back out of the card.
         let mut s = format!("**\u{1f4da} Also from** {shown}");
         if let Some(n) = hidden(unlinked.len(), keep) {
             let _ = write!(s, ", and {n} more");

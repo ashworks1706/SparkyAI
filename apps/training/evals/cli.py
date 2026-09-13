@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 from pathlib import Path
+from types import ModuleType
 
 import typer
 from rich import print as rprint
@@ -28,7 +29,7 @@ SUITES = [
 ]
 
 
-def _suite(name: str):
+def _suite(name: str) -> ModuleType:
     if name not in SUITES:
         raise typer.BadParameter(f"unknown suite {name}; known: {', '.join(SUITES)}")
     return importlib.import_module(f"training.evals.suites.{name}")
@@ -85,7 +86,6 @@ def run_cmd(
                 continue
             score = _suite(name).score(case, turns)
             if score is None:
-                # The case carries no expectation for this suite, so it is not counted.
                 continue
             results.append(
                 CaseResult(
@@ -125,7 +125,7 @@ def compare_cmd(
     report = EvalReport.model_validate_json(src.read_text())
     regressions = []
     now = {s.suite: s for s in report.suites}
-    # Iterate the union: a suite missing from the report counts as a regression.
+    # A suite in the baseline and missing from the report is a regression.
     for name in sorted(set(now) | set(baseline)):
         b = baseline.get(name)
         s = now.get(name)

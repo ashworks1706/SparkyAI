@@ -7,7 +7,7 @@ use crate::core::types::agent::assemble::{self, Budget};
 use crate::core::types::agent::thinking::{ThinkingMode, ThinkingRules, words};
 use crate::core::types::trace::progress::{self, ProgressStyle};
 
-/// Agent loop limits. Every field has a default so a bare .env still boots.
+/// Agent loop limits and prompt budgets.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Agent {
@@ -51,11 +51,19 @@ pub struct Agent {
     pub retry_cap_ms: u64,
     /// Longest value recorded on a span; the JSONL trace keeps the rest.
     pub max_span_value_chars: usize,
-    /// Characters of a thought, a tool argument list, or a tool result one live progress line
-    /// carries.
+    /// Characters of a tool argument list or a tool result one live progress line carries.
     pub progress_detail_chars: usize,
+    /// Characters of reasoning a thinking line carries.
+    pub progress_thought_chars: usize,
+    /// Stream the reasoning and the answer of model calls to the watcher as they are written.
+    pub stream: bool,
+    /// Longest run of answer text held back while waiting for the end of a sentence or line.
+    pub stream_block_chars: usize,
     /// When a model call thinks.
     pub thinking: ThinkingRules,
+    /// Fraction added to the estimated prompt when checking it against the context of a chat
+    /// server slot.
+    pub prompt_estimate_headroom: f64,
 }
 
 impl Default for Agent {
@@ -68,7 +76,7 @@ impl Default for Agent {
             confirmation_ttl_secs: 600,
             model_slots: 2,
             model_queue_wait_secs: 30,
-            temperature: 0.3,
+            temperature: 0.6,
             history_turns: 20,
             memory_recall_limit: 10,
             recall_in_public: false,
@@ -82,6 +90,10 @@ impl Default for Agent {
             retry_cap_ms: 8_000,
             max_span_value_chars: 32_000,
             progress_detail_chars: progress::DETAIL_CHARS,
+            progress_thought_chars: progress::THOUGHT_CHARS,
+            stream: true,
+            stream_block_chars: 160,
+            prompt_estimate_headroom: 0.3,
             thinking: ThinkingRules::default(),
         }
     }
@@ -92,6 +104,7 @@ impl Agent {
     pub fn progress_style(&self) -> ProgressStyle {
         ProgressStyle {
             detail_chars: self.progress_detail_chars,
+            thought_chars: self.progress_thought_chars,
         }
     }
 
@@ -131,6 +144,27 @@ impl Default for ThinkingRules {
     }
 }
 
+/// Rejects loop limits and budgets that leave the loop unable to run.
+///
+/// # Errors
+/// Returns [ConfigError::Invalid] naming the setting.
+pub fn validate_agent(agent: &Agent) -> Result<(), ConfigError> {
+    let invalid = |m: &str| Err(ConfigError::Invalid(m.into()));
+    if agent.chars_per_token == 0 {
+        return invalid("agent.chars_per_token must be at least 1");
+    }
+    if agent.prompt_budget_tokens == 0 {
+        return invalid("agent.prompt_budget_tokens must be at least 1");
+    }
+    if agent.max_steps == 0 {
+        return invalid("agent.max_steps must be at least 1");
+    }
+    if !(0.0..=2.0).contains(&agent.prompt_estimate_headroom) {
+        return invalid("agent.prompt_estimate_headroom must be between 0 and 2");
+    }
+    Ok(())
+}
+
 /// Rejects a thinking cue that holds no word to match.
 ///
 /// # Errors
@@ -166,7 +200,9 @@ pub struct Prompt {
     pub capabilities_header: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
-    /// Hours from UTC the date is rendered in. Arizona keeps -7 all year.
+    /// Line added to a call that is offered no tools.
+    pub answer_only_line: String,
+    /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
 
@@ -182,6 +218,7 @@ impl Default for Prompt {
             no_evidence_line: assemble::NO_EVIDENCE_LINE.into(),
             capabilities_header: assemble::CAPABILITIES_HEADER.into(),
             date_line: assemble::DATE_LINE.into(),
+            answer_only_line: assemble::ANSWER_ONLY_LINE.into(),
             utc_offset_hours: -7,
         }
     }

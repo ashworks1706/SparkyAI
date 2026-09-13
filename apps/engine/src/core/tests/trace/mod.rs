@@ -15,6 +15,49 @@ use crate::core::types::trace::{RunStatus, TraceEvent, TraceRecord};
 use crate::runtime::harness::trace::JsonlSink;
 
 #[test]
+fn live_pieces_of_a_streaming_call_stay_out_of_the_recorded_trace() {
+    let dir = std::env::temp_dir().join(format!("sparky-trace-{}", Uuid::new_v4()));
+    let Ok(sink) = JsonlSink::new(&dir, 0) else {
+        unreachable!("the trace directory could be created")
+    };
+    let ctx = RequestContext::new("g", "u", Duration::from_secs(1));
+    sink.emit(
+        &ctx,
+        TraceEvent::ModelReasoning {
+            step: 1,
+            text: "row two".into(),
+        },
+    );
+    sink.emit(
+        &ctx,
+        TraceEvent::AnswerDraft {
+            step: 1,
+            text: "Open until".into(),
+        },
+    );
+    sink.emit(&ctx, TraceEvent::AnswerDraftCleared { step: 1 });
+    sink.emit(
+        &ctx,
+        TraceEvent::ModelThought {
+            step: 1,
+            text: "row two".into(),
+        },
+    );
+    let text = std::fs::read_to_string(sink.path_for(ctx.request_id)).unwrap_or_default();
+    let kinds: Vec<String> = text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<TraceRecord>(l).ok())
+        .map(|r| r.event.kind().to_owned())
+        .collect();
+    assert_eq!(
+        kinds,
+        vec!["model_thought"],
+        "only the finished thought is recorded"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn jsonl_round_trips() {
     let dir = std::env::temp_dir().join(format!("sparky-trace-{}", Uuid::new_v4()));
     let created = JsonlSink::new(&dir, 0);

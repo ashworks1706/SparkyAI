@@ -57,8 +57,7 @@ async fn a_compacted_turn_carries_its_own_role() {
     let Ok(summary) = c.compact(&ctx(), &turns).await else {
         unreachable!("the model answered")
     };
-    // A summary that looked like an assistant turn would be indistinguishable from what
-    // Sparky actually said when the conversation is replayed.
+    // The summary has the summary role and no tool calls.
     assert_eq!(summary.role, Role::Summary);
     assert!(summary.content.contains("Hayden"));
     assert!(summary.tool_calls.is_empty());

@@ -39,8 +39,8 @@ pub fn chunk(text: &str, limit: usize) -> Vec<String> {
 /// What to say when Sparky cannot be reached or the request could not be served.
 pub const UNAVAILABLE: &str = "Sparky is unavailable right now. Please try again shortly.";
 
-/// What to say when the engine call failed. Capacity is temporary and self-clearing. Anything
-/// else is an outage.
+/// What to say when the engine call failed: busy on 503, a closed approval on 409, a lost
+/// conversation on 404, and unavailable otherwise.
 pub fn failure(e: &EngineError) -> String {
     match e {
         EngineError::Status { status: 503, .. } => {

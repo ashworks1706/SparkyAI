@@ -18,7 +18,7 @@ just setup            # install every unit's deps
 just engine | discord # run a Rust app (needs .env, see .env.example)
 just cli              # developer console (TUI): every unit, its logs, and tasks
 just scraper ...      # e.g. just scraper run library_hours
-just worker           # answer the engine's live source queries (apps/scraper)
+just scraper serve    # the scraper: live searches, their indexing, and scheduled runs, from one job queue
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio
@@ -27,6 +27,7 @@ just phoenix          # Phoenix trace UI on :6006: one conversation as a tree
 just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
+just search           # self-hosted SearXNG on :8888 behind the search_web tool
 just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just web              # Vite dev server on :5173
@@ -46,14 +47,14 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
 apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. Exports one span per interaction and product events to PostHog.
 apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
-apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. Also the worker answering the engine's live `search_<source>` jobs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run to PostHog.
+apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. `scraper serve` runs it all from the `jobs` queue: the engine's live `search_<source>` jobs, the indexing of their results, and scheduled source runs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run to PostHog.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `search_<source>` jobs, which reach the scraper's worker through the `jobs` table. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / llama-server, scraper → Firecrawl / SearXNG / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `search_<source>` jobs, which reach the scraper through the `jobs` table. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 
@@ -74,7 +75,7 @@ Two layers, lowest first: `sparky.toml`, which is committed, and `SPARKY_<SECTIO
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
-- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages. A live query result answers one caller and is never written to the index.
+- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages. A live query result answers its caller first; the scraper then indexes the fetched page through the regular ingestion pipeline as a queued job, unless its query source sets `index = False`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Live progress is a `TraceEvent`: give a new variant a line in `TraceEvent::progress` (or `None`) and every watching client shows it. Clients render the `text` the engine sends, never their own copy of the enum.

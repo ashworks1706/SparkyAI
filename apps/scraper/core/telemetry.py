@@ -1,7 +1,5 @@
-"""OpenTelemetry export over OTLP/HTTP protobuf to the PostHog traces endpoint and to Phoenix.
-One span per source run and per live query, with sparky attributes. Each destination is
-independent: an empty host or project token turns PostHog off, an empty phoenix_url turns
-Phoenix off."""
+"""OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix. One span per source run
+and per live query, with sparky attributes."""
 
 from __future__ import annotations
 
@@ -98,4 +96,5 @@ def shutdown() -> None:
 
 
 def tracer() -> trace.Tracer:
+    """The scraper tracer."""
     return trace.get_tracer("scraper")

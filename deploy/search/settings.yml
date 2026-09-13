@@ -1,0 +1,19 @@
+# SearXNG for the scraper's web search. Everything not set here keeps the upstream default,
+# including the engine list. Reached only by apps/scraper, over loopback or the compose network.
+use_default_settings: true
+
+general:
+  instance_name: sparky-search
+
+server:
+  # Overwritten by SEARXNG_SECRET from the environment.
+  secret_key: "local-only-change-me"
+  limiter: false
+  image_proxy: false
+  public_instance: false
+
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json

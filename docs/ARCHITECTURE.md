@@ -1,132 +1,143 @@
 # Architecture
 
-SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation and user memory, and performs moderator actions in Discord.
+SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation history and a profile of each user, and gates moderator actions behind policy and confirmation.
 
-This document is the target shape. Order of work is in [ROADMAP.md](ROADMAP.md); decisions are recorded in the commits that settle them.
+This document describes the current shape of the system and the rules it keeps. Order of work is in [ROADMAP.md](ROADMAP.md). Decisions are recorded in the commits that settle them.
 
 ## Stack
 
 | Layer | Choice | Where |
 |---|---|---|
-| Engine, Discord bot | tokio, axum, serenity, serde, thiserror, figment | `apps/engine`, `apps/discord` |
-| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client. | `apps/engine/src/runtime/model/rig_openai.rs` |
-| MCP | `rmcp` (official SDK) | `apps/engine/src/runtime/tools/mcp.rs` |
-| Scraper | psycopg, boto3, httpx | `apps/scraper` |
-| Fetch + extract | Firecrawl, self-hosted; httpx + BeautifulSoup | `deploy/compose.yml` profile `crawl` |
-| Web | Vite + React + TypeScript + shadcn | `apps/web` |
-| Post-training | Unsloth QLoRA + TRL, TensorBoard, GGUF | `apps/training/posttrain` |
-| Evals | Golden cases against `/chat`, deterministic baseline gate | `apps/training/evals` |
-| Chat model | Qwen3 GGUF on `llama-server` (OpenAI-compatible HTTP) | `deploy/inference` |
-| Embeddings | Qwen3-Embedding-0.6B (1024-dim) on `llama-server` | `deploy/inference` |
-| Database | PostgreSQL 17 | `apps/engine` reads, `apps/scraper` writes |
-| Vector store | pgvector | same database |
-| Cache, queue | Redis 7 | `apps/engine` |
-| Object storage | S3-compatible (MinIO locally) | `apps/scraper` |
-| Observability | OpenTelemetry and product events → PostHog, self-hosted; the same spans → Phoenix for reading one conversation; logs under `.sparky/` | every app; `deploy/compose.yml` profiles `posthog` and `phoenix` |
-| Config | `sparky.toml` (committed), then `SPARKY_*` env vars from `.env`, which win | `sparky.toml`, `config.rs`, `settings.py`, `.env.example` |
-| Build, gate | `just` recipes; pre-commit hook and CI | `justfile`, `.githooks`, `.github/workflows` |
-| Deploy | Docker Compose (prod pulls GHCR); `llama-server` on a GPU host | `deploy/` |
+| Engine, Discord bot, console | tokio, axum, serenity, ratatui, serde, thiserror, figment | `apps/engine`, `apps/discord`, `apps/cli` |
+| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client | `apps/engine/src/runtime/model/rig_openai.rs` |
+| MCP | `rmcp` | `apps/engine/src/runtime/tools/mcp.rs` |
+| Scraper | psycopg, httpx, BeautifulSoup, boto3, typer | `apps/scraper` |
+| Page rendering | Firecrawl, self-hosted | `deploy/compose.yml` profile `crawl` |
+| Web search | SearXNG, self-hosted | `deploy/compose.yml` profile `search` |
+| Web | Vite, React, TypeScript, shadcn | `apps/web` |
+| Post-training | Unsloth QLoRA, TRL, TensorBoard, GGUF | `apps/training/posttrain` |
+| Evals | golden cases against the engine, baseline gate | `apps/training/evals` |
+| Chat model | Qwen3 GGUF on `llama-server` | compose service `chat`, profile `model` |
+| Embeddings | Qwen3-Embedding-0.6B, 1024 dimensions, on `llama-server` | compose service `embed`, profile `model` |
+| Database, vector store, job queue | PostgreSQL 17 with pgvector | schema in `apps/scraper/migrations` |
+| Object storage | S3-compatible, MinIO locally | `apps/scraper` |
+| Cache | Redis 7, provisioned and unused | `deploy/compose.yml` |
+| Observability | OpenTelemetry spans to PostHog and Phoenix, product events to PostHog, JSONL traces and logs under `.sparky/` | profiles `posthog`, `phoenix`, `metrics` |
+| Config | `sparky.toml`, then `SPARKY_*` env vars | `sparky.toml`, `.env.example` |
+| Build, gate | `just` recipes, pre-commit hook, CI | `justfile`, `.githooks`, `.github/workflows` |
+| Deploy | Docker Compose, prod pulls GHCR images | `deploy/` |
 
 ## Rules
 
 - Open models only, served by `llama-server` behind an OpenAI-compatible HTTP API.
-- Facts come from retrieval or live observation, never from model weights.
-- Public sites are ingested offline through Firecrawl. The request path never fetches a page as retrieval evidence; no tool writes to the index.
-- The engine and the scraper both open database connections; nothing else does. They share the schema in `apps/scraper/migrations`, not code.
-- Every request carries its own `RequestContext`. No global mutable state.
+- Facts come from retrieval or from a live source query, never from model weights.
+- The engine never fetches a page. The scraper fetches, on a schedule or for a live query job, and is the only writer of the retrieval index.
+- The engine and the scraper are the only processes with database connections. They share the schema in `apps/scraper/migrations`, not code.
+- Every request carries its own `RequestContext`. There is no global mutable state.
 - Every replaceable dependency is a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
 - The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `runtime/model`.
 - Model output is never written back as retrieval evidence.
-- Anything that creates, changes, submits, posts, books, or deletes requires confirmation immediately before the action.
-- Credentials, cookies, and authenticated page content never enter retrieval indexes, memory, or traces.
+- An action at or above `policy.confirm_from` is held for the caller's approval immediately before it runs.
+- Credentials, cookies, and authenticated page content never enter the retrieval index, memory, or traces.
 
 ## Layout
 
 ```
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
-    src/core/       config · telemetry · types (data: messages, config, errors, wire shapes) · traits (interfaces) · tests. Imports nothing else.
-    src/runtime/    harness (Agent, ToolSet, RiskPolicy, sinks, assembly) · model (Rig → llama-server chat and embed) · tools
+    src/core/       config (services, http, harness by domain), telemetry, types, traits, tests
+    src/runtime/    harness (loop, prompt, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (search, skills, mcp, sandbox)
     src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs, skills), memory (memories, profile graph)
-    src/routes/     chat (JSON and SSE), conversation, profile, openai (/v1), health
-    src/wiring.rs
-  discord/        Rust bin. serenity bot; HTTP client of engine. Never links it.
-    src/core/       config · telemetry · types · tests
-    src/bot/        client, event dispatch, slash commands and their handlers, the streamed turn
+    src/routes/     chat (JSON and SSE), confirm, conversation, profile, openai (/v1), health, rate limit
+    src/wiring.rs   builds every dependency from config and serves
+  discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
+    src/core/       config, telemetry, types, tests
+    src/bot/        client, slash commands, mentions, approvals, the streamed turn
     src/engine/     HTTP client of the engine and SSE frame parsing
-    src/render/     how a turn is shown: the turn card, reply text, buttons and their custom ids
-    src/access/     who may ask or write (roles, permissions) and where a turn is answered
-    src/analytics/  product events to PostHog: a bounded queue flushed in the background
-  cli/            Rust bin `sparky`. Developer console: runs just recipes and compose services and tails them.
-    src/core/       config · types · tests
-    src/app/        console state, key map, control, and rendering
-    src/units/      the unit catalog, its process runner, log buffers, and health probes
-  scraper/        Python. Offline ingestion: fetch → snapshot → extract → chunk → embed → index.
-    core/{settings,types,tests} · ingest (fetch, extract, chunk, embed, tree, pipeline) · query (live query registry and worker) · sources · store · migrations/ (the schema)
-  training/       Python. datasets from PostHog LLM generations, evals with a baseline gate, SFT → GGUF; evals/cases holds the golden set
-  web/            Vite + React frontend and admin UI
-deploy/           compose (dev + prod), one Dockerfile per image, inference/ (model serving config)
+    src/render/     the turn card, reply text, buttons and their custom ids
+    src/access/     roles, permissions, and where a turn is answered
+    src/analytics/  product events to PostHog, a bounded queue flushed in the background
+  cli/            Rust bin sparky. Developer console: runs just recipes and compose services and tails them.
+    src/core/       config, types, tests
+    src/app/        console state, key map, control, rendering
+    src/units/      unit catalog, process runner, log buffers, health probes
+  scraper/        Python. Scheduled ingestion and the worker for live query jobs.
+    core/           settings, types, telemetry, tests
+    ingest/         fetch, extract, chunk, embed, tree, pipeline
+    sources/        scheduled sources, one module each
+    query/          live query registry, parameter checks, runner, indexing of live results
+    query/sources/  live query sources, one module each
+    jobs.py         the job queue: handlers, lanes, scheduling
+    store/          postgres and object storage, the only place a connection opens
+    migrations/     the schema
+  training/       Python. Datasets from PostHog llm spans, evals with a baseline gate, SFT to GGUF.
+  web/            Vite and React frontend and admin UI
+deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, posthog, search
 docs/             ROADMAP.md, this file
-.sparky/          ignored local state: traces, logs, training data, reports, and outputs
+.sparky/          ignored local state: traces, logs, training data, reports
 ```
 
-Each Python app directory is itself the importable package — `apps/scraper` is `scraper` — with no `src/` layer and no repeated directory name. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage must be added there.
+Each Python app directory is its own importable package (`apps/scraper` is `scraper`) with no `src/` layer. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage is added there.
 
-Every app has a `core/`: config or settings, telemetry, data types, interfaces, and tests. Domain modules import from it; it imports nothing from them.
+Every app has a `core/` holding config, telemetry, data types, interfaces, and tests. Domain modules import from it. It imports nothing from them.
 
-Everything that runs is under `apps/`. Language is never a folder. ASU domain (library, events, …) is never a folder either — it is a row in `sources` or an entry in a registry.
-
-Services talk only at these edges: `discord → engine`, `engine → PostgreSQL / llama-server / MCP`, `scraper → PostgreSQL / llama-server embed`, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database.
+Language is never a folder. ASU domain (library, events) is never a folder either. It is a module in a source registry and a row in `sources` or `query_sources`.
 
 ## System context
 
 ```mermaid
 flowchart LR
-    U[Student / Moderator] -->|slash command| D[Discord]
-    A[Admin · web] -->|HTTP| APP
+    U["Student or moderator"] --> DC["Discord"]
+    DEV["Developer"] --> CLI["sparky console"]
+    DEV --> OAI["OpenAI-compatible client"]
 
-    subgraph rust [apps/engine · apps/discord]
-        BOT[discord]
-        APP[engine<br/>core · agent · stores · routes]
+    subgraph apps ["apps"]
+        BOT["discord"]
+        ENG["engine"]
+        SCR["scraper serve"]
     end
-    D --> BOT
-    BOT -->|HTTP / SSE| APP
 
-    DEV[Developer] -->|just cli| CLI["cli · sparky console"]
-    CLI -->|just · docker compose| rust
-    DEV -->|OpenAI-compatible client| APP
+    DC --> BOT
+    BOT -->|"HTTP and SSE"| ENG
+    OAI -->|"/v1/chat/completions"| ENG
+    CLI -->|"just, docker compose"| apps
 
-    APP -->|OpenAI-compatible| OLL[llama-server · chat]
-    APP -->|OpenAI-compatible| EMB[llama-server · embed]
-    APP --> PG[(PostgreSQL + pgvector)]
-    APP -->|MCP| MCP[Playwright MCP]
+    ENG -->|"completions"| CHAT["llama-server chat"]
+    ENG -->|"embeddings"| EMB["llama-server embed"]
+    ENG <-->|"conversations, index reads, jobs"| PG[("PostgreSQL and pgvector")]
+    ENG -.->|"optional"| MCP["MCP servers"]
+    ENG -.->|"run_sandbox"| SBX["sandbox containers"]
 
-    ING[apps/scraper<br/>offline ingestion] --> FC[Firecrawl]
-    FC --> WEB[Public ASU sites]
-    ING --> PG
-    ING --> S3[(Object storage)]
-    ING --> EMB
+    SCR <-->|"job claims, index writes"| PG
+    SCR -->|"embeddings"| EMB
+    SCR -.->|"tree summaries"| CHAT
+    SCR --> FC["Firecrawl"]
+    SCR --> SX["SearXNG"]
+    SCR --> SITES["ASU sites and APIs"]
+    FC --> SITES
+    SCR --> S3[("MinIO snapshots")]
 
-    APP -->|OTLP| PX[PostHog]
-    BOT -->|OTLP · events| PX
-    ING -->|OTLP| PX
-    APP -->|OTLP| PH[Phoenix]
-    BOT -->|OTLP| PH
-    ING -->|OTLP| PH
+    BOT -->|"spans, product events"| OBS["PostHog and Phoenix"]
+    ENG -->|"spans"| OBS
+    SCR -->|"spans"| OBS
 ```
 
-Only the scraper touches the web. The engine and the scraper meet only in PostgreSQL. The console starts and stops the other units. A host process whose port is already served is not started a second time; the console says what holds the port instead. The engine serves `/chat` and `/chat/stream` for the bot and an OpenAI-compatible `/v1/chat/completions` for off-the-shelf clients; all three run the same loop.
+Processes talk only at these edges. The engine and the scraper meet only in PostgreSQL: the engine queues a job and reads its row, the scraper claims it and writes the result. Only the scraper reaches the web. MCP servers are optional and none is configured by default.
 
-## Inside `engine`
+The engine serves `/chat` and `/chat/stream` for the bot and `/v1/chat/completions` for OpenAI-compatible clients. All three run the same loop. Every route except health and `/v1/models` requires the bearer token in `SPARKY_ENGINE__SERVICE_TOKEN` and applies the per-user `http.rate_limit_per_min`.
+
+The console starts and stops the other units and tails their output. It does not start a process whose port something else already serves, and says so instead.
+
+## Inside engine
 
 ```mermaid
 flowchart TD
-    ROUTES["routes · wiring<br/>compose everything, own main"]
-    HARNESS["runtime::harness<br/>agent/{loop,step,inputs,execute,conclude,run,task}<br/>agent/call/{retry,spans,thinking,thought}<br/>agent/prompt/{assemble,capability}<br/>memory/{detect,profile} · safety/{guardrail,policy,redact}<br/>compact · tools · trace"]
-    MODEL["runtime::model<br/>rig_openai · limit"]
-    TOOLS["runtime::tools<br/>knowledge/search/one file per source · knowledge/skills · mcp · sandbox"]
-    STORES["stores<br/>postgres · conversation · confirmation<br/>knowledge/{retrieval,query,skills} · memory/{memories,profile}"]
-    CORE["core<br/>config/{services,http} · config/harness by domain<br/>types · traits · tests, each split by domain"]
+    ROUTES["routes and wiring<br/>compose everything, own main"]
+    HARNESS["runtime::harness<br/>agent: run, step, inputs, execute, conclude, task<br/>agent/call: thinking, relay, draft, thought, retry, spans<br/>agent/prompt: assemble, capability<br/>memory: detect, profile<br/>safety: guardrail, policy, redact<br/>compact, tools, trace"]
+    MODEL["runtime::model<br/>rig_openai, limit, props"]
+    TOOLS["runtime::tools<br/>knowledge/search, one file per source<br/>knowledge/skills, mcp, sandbox"]
+    STORES["stores<br/>postgres, conversation, confirmation<br/>knowledge: retrieval, query, skills<br/>memory: memories, profile"]
+    CORE["core<br/>config, telemetry, types, traits, tests"]
 
     ROUTES --> HARNESS
     ROUTES --> MODEL
@@ -139,11 +150,17 @@ flowchart TD
     STORES --> CORE
 ```
 
-`core` imports nothing else in the crate. `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores` import only `core`; `routes` and `wiring` compose them. A module splits when it holds more than one concern: `config` by what a section configures, `stores` by the trait each adapter implements, `agent` by loop, inputs, execution, conclusion. Folders nest by domain, and the same names repeat across `core/types`, `core/traits`, `core/tests`, `runtime/harness`, `runtime/tools`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat instead of a one-file folder. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations. `scripts/check-deps.sh` enforces separation between the Rust apps.
+`core` imports nothing else in the crate. `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores` import only `core`. `routes` and `wiring` compose them. `scripts/check-deps.sh` enforces that the three Rust apps never depend on each other.
 
-## Inside `scraper`
+Folders nest by domain, and the same domain names repeat across `core/types`, `core/traits`, `core/tests`, `runtime`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations.
 
-`store/` is the only place it opens a connection. `migrations/` is the schema contract with `engine`: the scraper writes `chunks`, the engine reads them, and `ingest/embed.py` must use the model and dimension the engine queries with. Changing the embedding model means re-embedding every chunk.
+`runtime::model::limit` wraps the chat client in a semaphore of `agent.model_slots` permits, matching `llama-server --parallel`. A call waits up to `agent.model_queue_wait_secs` for a slot, then fails as busy.
+
+## Inside scraper
+
+`store/` is the only place the scraper opens a connection. `migrations/` is the schema contract with the engine. The scraper writes `sources`, `source_versions`, `chunks`, `query_sources`, and job results. The engine reads the index and writes conversations, confirmations, the profile graph, and `source_query` jobs. `ingest/embed.py` uses the same model and dimension the engine queries with, so changing the embedding model means re-embedding every chunk.
+
+`sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
 
 ## Types
 
@@ -158,7 +175,7 @@ pub struct RequestContext {
     pub visibility: Visibility,
     pub deadline: Instant,
     pub cancel: CancellationToken,
-    /// Live progress goes here while a caller is watching; `None` for a plain request.
+    /// Live progress goes here while a caller is watching; None for a plain request.
     pub progress: Option<UnboundedSender<Progress>>,
 }
 
@@ -173,40 +190,29 @@ pub struct Evidence {
 }
 ```
 
-Citations are built from `Evidence`, not parsed out of generated text.
+Citations are built from the `Evidence` that fit the prompt and from the pages tools read (`Answer.sources`), not parsed out of generated text.
 
 ## Traits
 
-All in `engine/src/core/traits`, implemented in `runtime::harness`, `runtime::model`, `runtime::tools`, and `stores`. Inputs and outputs are owned Sparky types from `core/types`.
+All in `engine/src/core/traits`. Inputs and outputs are owned types from `core/types`. The main ones:
 
 ```rust
 #[async_trait]
 pub trait ModelProvider {
     async fn generate(&self, ctx: &RequestContext, req: ModelRequest) -> Result<ModelResponse, ModelError>;
+    // The same completion, sending each reasoning and text piece to deltas as it arrives.
+    async fn stream(&self, ctx: &RequestContext, req: ModelRequest, deltas: UnboundedSender<ModelDelta>) -> Result<ModelResponse, ModelError>;
 }
 
 #[async_trait]
 pub trait Tool {
-    fn definition(&self) -> ToolDefinition;   // name, description, JSON schema, RiskClass
+    fn definition(&self) -> ToolDefinition;   // name, description, JSON schema, risk, sequential, timeout
     async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError>;
 }
 
 #[async_trait]
 pub trait Retriever {
-    async fn retrieve(&self, ctx: &RequestContext, q: &RetrievalQuery) -> Result<Vec<Evidence>, RetrievalError>;
-}
-
-#[async_trait]
-pub trait ConversationStore {
-    async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError>;
-    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError>;
-    async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError>;
-}
-
-#[async_trait]
-pub trait MemoryStore {
-    async fn recall(&self, ctx: &RequestContext, q: &MemoryQuery) -> Result<Vec<Memory>, StoreError>;
-    // write and forget arrive with Phase 5, when the agent starts producing memories
+    async fn retrieve(&self, ctx: &RequestContext, query: &RetrievalQuery) -> Result<Vec<Evidence>, RetrievalError>;
 }
 
 #[async_trait]
@@ -216,15 +222,44 @@ pub trait Embedder {
 }
 
 #[async_trait]
+pub trait SourceQueries {
+    async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError>;
+    async fn run(&self, ctx: &RequestContext, request: &QueryRequest) -> Result<QueryOutcome, QueryError>;
+}
+
+#[async_trait]
+pub trait ConversationStore {
+    async fn ensure(&self, ctx: &RequestContext, channel_id: &str) -> Result<(), StoreError>;
+    async fn owns(&self, ctx: &RequestContext) -> Result<bool, StoreError>;
+    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError>;
+    async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError>;
+    async fn latest(&self, ctx: &RequestContext, channel_id: &str) -> Result<Option<Uuid>, StoreError>;
+    async fn end(&self, ctx: &RequestContext, channel_id: &str) -> Result<u64, StoreError>;
+}
+
+#[async_trait]
+pub trait MemoryStore {
+    async fn recall(&self, ctx: &RequestContext, q: &MemoryQuery) -> Result<Vec<Memory>, StoreError>;
+    // No write method yet.
+}
+
+#[async_trait]
 pub trait Policy {
     async fn authorize(&self, ctx: &RequestContext, action: &ProposedAction) -> Decision;
-    // Decision: Allow | Deny(reason) | Confirm(ConfirmationRequest)
+    // Decision: Allow | Deny { reason } | Confirm(ConfirmationRequest)
+}
+
+#[async_trait]
+pub trait Guardrail {
+    async fn check(&self, ctx: &RequestContext, stage: Stage, text: &str) -> Verdict;
 }
 
 pub trait TraceSink {
-    fn emit(&self, ctx: &RequestContext, e: TraceEvent);
+    fn emit(&self, ctx: &RequestContext, event: TraceEvent);
 }
 ```
+
+The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Sandbox`.
 
 ## Request lifecycle
 
@@ -235,325 +270,422 @@ sequenceDiagram
     participant E as engine
     participant PG as PostgreSQL
     participant M as llama-server
-    participant PX as PostHog
+    participant S as scraper
 
-    U->>B: /ask question
-    B->>E: POST /chat/stream with roles and traceparent
-    E->>E: verify service token, build RequestContext
-    E->>PG: load conversation, recall memory
-    E->>M: embed the question
-    E->>PG: dense and lexical search, fuse
-    PG-->>E: Evidence
-    E->>E: assemble within the token budget
-    loop agent loop
-        E->>M: completion with tool schemas
-        M-->>E: text or tool calls
-        E->>E: authorize, then execute allowed calls
+    U->>B: /ask or @mention
+    B->>B: resolve roles, destination, visibility
+    B->>E: POST /chat/stream with bearer token and traceparent
+    E->>PG: ensure conversation, load recent turns
+    opt history over its budget
+        E->>M: chat agent compacts the oldest turns
     end
-    E->>PG: persist the turn
-    E-->>B: answer, citations, request_id
-    B-->>U: reply
-    E->>PX: spans
-    B->>PX: spans and product events
+    E->>PG: recall memory and profile graph, private turns only
+    E->>M: embed the question
+    E->>PG: dense and lexical search
+    loop one step per model call
+        E->>M: streamed completion with tool schemas
+        M-->>E: reasoning, text, tool calls
+        E-->>B: SSE progress, thinking line, answer draft
+        opt search tool call
+            E->>PG: queue source_query job
+            S->>PG: claim, fetch, write result
+            PG-->>E: result text
+        end
+    end
+    E->>PG: append the new turns
+    E-->>B: SSE answer, then done
+    B->>U: final card with answer, sources, memories
+    E->>E: spawn profile writer, detached
 ```
 
-1. `discord` receives the slash command or @mention and POSTs it to `engine` with the Discord identity, roles, native permissions, the channel or thread it answers in, and the visibility of that answer. Web and admin clients hit the same endpoints.
-2. `engine` checks the service token, then turns the request and its asserted roles into a `RequestContext`. A named conversation must belong to the caller; `continue_channel` continues the caller's latest open conversation in that channel at that visibility.
-3. Load conversation, recall memory, and retrieve evidence from PostgreSQL if the query needs it.
-4. Assemble context within a token budget, in fixed order: system instructions (versioned) → role/permissions → memory → evidence → relevant turns → current request, with tool definitions alongside. Tool schemas are charged to the budget first; evidence and history are trimmed to what remains. MCP schemas are compacted and, by default, show only required properties.
-5. Run the agent loop below.
-6. Persist turn, memory candidates that pass the write policy, and trace.
-7. Reply with citations built from `Evidence`.
+1. `discord` receives a slash command or a mention and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, and `continue_channel`.
+2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility, and otherwise a new conversation starts.
+3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question.
+4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs.
+5. Every exit appends the new turns, hands the user's text to the profile writer, and builds the answer with its citations, tool runs, memories (empty for a public answer), usage, and cost.
+6. An answer with status `AwaitingConfirmation` carries a token. `POST /confirm` with that token runs the held action and resumes the loop from its result.
+
+## Prompt assembly
+
+Each step assembles the prompt in a fixed order:
+
+1. System instructions, the role line, and today's date.
+2. The capabilities section, if it fits `agent.capabilities_budget_tokens`.
+3. Memory, within `agent.memory_budget_tokens`.
+4. Evidence, numbered for citation, within `agent.evidence_budget_tokens`. With no evidence, `prompt.no_evidence_line` tells the model to call a search tool or say it does not know.
+5. History, newest first within `agent.history_budget_tokens`, never starting on an orphaned tool result.
+6. The user's input, then the model and tool turns of this request.
+
+Tool schemas are sent beside the messages and are charged to `agent.prompt_budget_tokens` first. Evidence and history are capped by what remains. The system prompt, the input, and this request's tool exchange are never dropped. Token counts are estimates from `agent.chars_per_token`. MCP schemas are compacted and, by default, show only required properties.
 
 ## Agent loop
 
 ```mermaid
 flowchart TD
-    ASM["assembled context"] --> CALL["call model"]
-    CALL --> ANS{"tool calls<br/>requested?"}
-    ANS -->|no| OUT["Guardrail::check the answer"]
-    OUT --> DONE(["Answered · text + citations"])
-    ANS -->|yes| REPEAT{"identical call<br/>already made?"}
-    REPEAT -->|yes| FORCE["tell the model it repeated<br/>next step offers no tools"]
-    FORCE --> AGAIN{"repeats again?"}
-    AGAIN -->|yes| STALLED(["Stalled"])
-    AGAIN -->|no| CALL
-    REPEAT -->|no| GUARD["Guardrail::check the response"]
-    GUARD --> POL["Policy::authorize each call"]
-    POL --> DEC{"decision"}
-    DEC -->|Deny| FEED
-    DEC -->|Confirm| WAIT(["AwaitingConfirmation"])
-    DEC -->|Allow| EXEC["execute with timeout<br/>parallel unless a call is sequential"]
-    EXEC --> FEED["feed results back as messages"]
-    FEED --> LIMIT{"step limit, deadline,<br/>or cancel?"}
-    LIMIT -->|yes| STOP(["StepLimit · Deadline · Cancelled"])
-    LIMIT -->|no| CALL
+    TOP(["next step"]) --> LIMIT{"cancelled, past deadline,<br/>or max_steps reached?"}
+    LIMIT -->|yes| STOP(["Cancelled, Deadline, or StepLimit"])
+    LIMIT -->|no| ASM["assemble prompt"]
+    ASM --> THINK{"thinking decision"}
+    THINK --> CALL["model call<br/>no tools when an answer is forced"]
+    CALL --> RELAY["relay while streaming<br/>reasoning line, answer draft blocks"]
+    RELAY --> SPENT{"thought, but no answer<br/>and no tool call?"}
+    SPENT -->|yes| PLAIN["same call without thinking"]
+    SPENT -->|no| GUARD
+    PLAIN --> GUARD{"guardrail passes?"}
+    GUARD -->|no| BLOCKED(["Blocked, replacement text"])
+    GUARD -->|yes| CALLS{"tool calls?"}
+    CALLS -->|no| ANSWER(["Answered"])
+    CALLS -->|yes| POLICY{"Policy::authorize<br/>each call"}
+    POLICY -->|Confirm| HOLD(["AwaitingConfirmation"])
+    POLICY -->|"Deny or unknown tool"| FEED
+    POLICY -->|Allow| REPEAT{"same name and arguments<br/>already run?"}
+    REPEAT -->|"some calls are new"| EXEC["run new calls with timeouts<br/>parallel unless one is sequential"]
+    REPEAT -->|"all repeats, first time"| FORCE["force an answer on the next step"]
+    REPEAT -->|"all repeats, already forced"| STALLED(["Stalled"])
+    EXEC --> FEED["append tool results as messages"]
+    FEED --> TOP
+    FORCE --> TOP
 ```
 
-Every model call decides whether the model reasons first (`agent.thinking`). In `auto` the first rule that applies wins: a call offered no tools does not think, a step with tool results thinks, a question with a cue word, longer than a quick one, or with no evidence thinks, and a short question with evidence does not. A call that thought and left no answer and no tool call is made again without thinking, inside the same step. The `llm` span records `sparky.thinking` and `sparky.thinking_reason`. Prompted sub-agents never think.
+The loop owns every stopping condition. It checks cancellation, the deadline, and `agent.max_steps` before each step.
 
-The loop owns every stopping condition. Structured output gets one correction attempt. Independent calls run in parallel; a stateful tool makes the step sequential. Identical calls are not run twice.
+Thinking is decided per model call by `agent.thinking`. `on` and `off` apply to every call. In `auto` the first matching rule wins: a call with no tools does not think; a step after tool results thinks when `after_tools` is set; a question with a cue word, longer than `max_quick_chars`, or with no evidence thinks; anything else does not. A call that thinks gets `model.max_tokens`, and one that does not gets `model.max_tokens_without_thinking`. A call that thought and returned neither an answer nor a tool call is made once more without thinking when `retry_without` is set. The `llm` span records `sparky.thinking` and `sparky.thinking_reason`. Prompted sub-agents never think.
 
-Every model response passes the guardrail, on the execution branch and on the answer branch alike. The guardrail is the outer gate and `Policy` is what it consults for a proposed action: `Policy` classifies a typed action by risk, the guardrail decides whether a response may proceed at all. Neither replaces the other.
+With `agent.stream` on, the model call streams. Reasoning updates the thinking line as it grows. When answer text begins, the thinking line becomes the full thought, clipped to `agent.progress_thought_chars`. Answer text is released as a draft at the end of a sentence or line, or at a word break past `agent.stream_block_chars`, and every block passes the guardrail before it is sent. A draft is withdrawn when the call ends in tool calls, fails, or a block is refused. A step that answers without showing a thought takes its thinking line back.
+
+Every response passes the guardrail: the answer stage for a final answer, the capability stage for a response with tool calls and text. `Policy` decides whether a typed action may run by its risk class. The guardrail decides whether a response may proceed at all.
+
+Tool calls are authorized before any runs. A denial or an unknown tool name becomes a tool result the model reads. The first call that needs confirmation is stored in `confirmations` and ends the run. Allowed calls that repeat an earlier call with identical arguments are not run again, and the model is told so. When every call in a step is a repeat, the next step offers no tools and adds `prompt.answer_only_line`. If that step repeats again, or answers with nothing, the run ends as `Stalled`.
+
+Allowed calls run in parallel, each under its own timeout (the tool's declared timeout or `agent.tool_timeout_secs`, capped by the request deadline). If any call is to a tool marked sequential, the step runs its calls in order. A tool error, including `InvalidArguments`, is fed back as the tool result so the model can correct the call on its next step.
+
+A retryable model error (transport, 5xx, 429) is retried with backoff up to `agent.max_model_retries`. A model timeout ends the run as `Deadline`, cancellation as `Cancelled`, and any other error keeps the turns and returns the error.
 
 ## Prompted sub-agents
 
-The harness runs more than one prompt. The loop is one of them; compaction and profile extraction are others, each with its own instructions and its own model call, and none of them but the loop may call a tool.
+The harness runs more than one prompt. Each sub-agent is a `runtime::harness::agent::task::Task`: its own instructions, one model call, no tools, no thinking, and a typed result. The loop does not use `Task`, because it has tools and stopping conditions.
 
 | Agent | When | Reads | Writes |
 |---|---|---|---|
-| Sparky | every request | retrieval, memory, history, capabilities | the turn |
-| Chat | the context window fills | the turns being replaced | one compacted turn |
-| Graph | after a turn is appended, when the classifier finds something | the turn | the profile graph |
-
-`runtime::harness::agent::task` is what they share: a prompt, one model call, no tools, a typed result. The loop is not built on it, because the loop is the thing with tools and stopping conditions.
+| Sparky (the loop) | every request | evidence, memory, history, capabilities | the turn |
+| Chat | loaded history overflows its budget | the turns being replaced | one compacted turn |
+| Graph | after a turn, when the detector passes it | the user's text | profile facts |
+| Reconcile | a new fact collides with recorded ones | the new fact and the candidates | which recorded facts to withdraw |
 
 ## Capabilities
 
-What the model may do is one list, not several. `runtime::harness::agent::prompt::capability` renders the `<capabilities>` section of the prompt and each entry names its kind.
+`runtime::harness::agent::prompt::capability` renders one `<capabilities>` list in the prompt. Each entry names its kind.
 
 | Kind | Executed by | Risk |
 |---|---|---|
-| `tool` | a built-in `Tool` | declared per tool |
+| `tool` | a built-in `Tool`: the `search_<source>` tools, `get_skill`, `run_sandbox` | declared per tool |
 | `mcp` | a remote MCP server | derived from the tool name |
-| `skill` | fetched by `get_skill`, then followed | the steps it names |
-| `sandbox` | a command in an isolated environment | its own class |
+| `skill` | fetched by `get_skill`, then followed | the risk of each capability it uses |
 
-A sandbox call naming a session runs in a container that outlives it, so what an earlier command wrote under /tmp is still there. Session containers are named from the tenant and the user, so naming another caller's session reaches a container of one's own instead of theirs.
+`tools.disabled` removes tools by name at registration. The engine refuses to boot when the capabilities section exceeds its budget or the tool schemas take more than half of `agent.prompt_budget_tokens`. It also refuses when the prompt budget plus `agent.prompt_estimate_headroom` and `model.max_tokens_without_thinking` do not fit one `llama-server` slot.
 
-A skill is a saved procedure, not code the model wrote: parameters, an ordered list of steps, and the domain it applies to. `get_skill` fetches one; the model follows it with the capabilities it already has. Skills are reviewed before they are offered, so a skill is never promoted from a trace without a person in the loop.
+`run_sandbox` runs a command in a container with no network, a read-only root, memory, CPU, and process limits, and a non-root user. A call that names a session reuses a container that stays up for `sandbox.session_idle_secs`, so files written under /tmp persist between calls. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session.
+
+A skill is a saved procedure: parameters, ordered steps, and the domain it applies to. `get_skill` fetches one, and the model follows it with the capabilities it already has. Only rows with `enabled` set are offered, and a row starts disabled, so a person reviews each skill before it is offered. With no enabled skill, `get_skill` is not registered.
 
 ## Compaction
 
-History is trimmed to its budget by dropping the oldest turns. When the window fills, the Chat Agent replaces the turns it would have dropped with one compacted turn instead.
+Without compaction, history is trimmed to its budget by dropping the oldest turns. With `compaction.enabled`, the Chat agent replaces the turns that would be dropped with one compacted turn and stores it, so the next request starts from it. At least the newest turn is always kept. A failed compaction falls back to trimming.
 
-A compacted turn is model output. It is stored with its own role so a replayed conversation can tell it from what the user and the assistant actually said, it is never retrieval evidence, and the turns it replaced stay in `messages`. Compaction changes what the next prompt carries, not what happened.
+A compacted turn is model output. It is stored with role `summary`, so a replayed conversation can tell it apart from what the user and the assistant said. It is never retrieval evidence, and the turns it replaced stay in `messages`.
 
 ## Profile graph
 
-Flat memory rows answer what a user said. They do not answer how two facts relate. The profile graph holds entities, the relations between them, and an embedding per node, so recall can start from a relation rather than from similarity alone.
+Flat memory rows record what a user said. The profile graph records entities, the relations between them, and an embedding per node, so recall can start from a relation.
 
-Extraction never runs in the request path. After a turn is appended, the loop hands it to the profile writer and returns, and the writer carries its own context and deadline.
+Extraction never runs in the request path. When a run ends, the loop spawns the profile writer with the user's text and returns. The writer has its own context and a deadline of `profile.timeout_secs`.
 
-The gate is rules, not a model call. It runs on every turn, so a greeting must cost nothing: `FactDetector` looks for a first-person marker next to a stative cue and rejects questions. Only a turn that passes reaches the Graph Agent, which is the prompted sub-agent that extracts. Generic embeddings are not the gate because they encode topic and style rather than whether a sentence is worth keeping, and they place `I like this` and `I do not like this` close together; a trained head could replace the rules through the same trait.
+The gate is rules, not a model call, because it runs on every turn. `RuleDetector` passes a sentence with a first-person marker next to a stative cue and rejects questions and turns shorter than `profile.detector.min_words`. Only a turn that passes reaches the Graph agent. Facts below `profile.min_confidence` or with an empty label are dropped. A trained classifier can replace the rules through the `FactDetector` trait.
 
-A new fact is reconciled against what is already recorded for the same subject and relation before it is written. The reconciler is a prompted sub-agent: it sees the new statement and the ones it might replace, and names the ones the new statement makes false. Two statements that can both be true are both kept, which is the case a fact extractor that strips scope gets wrong. An answer that cannot be read withdraws nothing, since keeping a stale fact is recoverable and removing a true one is not.
+With `profile.reconcile` on, a new fact is checked against facts already recorded for the same subject and relation. The Reconcile agent names the recorded facts the new one makes false, and those are withdrawn. Two facts that can both be true are both kept. An answer that cannot be parsed, or a failed call, withdraws nothing.
 
-Every rule in Memory still holds: recall filters by `tenant_id` and `user_id` before ranking, sensitivity gates what may be written, and users can view and delete. `POST /profile/forget` removes one label or everything a user carries; relations cascade from the node they run through.
-
-## Tool risk classes
-
-| Class | Examples | Behavior |
-|---|---|---|
-| `ReadPublic` | search indexed pages, library hours | run |
-| `ReadAuthenticated` | read a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
-| `PrepareWrite` | draft an announcement, fill a form without submitting | run |
-| `ExternalWrite` | post, create ticket, book, submit | require a `policy.write_roles` role, then confirm immediately before |
-| `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm immediately before |
-| `Forbidden` | another user's session, bypassing policy | deny |
-
-The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above; `policy.confirm_from` names the lowest class held for the caller's approval, so a deployment can hold drafts too while a new tool is being trusted. `Forbidden` is denied whatever the settings say. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
-
-A confirmation is bound to one exact action payload, is single-use and short-lived, states what happens / where / with what data / whether reversible, and is recorded in the trace. If the payload changes, confirm again. External writes are never auto-retried without an idempotency key.
-
-## Hierarchical index
-
-Ingestion clusters the chunks of one source, writes a model summary of each cluster as a new row, embeds it, and recurses, so the index holds both the detail of a page and the shape of it. A summary row lives in `chunks` beside the leaves, distinguished by `level` and pointing at what it covers through `parent_id`.
-
-Retrieval searches every level at once rather than walking down from the root, which is what the RAPTOR paper finds works better: a query lands on whatever granularity answers it. A summary and the chunks it covers can both score well and say the same thing twice, so after fusion a row whose summary already scored higher is dropped. A chunk that outranks its own summary keeps both, since the chunk is the answer and the summary is the context around it.
-
-The tree is off by default. It costs a model call per cluster per level, and a flat index answers a short page.
-
-## Knowledge
-
-Ingestion runs offline in `apps/scraper`. Each document records canonical source, fetch time, content hash, parser/chunker/embedding versions, and its previous version on change.
-
-```mermaid
-flowchart LR
-    SRC["source definition"] --> FETCH["Firecrawl<br/>JS rendered markdown"]
-    FETCH --> HASH{"content hash<br/>changed?"}
-    HASH -->|no| SKIP(["stop · nothing rewritten"])
-    HASH -->|yes| SNAP["raw snapshot to object storage"]
-    SNAP --> CHUNK["extract and chunk<br/>max chars plus overlap"]
-    CHUNK --> TITLE["prefix each chunk<br/>with the page title"]
-    TITLE --> EMB["embed the batch<br/>llama-server · 1024 dims"]
-    EMB --> WRITE["replace chunks<br/>new source_version"]
-    WRITE --> PG[("chunks · tsv generated by Postgres")]
-```
-
-Retrieval happens inside the engine, over the same rows.
-
-```mermaid
-flowchart TD
-    Q["question"] --> EMB["embed · 1024 dims"]
-    EMB --> DIM{"dimension matches<br/>the index?"}
-    DIM -->|no| ERR(["RetrievalError · never a wrong answer"])
-    DIM -->|yes| DENSE["dense · cosine distance<br/>HNSW · 20 candidates"]
-    DIM -->|yes| LEX["lexical · websearch_to_tsquery<br/>GIN · ts_rank_cd · 20 candidates"]
-    DENSE --> RRF["reciprocal rank fusion<br/>k = 60, ranks not scores"]
-    LEX --> RRF
-    RRF --> TOPK["take top_k"]
-    TOPK --> EV["Evidence<br/>title · url · fetched_at · score"]
-```
-
-Both queries filter by tenant and category. Reciprocal rank fusion combines dense and lexical results without comparing their incompatible raw scores. A reranker is deferred until evals justify it.
+Recall filters by `tenant_id` and `user_id` before ranking. Users list and delete what the graph holds with `/memory` and `/forget` (`POST /profile/list`, `POST /profile/forget`). Relations cascade from the node they run through.
 
 ## Memory
 
-| Kind | Content |
-|---|---|
-| Working | current request; not persisted |
-| Conversation | turns and tool results |
-| Episodic | a useful event from a prior interaction |
-| Semantic | a stable inferred fact |
-| Profile | approved preferences, interests, goals |
-| Task | state to continue a multi-step job |
+| Kind | Content | Status |
+|---|---|---|
+| Working | the current request | not persisted |
+| Conversation | turns and tool results | `messages` |
+| Episodic, semantic, profile, task | durable facts about a user | `memories`, read by recall |
+| Profile graph | entities and relations | `profile_nodes`, `profile_edges` |
 
-A candidate is written only if it is useful later, stable, belongs to this user, permitted by its sensitivity class, not a duplicate, and has an expiry. Recall filters by `tenant_id` and `user_id` before ranking; the interface cannot express a cross-user query. A public request recalls no memory and no profile graph unless `agent.recall_in_public` is set; only an answer no one else can read is private. Users view and delete what the profile graph holds with `/memory` and `/forget` (`POST /profile/list`, `POST /profile/forget`). Conflicting memories keep provenance and timestamps; newer and higher-confidence wins at assembly time, nothing is silently rewritten.
+The engine recalls `memories` rows, unexpired and ordered newest and most confident first, and appends profile graph nodes and relations. It does not write `memories` rows yet. The schema carries `sensitivity`, `confidence`, `source_msg`, and `expires_at` for when it does.
+
+A public request recalls no memory and no profile graph unless `agent.recall_in_public` is set. Only an answer no one else can read is private. A public answer never lists the memories its prompt carried.
+
+## Tool risk classes
+
+| Class | Examples | Default behavior |
+|---|---|---|
+| `ReadPublic` | `search_<source>`, `get_skill` | run |
+| `ReadAuthenticated` | a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
+| `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
+| `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
+| `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm |
+| `Forbidden` | another user's session, bypassing policy | deny |
+
+The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above. `policy.confirm_from` names the lowest class held for approval, so a deployment can hold drafts too while a new tool is being trusted. `Forbidden` is denied regardless of settings. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
+
+A confirmation is bound to a hash of the exact arguments, belongs to the caller who was asked, is single use, and expires after `agent.confirmation_ttl_secs`. Its summary names the tool, the arguments, and whether the action can be undone. The policy decision is recorded in the trace.
+
+## Knowledge
+
+The retrieval index is `chunks`, written by the scraper and read by the engine. Two kinds of job write it: a scheduled run of a registered source, and the indexing of a page a live query fetched. Both go through the same pipeline in `ingest/pipeline.py`.
+
+```mermaid
+flowchart TD
+    RUN["source_run job<br/>a registered source fell due"] --> FETCH["fetch<br/>Firecrawl, or httpx when scraper.fetcher is http"]
+    LIVE["live_index job<br/>text a live query already fetched"] --> PAGE["pick the source row<br/>scheduled source with that URL,<br/>or query key plus URL digest"]
+    FETCH --> HASH{"content hash equals<br/>the latest version?"}
+    PAGE --> HASH
+    HASH -->|yes| SKIP(["unchanged, nothing written"])
+    HASH -->|no| SNAP["raw snapshot to object storage"]
+    SNAP --> EXTRACT["extract text<br/>source extractor or shared heuristic"]
+    EXTRACT --> CHUNK["chunk<br/>scraper.chunk_chars with overlap"]
+    CHUNK --> FLOOR{"text above the quality floor<br/>of the last version?"}
+    FLOOR -->|no| REFUSE(["PipelineError, old index kept"])
+    FLOOR -->|yes| EMBED["prefix the page title<br/>embed the batch, 1024 dims"]
+    EMBED --> WRITE["insert source_versions row<br/>replace the source's chunks"]
+    WRITE --> TREE{"scraper.tree_enabled?"}
+    TREE -->|no| DONE(["committed"])
+    TREE -->|yes| SUM["cluster, summarize, embed<br/>summary rows by level"]
+    SUM --> DONE
+```
+
+Each version records content hash, snapshot key, parser, chunker and embedding versions, text length, chunk count, and the previous version. The quality floor refuses a run whose text is under `scraper.quality_floor_ratio` of the last version, once that version had at least `scraper.quality_floor_min_chars`. An extractor break that returns only navigation is caught this way. `scraper run <source> --force` accepts such a run.
+
+Retrieval runs in the engine before the first model call, over the same rows.
+
+```mermaid
+flowchart TD
+    Q["question"] --> EMB["embed"]
+    EMB --> DIM{"dimension matches<br/>the index?"}
+    DIM -->|no| ERR(["RetrievalError"])
+    DIM -->|yes| DENSE["dense leg<br/>cosine distance, HNSW"]
+    DIM -->|yes| LEX["lexical leg<br/>websearch_to_tsquery, ts_rank_cd, GIN"]
+    DENSE --> RRF["reciprocal rank fusion<br/>retrieval.rrf_k"]
+    LEX --> RRF
+    RRF --> MIN["drop below retrieval.min_score"]
+    MIN --> TREE["drop a row whose summary<br/>ranked higher"]
+    TREE --> TOPK["top retrieval.top_k"]
+    TOPK --> EV["Evidence"]
+```
+
+Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. Fusion combines ranks, not the legs' incompatible raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
+
+### Hierarchical index
+
+With `scraper.tree_enabled`, ingestion clusters the chunks of one source, writes a model summary of each cluster as a new row, embeds it, and repeats up to `scraper.tree_max_level`. A summary row lives in `chunks` beside the leaves, with a `level` above 0, and each leaf points at its summary through `parent_id`. The summaries use the `[summary]` model on the chat server.
+
+Retrieval searches every level at once, so a query lands on whatever granularity answers it (the RAPTOR collapsed-tree approach). After fusion, a row whose summary already ranked higher is dropped. A chunk that outranks its own summary keeps both.
+
+The tree is off by default. It costs a model call per cluster per level.
+
+## Live source queries
+
+Scheduled ingestion keeps the index current on an interval. A live query answers from a source now, with parameters the model picks: a term, subject and level of the class catalog, a scholarship search filtered by the student's situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, a web search, or a refetch of this week's library hours.
+
+The engine offers one tool per source, named `search_<source>`. The tool description tells the model what the source answers. The prompt tells it to use the evidence first and to call a search tool when the evidence does not answer.
+
+```mermaid
+sequenceDiagram
+    participant M as model
+    participant T as engine search tool
+    participant PG as PostgreSQL jobs
+    participant L as scraper live lane
+    participant BG as scraper background lane
+    participant W as source site or SearXNG
+
+    M->>T: search_courses with arguments
+    T->>T: check and normalize arguments
+    T->>PG: insert source_query, priority 0, deadline
+    T->>PG: pg_notify source_query
+    PG-->>L: notification wakes the lane
+    L->>PG: claim with for update skip locked
+    L->>W: fetch the page or read the endpoints
+    L->>PG: mark done with result, queue live_index at -10, one commit
+    T->>PG: poll status every query.poll_ms
+    PG-->>T: done, result text
+    T-->>M: live result text and citation
+    BG->>PG: claim live_index
+    BG->>BG: index the page through the pipeline
+    BG->>PG: write chunks
+    Note over T,PG: unclaimed after query.claim_secs, the job is cancelled and the tool reports the scraper is not running
+```
+
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the description, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. Arguments are checked and normalized there, so a bad call is corrected by the model without queueing a job. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
+
+`query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine registers every tool in its catalog and logs a warning when a tool and the published source disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks the parameters of every query again before it runs it.
+
+Any scraper failure (unknown source, missing parameter, unreadable page, an exception) marks the job failed. The tool returns the reason as `InvalidArguments`, which the loop feeds to the model. A caller that is cancelled or runs out of time cancels its job. The text handed back is held to `scraper.query_max_chars`, and the page is cited in `Answer.sources`.
+
+`search_web` uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
+
+Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login) and anything behind a student login, such as Workday jobs.
+
+### Indexing live results
+
+A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.
+
+A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
+
+## Job queue
+
+The scraper does all its work from the `jobs` table in one process, `scraper serve` (`apps/scraper/jobs.py`).
+
+| kind | queued by | priority | lane |
+|---|---|---|---|
+| `source_query` | the engine, for a `search_<source>` call | 0 | live |
+| `live_index` | the scraper, with the answer to a `source_query` | -10 | background |
+| `source_run` | the scraper, when a registered source falls due | -20 | background |
+
+A claim takes the highest priority first, then the oldest, skipping jobs past their deadline, with `for update skip locked`, so several lanes and processes can claim at once. The live lane claims only `source_query` and wakes on the engine's `pg_notify`. The background lane claims the other kinds, so a long scrape never delays a live query. Both lanes also poll every `scraper.serve_poll_secs`.
+
+Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for each registered source that is due by its `fetch_every` and last attempt. A partial unique index allows at most one queued or running `source_run` per source. The same pass requeues background jobs left running longer than `scraper.job_lease_secs` by a stopped process.
+
+`scraper status` shows each source and the queue by kind and status. `scraper run <source>` runs one source directly, outside the queue.
 
 ## Discord surface
 
 | Entry | Where the answer goes | Visibility |
 |---|---|---|
 | `/ask` in a text channel | a thread opened from the question | public |
-| @mention in a text channel | a thread opened from the message | public |
-| `/ask` or @mention in a thread | that thread | public |
+| mention in a text channel | a thread opened from the message, or inline if the thread cannot be made | public |
+| `/ask` or mention in a thread | that thread | public |
 | `/ask private:true` | an ephemeral reply | private |
 
-A turn is one message, edited in place: it opens as a spinner line, gains one line per progress event, and ends with the answer. A progress line that carries a `slot` writes over the line of that slot, so a tool result lands where its own start line was, carrying the arguments and a trimmed result. The model's own reasoning is shown as a thought on that same line, and a step that reasoned nothing worth showing takes its thinking line back. Under the answer sit the memories that went into the prompt (`ChatResponse.memories`) and any source with no page of its own; every other source is a link button. An approval puts buttons on that message, and the resumed answer is appended to it. A second message carries only answer text past the Discord length limit.
+A turn is one message, edited in place. It opens with a spinner header and gains one line per progress event. The engine writes the text of each line; the bot renders it and never keeps its own copy of the event enum. A line that carries a `slot` writes over the earlier line in that slot, so a tool result replaces its own start line. A `clear` event removes a line. A `draft` event sets or withdraws the answer shown under the steps. Edits are paced to one per `bot.edit_every_ms`, and a change inside the gap waits for the next edit.
 
-A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state; `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`.
+The finished card shows the steps (the oldest fold into a count when space runs out), the answer, the memories the prompt carried (`ChatResponse.memories`), and sources without a URL. Sources with a URL are link buttons. Only an answer that still does not fit spills into further messages. An approval adds buttons to the card, and the resumed answer replaces the prompt on the same card.
+
+A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state. `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`.
 
 ## Storage
 
 | Data | Store |
 |---|---|
-| users, roles, conversations, messages, memories, source metadata and versions, jobs, confirmations | PostgreSQL (source of truth) |
-| chunk embeddings with `source_id`, `version`, `category`, `fetched_at` | pgvector, same PostgreSQL (rebuildable) |
-| raw snapshots, model artifacts | object storage |
-| session secrets | encrypted, separate namespace |
-| local traces, console logs, training outputs | `.sparky/` (ignored) |
+| users, conversations, messages, memories, profile graph, confirmations, skills | PostgreSQL |
+| sources, source versions, query source registry, jobs | PostgreSQL |
+| chunk text, `vector(1024)` embedding, generated `tsvector` | PostgreSQL with pgvector, rebuildable from snapshots |
+| raw page snapshots | object storage |
+| local traces, console logs, training data | `.sparky/`, ignored |
 
 ```mermaid
 erDiagram
-    users ||--o{ conversations : "opens"
-    conversations ||--o{ messages : "contains"
-    users ||--o{ memories : "owns"
-    messages ||--o| memories : "sources"
-    users ||--o{ confirmations : "approves"
+    users ||--o{ conversations : opens
+    conversations ||--o{ messages : contains
+    users ||--o{ memories : owns
+    messages ||--o| memories : sources
+    users ||--o{ confirmations : approves
+    users ||--o{ profile_nodes : describes
+    profile_nodes ||--o{ profile_edges : relates
     sources ||--o{ source_versions : "versioned by"
     sources ||--o{ chunks : "chunked into"
-    source_versions ||--o{ chunks : "produced"
+    source_versions ||--o{ chunks : produced
+    chunks ||--o{ chunks : summarizes
 ```
 
-Each `chunks` row contains a `vector(1024)` embedding and a generated `tsvector`. HNSW, GIN, and tenant/category/fetch-time indexes serve retrieval. Redis is provisioned but unused until multiple engine replicas require shared ephemeral state.
-
-## Background jobs
-
-Discord handlers never block on long work. Ingestion, embedding, reminders, evals, and trace processing run as jobs with id, owner, type, status, input ref, attempts, deadline, cancel state, result ref, and error category.
+`jobs`, `query_sources`, and `skills` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis is provisioned but unused until multiple engine replicas need shared ephemeral state.
 
 ## Failure behavior
 
 | Failure | Response |
 |---|---|
-| model unavailable | retry within deadline, then clear error |
-| invalid tool call from model | one correction, then stop |
-| model repeats an identical tool call | refuse the repeat, next step offers no tools; stop as `Stalled` if it repeats again |
-| prompt would exceed the context | tool schemas count against the budget; evidence and history are trimmed first |
-| tool timeout | cancel, trace, report |
-| retrieval empty | say so; do not guess |
-| sources conflict | show both with dates |
-| confirmation denied or expired | do nothing |
-| write result unclear | do not retry; inspect final state |
-| Postgres unavailable | reject stateful requests rather than run without identity or policy |
-| trace sink unavailable | continue only with a bounded local fallback |
+| model returns a retryable error | retry with backoff up to `agent.max_model_retries` within the deadline, then 502 |
+| all model slots busy past `agent.model_queue_wait_secs` | 503, which the bot reports as temporary |
+| model call outlives the request deadline | run ends as `Deadline` |
+| tool argument error or scraper refusal | the reason becomes the tool result and the model corrects the call |
+| tool timeout | `ToolError::Timeout` fed back as the tool result |
+| scraper not running | unclaimed job cancelled after `query.claim_secs`, the tool says so |
+| model repeats an identical tool call | repeat refused, next step offers no tools, `Stalled` if it repeats again |
+| thinking spends the whole completion | the call is made again without thinking |
+| prompt would exceed the budget | evidence and history are trimmed, the boot checks keep tool schemas under half |
+| retrieval returns nothing | the prompt tells the model to search or say it does not know |
+| guardrail blocks a response | run ends as `Blocked` with `guardrail.replacement` |
+| confirmation denied, expired, or answered by someone else | nothing runs |
+| PostgreSQL unavailable | the engine does not boot, and a request that needs a store gets 503 |
+| JSONL trace over `trace.max_file_bytes` | later events for that request are dropped |
 
 ## Tracing
 
-One trace per request covering every model call, retrieval, memory access, tool call, policy decision, confirmation, and error.
+Every request produces one trace covering model calls, retrieval, memory recall, tool calls, policy decisions, guardrail blocks, and the outcome. The live pieces of a streaming call (reasoning so far, answer drafts, a withdrawn draft) go only to the watcher. The recorded trace keeps the finished call.
 
 ```mermaid
 flowchart TD
-    A["discord.ask<br/>bot · $ai_session_id = conversation"] --> B["http.chat<br/>engine · joined by traceparent"]
-    B --> C["agent.run · invoke_agent"]
+    A["discord.ask<br/>bot"] --> B["http.chat<br/>engine, parented by traceparent"]
+    B --> C["agent.run<br/>invoke_agent"]
     C --> D["retrieve<br/>chunks returned"]
-    C --> E["llm · chat<br/>$ai_generation: full prompt and reply"]
-    C --> F["tool · execute_tool<br/>redacted args and result"]
-    E -.->|one generation is one training example| G["apps/training · data export"]
+    C --> E["llm<br/>full prompt and reply, thinking"]
+    C --> F["tool<br/>redacted arguments and result"]
+    F --> G["scrape.query<br/>scraper, separate trace"]
+    E -.->|"one llm span, one training example"| H["apps/training data export"]
 ```
 
-Two forms of it:
+Traces go to three places:
 
-- **JSONL** (`.sparky/traces/<request_id>.jsonl`): complete local replay records.
-- **PostHog spans**: cross-process traces joined with W3C `traceparent`, exported over OTLP/HTTP to the traces path, and to the AI path when `telemetry.ai_path` is set. Spans carry `gen_ai.*` attributes; each model call becomes an `$ai_generation` with the prompt, reply, model, and usage, tied to the user (`posthog.distinct_id`) and the conversation (`$ai_session_id`). Training export reads these. Retrieval, tool, policy, and scraper spans carry their structured results.
-- **Phoenix spans**: the same spans, exported to `telemetry.phoenix_url` plus `/v1/traces` with no authentication, read as a trace tree of one conversation. They carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those. Each destination is independent: either can be off.
+- JSONL at `.sparky/traces/<request_id>.jsonl`: the complete local record of trace events.
+- PostHog: spans exported over OTLP/HTTP to `telemetry.traces_path`. They carry `gen_ai.*` attributes, `posthog.distinct_id` for the user, and `$ai_session_id` for the conversation. `apps/training` reads `llm` spans from `posthog.trace_spans` to build datasets. `telemetry.ai_path` is empty by default because the self-hosted capture-ai service does not accept OTLP. Set it against PostHog Cloud.
+- Phoenix: the same spans exported to `telemetry.phoenix_url` plus `/v1/traces`, without authentication, and read as a tree per conversation. Spans carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI reads those.
 
-Secrets, credentials, cookies, and sensitive form values are excluded from both forms. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`; deployments keep stdout with the platform log driver.
+Each destination is independent: an empty project token turns PostHog off, and an empty `phoenix_url` turns Phoenix off. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot also sends product events to PostHog through a bounded queue (`[analytics]`). The local PostHog stack runs only the services traces, events, and the UI need.
+
+Secrets, credentials, cookies, and sensitive form values are redacted from tool arguments and results before they reach any trace. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`. Deployments keep stdout with the platform log driver.
 
 ## Metrics
 
-`llama-server` runs with `--metrics` and exports Prometheus format on its own port. Prometheus scrapes it; Grafana reads Prometheus. Both are opt-in (`just metrics`) and bind to loopback.
+`llama-server` runs with `--metrics` and exports Prometheus format on its own port. Prometheus scrapes it and Grafana reads Prometheus. Both are opt-in (`just metrics`) and bind to loopback.
 
 ```mermaid
 flowchart LR
-    subgraph inference["llama-server"]
+    subgraph inference ["llama-server"]
         CH["chat :8000/metrics"]
         EM["embed :8001/metrics"]
     end
-    GX["gpu-exporter :9835<br/>nvidia-smi · gpu-metrics profile"]
-    CH --> P[("prometheus :9090<br/>15s scrape · 15d retention")]
+    GX["gpu-exporter :9835<br/>nvidia-smi, gpu-metrics profile"]
+    CH --> P[("prometheus :9090<br/>15s scrape, 15d retention")]
     EM --> P
     GX --> P
-    P --> G["grafana :3000<br/>SparkyAI inference<br/>throughput · queue · batching"]
-    EN["engine"] -->|OTLP traces| PX["posthog :8010<br/>prompt · reply · tokens · latency"]
-    EN -->|HTTP inference| CH
+    P --> G["grafana :3000<br/>throughput, queue, batching"]
+    EN["engine"] -->|"inference"| CH
+    EN -->|"OTLP spans"| PX["posthog :8010<br/>prompt, reply, tokens, latency"]
 ```
 
-PostHog holds spans and events, Prometheus holds time series. A slow request reads as the `llm` generation's latency in PostHog against `llamacpp:requests_deferred` in Grafana for the same minute.
-
-Dashboard panels and the metric names behind them: `deploy/README.md`.
+PostHog holds spans and events. Prometheus holds time series. A slow request shows as the `llm` span's latency in PostHog and as `llamacpp:requests_deferred` in Grafana for the same minute. Dashboard panels and their metric names are in `deploy/README.md`.
 
 ## Authenticated tasks (Phase 8)
 
-No mechanism. The browser MCP server that Phase 8 assumed is gone: no browser, no Playwright MCP, nothing that drives a page. Whatever replaces it is a new design. The rules it has to meet stand: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
-
-## Live source queries
-
-Two ways to answer a question about an ASU page. The index the scraper wrote on a schedule is retrieved before the first model call and handed to the model as evidence; the model has no tool over it. When that evidence does not answer, the model calls the `search_<source>` tool for the topic, which runs that source **now** with the parameters it supplies: a term, subject and level of the class catalog, a scholarship search filtered by the student's own situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, or a plain refetch of this week's library hours.
-
-The engine never fetches that page. The scraper owns fetching, and the two meet in the database, so a query is a `jobs` row:
-
-```
-model ──► search_<source>(params)
-engine ──► insert jobs(kind='source_query', input, deadline) ──► poll
-scraper worker ──► claim (for update skip locked) ──► fetch ──► result | error
-engine ──► reads the row, hands the text back to the model
-```
-
-A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, is the tool: its description, the parameters the model may pass and what each accepts (text, one or any of fixed choices, a date, a flag), and any check beyond those. Arguments are checked and normalized there, so a bad call is corrected by the model without queueing a job. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker API, the campus map layers, news and video feeds).
-
-`query_sources` is the registry: key and the parameters the worker accepts, with their choices. `just worker` publishes it on start. At boot the engine registers the tool of every source the worker serves and refuses to boot when a tool and the worker disagree on a parameter name, whether it is required, whether it takes a list, or a choice. Adding a source is a file on each side and an entry in each catalog. Every source adds a schema to every request, so the engine refuses to boot when the schemas take over half of `agent.prompt_budget_tokens` or the capabilities section overflows its budget. An empty registry means no search tools, rather than tools advertising sources that do not exist.
-
-Not covered: X and Instagram posts (the public X timeline endpoint serves posts years old, Instagram requires a login) and anything behind a student login, such as Workday jobs. A live page the model read is cited with the answer beside the evidence (`Answer.sources`).
-
-A worker refusal (unknown source, missing parameter, unreadable page) comes back as `InvalidArguments`, which the loop feeds to the model to correct, not as a failed run. **Nothing a live query returns is written to `chunks`.** It answers one caller; the index is the scraper's alone.
+Not built. The browser MCP server that Phase 8 assumed is gone, and nothing drives a page. Whatever replaces it needs a new design that meets these rules: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
 
 ## Configuration
 
-Two layers, lowest first: `sparky.toml` and `SPARKY_<SECTION>__<KEY>` environment variables, which win. `sparky.toml` is committed and holds every tunable value, so a change to the retrieval fusion or a prompt budget is reviewed like code. `.env` is not committed and holds only secrets, per-machine URLs, and what docker compose and the justfile read. Both images bake `sparky.toml` in; compose overrides the service URLs through the environment.
+Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environment variables, which win. `sparky.toml` is committed and holds every tunable value, so a change to retrieval fusion or a prompt budget is reviewed like code. `.env` is not committed and holds only secrets, per-machine URLs, and what docker compose and the justfile read. Both images copy `sparky.toml` in, and compose overrides the service URLs through the environment.
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
 
-Sections: `app`, `engine`, `discord`, `model` (with `model.sampling`), `postgres`, `embedding`, `telemetry`, `agent`, `prompt`, `policy`, `retrieval`, `tools`, `query`, `trace`, `http`, `mcp`, and `bot` for the Discord binary. A default belongs to exactly one settings struct: the adapters build themselves from those and declare none of their own, so a changed setting cannot leave a stale copy behind. The engine validates at boot and refuses to start on a combination it cannot serve: both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers sharing a name, a text search configuration that is not a plain identifier, or a `prompt.system_file` it cannot read. Nothing is silently clamped.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query`, `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
 
-`prompt` holds the wording the harness writes around every section, `system_file` included. Changing any of it changes the prompt hash, so a trace says which wording produced an answer.
+A default belongs to exactly one settings struct. Adapters build themselves from those structs and declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. A `prompt.system_file` that cannot be read also stops the boot. Nothing is clamped at runtime.
+
+`prompt` holds the wording the harness writes around every section. `system_file` takes precedence over `system`, which takes precedence over the built-in prompt.
 
 ## Deployment
 
-Two images: `sparkyai-rust` (`engine` and `discord`; entrypoint selects) and `sparkyai-scraper`. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose; `llama-server` runs from `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details: `deploy/README.md`.
+Two images: `sparkyai-rust` (engine and discord, selected by entrypoint) and `sparkyai-scraper` (runs `serve`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose. `llama-server` runs as the compose services `chat` and `embed` under the `model` profile, configured in `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details are in `deploy/README.md`.
 
 ## Open decisions
 
-Chat model size and quantization · whether a reranker earns its place once the eval set exists · parallel slots per llama-server under load · default `chars_per_token` once the tokenizer is measured · queue implementation · memory retention periods · moderator access to user conversations and traces · MCP servers in-process vs child process vs remote · app server host.
+- Chat model size and quantization.
+- Whether a reranker earns its place once the eval set exists.
+- Parallel slots per `llama-server` under load.
+- Default `chars_per_token` once the tokenizer is measured.
+- Retention periods for memories and traces.
+- Moderator access to user conversations and traces.
+- App server host.
 
 Record each in the commit that settles it.

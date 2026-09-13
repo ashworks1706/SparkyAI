@@ -1,5 +1,16 @@
 //! Server-sent event framing for the engine /chat/stream endpoint.
 
+/// Takes the bytes of every complete frame out of pending as text, leaving a partial frame
+/// behind. A frame ends at a blank line, so a character split across network chunks is decoded
+/// only once all of its bytes have arrived.
+pub fn take_complete(pending: &mut Vec<u8>) -> String {
+    let Some(end) = pending.windows(2).rposition(|pair| pair == b"\n\n") else {
+        return String::new();
+    };
+    let complete: Vec<u8> = pending.drain(..end + 2).collect();
+    String::from_utf8_lossy(&complete).into_owned()
+}
+
 /// Pulls every complete event and data frame out of buf, leaving any partial tail behind.
 ///
 /// Returns (event name, data) pairs in arrival order. A frame with no event line reports an

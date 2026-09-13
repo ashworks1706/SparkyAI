@@ -59,9 +59,9 @@ One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata`
 just posthog       # fetch pinned upstream files into .sparky/posthog, then start the posthog profile
 ```
 
-The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` (28 containers; session replay, error tracking, screenshots, and live events are left out). It wants about 16 GB of memory. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config, Kafka topics, Temporal and livestream config) and downloads GeoIP into `.sparky/posthog/share`; set `SPARKY_POSTHOG_DIR` to an absolute path to keep them elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
+The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` and cut to what Sparky sends: 17 containers for OTLP traces, product events, and the UI and query API that read them. Session replay, error tracking, screenshots, live events, feature flags, surveys, CDP destinations and webhooks, batch exports (Temporal and Elasticsearch), logs, property definitions, and the LLM analytics capture service are left out, so those pages of the UI do not work. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config and Kafka topics); set `SPARKY_POSTHOG_DIR` to an absolute path to keep it elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
 
-The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces), `/batch/` (events); `/i/v0/ai/otel` takes PostHog's own payload rather than OTLP here, so `telemetry.ai_path` is empty. The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
+The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces) and `/batch/` (events). There is no LLM analytics capture service, so `telemetry.ai_path` stays empty locally; set it only against PostHog Cloud. The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
 
 First run:
 

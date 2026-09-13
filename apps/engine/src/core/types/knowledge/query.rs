@@ -1,11 +1,12 @@
 //! QuerySourceInfo, QueryRequest, QueryOutcome: live parameterized source queries.
 //!
 //! A query source is an ASU site the scraper fetches on demand with parameters the model
-//! supplies. What comes back answers one caller and is never retrieval evidence.
+//! supplies. What comes back answers its caller; the scraper then indexes the page for sources
+//! that allow it.
 
 use serde::{Deserialize, Serialize};
 
-/// One parameter a query source accepts, as the scraper worker published it.
+/// One parameter a query source accepts, as the scraper published it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryParam {
     /// Parameter name.
@@ -13,7 +14,7 @@ pub struct QueryParam {
     /// Whether the query fails without it.
     #[serde(default)]
     pub required: bool,
-    /// The only values the worker accepts, compared without case. Empty accepts any text.
+    /// The only values the scraper accepts, compared without case. Empty accepts any text.
     #[serde(default)]
     pub choices: Vec<String>,
     /// Whether a comma-separated list of choices is accepted.
@@ -21,7 +22,7 @@ pub struct QueryParam {
     pub many: bool,
 }
 
-/// A query source the scraper worker serves, read from the registry it publishes.
+/// A query source the scraper serves, read from the registry it publishes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuerySourceInfo {
     /// Registry key.
@@ -56,12 +57,17 @@ pub enum QueryError {
     /// The queue could not be reached.
     #[error("query queue: {0}")]
     Store(String),
-    /// The worker rejected it: an unknown source, a missing parameter, an unreadable page.
+    /// The scraper rejected it: an unknown source, a missing parameter, an unreadable page.
     /// The reason goes back to the model.
     #[error("{0}")]
     Rejected(String),
-    /// No worker answered inside the budget.
-    #[error("no source worker answered within {0:?}; is `just worker` running?")]
+    /// The scraper did not claim the query in time, so it is not running.
+    #[error(
+        "the scraper is not running, so {0} cannot be fetched now; start it with just scraper serve"
+    )]
+    NoWorker(String),
+    /// The scraper did not answer inside the budget.
+    #[error("the scraper did not answer within {0:?}")]
     Timeout(std::time::Duration),
     /// The request ended before the query did.
     #[error("query cancelled")]

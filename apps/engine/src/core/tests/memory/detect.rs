@@ -25,9 +25,7 @@ fn a_stated_preference_passes_the_gate() {
 
 #[test]
 fn a_negated_preference_still_passes() {
-    // This is why the gate is rules. Generic embeddings place I like this and I do not like
-    // this close together, so a cosine gate cannot tell them apart. Polarity is extraction's
-    // problem, and it only gets the chance if the gate lets the turn through.
+    // A negated first person statement passes the gate.
     let d = detector();
     assert!(d.carries_fact("I do not like studying in the library"));
     assert!(d.carries_fact("I never work on weekends"));
@@ -57,9 +55,28 @@ fn small_talk_and_questions_cost_nothing() {
 
 #[test]
 fn a_question_about_oneself_is_still_a_question() {
-    // I am asking, not stating. A question ends in a question mark whatever else it carries.
+    // A sentence ending in a question mark is a question.
     let d = detector();
     assert!(!d.carries_fact("What classes should I take as a computer science major?"));
+}
+
+#[test]
+fn a_statement_followed_by_a_question_still_passes() {
+    // A statement before a question passes; questions alone do not.
+    let d = detector();
+    assert!(d.carries_fact(
+        "I am a computer science major at ASU and I really love robotics. Why should I join a club?"
+    ));
+    assert!(d.carries_fact("Which dining hall is closest? I live in Manzanita"));
+    assert!(!d.carries_fact("Is there a robotics club? Does it meet on Fridays?"));
+}
+
+#[test]
+fn a_first_person_marker_has_to_start_a_word() {
+    // The i at the end of ai is not the asker.
+    let d = detector();
+    assert!(!d.carries_fact("The ai club members love robotics and meet weekly"));
+    assert!(!d.carries_fact("Is the ai club open? The robotics club members like Thursdays"));
 }
 
 #[test]
@@ -71,7 +88,7 @@ fn a_sentence_with_no_first_person_subject_is_not_about_the_asker() {
 
 #[test]
 fn a_marker_inside_another_word_does_not_count() {
-    // Without word boundaries, imagine and limited would both look like a first person I.
+    // Imagine and limited do not match a first person I.
     let d = detector();
     assert!(!d.carries_fact("Imagine the library was always open"));
     assert!(!d.carries_fact("Financial aid is limited this year"));

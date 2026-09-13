@@ -25,11 +25,11 @@ def _toml_files() -> tuple[Path, ...]:
 
 class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
-    # The engine rejects every /chat call without this. See apps/engine routes::chat::authorized.
+    # Bearer token the engine /chat route requires.
     engine_service_token: SecretStr = SecretStr("")
     posthog_host: str = "http://localhost:8010"
     posthog_project_id: str = ""
-    # Personal API key with Query Read; the HogQL query API rejects project tokens.
+    # Personal API key with the Query Read scope. A project token is rejected.
     posthog_api_key: SecretStr = SecretStr("")
     posthog_page_rows: int = 5000
     state_dir: Path = Path("../../.sparky")

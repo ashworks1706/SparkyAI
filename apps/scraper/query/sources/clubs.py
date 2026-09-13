@@ -25,4 +25,5 @@ QUERY = QuerySource(
     ),
     to_url=to_url,
     extractor=form_page_text,
+    category="clubs",
 )

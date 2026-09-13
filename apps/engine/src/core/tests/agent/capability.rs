@@ -46,7 +46,7 @@ fn every_offered_tool_becomes_one_line_naming_its_kind() {
 
 #[test]
 fn a_capability_that_needs_approval_says_so() {
-    // The model choosing a write tool without knowing it will stop for approval wastes a step.
+    // A write tool is listed as needing approval; a read tool is not.
     let caps = from_definitions(&[definition("post", RiskClass::ExternalWrite)], &[]);
     assert!(render(&caps).contains("needs the user to approve"));
 
@@ -56,7 +56,7 @@ fn a_capability_that_needs_approval_says_so() {
 
 #[test]
 fn nothing_offered_writes_no_section() {
-    // A heading with nothing under it spends budget and tells the model nothing.
+    // No capabilities render as an empty string.
     assert!(render(&[]).is_empty());
 }
 
@@ -88,7 +88,7 @@ fn the_section_reaches_the_prompt_and_is_capped_by_its_budget() {
     let joined: String = out.messages.iter().map(|m| m.content.clone()).collect();
     assert!(joined.contains("search_library_hours (tool)"), "{joined}");
 
-    // A section that does not fit is left out whole rather than truncated into a half list.
+    // A section that does not fit is left out whole.
     let tight = assemble(
         &ctx(),
         &Sections {

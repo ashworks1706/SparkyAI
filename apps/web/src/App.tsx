@@ -18,7 +18,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/old" element={<Legacy />} />
-            <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

@@ -19,9 +19,7 @@ fn ctx() -> RequestContext {
 fn every_flag_that_seals_the_container_is_passed_once_with_its_value() {
     let args = ContainerSandbox::new(Limits::default()).args();
 
-    // Each of these is the difference between a sandbox and a shell on the host. Checking the
-    // joined string for a substring is not enough: a flag repeated by accident still contains
-    // the pair, and docker then reads the value as the image name.
+    // Each sealing flag appears exactly once, followed by its value.
     for (flag, value) in [
         ("--network", Some("none")),
         ("--read-only", None),
@@ -78,7 +76,7 @@ async fn an_empty_command_is_refused_before_a_container_starts() {
             },
         )
         .await;
-    // The runtime does not exist, so reaching it would be a Runtime error instead.
+    // The runtime does not exist; a Refused error shows it was never reached.
     assert!(matches!(out, Err(SandboxError::Refused(_))), "{out:?}");
 }
 
@@ -256,7 +254,7 @@ async fn a_real_container_computes_and_stays_sealed() {
     assert_eq!(out.exit_code, 0);
     assert_eq!(out.stdout.trim(), "1337");
 
-    // The seal is the reason this tool is allowed to exist at all.
+    // The container has no network.
     let Ok(net) = s
         .run(
             &ctx,

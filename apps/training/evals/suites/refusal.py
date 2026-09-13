@@ -16,10 +16,9 @@ _DECLINE = re.compile(
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     last = turns[-1]
     declined = bool(_DECLINE.search(last.text))
-    guessed = bool(last.citations) and not declined
     if case.expect.refuse:
         return Score(
-            passed=declined and not guessed,
+            passed=declined,
             detail="declined" if declined else f"did not decline: {last.text[:80]!r}",
         )
     return Score(passed=not declined, detail="answered" if not declined else "declined wrongly")

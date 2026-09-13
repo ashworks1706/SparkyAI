@@ -9,7 +9,7 @@ from scraper.core.types import Job, QueryError
 from scraper.ingest.extract import extract_text
 from scraper.query.params import term_code
 from scraper.query.registry import QUERY_SOURCES, url_for
-from scraper.query.worker import run_job
+from scraper.query.run import run_job
 
 
 def test_term_codes_are_derived_rather_than_tabulated():
@@ -41,6 +41,7 @@ def test_every_live_source_is_registered_under_its_own_key():
         "campus_map",
         "social_media",
         "jobs",
+        "web",
     }
 
 
@@ -113,6 +114,12 @@ def test_keyword_searches_encode_the_keyword():
     )
     assert "searchText=career+fair" in url_for(QUERY_SOURCES["events"], {"keywords": "career fair"})
     assert "search=robotics" in url_for(QUERY_SOURCES["news"], {"keywords": "robotics"})
+    assert url_for(QUERY_SOURCES["news"], {}) == "https://news.asu.edu/", (
+        "no topic is the front page"
+    )
+    assert (
+        url_for(QUERY_SOURCES["news"], {"keywords": "Latest ASU news"}) == "https://news.asu.edu/"
+    )
     catalog = url_for(
         QUERY_SOURCES["library_catalog"], {"keywords": "deep learning", "type": "books"}
     )
@@ -247,3 +254,37 @@ def test_channel_posts_carry_date_title_link_and_are_narrowed_by_keyword():
         "Sat Sep 12, 2026 | Football intro | https://y/1 | Season opener"
     ]
     assert len(posts_of(feed, "")) == 2
+
+
+def test_web_results_are_listed_once_each_with_title_link_date_and_snippet():
+    from scraper.query.sources.web import render
+
+    found = {
+        "answers": [{"answer": "ASU beat Morgan State 70-7."}],
+        "results": [
+            {
+                "url": "https://thesundevils.com/sports/football/schedule",
+                "title": "2026 Football Schedule",
+                "content": "<b>Sun Devil</b> football &amp; more",
+                "publishedDate": "2026-09-05T00:00:00",
+            },
+            {"url": "https://thesundevils.com/sports/football/schedule", "title": "duplicate"},
+            {"url": "https://espn.com/asu", "title": "ESPN", "content": ""},
+        ],
+    }
+    out = render("asu football", found, limit=8, snippet_chars=300)
+    assert out.splitlines()[1] == "Answer: ASU beat Morgan State 70-7."
+    assert (
+        "1. 2026 Football Schedule | https://thesundevils.com/sports/football/schedule | 2026-09-05"
+        in out
+    )
+    assert "Sun Devil football & more" in out
+    assert "duplicate" not in out
+    assert "2. ESPN | https://espn.com/asu" in out
+
+
+def test_a_web_search_with_no_results_says_which_engines_did_not_answer():
+    from scraper.query.sources.web import render
+
+    with pytest.raises(QueryError, match="duckduckgo"):
+        render("x", {"results": [], "unresponsive_engines": [["duckduckgo", "CAPTCHA"]]}, 8, 300)

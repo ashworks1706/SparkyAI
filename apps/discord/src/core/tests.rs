@@ -19,7 +19,7 @@ fn response(text: &str, citations: Vec<Citation>, status: &str) -> ChatResponse 
     }
 }
 
-/// A source that carries a link, so it renders as a button.
+/// A source that carries a link. It renders as a button.
 fn linked(title: &str) -> Citation {
     Citation {
         title: title.into(),
@@ -27,7 +27,7 @@ fn linked(title: &str) -> Citation {
     }
 }
 
-/// A source with no page of its own, so it renders as text.
+/// A source with no page of its own. It renders as text.
 fn unlinked(title: &str) -> Citation {
     Citation {
         title: title.into(),
@@ -193,21 +193,21 @@ fn steps_append_as_subtext_and_an_immediate_repeat_collapses() {
     assert!(!steps.push(None, "   "));
     assert_eq!(steps.lines().len(), 3);
 
-    let head = thinking(&[], 2_000, 0);
+    let head = thinking(&[], None, 2_000, 0);
     assert!(head.ends_with(THINKING), "{head}");
-    let shown = thinking(&steps.lines(), 2_000, 0);
+    let shown = thinking(&steps.lines(), None, 2_000, 0);
     assert_eq!(
         shown,
         format!("{head}\n-# thinking\n-# searching live courses\n-# thinking")
     );
     assert_ne!(
-        thinking(&[], 2_000, 1),
+        thinking(&[], None, 2_000, 1),
         head,
         "the spinner turns with the frame"
     );
 
     let many: Vec<String> = (0..200).map(|i| format!("step number {i}")).collect();
-    let folded = thinking(&many, 500, 0);
+    let folded = thinking(&many, None, 500, 0);
     assert!(folded.len() <= 500);
     assert!(folded.ends_with("step number 199"), "the newest step stays");
     assert!(folded.contains("earlier steps"), "{folded}");
@@ -982,7 +982,7 @@ fn discord_spans_reach_the_traces_path_with_the_bearer_token() {
     let cfg = Telemetry {
         host: Some(format!("http://{addr}")),
         project_token: SecretString::from("phc_test".to_owned()),
-        // Off by default; set here to prove it is still reachable when it is configured.
+        // The AI path is empty by default and set here.
         ai_path: "/i/v0/ai/otel".into(),
         ..Telemetry::default()
     };
@@ -1011,7 +1011,6 @@ fn discord_spans_reach_the_traces_path_with_the_bearer_token() {
 fn the_ai_path_is_off_unless_it_is_configured() {
     use crate::core::config::Telemetry;
 
-    // The self-hosted capture-ai service refuses OTLP, so a batch sent there fails forever.
     assert!(Telemetry::default().ai_path.is_empty());
     assert!(Telemetry::default().validate().is_ok());
 }
@@ -1074,4 +1073,128 @@ fn export_is_off_only_when_every_destination_is_unset() {
         ..Telemetry::default()
     };
     assert!(matches!(provider(&phoenix_only, "d", "test"), Ok(Some(_))));
+}
+
+/// A progress update as the engine sends it.
+fn progress(
+    text: &str,
+    slot: Option<&str>,
+    clear: bool,
+    draft: bool,
+) -> crate::core::types::Progress {
+    crate::core::types::Progress {
+        text: text.to_owned(),
+        slot: slot.map(str::to_owned),
+        clear,
+        draft,
+    }
+}
+
+#[test]
+fn the_thinking_line_follows_the_reasoning_and_settles_on_the_thought() {
+    use crate::render::card::Steps;
+
+    let mut steps = Steps::default();
+    assert!(steps.apply(&progress(
+        "\u{1f914} thinking",
+        Some("model:1"),
+        false,
+        false
+    )));
+    assert!(steps.apply(&progress(
+        "\u{1f914} The hours are in row two.",
+        Some("model:1"),
+        false,
+        false
+    )));
+    assert!(steps.apply(&progress(
+        "\u{1f4ad} The hours are in row two. Hayden closes at 2am.",
+        Some("model:1"),
+        false,
+        false
+    )));
+    assert_eq!(
+        steps.lines(),
+        vec!["\u{1f4ad} The hours are in row two. Hayden closes at 2am.".to_owned()],
+        "one line, rewritten as the reasoning grows"
+    );
+}
+
+#[test]
+fn the_answer_draft_is_the_body_of_the_running_card_and_can_be_withdrawn() {
+    use crate::render::card::{ANSWERING, Steps, THINKING, thinking};
+
+    let mut steps = Steps::default();
+    assert!(steps.apply(&progress(
+        "\u{1f4ad} thought",
+        Some("model:1"),
+        false,
+        false
+    )));
+    assert!(steps.apply(&progress(
+        "Hayden closes at 2am.",
+        Some("answer"),
+        false,
+        true
+    )));
+    assert!(
+        !steps.apply(&progress(
+            "Hayden closes at 2am.",
+            Some("answer"),
+            false,
+            true
+        )),
+        "a repeat changes nothing"
+    );
+    assert_eq!(steps.lines().len(), 1, "a draft is not a step");
+    let card = thinking(&steps.lines(), steps.draft(), 2_000, 0);
+    assert!(card.contains(ANSWERING), "{card}");
+    assert!(
+        card.ends_with("-# \u{1f4ad} thought\n\nHayden closes at 2am."),
+        "{card}"
+    );
+
+    assert!(steps.apply(&progress("", Some("answer"), true, true)));
+    assert_eq!(steps.draft(), None);
+    assert!(thinking(&steps.lines(), steps.draft(), 2_000, 0).contains(THINKING));
+}
+
+#[test]
+fn a_draft_too_long_for_the_card_folds_the_steps_then_keeps_its_newest_part() {
+    use crate::render::card::thinking;
+
+    let steps: Vec<String> = (0..20).map(|i| format!("step number {i}")).collect();
+    let draft = format!("{} the end.", "word ".repeat(200));
+    let card = thinking(&steps, Some(&draft), 500, 0);
+    assert!(card.len() <= 500, "{}", card.len());
+    assert!(
+        card.ends_with("the end."),
+        "the newest part of the draft stays"
+    );
+    assert!(card.contains("20 earlier steps"), "{card}");
+    assert!(card.contains("\u{2026}word"), "{card}");
+}
+
+#[test]
+fn a_character_split_across_two_network_chunks_arrives_whole() {
+    use crate::engine::sse::{drain_frames, take_complete};
+
+    let frame = "event: progress\ndata: {\"text\":\"\u{1f914} thinking\"}\n\n";
+    let bytes = frame.as_bytes();
+    // The emoji is four bytes; cut inside it.
+    let cut = frame.find('\u{1f914}').unwrap_or_default() + 2;
+    let mut pending = Vec::new();
+    let mut frames = Vec::new();
+    for chunk in [&bytes[..cut], &bytes[cut..]] {
+        pending.extend_from_slice(chunk);
+        let mut text = take_complete(&mut pending);
+        frames.extend(drain_frames(&mut text));
+    }
+    assert_eq!(frames.len(), 1);
+    assert!(frames[0].1.contains('\u{1f914}'), "{:?}", frames[0].1);
+    assert!(
+        !frames[0].1.contains('\u{fffd}'),
+        "no replacement characters"
+    );
+    assert!(pending.is_empty());
 }

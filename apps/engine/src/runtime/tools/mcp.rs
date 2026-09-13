@@ -1,5 +1,5 @@
 //! MCP servers as tools. Each remote tool becomes a Tool with a RiskClass derived from its
-//! name, and Policy gates it like any built-in. This serves Playwright MCP.
+//! name, gated by Policy like any built-in.
 
 use std::sync::Arc;
 
@@ -14,8 +14,7 @@ use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
-/// Limits applied to the tools of one MCP server. Schemas and results count against the
-/// context window on every step.
+/// Limits applied to the tools of one MCP server.
 #[derive(Debug, Clone)]
 pub struct McpLimits {
     /// Longest tool result handed back to the model.
@@ -121,7 +120,7 @@ pub fn risk_for(name: &str) -> RiskClass {
         "resize",
         "install",
     ];
-    /// Change what the page holds without committing it. Reversible by navigating away.
+    /// Change what the page holds without committing it.
     const DRAFTS: [&str; 5] = ["type", "fill_form", "select_option", "hover", "drag"];
     /// Can commit the page or run code in it. Listed by name.
     const COMMITS: [&str; 6] = [
@@ -141,7 +140,7 @@ pub fn risk_for(name: &str) -> RiskClass {
     if READS.iter().any(|k| name.contains(k)) {
         return RiskClass::ReadPublic;
     }
-    // An unrecognised tool is treated as consequential until it is classified.
+    // An unrecognised tool is treated as an external write.
     RiskClass::ExternalWrite
 }
 

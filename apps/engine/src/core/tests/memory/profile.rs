@@ -44,7 +44,7 @@ async fn the_graph_agent_turns_a_turn_into_facts() {
     assert_eq!(facts[0].object.kind, "course");
     assert_eq!(facts[0].object.label, "CSE 310");
     assert!(facts[0].confidence < 1.0);
-    // A fact that says nothing about confidence is stored as certain, not as zero.
+    // A fact with no confidence is stored as certain.
     assert!(facts[1].confidence > 0.99);
 }
 
@@ -66,7 +66,7 @@ async fn an_unparseable_extraction_is_an_error_rather_than_no_facts() {
     let g = graph_agent(vec![Ok(text(
         "Sure, I found a couple of things about them.",
     ))]);
-    // An empty extraction here would silently drop everything the turn stated.
+    // An unreadable answer is Malformed, not an empty extraction.
     let Err(ProfileError::Malformed(_)) = g.extract(&ctx(), "i'm taking CSE 310").await else {
         unreachable!("an unreadable answer is malformed")
     };
@@ -297,7 +297,7 @@ fn a_reconciler_answer_names_statements_to_withdraw() {
 fn anything_unreadable_withdraws_nothing() {
     use crate::runtime::harness::memory::profile::parse_indices;
 
-    // Keeping a stale fact is recoverable. Removing a true one is not, so a misparse keeps.
+    // An unreadable answer withdraws nothing.
     for answer in [
         "none",
         "None.",
@@ -311,7 +311,7 @@ fn anything_unreadable_withdraws_nothing() {
             "{answer:?} withdrew something"
         );
     }
-    // An index outside the list is dropped rather than wrapped onto another statement.
+    // An index outside the list is dropped.
     assert!(parse_indices("9", 3).is_empty());
     assert_eq!(parse_indices("0, 2", 3), vec![1], "numbering starts at one");
 }
@@ -493,8 +493,7 @@ async fn an_extraction_that_echoes_the_empty_template_writes_nothing() {
 
 #[tokio::test]
 async fn a_changed_major_withdraws_the_old_one() {
-    // The bug this closes: without reconciliation both majors stay recorded and both reach
-    // the prompt, so the agent believes a student studies two things.
+    // The reconciler withdraws the old major when a new one is stated.
     let (dropped, written) = record(
         vec![relation("the user", "studies", "computer science")],
         r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"studies",
@@ -509,8 +508,7 @@ async fn a_changed_major_withdraws_the_old_one() {
 
 #[tokio::test]
 async fn two_statements_that_can_both_be_true_are_both_kept() {
-    // mem0 reports that stripping scope turns compatible preferences into contradictions.
-    // The reconciler answering none is what keeps both.
+    // The reconciler answers none and both preferences stay.
     let (dropped, written) = record(
         vec![relation("the user", "prefers", "mornings for lectures")],
         r#"{"facts":[{"subject":{"kind":"person","label":"the user"},"relation":"prefers",
@@ -533,8 +531,7 @@ async fn repeating_a_fact_withdraws_nothing() {
         "I am studying physics this year",
     )
     .await;
-    // The repeated statement is filtered before the reconciler sees it, so a model that says
-    // to remove something has nothing to point at.
+    // The repeated statement is filtered before the reconciler sees it.
     assert!(dropped.is_empty(), "{dropped:?}");
 }
 

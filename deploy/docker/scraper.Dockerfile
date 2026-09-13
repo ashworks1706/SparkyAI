@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Offline ingestion worker.
-# The venv is built on the runtime base so its interpreter path stays valid.
+# Scraper: ingestion and the live query worker. The venv is built on the runtime base image.
 FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 WORKDIR /app

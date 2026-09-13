@@ -5,8 +5,7 @@
 //!
 //! A call naming a session runs in a container that outlives it, so what an earlier command
 //! wrote under /tmp is still there. A call naming none starts a container that is removed when
-//! it exits. Sessions are per tenant and user, so one caller cannot resume the session of
-//! another by naming it.
+//! it exits. Session containers are scoped to the tenant and user.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Stdio;
@@ -80,7 +79,7 @@ impl ContainerSandbox {
         Self { limits }
     }
 
-    /// The container name a session runs under, scoped so one caller cannot reach another.
+    /// The container name a session runs under, scoped to the tenant and user.
     pub fn container_name(ctx: &RequestContext, session: &str) -> String {
         let mut hasher = DefaultHasher::new();
         (&ctx.tenant_id, &ctx.user_id).hash(&mut hasher);
@@ -110,7 +109,7 @@ impl ContainerSandbox {
             return Ok(());
         }
         let why = String::from_utf8_lossy(&out.stderr);
-        // A container under this name is already up, which is what resuming means.
+        // A container under this name is already up and is resumed.
         if why.contains("already in use") {
             return Ok(());
         }
@@ -120,7 +119,7 @@ impl ContainerSandbox {
         )))
     }
 
-    /// The arguments that seal a container. Every one of them is load bearing.
+    /// The arguments that seal a container.
     pub fn seal(&self) -> Vec<String> {
         let l = &self.limits;
         [
@@ -212,6 +211,7 @@ impl Sandbox for ContainerSandbox {
 
         let max = self.limits.max_output_chars;
         Ok(SandboxOutput {
+            // A process ended by a signal has no exit code and reports -1.
             exit_code: output.status.code().unwrap_or(-1),
             stdout: clip(&String::from_utf8_lossy(&output.stdout), max),
             stderr: clip(&String::from_utf8_lossy(&output.stderr), max),
@@ -255,8 +255,7 @@ impl Tool for SandboxTool {
                 "required": ["command"]
             }),
             risk: self.risk,
-            // Runs are independent, but a container is expensive enough that two at once on one
-            // step is worth avoiding.
+            // Sandbox calls within one step run one at a time.
             sequential: true,
             timeout_secs: None,
         }

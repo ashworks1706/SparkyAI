@@ -1,9 +1,10 @@
 //! ModelProvider trait.
 
 use async_trait::async_trait;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
+use crate::core::types::model::{ModelDelta, ModelError, ModelRequest, ModelResponse};
 
 /// A chat model behind an OpenAI-compatible endpoint, or a test double.
 #[async_trait]
@@ -14,4 +15,16 @@ pub trait ModelProvider: Send + Sync {
         ctx: &RequestContext,
         req: ModelRequest,
     ) -> Result<ModelResponse, ModelError>;
+
+    /// Runs one completion like generate and sends each piece to deltas as it arrives. The
+    /// response is the whole completion. A provider that cannot stream sends nothing.
+    async fn stream(
+        &self,
+        ctx: &RequestContext,
+        req: ModelRequest,
+        deltas: UnboundedSender<ModelDelta>,
+    ) -> Result<ModelResponse, ModelError> {
+        drop(deltas);
+        self.generate(ctx, req).await
+    }
 }

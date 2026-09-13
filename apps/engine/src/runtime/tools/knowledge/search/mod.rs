@@ -1,8 +1,7 @@
 //! ReadPublic: one search tool per live ASU source, one file per tool.
 //!
 //! Each file names the source, says what it answers, and declares the parameters the model may
-//! pass. A call checks the arguments and queues a job; the scraper worker fetches the source and
-//! the answer goes back to this caller only, never into the index.
+//! pass. A call checks the arguments and queues a job that the scraper worker answers.
 
 pub mod campus_map;
 pub mod clubs;
@@ -18,6 +17,7 @@ pub mod social_media;
 pub mod sports;
 pub mod sports_news;
 pub mod study_rooms;
+pub mod web;
 
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -58,6 +58,7 @@ pub fn catalog() -> Vec<Box<dyn LiveSource>> {
         Box::new(campus_map::CampusMap),
         Box::new(social_media::SocialMedia),
         Box::new(jobs::Jobs),
+        Box::new(web::Web),
     ]
 }
 
@@ -182,7 +183,7 @@ impl Param {
         }
     }
 
-    /// The argument as the string the worker takes. Err names what was wrong with it.
+    /// The argument as the string the scraper takes. Err names what was wrong with it.
     fn normalize(&self, value: &Value) -> Result<String, String> {
         let text = match value {
             Value::String(text) => text.trim().to_owned(),
@@ -222,7 +223,7 @@ impl Param {
         }
     }
 
-    /// The values the worker has to accept for this parameter, and whether it takes a list.
+    /// The values the scraper has to accept for this parameter, and whether it takes a list.
     fn values(&self) -> Option<(&'static [&'static str], bool)> {
         match self.accepts {
             Accepts::OneOf(choices) => Some((choices, false)),
@@ -241,13 +242,14 @@ fn pick<'a>(text: &str, choices: &[&'a str]) -> Option<&'a str> {
         .copied()
 }
 
+/// The refusal for a value that is not one of choices.
 fn not_one_of(name: &str, value: &str, choices: &[&str]) -> String {
     format!("{name} {value:?} is not one of: {}", choices.join(", "))
 }
 
 /// One live ASU source the model may search.
 pub trait LiveSource: Send + Sync {
-    /// Registry key the scraper worker serves it under.
+    /// Registry key the scraper serves it under.
     fn key(&self) -> &'static str;
 
     /// What it answers, for the model.
@@ -283,7 +285,7 @@ pub fn definition(source: &dyn LiveSource, timeout_secs: u64) -> ToolDefinition 
     }
 }
 
-/// The arguments of a call as the parameters the worker takes. Err is shown to the model.
+/// The arguments of a call as the parameters the scraper takes. Err is shown to the model.
 pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Value>, String> {
     let given = match args {
         Value::Object(given) => given,
@@ -324,27 +326,27 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
     Ok(out)
 }
 
-/// Whether the parameters of source match what the worker published for its key. Err names
+/// Whether the parameters of source match what the scraper published for its key. Err names
 /// the first difference.
 pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<(), String> {
     let name = tool_name(source.key());
     for param in source.params() {
         let Some(served) = published.params.iter().find(|p| p.name == param.name) else {
             return Err(format!(
-                "{name} takes {} but the worker does not",
+                "{name} takes {} but the scraper does not",
                 param.name
             ));
         };
         if served.required != param.required {
             return Err(format!(
-                "{name} and the worker disagree on whether {} is required",
+                "{name} and the scraper disagree on whether {} is required",
                 param.name
             ));
         }
         if let Some((values, many)) = param.values() {
             if served.many != many {
                 return Err(format!(
-                    "{name} and the worker disagree on whether {} takes a list",
+                    "{name} and the scraper disagree on whether {} takes a list",
                     param.name
                 ));
             }
@@ -353,7 +355,7 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
                 .find(|v| !served.choices.iter().any(|c| c.eq_ignore_ascii_case(v)))
             {
                 return Err(format!(
-                    "{name} offers {missing:?} for {} but the worker does not accept it",
+                    "{name} offers {missing:?} for {} but the scraper does not accept it",
                     param.name
                 ));
             }
@@ -365,7 +367,7 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
         .find(|served| !source.params().iter().any(|p| p.name == served.name))
     {
         return Err(format!(
-            "the worker takes {} for {} but {name} does not offer it",
+            "the scraper takes {} for {} but {name} does not offer it",
             extra.name, published.key
         ));
     }
@@ -408,10 +410,11 @@ impl Tool for Search {
             params,
         };
         let outcome = self.queries.run(ctx, &request).await.map_err(|e| match e {
-            // A rejection, such as an unreadable page, comes back as text the model can act on.
+            // A rejection reaches the model as an argument error.
             QueryError::Rejected(reason) => ToolError::InvalidArguments(reason),
             QueryError::Cancelled => ToolError::Cancelled,
             QueryError::Timeout(_) => ToolError::Timeout,
+            absent @ QueryError::NoWorker(_) => ToolError::Failed(absent.to_string()),
             store @ QueryError::Store(_) => ToolError::Failed(store.to_string()),
         })?;
         Ok(ToolOutput {

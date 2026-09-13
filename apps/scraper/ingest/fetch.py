@@ -50,7 +50,6 @@ def fetch_rendered(url: str) -> Fetched:
             response = page.goto(
                 url, wait_until="networkidle", timeout=int(s.request_timeout_secs * 1000)
             )
-            # The status comes from the navigation response, not from whatever rendered.
             status = response.status if response else 0
             html = page.content()
             final_url = page.url
@@ -119,7 +118,11 @@ def fetch_firecrawl(url: str) -> Fetched:
         raise FetchError(f"firecrawl returned {r.status_code}: {r.text[:200]}")
     if r.status_code >= 400:
         raise FetchRejected(f"firecrawl returned {r.status_code}: {r.text[:200]}")
-    return parse_firecrawl(url, r.json())
+    try:
+        payload = r.json()
+    except ValueError as e:
+        raise FetchError(f"firecrawl returned a body that is not JSON for {url}") from e
+    return parse_firecrawl(url, payload)
 
 
 def fetch(url: str, *, needs_js: bool = False) -> Fetched:

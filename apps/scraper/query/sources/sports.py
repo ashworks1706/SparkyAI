@@ -30,4 +30,5 @@ QUERY = QuerySource(
     params=(QueryParam("sport", "Sport.", required=True, choices=choices(_SPORTS)),),
     to_url=to_url,
     needs_js=True,
+    category="sports",
 )

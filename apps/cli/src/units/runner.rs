@@ -3,7 +3,7 @@
 //! logs -f.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -102,8 +102,10 @@ impl Runner {
 
     /// Stops following the logs of a service.
     pub fn unfollow(&mut self, service: &str) {
-        if let Some(mut child) = self.followers.remove(service) {
-            let _ = child.start_kill();
+        if let Some(mut child) = self.followers.remove(service)
+            && let Err(e) = child.start_kill()
+        {
+            self.note(service, format!("stop following logs: {e}"));
         }
     }
 
@@ -114,6 +116,7 @@ impl Runner {
             self.unfollow(&s);
         }
         for pgid in self.groups.values() {
+            // The terminal is being restored; a failed kill has no pane to report to.
             let _ = std::process::Command::new("kill")
                 .args(["-TERM", "--", &format!("-{pgid}")])
                 .stdout(Stdio::null())
@@ -124,7 +127,7 @@ impl Runner {
     }
 
     /// One docker compose ps -a --format json snapshot, keyed by service.
-    pub async fn service_states(root: &PathBuf) -> Result<HashMap<String, ServiceState>, String> {
+    pub async fn service_states(root: &Path) -> Result<HashMap<String, ServiceState>, String> {
         let out = Command::new("docker")
             .args(["compose", "-f", COMPOSE_FILE])
             .args(all_profiles())
@@ -175,6 +178,7 @@ impl Runner {
         let tx = self.tx.clone();
         let id = unit_id.to_owned();
         tokio::spawn(async move {
+            // A send error means the UI has exited.
             let code = match child.wait().await {
                 Ok(status) => status.code(),
                 Err(e) => {
@@ -221,6 +225,7 @@ impl Runner {
     }
 
     fn note(&self, unit_id: &str, text: String) {
+        // A send error means the UI has exited.
         let _ = self.tx.send(Event::Log {
             unit: unit_id.to_owned(),
             line: LogLine::now(Stream::Meta, text),
@@ -263,8 +268,8 @@ where
             let text = match lines.next_line().await {
                 Ok(Some(text)) => text,
                 Ok(None) => break,
-                // Report why log capture stopped.
                 Err(e) => {
+                    // A send error means the UI has exited.
                     let _ = tx.send(Event::Log {
                         unit: unit.clone(),
                         line: LogLine::now(Stream::Meta, format!("log capture ended: {e}")),

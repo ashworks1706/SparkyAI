@@ -4,29 +4,44 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use tokio::sync::Semaphore;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::core::traits::model::ModelProvider;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
+use crate::core::types::model::{ModelDelta, ModelError, ModelRequest, ModelResponse};
 
 /// Admits slots model calls at once and queues the rest for up to max_wait.
 ///
-/// slots mirrors llama-server --parallel. The queue stays inside the engine, under the deadline
-/// and cancellation of the request.
+/// slots matches llama-server --parallel. A queued call still honours the request deadline and
+/// cancellation.
 pub struct Limited {
     inner: Arc<dyn ModelProvider>,
-    permits: Semaphore,
+    permits: Arc<Semaphore>,
     max_wait: Duration,
 }
 
 impl Limited {
-    /// Wraps a provider. slots must be at least 1. wiring skips the wrapper when unlimited.
+    /// Wraps a provider. slots must be at least 1.
     pub fn new(inner: Arc<dyn ModelProvider>, slots: usize, max_wait: Duration) -> Self {
         Self {
             inner,
-            permits: Semaphore::new(slots),
+            permits: Arc::new(Semaphore::new(slots)),
             max_wait,
+        }
+    }
+
+    /// Waits for a slot within the queue wait and the request budget.
+    async fn admit(&self, ctx: &RequestContext) -> Result<OwnedSemaphorePermit, ModelError> {
+        let wait = self.max_wait.min(ctx.remaining());
+        let permit = tokio::select! {
+            () = ctx.cancel.cancelled() => return Err(ModelError::Cancelled),
+            acquired = tokio::time::timeout(wait, Arc::clone(&self.permits).acquire_owned()) => acquired,
+        };
+        match permit {
+            Ok(Ok(permit)) => Ok(permit),
+            Ok(Err(e)) => Err(ModelError::Transport(format!("model limiter closed: {e}"))),
+            Err(_) => Err(ModelError::Busy),
         }
     }
 }
@@ -38,16 +53,17 @@ impl ModelProvider for Limited {
         ctx: &RequestContext,
         req: ModelRequest,
     ) -> Result<ModelResponse, ModelError> {
-        let wait = self.max_wait.min(ctx.remaining());
-        let permit = tokio::select! {
-            () = ctx.cancel.cancelled() => return Err(ModelError::Cancelled),
-            acquired = tokio::time::timeout(wait, self.permits.acquire()) => acquired,
-        };
-        let _permit = match permit {
-            Ok(Ok(permit)) => permit,
-            Ok(Err(e)) => return Err(ModelError::Transport(format!("model limiter closed: {e}"))),
-            Err(_) => return Err(ModelError::Busy),
-        };
+        let _permit = self.admit(ctx).await?;
         self.inner.generate(ctx, req).await
+    }
+
+    async fn stream(
+        &self,
+        ctx: &RequestContext,
+        req: ModelRequest,
+        deltas: UnboundedSender<ModelDelta>,
+    ) -> Result<ModelResponse, ModelError> {
+        let _permit = self.admit(ctx).await?;
+        self.inner.stream(ctx, req, deltas).await
     }
 }

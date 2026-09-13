@@ -9,7 +9,7 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::store::StoreError;
 
-/// Cross-conversation memory for one user in one tenant. Writes arrive with Phase 4.
+/// Cross-conversation memory for one user in one tenant.
 #[async_trait]
 pub trait MemoryStore: Send + Sync {
     /// Recalls unexpired memories, newest and most confident first.

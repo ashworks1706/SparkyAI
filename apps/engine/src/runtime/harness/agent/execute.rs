@@ -1,12 +1,10 @@
 //! Authorizing the capabilities a step asked for, and running the ones allowed.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use futures::future::join_all;
 use tracing::Instrument;
 use tracing::field::Empty;
-
-use std::time::Duration;
 
 use super::{Agent, StepOutcome, ms};
 use crate::core::types::agent::context::RequestContext;
@@ -38,8 +36,7 @@ impl Agent {
         runnable: Vec<ToolCall>,
     ) -> Result<StepOutcome, ModelError> {
         let ctx = run.ctx;
-        // A call the model already made with identical arguments is not run again. The model
-        // is told so.
+        // A call already made with identical arguments is answered with a notice, not run.
         let mut fresh = Vec::with_capacity(runnable.len());
         let mut repeats = 0usize;
         for call in runnable {
@@ -70,8 +67,7 @@ impl Agent {
             return Ok(StepOutcome::Continue);
         }
 
-        // Independent calls run in parallel, each under its own timeout. Anything stateful
-        // forces the whole step to run in order.
+        // Calls run in parallel unless one of them is sequential.
         let step = run.steps;
         let stateful = fresh.iter().any(|call| {
             self.deps
@@ -100,6 +96,7 @@ impl Agent {
         }
         Ok(StepOutcome::Continue)
     }
+
     /// Runs policy over every call before anything executes. Denials are fed back as tool
     /// results, and the first confirmation stops the run.
     pub(super) async fn authorize_all(
@@ -164,6 +161,8 @@ impl Agent {
         }
         Ok(runnable)
     }
+
+    /// Runs one tool call under its timeout, tracing it, and returns its text and citations.
     pub(super) async fn run_tool(
         &self,
         ctx: &RequestContext,
@@ -175,23 +174,23 @@ impl Agent {
             let missing = ToolError::Failed(format!("no tool named {}", call.name));
             return (Err(missing), Vec::new());
         };
+        let arguments = redact(&call.arguments);
         deps.trace.emit(
             ctx,
             TraceEvent::ToolStarted {
                 step,
                 call_id: call.id.clone(),
                 tool: call.name.clone(),
-                arguments: redact(&call.arguments),
+                arguments: arguments.clone(),
             },
         );
         let started = Instant::now();
-        // A tool may declare its own budget. The request deadline still wins.
+        // A declared tool timeout replaces the default; the request deadline caps both.
         let declared = tool
             .definition()
             .timeout_secs
             .map_or(self.cfg.tool_timeout, Duration::from_secs);
         let limit = declared.min(ctx.remaining());
-        let arguments = redact(&call.arguments);
         let span = tracing::info_span!(
             "tool",
             "gen_ai.operation.name" = "execute_tool",
@@ -219,20 +218,15 @@ impl Agent {
                 outcome.unwrap_or(Err(ToolError::Timeout))
             }
         };
-        let mut found = Vec::new();
-        let (content, traced) = match result {
+        let (content, traced, found) = match result {
             Ok(output) => {
-                found = output.sources;
-                (
-                    Ok(output.content.clone()),
-                    // Tool output can carry a page the user authenticated to reach, so it is
-                    // redacted the way arguments already are before it reaches the trace.
-                    Ok(truncate(&redact_text(&output.content), 2_000)),
-                )
+                // Tool output is redacted before it reaches the trace.
+                let traced = Ok(truncate(&redact_text(&output.content), 2_000));
+                (Ok(output.content), traced, output.sources)
             }
             Err(error) => {
                 let message = error.to_string();
-                (Err(error), Err(message))
+                (Err(error), Err(message), Vec::new())
             }
         };
         deps.trace.emit(
@@ -241,7 +235,7 @@ impl Agent {
                 step,
                 call_id: call.id.clone(),
                 tool: call.name.clone(),
-                arguments: redact(&call.arguments),
+                arguments,
                 result: traced,
                 duration_ms: ms(started),
             },

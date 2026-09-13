@@ -22,6 +22,8 @@ pub struct PromptText {
     pub capabilities_header: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
+    /// Line added to a call that is offered no tools.
+    pub answer_only_line: String,
     /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
@@ -42,6 +44,7 @@ impl From<&crate::core::config::Prompt> for PromptText {
             no_evidence_line: cfg.no_evidence_line.clone(),
             capabilities_header: cfg.capabilities_header.clone(),
             date_line: cfg.date_line.clone(),
+            answer_only_line: cfg.answer_only_line.clone(),
             utc_offset_hours: cfg.utc_offset_hours,
         }
     }
@@ -50,15 +53,22 @@ impl From<&crate::core::config::Prompt> for PromptText {
 impl PromptText {
     /// Today's date in the configured offset, as the date line renders it.
     ///
-    /// Config::validate bounds the offset, so it always resolves; UTC answers if it ever
-    /// does not.
+    /// Config::validate bounds the offset. An out of range offset renders in UTC with a warning.
     pub fn today(&self) -> String {
         const FORMAT: &str = "%A %-d %B %Y";
         let now = chrono::Utc::now();
-        match chrono::FixedOffset::east_opt(self.utc_offset_hours * 3600) {
-            Some(offset) => now.with_timezone(&offset).format(FORMAT).to_string(),
-            None => now.format(FORMAT).to_string(),
+        let offset = self
+            .utc_offset_hours
+            .checked_mul(3600)
+            .and_then(chrono::FixedOffset::east_opt);
+        if let Some(offset) = offset {
+            return now.with_timezone(&offset).format(FORMAT).to_string();
         }
+        tracing::warn!(
+            utc_offset_hours = self.utc_offset_hours,
+            "utc offset out of range; the date is rendered in UTC"
+        );
+        now.format(FORMAT).to_string()
     }
 
     /// Borrowed view for one assembly pass.

@@ -1,8 +1,4 @@
-//! The rule detector. A first-person subject next to a stative cue.
-//!
-//! Generic embeddings encode topic and style rather than whether a sentence is worth
-//! remembering, and they place I like this and I do not like this close together, so a cosine
-//! gate cannot separate them. A trained head could, which is what the trait is for.
+//! The rule detector: a first-person subject next to a stative cue.
 
 use crate::core::traits::memory::detector::FactDetector;
 
@@ -86,6 +82,18 @@ impl RuleDetector {
     pub fn new(rules: Rules) -> Self {
         Self { rules }
     }
+
+    /// Whether one sentence has a first-person subject that starts a word and a cue.
+    fn states(&self, sentence: &str) -> bool {
+        // Padded so a subject matches only at the start of a word.
+        let lowered = format!(" {} ", sentence.to_lowercase().replace(['\n', '\t'], " "));
+        let subject = self
+            .rules
+            .subjects
+            .iter()
+            .any(|s| lowered.contains(&format!(" {s}")));
+        subject && self.rules.cues.iter().any(|c| lowered.contains(c.as_str()))
+    }
 }
 
 impl FactDetector for RuleDetector {
@@ -94,20 +102,16 @@ impl FactDetector for RuleDetector {
         if text.split_whitespace().count() < self.rules.min_words {
             return false;
         }
-        // A question asks for something and states nothing about the asker.
-        if text.ends_with('?') {
-            return false;
-        }
-        // Padded so a marker matches a whole word rather than the inside of another.
-        let lowered = format!(" {} ", text.to_lowercase().replace(['\n', '\t'], " "));
-        let subject = self
-            .rules
-            .subjects
-            .iter()
-            .any(|s| lowered.contains(s.as_str()));
-        if !subject {
-            return false;
-        }
-        self.rules.cues.iter().any(|c| lowered.contains(c.as_str()))
+        // Questions are skipped; the other sentences of the turn are still checked.
+        sentences(text)
+            .filter(|sentence| !sentence.ends_with('?'))
+            .any(|sentence| self.states(sentence))
     }
+}
+
+/// The sentences of text, each with its closing mark.
+fn sentences(text: &str) -> impl Iterator<Item = &str> {
+    text.split_inclusive(['.', '!', '?', '\n'])
+        .map(str::trim)
+        .filter(|sentence| !sentence.is_empty())
 }

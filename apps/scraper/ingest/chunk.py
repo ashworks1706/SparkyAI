@@ -4,9 +4,8 @@ from __future__ import annotations
 
 
 def chunk_text(text: str, *, max_chars: int = 1200, overlap_chars: int = 200) -> list[str]:
-    """Splits on paragraph boundaries, packing paragraphs up to max_chars. Paragraphs longer
-    than the limit are split on sentence-ish boundaries. Consecutive chunks share overlap_chars
-    of trailing context."""
+    """Packs paragraphs into chunks of at most max_chars, splitting longer paragraphs at sentence
+    and clause breaks. Consecutive chunks share up to overlap_chars of trailing lines."""
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
     overlap_chars = max(0, min(overlap_chars, max_chars // 2))
@@ -57,11 +56,7 @@ def _split_long(paragraph: str, max_chars: int) -> list[str]:
 
 
 def _tail(chunk: str, overlap_chars: int) -> str:
-    """The newest whole lines of chunk that fit in overlap_chars.
-
-    A character slice opens the next chunk mid-line, leaving a fragment with nothing to
-    attribute it to.
-    """
+    """The newest whole lines of chunk that fit in overlap_chars."""
     if overlap_chars <= 0:
         return ""
     lines = chunk.split("\n")

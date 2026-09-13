@@ -1,7 +1,4 @@
-//! The default guardrail. Denied phrases, a length ceiling, and an empty answer check.
-//!
-//! Every rule is configuration. A deployment that needs a model-backed check implements the
-//! trait instead; nothing here is the only possible gate.
+//! The default guardrail: denied phrases, a length ceiling, and an empty answer check.
 
 use async_trait::async_trait;
 
@@ -52,6 +49,7 @@ impl RuleGuardrail {
         Self { rules }
     }
 
+    /// A block verdict with the configured replacement.
     fn block(&self, reason: impl Into<String>) -> Verdict {
         Verdict::Block {
             replacement: self.rules.replacement.clone(),
@@ -72,18 +70,14 @@ impl Guardrail for RuleGuardrail {
         {
             return self.block(format!("denied phrase {phrase}"));
         }
-        // An answer is what the user reads. A capability branch carries tool calls and often no
-        // text at all, so neither length nor emptiness is checked there.
+        // Emptiness and length are checked only on the answer stage.
         if stage == Stage::Answer {
             if text.trim().is_empty() {
                 return self.block("the answer was empty");
             }
-            if self.rules.max_answer_chars > 0 && text.chars().count() > self.rules.max_answer_chars
-            {
-                return self.block(format!(
-                    "the answer ran to {} characters",
-                    text.chars().count()
-                ));
+            let chars = text.chars().count();
+            if self.rules.max_answer_chars > 0 && chars > self.rules.max_answer_chars {
+                return self.block(format!("the answer ran to {chars} characters"));
             }
         }
         Verdict::Pass

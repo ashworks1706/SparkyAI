@@ -37,7 +37,7 @@ fn a_zero_divisor_does_not_divide_by_zero() {
 
 #[test]
 fn the_loop_config_carries_the_agent_settings_unchanged() {
-    // One set of defaults. A second set would drift the moment a setting changed.
+    // The loop config defaults match the agent settings defaults.
     let settings = Agent::default();
     let cfg = AgentConfig::default();
     assert_eq!(cfg.max_steps, settings.max_steps);
@@ -70,7 +70,7 @@ fn the_prompt_budget_carries_the_agent_settings_unchanged() {
 
 #[test]
 fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
-    // Candidate count and RRF k were literals in the adapter. Both come from configuration.
+    // Candidate count and RRF k come from configuration.
     let settings = Retrieval {
         candidates: 40,
         rrf_k: 20.0,

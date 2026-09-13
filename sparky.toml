@@ -20,15 +20,15 @@ tool_timeout_secs = 20
 confirmation_ttl_secs = 600
 model_slots = 2                # match llama-server --parallel
 model_queue_wait_secs = 30
-temperature = 0.3
+temperature = 0.6
 history_turns = 20
 memory_recall_limit = 10
 # Recall memory and the profile graph where others can read the answer.
 recall_in_public = false
 
 # Prompt budgets in estimated tokens. A section budget above the total is rejected at boot.
-# chars_per_token is what makes an estimate an estimate. Lower it for a tokenizer that splits
-# URLs and course codes finely. The tool schemas come out of prompt_budget_tokens; the engine
+# chars_per_token converts characters to estimated tokens; lower it for a tokenizer that splits
+# URLs and course codes finely. Tool schemas count against prompt_budget_tokens, and the engine
 # refuses to boot when they take over half of it. The prompt and model.max_tokens share one
 # llama-server slot: ctx-size 16384 over --parallel 2 is 8192 a slot.
 prompt_budget_tokens = 4000
@@ -37,17 +37,26 @@ history_budget_tokens = 1000
 memory_budget_tokens = 300
 capabilities_budget_tokens = 600
 chars_per_token = 4
+# Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
+# model.max_tokens_without_thinking, must fit one slot of the chat server.
+prompt_estimate_headroom = 0.3
 
 retry_base_ms = 250
 retry_cap_ms = 8000
 max_span_value_chars = 32000
-# Characters of a thought, of the arguments, and of the result that one live progress line
-# carries to whoever is watching the turn.
+# Characters of the arguments and of the result that one live progress line carries to
+# whoever is watching the turn, and of the reasoning the thinking line carries.
 progress_detail_chars = 160
+progress_thought_chars = 600
+# Stream model calls: the thinking line follows the reasoning, and the answer is shown as a
+# draft a block at a time. A block ends at a sentence or a line; stream_block_chars is the
+# longest run held back waiting for one. Live pieces reach the watcher only; the recorded trace
+# keeps the finished call.
+stream = true
+stream_block_chars = 160
 
-# Whether a model call reasons before it answers. llama-server returns the reasoning in
-# reasoning_content, the harness shows it as the live thinking line, and it never reaches the
-# answer. Tasks such as compaction never think.
+# Whether a model call reasons before it answers. The reasoning is shown as the live thinking
+# line and never reaches the answer. Tasks such as compaction never think.
 [agent.thinking]
 mode = "auto"                  # on, off, or auto
 # auto takes the first rule that applies: a call offered no tools does not think; a step with
@@ -70,27 +79,30 @@ memory_header = "What you remember about this user:"
 evidence_header = "Knowledge base results for this question, closest match first. These were retrieved for you before you were called. Answer from them and from tool output only, and cite the bracketed number of every entry you use."
 no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
-# {date} is filled in at assembly. Evidence rows carry a day or date label; without today's
-# date the model cannot tell which one a question means.
+# {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
-utc_offset_hours = -7          # Arizona, which keeps -7 all year
+answer_only_line = "You have no tools on this step. Answer the user now in plain text from what you already have, or say what you could not find. Do not write a tool call."
+utc_offset_hours = -7          # Arizona, no daylight saving
 
 # ---------------------------------------------------------------- the model
 # base_url and api_key are per-machine and live in .env.
 [model]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
-# Reasoning comes out of the same budget as the answer, so a call that thinks needs room for
-# both. The slot has to hold the prompt and this: chat ctx-size 16384 over --parallel 2 is
-# 8192 a slot. Whether a call thinks is agent.thinking.
+# Token budget of a call that thinks, reasoning and answer together. One slot holds the prompt
+# and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot. See agent.thinking.
 max_tokens = 4096
+# Token budget of a call that does not think.
+max_tokens_without_thinking = 1024
 usd_per_m_prompt = 0.0
 usd_per_m_completion = 0.0
 
-# Only what is set is sent. The server defaults apply to the rest.
+# Only what is set is sent; server defaults apply to the rest. Values follow the Qwen3
+# recommended settings plus a presence penalty. agent.temperature pairs with them.
 [model.sampling]
-# top_p = 0.9
-# top_k = 40
-# min_p = 0.05
+top_p = 0.9
+top_k = 20
+min_p = 0.0
+presence_penalty = 1.0
 # repeat_penalty = 1.05
 # seed = 42
 
@@ -99,6 +111,7 @@ usd_per_m_completion = 0.0
 name = "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0"
 dim = 1024
 batch_size = 32                # apps/scraper only
+timeout_secs = 120.0           # apps/scraper only, one embedding request
 
 # The model that writes a tree node summary. base_url and api_key are per-machine and live
 # in .env.
@@ -107,7 +120,7 @@ name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
 max_tokens = 512
 temperature = 0.2
 timeout_secs = 120
-thinking = false               # reasoning spends the whole budget and returns empty content
+thinking = false               # true spends the whole budget on reasoning and returns empty content
 
 # ---------------------------------------------------------------- retrieval
 # Two legs fused with reciprocal rank fusion. Turning both off is rejected at boot.
@@ -130,24 +143,23 @@ confirm_from = "external_write"
 
 [tools]
 disabled = []
-search = true                  # one search_<source> tool per live source the worker publishes
+search = true                  # one search_<source> tool per live source the scraper publishes
 
-# The classifier and the graph agent. Detached from the request that produced the turn.
-# Off until the graph is wanted; every turn otherwise costs two extra model calls.
+# The classifier and the graph agent, detached from the request that produced the turn.
+# Enabled, every turn costs two extra model calls.
 [profile]
 enabled = true
 max_tokens = 512
 timeout_secs = 60
-# Withdraw a recorded fact when a new one makes it false. Costs a model call only when a new
-# fact collides with one already recorded for the same subject and relation.
+# Withdraw a recorded fact when a new one makes it false. Costs a model call when a new fact
+# collides with one recorded for the same subject and relation.
 reconcile = true
 min_confidence = 0.5           # extracted facts below this, or with an empty label, are dropped
 list_limit = 50               # nodes and relations POST /profile/list returns, each
 request_timeout_secs = 30      # budget for one /profile/list or /profile/forget call
 
-# The gate on extraction. It runs on every turn, so it is rules rather than a model call.
-# Empty lists use the built-in ones. A turn passes when a first-person marker sits next to a
-# cue and it is not a question.
+# The rule-based gate on extraction, run on every turn. Empty lists use the built-in ones. A
+# turn passes when a first-person marker sits next to a cue and it is not a question.
 [profile.detector]
 subjects = []
 cues = []
@@ -183,13 +195,14 @@ temperature = 0.0
 timeout_secs = 30
 # instructions = "You compact a conversation..."
 
-# Live source queries need just worker. Without it every query times out.
+# Live source queries. They need just scraper serve running.
 [query]
 timeout_secs = 90
-poll_ms = 400
+poll_ms = 100
+claim_secs = 5                 # a query the scraper does not claim in this long reports that it is not running
 
 # ---------------------------------------------------------------- MCP
-# Servers go in [[mcp.servers]], which the environment cannot express. None is configured.
+# Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
 [mcp]
 required_props_only = true
 max_output_chars = 6000
@@ -215,9 +228,8 @@ retention_hours = 0            # 0 keeps them forever
 # in .env. Each destination is independent: an empty project_token turns PostHog off, an empty
 # phoenix_url turns Phoenix off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with
 # just phoenix running to read a conversation as a trace tree.
-# ai_path is off: the self-hosted capture-ai service answers /i/v0/ai/otel with "request missing
-# data payload" because it takes PostHog's own event payload rather than OTLP, so every batch
-# sent there fails. Set it to /i/v0/ai/otel against PostHog Cloud, which does take OTLP.
+# ai_path is empty: self-hosted PostHog does not accept OTLP at /i/v0/ai/otel. Against PostHog
+# Cloud set it to /i/v0/ai/otel.
 [telemetry]
 sample_ratio = 1.0
 export_timeout_secs = 10
@@ -263,24 +275,33 @@ user_agent = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
 request_timeout_secs = 30.0
 chunk_chars = 1200
 chunk_overlap_chars = 200
-query_max_chars = 12000
+index_live_results = true          # index a live result after answering, for sources that allow it
+serve_poll_secs = 0.5              # longest a lane of scraper serve waits before looking again
+schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
+job_lease_secs = 1800.0            # a background job running longer is queued again
+query_max_chars = 6000             # a live result is always kept in the prompt; about 1500 tokens
 parser_version = "bs4-text-v1"
-# A fetch yielding less than this fraction of the last good run is refused. Pages churn by
-# single digits between runs; an extractor break returns a nav shell.
+# A fetch yielding less than this fraction of the last good run is refused.
 quality_floor_ratio = 0.5
-quality_floor_min_chars = 500     # below this, ordinary variation crosses any ratio
-# A RAPTOR style tree over the chunks of one source. Off by default: it costs a model call per
-# cluster per level. Retrieval searches every level at once, so a query finds the granularity
-# that fits it.
+quality_floor_min_chars = 500     # the floor applies only when the last good run had this many chars
+# A RAPTOR style tree over the chunks of one source. Costs a model call per cluster per level.
+# Retrieval searches every level at once.
 tree_enabled = false
 tree_max_level = 3
 tree_cluster_size = 5
 tree_min_chunks = 12
 
-# base_url is per-machine and lives in .env.
+# SearXNG behind the search_web tool (just search). base_url is per-machine and lives in .env.
+[search]
+engines = "google,brave,bing"
+language = "en-US"
+safesearch = 1                     # 0 off, 1 moderate, 2 strict
+max_results = 8
+snippet_chars = 300
+
 [firecrawl]
 timeout_ms = 60000
-wait_for_ms = 5000             # ASU pages fill in content after load
+wait_for_ms = 5000             # wait after load for ASU pages to fill in content
 only_main_content = true
 
 # endpoint and keys are per-machine and live in .env.

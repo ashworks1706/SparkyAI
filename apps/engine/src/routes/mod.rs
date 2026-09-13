@@ -2,6 +2,7 @@
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
+use axum::http::HeaderValue;
 use axum::routing::{get, post};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -36,7 +37,15 @@ pub fn cors(origins: &[String]) -> Option<CorsLayer> {
                 .allow_headers(Any),
         );
     }
-    let parsed: Vec<_> = origins.iter().filter_map(|o| o.parse().ok()).collect();
+    let mut parsed: Vec<HeaderValue> = Vec::with_capacity(origins.len());
+    for origin in origins {
+        match origin.parse() {
+            Ok(value) => parsed.push(value),
+            Err(error) => {
+                tracing::warn!(%origin, %error, "cors origin is not a valid header value; skipped");
+            }
+        }
+    }
     Some(
         CorsLayer::new()
             .allow_origin(parsed)

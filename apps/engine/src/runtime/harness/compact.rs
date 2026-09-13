@@ -14,8 +14,9 @@ use crate::runtime::harness::agent::task::Task;
 pub const INSTRUCTIONS: &str = "You compact a conversation. Rewrite the turns below as one \
 short paragraph a later reader can act on. Keep what the user asked for, what was decided, \
 every identifier, date and number, and anything still unresolved. Drop pleasantries and \
-restatements. Write plain prose, no headings, no bullet points. Do not answer the \
-conversation, only record it.";
+restatements. Write in the third person: call the two sides the user and Sparky, never I, me \
+or you. Write plain prose, no headings, no bullet points. Do not answer the conversation, only \
+record it.";
 
 /// Compacts turns with a prompted sub-agent.
 pub struct ChatCompactor {

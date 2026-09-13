@@ -146,7 +146,7 @@ impl Handler {
     }
 
     /// Role names the author holds plus the capability their guild roles or ownership grant.
-    /// A lookup failure is an error, not an empty list.
+    /// Fails when the owner or the guild roles cannot be fetched.
     async fn message_roles(
         &self,
         ctx: &Context,

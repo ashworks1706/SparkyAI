@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::core::types::{ComposePsRow, ServiceState};
 
-/// Removes ANSI escape sequences so colored output from children renders as plain text.
+/// Removes ANSI escape sequences and every control character except tab.
 pub fn sanitize_line(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -30,7 +30,7 @@ pub fn sanitize_line(s: &str) -> String {
 }
 
 /// Parses docker compose ps --format json: a JSON array on older releases, one object per
-/// line on newer ones. Anything else is an error, not an empty stack.
+/// line on newer ones. Any other input is an error.
 pub fn parse_ps(raw: &str) -> Result<HashMap<String, ServiceState>, String> {
     let rows: Vec<ComposePsRow> = if raw.trim().is_empty() {
         Vec::new()

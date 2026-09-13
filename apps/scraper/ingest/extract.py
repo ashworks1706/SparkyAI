@@ -62,6 +62,7 @@ def extract_text(html: bytes | str, *, main_only: bool = True, keep_forms: bool 
 
 
 def title_of(html: bytes | str) -> str | None:
+    """The page title, else the first h1, else None."""
     soup = BeautifulSoup(html, "lxml")
     if soup.title and soup.title.string:
         return soup.title.string.strip()
@@ -95,8 +96,8 @@ def plain(line: str) -> str:
 def table_cells(line: str) -> list[str] | None:
     """Cells of a markdown table row, or None when the line is not one.
 
-    A row runs from its opening pipe to its closing pipe. Text after the closing pipe is a
-    caption the page put beside the table, not a cell.
+    A row runs from its opening pipe to its closing pipe. Text after the closing pipe is
+    dropped.
     """
     stripped = line.strip()
     if not stripped.startswith("|"):

@@ -180,7 +180,7 @@ fn logs(frame: &mut Frame, app: &mut App, area: Rect) {
                     l.at.format("%H:%M:%S ").to_string(),
                     Style::default().fg(DIM),
                 ),
-                Span::styled(l.text.clone(), style),
+                Span::styled(l.text.as_str(), style),
             ])
         })
         .collect();

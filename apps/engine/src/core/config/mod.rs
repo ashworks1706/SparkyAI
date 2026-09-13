@@ -108,9 +108,12 @@ impl Default for AgentConfig {
             max_span_value_chars: agent.max_span_value_chars,
             retrieval_top_k: Retrieval::default().top_k,
             budget: agent.budget(),
+            stream: agent.stream,
+            stream_block_chars: agent.stream_block_chars,
             thinking: agent.thinking,
-            // [model] has no defaults; these values are not read from a settings struct.
+            // The model section has no defaults; these are fixed values.
             max_tokens: 1024,
+            max_tokens_without_thinking: 1024,
             usd_per_m_prompt: 0.0,
             usd_per_m_completion: 0.0,
         }
@@ -128,11 +131,8 @@ pub enum ConfigError {
     Invalid(String),
 }
 
-/// Settings that moved to another section.
-///
-/// An unknown SPARKY_* variable is not rejected: the apps share one .env, so the engine sees
-/// the scraper keys and the scraper sees the engine keys. A variable named here is a boot
-/// failure that reports where it went.
+/// Settings that moved to another section. A variable named here fails boot; other unknown
+/// SPARKY_* variables are accepted.
 const RENAMED: [(&str, &str); 4] = [
     ("SPARKY_AGENT__TRACE_DIR", "SPARKY_TRACE__DIR"),
     ("SPARKY_AGENT__RETRIEVAL_TOP_K", "SPARKY_RETRIEVAL__TOP_K"),
@@ -176,19 +176,13 @@ impl Config {
         if !self.retrieval.dense && !self.retrieval.lexical {
             return invalid("retrieval.dense and retrieval.lexical are both off".into());
         }
-        // Rendering the date in an offset no clock keeps would name the wrong day.
         if !(-14..=14).contains(&self.prompt.utc_offset_hours) {
             return invalid(format!(
                 "prompt.utc_offset_hours must be between -14 and 14, got {}",
                 self.prompt.utc_offset_hours
             ));
         }
-        if self.agent.chars_per_token == 0 {
-            return invalid("agent.chars_per_token must be at least 1".into());
-        }
-        if self.agent.prompt_budget_tokens == 0 {
-            return invalid("agent.prompt_budget_tokens must be at least 1".into());
-        }
+        validate_agent(&self.agent)?;
         if !(0.0..=1.0).contains(&self.profile.min_confidence) {
             return invalid("profile.min_confidence must be between 0 and 1".into());
         }
@@ -199,27 +193,7 @@ impl Config {
             return invalid("profile.request_timeout_secs must be at least 1".into());
         }
         validate_thinking(&self.agent.thinking)?;
-        if self.agent.max_steps == 0 {
-            return invalid("agent.max_steps must be at least 1".into());
-        }
-        if !(0.0..=1.0).contains(&self.telemetry.sample_ratio) {
-            return invalid(format!(
-                "telemetry.sample_ratio must be between 0 and 1, got {}",
-                self.telemetry.sample_ratio
-            ));
-        }
-        // An empty ai_path is how the AI endpoint is turned off.
-        for (name, path) in [
-            ("traces_path", &self.telemetry.traces_path),
-            ("ai_path", &self.telemetry.ai_path),
-        ] {
-            if !(path.starts_with('/') || (name == "ai_path" && path.is_empty())) {
-                return invalid(format!("telemetry.{name} must start with /, got {path:?}"));
-            }
-        }
-        if self.telemetry.provider_name.trim().is_empty() {
-            return invalid("telemetry.provider_name is empty".into());
-        }
+        validate_telemetry(&self.telemetry)?;
         if self.retrieval.text_search_config.is_empty()
             || !self
                 .retrieval
@@ -235,11 +209,12 @@ impl Config {
         if self.sandbox.enabled && self.sandbox.runtime.trim().is_empty() {
             return invalid("sandbox.runtime is empty".into());
         }
+        validate_model(&self.model)?;
         if self.compaction.enabled && self.compaction.max_tokens == 0 {
             return invalid("compaction.max_tokens must be at least 1".into());
         }
-        if self.tools.search && self.query.poll_ms == 0 {
-            return invalid("query.poll_ms must be at least 1".into());
+        if self.tools.search && (self.query.poll_ms == 0 || self.query.claim_secs == 0) {
+            return invalid("query.poll_ms and query.claim_secs must be at least 1".into());
         }
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
@@ -252,15 +227,14 @@ impl Config {
         }
         let mut names = std::collections::BTreeSet::new();
         for server in &self.mcp.servers {
-            if !names.insert(server.name.clone()) {
+            if !names.insert(server.name.as_str()) {
                 return invalid(format!(
                     "mcp.servers has two servers named {:?}",
                     server.name
                 ));
             }
         }
-        // A section budget above the total is a configuration error; the prompt is never
-        // trimmed.
+        // Each section budget fits within the total.
         for (name, value) in [
             ("evidence", self.agent.evidence_budget_tokens),
             ("history", self.agent.history_budget_tokens),
@@ -299,4 +273,27 @@ impl Config {
             .unwrap_or(fallback)
             .to_owned())
     }
+}
+
+/// Rejects telemetry settings that cannot export. An empty ai_path turns the AI endpoint off.
+fn validate_telemetry(telemetry: &Telemetry) -> Result<(), ConfigError> {
+    let invalid = |m: String| Err(ConfigError::Invalid(m));
+    if !(0.0..=1.0).contains(&telemetry.sample_ratio) {
+        return invalid(format!(
+            "telemetry.sample_ratio must be between 0 and 1, got {}",
+            telemetry.sample_ratio
+        ));
+    }
+    for (name, path) in [
+        ("traces_path", &telemetry.traces_path),
+        ("ai_path", &telemetry.ai_path),
+    ] {
+        if !(path.starts_with('/') || (name == "ai_path" && path.is_empty())) {
+            return invalid(format!("telemetry.{name} must start with /, got {path:?}"));
+        }
+    }
+    if telemetry.provider_name.trim().is_empty() {
+        return invalid("telemetry.provider_name is empty".into());
+    }
+    Ok(())
 }

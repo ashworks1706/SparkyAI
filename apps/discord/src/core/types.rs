@@ -38,7 +38,7 @@ pub struct ChatRequest {
 /// An action the engine is holding until the caller who asked answers it.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Confirmation {
-    /// Single-use token the buttons echo back so the engine can find the held action.
+    /// Single-use token the buttons echo back to identify the held action.
     pub token: Uuid,
     /// Tool that would have run.
     pub tool: String,
@@ -106,8 +106,8 @@ pub struct ErrorFrame {
 
 /// One line of progress from /chat/stream.
 ///
-/// The engine renders the sentence. slot names the line this one writes over, so a tool result
-/// lands where its own start line was.
+/// The engine renders the sentence. slot names the line this one writes over. A tool result
+/// carries the slot of its start line.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Progress {
     /// Ready-to-display sentence.
@@ -118,6 +118,9 @@ pub struct Progress {
     /// Removes the line of slot instead of writing text there.
     #[serde(default)]
     pub clear: bool,
+    /// The text is the answer written so far, shown as the body.
+    #[serde(default)]
+    pub draft: bool,
 }
 
 /// What arrives while a streamed turn runs.

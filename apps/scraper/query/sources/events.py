@@ -17,4 +17,5 @@ QUERY = QuerySource(
     params=(QueryParam("keywords", "What the event is about.", example="career fair"),),
     to_url=to_url,
     needs_js=True,
+    category="events",
 )

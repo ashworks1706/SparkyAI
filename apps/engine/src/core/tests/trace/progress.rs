@@ -117,7 +117,10 @@ fn a_finished_tool_call_carries_its_result_and_a_failed_one_its_error() {
 fn detail_is_held_to_what_the_style_allows() {
     let long = finished("search_library_hours", Ok("x".repeat(4_000)));
     let short = long
-        .progress(ProgressStyle { detail_chars: 40 })
+        .progress(ProgressStyle {
+            detail_chars: 40,
+            thought_chars: 40,
+        })
         .unwrap_or_default();
     assert!(short.chars().count() < 140, "{short}");
     assert!(short.contains('\u{2026}'), "the cut is visible: {short}");
@@ -237,8 +240,7 @@ fn the_wire_form_reads_without_knowing_the_variant() {
     };
     let wire = serde_json::to_value(&progress).unwrap_or(json!(null));
 
-    // A client renders text and needs no match arm of its own; event names the kind and slot
-    // says which line it lands on.
+    // The wire form carries event, slot, and text.
     assert_eq!(wire["event"], json!("tool_started"));
     assert_eq!(wire["slot"], json!("tool:c1"));
     assert!(

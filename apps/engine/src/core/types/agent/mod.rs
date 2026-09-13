@@ -16,9 +16,7 @@ use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::RunStatus;
 
-/// Knobs for the loop. All bounded; nothing runs forever.
-///
-/// Default is implemented in core::config.
+/// Knobs for the loop. Default is implemented in core::config.
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     /// gen_ai.provider.name on model spans.
@@ -33,8 +31,10 @@ pub struct AgentConfig {
     pub tool_timeout: Duration,
     /// How long a held action waits for caller approval.
     pub confirmation_ttl: Duration,
-    /// Completion budget per model call.
+    /// Completion budget of a model call that thinks.
     pub max_tokens: u32,
+    /// Completion budget of a model call that does not think.
+    pub max_tokens_without_thinking: u32,
     /// Sampling temperature.
     pub temperature: f32,
     /// Evidence chunks to retrieve per request.
@@ -59,6 +59,10 @@ pub struct AgentConfig {
     pub budget: Budget,
     /// When a model call thinks.
     pub thinking: ThinkingRules,
+    /// Stream model calls to whoever is watching.
+    pub stream: bool,
+    /// Longest run of answer text held back while waiting for the end of a sentence or line.
+    pub stream_block_chars: usize,
 }
 
 /// How a run ended and what it produced.

@@ -127,7 +127,7 @@ fn telemetry_defaults_point_at_the_local_posthog() {
     assert_eq!(cfg.telemetry.host.as_deref(), Some("http://localhost:8010"));
     assert!(cfg.telemetry.project_token.expose_secret().is_empty());
     assert_eq!(cfg.telemetry.traces_path, "/i/v1/traces");
-    // Off: the self-hosted capture-ai service refuses OTLP, so every batch sent there fails.
+    // The AI path is off by default.
     assert_eq!(cfg.telemetry.ai_path, "");
     assert_eq!(cfg.telemetry.provider_name, "llama.cpp");
 }
@@ -179,6 +179,19 @@ fn thinking_is_automatic_by_default_and_takes_a_fixed_mode() {
     let cfg = ok("[agent.thinking]\nmode = \"off\"\n");
     assert_eq!(cfg.agent.thinking.mode, ThinkingMode::Off);
     assert!(err("[agent.thinking]\nmode = \"sometimes\"\n").contains("mode"));
+}
+
+#[test]
+fn a_prompt_estimate_headroom_out_of_range_is_rejected() {
+    let e = err("[agent]\nprompt_estimate_headroom = -0.1\n");
+    assert!(e.contains("prompt_estimate_headroom"), "{e}");
+}
+
+#[test]
+fn a_completion_budget_of_zero_is_rejected() {
+    let e = err("[model]\nmax_tokens_without_thinking = 0\n");
+    assert!(e.contains("max_tokens_without_thinking"), "{e}");
+    assert_eq!(ok("").model.max_tokens_without_thinking, 1024);
 }
 
 #[test]
@@ -249,16 +262,14 @@ fn the_system_prompt_falls_back_then_yields_to_config_then_to_a_file() {
 
 #[test]
 fn a_missing_system_prompt_file_fails_at_boot() {
-    // A named system_file that cannot be read is a boot failure, not a fall back to the
-    // built-in prompt.
+    // A named system_file that cannot be read fails the boot.
     let cfg = ok("[prompt]\nsystem_file = \"/nonexistent/sparky-prompt.md\"\n");
     assert!(cfg.system_prompt("built-in").is_err());
 }
 
 #[test]
 fn a_setting_that_moved_sections_fails_the_boot_rather_than_being_ignored() {
-    // Unknown SPARKY_* variables are not rejected wholesale: the apps share one .env, so the
-    // engine sees the scraper keys. A key that moved is named instead.
+    // A key that moved sections is rejected and named; other unknown keys are not.
     let stale = "SPARKY_AGENT__TRACE_DIR";
     match Config::reject_renamed(|key| key == stale) {
         Ok(()) => unreachable!("a moved setting must not be ignored"),

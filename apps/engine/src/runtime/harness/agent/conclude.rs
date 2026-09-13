@@ -31,8 +31,8 @@ impl Agent {
         };
         Ok(self.finish(run, status, text, evidence, confirmation))
     }
-    /// Hands the turn to the profile writer and returns. The spawned task carries its own
-    /// context and deadline, so the answer never waits on it.
+
+    /// Hands the user turns to the profile writer on a detached task.
     fn record_profile(&self, run: &Run<'_>) {
         let Some(writer) = self.deps.profile.clone() else {
             return;
@@ -41,7 +41,7 @@ impl Agent {
             .new_turns
             .iter()
             .filter(|m| m.role == Role::User)
-            .map(|m| m.content.clone())
+            .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n");
         if turn.trim().is_empty() {
@@ -50,6 +50,8 @@ impl Agent {
         let (tenant, user) = (run.ctx.tenant_id.clone(), run.ctx.user_id.clone());
         tokio::spawn(async move { writer.record(tenant, user, turn).await });
     }
+
+    /// Appends the turns of this request to the conversation store, when one is configured.
     async fn persist(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), AgentError> {
         if let Some(store) = &self.deps.conversations {
             store
@@ -59,6 +61,8 @@ impl Agent {
         }
         Ok(())
     }
+
+    /// Emits the completion event and builds the answer.
     fn finish(
         &self,
         run: &Run<'_>,

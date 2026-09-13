@@ -45,15 +45,19 @@ impl Default for Retrieval {
 pub struct Query {
     /// Budget for one live query, end to end. Overrides agent.tool_timeout_secs for this tool.
     pub timeout_secs: u64,
-    /// How often the engine checks whether the worker has answered.
+    /// How often the engine checks whether the scraper has answered.
     pub poll_ms: u64,
+    /// How long a query may wait for the scraper to claim it before the call reports that the
+    /// scraper is not running.
+    pub claim_secs: u64,
 }
 
 impl Default for Query {
     fn default() -> Self {
         Self {
             timeout_secs: 90,
-            poll_ms: 400,
+            poll_ms: 100,
+            claim_secs: 5,
         }
     }
 }

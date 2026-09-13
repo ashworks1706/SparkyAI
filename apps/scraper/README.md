@@ -1,7 +1,7 @@
 # apps/scraper
 
-Offline ingestion. Fetches public ASU pages, chunks and embeds them, and writes the retrieval
-index the engine reads. Never on the request path.
+Ingestion and live search. Fetches public ASU pages, chunks and embeds them, and writes the
+retrieval index the engine reads. The engine reaches it only through the `jobs` table.
 
 ```bash
 cd apps/scraper
@@ -9,8 +9,8 @@ uv sync --extra dev
 uv run scraper migrate              # apply migrations/ (schema owner)
 uv run scraper run library_hours    # one source
 uv run scraper run --all
-uv run scraper schedule             # every enabled source on its interval
-uv run scraper status
+uv run scraper serve                # the job queue: live searches, their indexing, scheduled runs
+uv run scraper status               # sources, then the queue by kind and status
 ```
 
 | Module | Holds |
@@ -21,8 +21,10 @@ uv run scraper status
 | `ingest/embed.py` | llama-server embed endpoint |
 | `ingest/tree.py` | the hierarchical index: cluster a level, summarize each cluster on the chat endpoint, embed the summary, recurse |
 | `ingest/pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index → tree |
-| `query/registry.py` | the live query sources the engine may call, published by `scraper worker` |
-| `query/worker.py` | claims `jobs` rows the engine queues, fetches, and writes the result |
+| `jobs.py` | `scraper serve`: the live and background lanes over the `jobs` queue, and the timer that queues due sources |
+| `query/registry.py` | the live query sources the engine may call, published by `scraper serve` |
+| `query/run.py` | one live query: checks, fetch, the text handed back |
+| `query/index.py` | indexing a live result under the right source |
 | `sources/` | one module per ASU source; a source is a row, not a folder |
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |
