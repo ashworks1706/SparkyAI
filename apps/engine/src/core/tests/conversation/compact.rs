@@ -3,11 +3,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::core::tests::support::{Scripted, text};
+use crate::core::tests::support::{Row, Scripted, history_of, push_row, text};
+use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::Stored;
 use crate::core::types::conversation::message::{Message, Role, ToolCall};
 use crate::core::types::model::ModelError;
+use crate::core::types::store::StoreError;
 use crate::runtime::harness::agent::task::{Task, TaskConfig};
 use crate::runtime::harness::compact::{ChatCompactor, transcript};
 
@@ -77,26 +80,37 @@ async fn a_model_that_answers_with_nothing_is_an_error() {
     assert!(c.compact(&ctx(), &turns).await.is_err());
 }
 
-/// A conversation store preloaded with history, recording what the loop appends.
+/// A conversation store preloaded with history, keeping positions and summary coverage the way
+/// the database does.
 #[derive(Default)]
 struct Loaded {
-    turns: std::sync::Mutex<Vec<Message>>,
+    rows: std::sync::Mutex<Vec<Row>>,
+}
+
+impl Loaded {
+    fn seed(&self, messages: impl IntoIterator<Item = Message>) {
+        if let Ok(mut rows) = self.rows.lock() {
+            for m in messages {
+                push_row(&mut rows, m, None);
+            }
+        }
+    }
+
+    fn messages(&self) -> Vec<Message> {
+        self.rows
+            .lock()
+            .map(|rows| rows.iter().map(|r| r.message.clone()).collect())
+            .unwrap_or_default()
+    }
 }
 
 #[async_trait::async_trait]
-impl crate::core::traits::conversation::ConversationStore for Loaded {
-    async fn ensure(
-        &self,
-        _ctx: &RequestContext,
-        _channel_id: &str,
-    ) -> Result<(), crate::core::types::store::StoreError> {
+impl ConversationStore for Loaded {
+    async fn ensure(&self, _ctx: &RequestContext, _channel_id: &str) -> Result<(), StoreError> {
         Ok(())
     }
 
-    async fn owns(
-        &self,
-        _ctx: &RequestContext,
-    ) -> Result<bool, crate::core::types::store::StoreError> {
+    async fn owns(&self, _ctx: &RequestContext) -> Result<bool, StoreError> {
         Ok(true)
     }
 
@@ -104,33 +118,39 @@ impl crate::core::traits::conversation::ConversationStore for Loaded {
         &self,
         _ctx: &RequestContext,
         _channel_id: &str,
-    ) -> Result<Option<uuid::Uuid>, crate::core::types::store::StoreError> {
+    ) -> Result<Option<uuid::Uuid>, StoreError> {
         Ok(None)
     }
 
-    async fn end(
-        &self,
-        _ctx: &RequestContext,
-        _channel_id: &str,
-    ) -> Result<u64, crate::core::types::store::StoreError> {
+    async fn end(&self, _ctx: &RequestContext, _channel_id: &str) -> Result<u64, StoreError> {
         Ok(0)
     }
 
-    async fn load(
-        &self,
-        _ctx: &RequestContext,
-        _limit: usize,
-    ) -> Result<Vec<Message>, crate::core::types::store::StoreError> {
-        Ok(self.turns.lock().map(|t| t.clone()).unwrap_or_default())
+    async fn load(&self, _ctx: &RequestContext, limit: usize) -> Result<Vec<Stored>, StoreError> {
+        Ok(self
+            .rows
+            .lock()
+            .map(|rows| history_of(&rows, limit))
+            .unwrap_or_default())
     }
 
-    async fn append(
+    async fn append(&self, _ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError> {
+        if let Ok(mut rows) = self.rows.lock() {
+            for turn in turns {
+                push_row(&mut rows, turn.clone(), None);
+            }
+        }
+        Ok(())
+    }
+
+    async fn append_summary(
         &self,
         _ctx: &RequestContext,
-        turns: &[Message],
-    ) -> Result<(), crate::core::types::store::StoreError> {
-        if let Ok(mut kept) = self.turns.lock() {
-            kept.extend_from_slice(turns);
+        summary: &Message,
+        covers: i64,
+    ) -> Result<(), StoreError> {
+        if let Ok(mut rows) = self.rows.lock() {
+            push_row(&mut rows, summary.clone(), Some(covers));
         }
         Ok(())
     }
@@ -146,17 +166,13 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
     use crate::runtime::harness::tools::ToolSet;
 
     let store = Arc::new(Loaded::default());
-    if let Ok(mut turns) = store.turns.lock() {
-        for i in 0..40 {
-            turns.push(Message::user(format!(
-                "question {i} about ASU library hours and events"
-            )));
-            turns.push(Message::assistant(format!(
-                "answer {i} with enough text to cost tokens"
-            )));
-        }
-    }
-    let before = store.turns.lock().map_or(0, |t| t.len());
+    store.seed((0..40).flat_map(|i| {
+        [
+            Message::user(format!("question {i} about ASU library hours and events")),
+            Message::assistant(format!("answer {i} with enough text to cost tokens")),
+        ]
+    }));
+    let before = store.messages().len();
 
     let deps = AgentDeps {
         model: Arc::new(Scripted::new(vec![Ok(text("done"))])),
@@ -187,9 +203,7 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
     };
     assert_eq!(answer.text, "done");
 
-    let Ok(after) = store.turns.lock().map(|t| t.clone()) else {
-        unreachable!("the store is readable")
-    };
+    let after = store.messages();
     let summaries: Vec<&Message> = after.iter().filter(|m| m.role == Role::Summary).collect();
     assert_eq!(summaries.len(), 1, "one compacted turn was stored");
     assert!(summaries[0].content.contains("Forty exchanges"));
@@ -207,13 +221,9 @@ async fn a_failed_compaction_leaves_the_run_working() {
     use crate::runtime::harness::tools::ToolSet;
 
     let store = Arc::new(Loaded::default());
-    if let Ok(mut turns) = store.turns.lock() {
-        for i in 0..40 {
-            turns.push(Message::user(format!(
-                "question {i} padded out to spend the budget"
-            )));
-        }
-    }
+    store.seed(
+        (0..40).map(|i| Message::user(format!("question {i} padded out to spend the budget"))),
+    );
     let deps = AgentDeps {
         model: Arc::new(Scripted::new(vec![Ok(text("answered anyway"))])),
         tools: ToolSet::new(),
@@ -241,9 +251,98 @@ async fn a_failed_compaction_leaves_the_run_working() {
         unreachable!("a failed compaction does not fail the request")
     };
     assert_eq!(answer.text, "answered anyway");
-    let stored = store.turns.lock().map(|t| t.clone()).unwrap_or_default();
+    let stored = store.messages();
     assert!(
         !stored.iter().any(|m| m.role == Role::Summary),
         "no summary is stored when compaction fails"
+    );
+}
+
+#[tokio::test]
+async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
+    use crate::core::tests::support::MemorySink;
+    use crate::core::types::agent::AgentConfig;
+    use crate::core::types::agent::assemble::Budget;
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
+
+    let pad = "x".repeat(80);
+    let store = Arc::new(Loaded::default());
+    store.seed([
+        Message::user(format!("first question {pad}")),
+        Message::assistant(format!("first answer {pad}")),
+        Message::user(format!("second question {pad}")),
+        Message::assistant(format!("second answer {pad}")),
+        Message::user(format!("KEPT-QUESTION {pad}")),
+        Message::assistant(format!("KEPT-ANSWER {pad}")),
+    ]);
+    let summarizer = Scripted::new(vec![
+        Ok(text("The user asked two questions.")),
+        Ok(text("The user asked four questions.")),
+    ]);
+    let transcripts = summarizer.sent();
+    let chat = Scripted::new(vec![
+        Ok(text(&format!("fourth answer {pad}"))),
+        Ok(text("fifth answer")),
+    ]);
+    let prompts = chat.sent();
+    let deps = AgentDeps {
+        model: Arc::new(chat),
+        tools: ToolSet::new(),
+        policy: Arc::new(RiskPolicy::default()),
+        trace: Arc::new(MemorySink::new()),
+        retriever: None,
+        conversations: Some(store.clone()),
+        memory: None,
+        confirmations: None,
+        compactor: Some(Arc::new(ChatCompactor::new(Task::new(
+            Arc::new(summarizer),
+            "compaction",
+            "compact this",
+            TaskConfig::default(),
+        )))),
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
+    };
+    let cfg = AgentConfig {
+        budget: Budget {
+            history: 60,
+            ..Budget::default()
+        },
+        ..AgentConfig::default()
+    };
+    let agent = Agent::new(deps, cfg, "sys");
+
+    assert!(agent.run(&ctx(), "turn four").await.is_ok());
+    assert!(agent.run(&ctx(), "turn five").await.is_ok());
+
+    let transcripts: Vec<String> = transcripts
+        .lock()
+        .map(|r| {
+            r.iter()
+                .map(|q| q.messages.iter().map(|m| m.content.clone()).collect())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(transcripts.len(), 2, "each request compacted once");
+    assert!(
+        !transcripts[0].contains("KEPT-QUESTION"),
+        "the first compaction keeps the newest turns"
+    );
+    assert!(
+        transcripts[1].contains("KEPT-QUESTION")
+            && transcripts[1].contains("The user asked two questions."),
+        "the second compaction reads what the first kept and the first summary: {}",
+        transcripts[1]
+    );
+    let first_prompt: String = prompts
+        .lock()
+        .map(|r| r[0].messages.iter().map(|m| m.content.clone()).collect())
+        .unwrap_or_default();
+    assert!(
+        first_prompt.contains("KEPT-ANSWER"),
+        "the kept turns reach the prompt"
     );
 }

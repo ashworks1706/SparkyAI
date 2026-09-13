@@ -6,9 +6,50 @@ use async_trait::async_trait;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::conversation::Visibility;
-use crate::core::types::conversation::message::Message;
+use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::conversation::{Stored, Visibility};
 use crate::core::types::store::StoreError;
+
+/// One stored message in a double: its position, and what a summary covers.
+#[derive(Debug, Clone)]
+pub struct Row {
+    pub seq: i64,
+    pub message: Message,
+    pub covers: Option<i64>,
+}
+
+/// Appends message to rows at the next position.
+pub fn push_row(rows: &mut Vec<Row>, message: Message, covers: Option<i64>) {
+    let seq = rows.last().map_or(1, |r| r.seq + 1);
+    rows.push(Row {
+        seq,
+        message,
+        covers,
+    });
+}
+
+/// The history the database returns for rows: the newest summary at the position it covers,
+/// then the newest limit messages after that position, oldest first.
+pub fn history_of(rows: &[Row], limit: usize) -> Vec<Stored> {
+    let summary = rows.iter().rev().find(|r| r.message.role == Role::Summary);
+    let from = summary.map_or(0, |s| s.covers.unwrap_or(s.seq));
+    let after: Vec<&Row> = rows
+        .iter()
+        .filter(|r| r.message.role != Role::Summary && r.seq > from)
+        .collect();
+    let skip = after.len().saturating_sub(limit);
+    summary
+        .map(|s| Stored {
+            position: from,
+            message: s.message.clone(),
+        })
+        .into_iter()
+        .chain(after.into_iter().skip(skip).map(|r| Stored {
+            position: r.seq,
+            message: r.message.clone(),
+        }))
+        .collect()
+}
 
 /// A conversation store that remembers what the loop asked it to keep.
 #[derive(Default)]
@@ -32,8 +73,20 @@ impl ConversationStore for Recording {
         Ok(true)
     }
 
-    async fn load(&self, _ctx: &RequestContext, _limit: usize) -> Result<Vec<Message>, StoreError> {
+    async fn load(&self, _ctx: &RequestContext, _limit: usize) -> Result<Vec<Stored>, StoreError> {
         Ok(Vec::new())
+    }
+
+    async fn append_summary(
+        &self,
+        _ctx: &RequestContext,
+        summary: &Message,
+        _covers: i64,
+    ) -> Result<(), StoreError> {
+        if let Ok(mut kept) = self.turns.lock() {
+            kept.push(summary.clone());
+        }
+        Ok(())
     }
 
     async fn latest(
@@ -65,7 +118,7 @@ struct Room {
     visibility: Visibility,
     ended: bool,
     touched: u64,
-    turns: Vec<Message>,
+    rows: Vec<Row>,
 }
 
 /// A conversation store that keeps ownership, channels, visibility, turns, and ends the way
@@ -112,7 +165,7 @@ impl ConversationStore for Rooms {
                 visibility: ctx.visibility,
                 ended: false,
                 touched: *clock,
-                turns: Vec::new(),
+                rows: Vec::new(),
             });
             Ok(())
         })?
@@ -126,17 +179,32 @@ impl ConversationStore for Rooms {
         })
     }
 
-    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError> {
+    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Stored>, StoreError> {
         self.with(|(_, rooms)| {
             rooms
                 .iter()
                 .find(|r| r.id == ctx.conversation_id && owned_by(r, ctx))
-                .map(|r| {
-                    let skip = r.turns.len().saturating_sub(limit);
-                    r.turns.iter().skip(skip).cloned().collect()
-                })
+                .map(|r| history_of(&r.rows, limit))
                 .unwrap_or_default()
         })
+    }
+
+    async fn append_summary(
+        &self,
+        ctx: &RequestContext,
+        summary: &Message,
+        covers: i64,
+    ) -> Result<(), StoreError> {
+        self.with(|(clock, rooms)| {
+            let room = rooms
+                .iter_mut()
+                .find(|r| r.id == ctx.conversation_id && owned_by(r, ctx))
+                .ok_or(StoreError::NotOwned)?;
+            *clock += 1;
+            room.touched = *clock;
+            push_row(&mut room.rows, summary.clone(), Some(covers));
+            Ok(())
+        })?
     }
 
     async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError> {
@@ -147,7 +215,9 @@ impl ConversationStore for Rooms {
                 .ok_or(StoreError::NotOwned)?;
             *clock += 1;
             room.touched = *clock;
-            room.turns.extend_from_slice(turns);
+            for turn in turns {
+                push_row(&mut room.rows, turn.clone(), None);
+            }
             Ok(())
         })?
     }

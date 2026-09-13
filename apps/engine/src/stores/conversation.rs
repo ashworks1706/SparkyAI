@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::Stored;
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::store::StoreError;
 use crate::stores::postgres::{db, row_limit};
@@ -91,19 +92,27 @@ impl ConversationStore for PgConversations {
         row.try_get("owned").map_err(db)
     }
 
-    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Message>, StoreError> {
-        // Loading stops at the newest summary, which stands in for every turn before it.
+    async fn load(&self, ctx: &RequestContext, limit: usize) -> Result<Vec<Stored>, StoreError> {
         let rows = sqlx::query(
-            "select m.content from messages m
-             join conversations c on c.id = m.conversation_id
-             join users u on u.id = c.user_id
-             where m.conversation_id = $1 and c.tenant_id = $2
-               and u.tenant_id = $2 and u.discord_id = $4
-               and m.seq >= coalesce(
-                 (select max(s.seq) from messages s
-                  where s.conversation_id = $1 and s.role = 'summary'),
-                 m.seq)
-             order by m.seq desc limit $3",
+            "with owned as (
+               select c.id from conversations c join users u on u.id = c.user_id
+               where c.id = $1 and c.tenant_id = $2 and u.tenant_id = $2 and u.discord_id = $4
+             ),
+             latest as (
+               select coalesce(s.covers_seq, s.seq) as position, s.content from messages s
+               where s.conversation_id = (select id from owned) and s.role = 'summary'
+               order by s.seq desc limit 1
+             ),
+             recent as (
+               select m.seq as position, m.content from messages m
+               where m.conversation_id = (select id from owned) and m.role <> 'summary'
+                 and m.seq > coalesce((select position from latest), 0)
+               order by m.seq desc limit $3
+             )
+             select position, content from latest
+             union all
+             select position, content from recent
+             order by position",
         )
         .bind(ctx.conversation_id)
         .bind(&ctx.tenant_id)
@@ -113,11 +122,14 @@ impl ConversationStore for PgConversations {
         .await
         .map_err(db)?;
         let mut out = Vec::with_capacity(rows.len());
-        for row in rows.iter().rev() {
+        for row in &rows {
             let value: serde_json::Value = row.try_get("content").map_err(db)?;
             let message = serde_json::from_value::<Message>(value)
                 .map_err(|e| StoreError::Database(format!("stored message unreadable: {e}")))?;
-            out.push(message);
+            out.push(Stored {
+                position: row.try_get("position").map_err(db)?,
+                message,
+            });
         }
         Ok(out)
     }
@@ -160,6 +172,28 @@ impl ConversationStore for PgConversations {
     }
 
     async fn append(&self, ctx: &RequestContext, turns: &[Message]) -> Result<(), StoreError> {
+        self.write(ctx, turns, None).await
+    }
+
+    async fn append_summary(
+        &self,
+        ctx: &RequestContext,
+        summary: &Message,
+        covers: i64,
+    ) -> Result<(), StoreError> {
+        self.write(ctx, std::slice::from_ref(summary), Some(covers))
+            .await
+    }
+}
+
+impl PgConversations {
+    /// Appends turns in one transaction, each covering covers when it is a summary.
+    async fn write(
+        &self,
+        ctx: &RequestContext,
+        turns: &[Message],
+        covers: Option<i64>,
+    ) -> Result<(), StoreError> {
         let mut tx = self.pool.begin().await.map_err(db)?;
         let touched = sqlx::query(
             "update conversations c set updated_at = now() from users u
@@ -179,11 +213,13 @@ impl ConversationStore for PgConversations {
             let content =
                 serde_json::to_value(m).map_err(|e| StoreError::Database(e.to_string()))?;
             sqlx::query(
-                "insert into messages (conversation_id, role, content) values ($1, $2, $3)",
+                "insert into messages (conversation_id, role, content, covers_seq)
+                 values ($1, $2, $3, $4)",
             )
             .bind(ctx.conversation_id)
             .bind(role_str(m))
             .bind(content)
+            .bind(covers.filter(|_| m.role == Role::Summary))
             .execute(&mut *tx)
             .await
             .map_err(db)?;

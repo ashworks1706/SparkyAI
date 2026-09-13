@@ -9,8 +9,8 @@ use tracing::field::Empty;
 use super::{Agent, ms};
 use crate::core::types::agent::AgentError;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::conversation::Visibility;
 use crate::core::types::conversation::message::Message;
+use crate::core::types::conversation::{Stored, Visibility};
 use crate::core::types::knowledge::retrieval::RetrievalQuery;
 use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::trace::TraceEvent;
@@ -19,11 +19,11 @@ use crate::runtime::harness::safety::redact::{json, truncate};
 
 /// How many of the oldest turns do not fit budget, counted from the newest. The newest turn is
 /// always kept.
-fn overflowing(turns: &[Message], budget: usize, chars_per_token: usize) -> usize {
+fn overflowing(turns: &[Stored], budget: usize, chars_per_token: usize) -> usize {
     let mut spent = 0;
     let mut kept = 0;
-    for m in turns.iter().rev() {
-        let cost = m.estimated_tokens(chars_per_token);
+    for stored in turns.iter().rev() {
+        let cost = stored.message.estimated_tokens(chars_per_token);
         if spent + cost > budget {
             break;
         }
@@ -46,41 +46,45 @@ impl Agent {
         Ok(self.compacted(ctx, loaded).await)
     }
 
-    /// Replaces the turns that do not fit the history budget with one stored compacted turn.
+    /// Replaces the turns that do not fit the history budget with one stored summary that
+    /// covers them, and returns the history the prompt carries.
     ///
-    /// A failed compaction returns turns unchanged.
-    async fn compacted(&self, ctx: &RequestContext, turns: Vec<Message>) -> Vec<Message> {
+    /// A failed compaction returns the turns unchanged.
+    async fn compacted(&self, ctx: &RequestContext, turns: Vec<Stored>) -> Vec<Message> {
         let Some(compactor) = &self.deps.compactor else {
-            return turns;
+            return turns.into_iter().map(|s| s.message).collect();
         };
         let cpt = self.cfg.budget.chars_per_token;
         let overflow = overflowing(&turns, self.cfg.budget.history, cpt);
-        if overflow == 0 {
-            return turns;
-        }
-        let (replaced, kept) = turns.split_at(overflow);
+        let Some(covers) = overflow.checked_sub(1).map(|last| turns[last].position) else {
+            return turns.into_iter().map(|s| s.message).collect();
+        };
+        let replaced: Vec<Message> = turns[..overflow]
+            .iter()
+            .map(|s| s.message.clone())
+            .collect();
         self.deps.trace.emit(
             ctx,
             TraceEvent::Compaction {
                 turns: replaced.len(),
             },
         );
-        let summary = match compactor.compact(ctx, replaced).await {
+        let summary = match compactor.compact(ctx, &replaced).await {
             Ok(summary) => summary,
             Err(error) => {
                 tracing::warn!(error = %error, "compaction failed; history is trimmed instead");
-                return turns;
+                return turns.into_iter().map(|s| s.message).collect();
             }
         };
         if let Some(store) = &self.deps.conversations
-            && let Err(error) = store.append(ctx, std::slice::from_ref(&summary)).await
+            && let Err(error) = store.append_summary(ctx, &summary, covers).await
         {
             // The prompt still gets the summary.
             tracing::warn!(error = %error, "compacted turn was not stored");
         }
-        let mut out = Vec::with_capacity(kept.len() + 1);
+        let mut out = Vec::with_capacity(turns.len() - overflow + 1);
         out.push(summary);
-        out.extend_from_slice(kept);
+        out.extend(turns.into_iter().skip(overflow).map(|s| s.message));
         out
     }
 

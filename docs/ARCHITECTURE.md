@@ -394,6 +394,10 @@ Without compaction, history is trimmed to its budget by dropping the oldest turn
 
 A compacted turn is model output. It is stored with role `summary`, so a replayed conversation can tell it apart from what the user and the assistant said. It is never retrieval evidence, and the turns it replaced stay in `messages`.
 
+A summary row records `covers_seq`, the `seq` of the last message it replaces. Loading history reads the newest summary and then up to `agent.history_turns` messages whose `seq` is greater than its `covers_seq`. The turns a compaction kept are stored before the summary, so they load again on the next request. A summary without `covers_seq` covers every message before its own `seq`.
+
+The system prompt is not a stored message. It is rebuilt on every request and always comes first, so compaction never replaces it.
+
 ## Profile graph
 
 Flat memory rows record what a user said. The profile graph records entities, the relations between them, and an embedding per node, so recall can start from a relation.
