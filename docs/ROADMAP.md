@@ -4,13 +4,17 @@
 
 - [ ] Crawl past the landing page on scheduled runs: courses, clubs, jobs and scholarships each index one navigation page. Pages a live search fetches are already indexed
 - [ ] Chunk on document structure instead of fixed character windows
+- [ ] search function args should be handled by llm, allow more variations to the search, make agent write more in search function args for better cosine results, 
+- [ ] have better filered and document block storage in vector db index
+- [ ] decide if search_x agent is needed, or if the Sparky can handle search_x function args itself
 - [ ] Measure whether the tree earns its model calls, once the eval suite exists
 - [ ] Deduplicate across sources, not only against a source's own previous version
 - [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what
 - [ ] First deployment
 
-## 5 — Memory and skills v0.5
+## 5 — Memory v0.5
 
+- [ ] decide how skills are going to be stored and retrieved, and how to handle the fact detector
 - [ ] Skills promoted from a trace, with review before one is offered
 - [ ] Train the fact detector on real turns; the gate is rules until there is labelled data
 - [ ] Personalized discovery and deadlines
