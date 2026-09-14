@@ -1,6 +1,6 @@
-//! search_study_rooms: bookable study room slots at one ASU library on one date.
+//! search_live_study_rooms: bookable study room slots at one ASU library on one date.
 
-use super::{LiveSource, Param};
+use super::{Freshness, LiveSource, Param};
 
 /// LibCal study room availability.
 pub struct StudyRooms;
@@ -25,5 +25,9 @@ impl LiveSource for StudyRooms {
 
     fn params(&self) -> &'static [Param] {
         PARAMS
+    }
+
+    fn freshness(&self) -> Freshness {
+        Freshness::Live
     }
 }

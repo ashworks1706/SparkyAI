@@ -259,7 +259,7 @@ pub trait TraceSink {
 }
 ```
 
-The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Sandbox`.
+The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Router`, `Sandbox`.
 
 ## Request lifecycle
 
@@ -300,7 +300,7 @@ sequenceDiagram
 
 1. `discord` receives a slash command or a mention and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, and `continue_channel`.
 2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility, and otherwise a new conversation starts.
-3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question.
+3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question, unless the router skipped it.
 4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs.
 5. Every exit appends the new turns, hands the user's text to the profile writer, and builds the answer with its citations, tool runs, memories (empty for a public answer), usage, and cost.
 6. An answer with status `AwaitingConfirmation` carries a token. `POST /confirm` with that token runs the held action and resumes the loop from its result.
@@ -312,7 +312,7 @@ Each step assembles the prompt in a fixed order:
 1. System instructions, the role line, and today's date.
 2. The capabilities section, if it fits `agent.capabilities_budget_tokens`.
 3. Memory, within `agent.memory_budget_tokens`.
-4. Evidence, numbered for citation, within `agent.evidence_budget_tokens`. Each entry is labelled a stored copy with its fetch date and age, and `prompt.evidence_header` tells the model to call the matching search tool when the question needs current information or the entries do not answer it. With no evidence, `prompt.no_evidence_line` tells the model to call a search tool or say it does not know.
+4. Evidence, numbered for citation, within `agent.evidence_budget_tokens`. Each entry is labelled a stored copy with its fetch date and age, and `prompt.evidence_header` tells the model to call the matching search tool when the question needs current information or the entries do not answer it. With no evidence, one line takes its place: `prompt.no_evidence_line` when retrieval ran and found nothing, `prompt.no_retrieval_line` when the router called the turn small talk, and `prompt.live_only_line` when it called the answer current.
 5. History, newest first within `agent.history_budget_tokens`, never starting on an orphaned tool result.
 6. The user's input, then the model and tool turns of this request.
 
@@ -378,7 +378,7 @@ The harness runs more than one prompt. Each sub-agent is a `runtime::harness::ag
 
 | Kind | Executed by | Risk |
 |---|---|---|
-| `tool` | a built-in `Tool`: the `search_<source>` tools, `get_skill`, `run_sandbox` | declared per tool |
+| `tool` | a built-in `Tool`: the `search_<source>` and `search_live_<source>` tools, `get_skill`, `run_sandbox` | declared per tool |
 | `mcp` | a remote MCP server | derived from the tool name |
 | `skill` | fetched by `get_skill`, then followed | the risk of each capability it uses |
 
@@ -464,6 +464,14 @@ flowchart TD
 
 Each version records content hash, snapshot key, parser, chunker and embedding versions, text length, chunk count, and the previous version. The quality floor refuses a run whose text is under `scraper.quality_floor_ratio` of the last version, once that version had at least `scraper.quality_floor_min_chars`. An extractor break that returns only navigation is caught this way. `scraper run <source> --force` accepts such a run.
 
+### The gate in front of retrieval
+
+`retrieval.router` decides whether a question is retrieved for at all, through the `Router` trait in `core/traits/knowledge/route.rs`. `RuleRouter` is rules, not a model call, because it runs on every turn and a model call before retrieval would cost more latency than the retrieval it skips. A trained classifier can replace the rules through the trait, as `FactDetector` allows for the memory gate.
+
+A turn holding a cue from `retrieval.router.live` skips retrieval as `Skipped::Live`: the answer has to be current, so a search tool answers it and a stored copy would be out of date. A turn of at most `retrieval.router.max_chitchat_words` that holds a marker from `retrieval.router.chitchat` and no live cue skips it as `Skipped::Chitchat`: it asks for no ASU fact. Live wins over chitchat. Anything else is retrieved for. Both lists match whole words, lowercase, punctuation ignored, and an empty list uses the built-in one.
+
+A skip emits `TraceEvent::RetrievalSkipped` and changes two things downstream: the prompt gets the line for that reason in place of `prompt.no_evidence_line`, and the call does not think, because the thinking rule that reasons over missing evidence applies only when retrieval actually ran.
+
 Retrieval runs in the engine before the first model call, over the same rows.
 
 ```mermaid
@@ -495,7 +503,7 @@ The tree is off by default. It costs a model call per cluster per level.
 
 Scheduled ingestion keeps the index current on an interval. A live query answers from a source now, with parameters the model picks: a term, subject and level of the class catalog, a scholarship search filtered by the student's situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, a web search, or a refetch of this week's library hours.
 
-The engine offers one tool per source, named `search_<source>`. The tool description tells the model what the source answers. The prompt tells it to use the evidence first and to call a search tool when the evidence does not answer.
+The engine offers one tool per source. A source whose answer is worth a stored copy is named `search_<source>`; one whose answer is only true now and is never indexed is named `search_live_<source>`. The name is the engine's own: the registry key the scraper serves under is unchanged, so the prefix carries no migration. `LiveSource::freshness` declares it, the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` names a disagreement at boot the way it does for parameters. The tool description tells the model what the source answers. The prompt tells it to use the evidence first, to call a `search_` tool when the evidence does not answer, and to call a `search_live_` tool whenever the question is one only it can answer, because nothing in the prompt ever holds that.
 
 ```mermaid
 sequenceDiagram
@@ -529,7 +537,7 @@ A source has two halves, one file each. The engine side, `runtime/tools/knowledg
 
 Any scraper failure (unknown source, missing parameter, unreadable page, an exception) marks the job failed. The tool returns the reason as `InvalidArguments`, which the loop feeds to the model. A caller that is cancelled or runs out of time cancels its job. The text handed back is held to `scraper.query_max_chars`, and the page is cited in `Answer.sources`.
 
-`search_web` uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
+`search_live_web` uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
 
 Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login) and anything behind a student login, such as Workday jobs.
 
@@ -537,7 +545,7 @@ Not covered: X and Instagram posts (the public X timeline endpoint serves old po
 
 A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.
 
-A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
+A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. Those are the sources the engine offers as `search_live_<source>`, so the name says the answer is not kept. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
 
 ## Job queue
 
@@ -672,7 +680,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query`, `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval` (with `retrieval.router`), `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query`, `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct. Adapters build themselves from those structs and declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. A `prompt.system_file` that cannot be read also stops the boot. Nothing is clamped at runtime.
 

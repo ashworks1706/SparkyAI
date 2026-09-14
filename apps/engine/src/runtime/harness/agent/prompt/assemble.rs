@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::tokens::estimate;
 
 /// Builds the message list within budget.
@@ -56,8 +57,13 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     let turn_cost: usize = s.turn.iter().map(|m| m.estimated_tokens(cpt)).sum();
     let input_cost = estimate(s.input, cpt) + turn_cost;
     if s.evidence.is_empty() {
-        if !s.templates.no_evidence_line.trim().is_empty() {
-            let block = s.templates.no_evidence_line.trim().to_owned();
+        let line = match s.route.skipped() {
+            None => s.templates.no_evidence_line,
+            Some(Skipped::Chitchat) => s.templates.no_retrieval_line,
+            Some(Skipped::Live) => s.templates.live_only_line,
+        };
+        if !line.trim().is_empty() {
+            let block = line.trim().to_owned();
             used += estimate(&block, cpt);
             messages.push(Message::system(block));
         }

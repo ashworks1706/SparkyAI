@@ -10,9 +10,11 @@ use crate::core::types::knowledge::query::{QueryParam, QuerySourceInfo};
 use crate::core::types::tools::{RiskClass, ToolError};
 use crate::runtime::tools::knowledge::search::courses::Courses;
 use crate::runtime::tools::knowledge::search::library_hours::LibraryHours;
+use crate::runtime::tools::knowledge::search::shuttles::Shuttles;
 use crate::runtime::tools::knowledge::search::study_rooms::StudyRooms;
+use crate::runtime::tools::knowledge::search::web::Web;
 use crate::runtime::tools::knowledge::search::{
-    Accepts, LiveSource, Search, arguments, catalog, conforms, definition, tool_name,
+    Accepts, Freshness, LiveSource, Search, arguments, catalog, conforms, definition, tool_name,
 };
 
 /// The registry entry the scraper would publish for source.
@@ -37,6 +39,7 @@ fn published(source: &dyn LiveSource) -> QuerySourceInfo {
                 }
             })
             .collect(),
+        indexed: source.freshness().indexed(),
     }
 }
 
@@ -50,7 +53,10 @@ fn refused(source: &dyn LiveSource, args: Value) -> String {
 #[test]
 fn every_source_is_its_own_tool_with_a_unique_name() {
     let sources = catalog();
-    let mut names: Vec<String> = sources.iter().map(|s| tool_name(s.key())).collect();
+    let mut names: Vec<String> = sources
+        .iter()
+        .map(|s| tool_name(s.key(), s.freshness()))
+        .collect();
     assert_eq!(names.len(), 15);
     names.sort();
     names.dedup();
@@ -70,6 +76,45 @@ fn every_source_is_its_own_tool_with_a_unique_name() {
             "a live fetch outlives the default tool budget"
         );
     }
+}
+
+#[test]
+fn a_source_whose_answer_is_never_stored_is_named_apart() {
+    let live: Vec<&'static str> = catalog()
+        .iter()
+        .filter(|s| s.freshness() == Freshness::Live)
+        .map(|s| s.key())
+        .collect();
+    assert_eq!(live, ["study_rooms", "shuttles", "web"]);
+    assert_eq!(definition(&Shuttles, 90).name, "search_live_shuttles");
+    assert_eq!(definition(&StudyRooms, 90).name, "search_live_study_rooms");
+    assert_eq!(definition(&Web, 90).name, "search_live_web");
+    assert_eq!(definition(&Courses, 90).name, "search_courses");
+    for source in catalog() {
+        assert_eq!(
+            source.freshness().indexed(),
+            !definition(source.as_ref(), 90)
+                .name
+                .starts_with("search_live_"),
+            "{} says in its name whether its answers are stored",
+            source.key()
+        );
+    }
+}
+
+#[test]
+fn a_source_the_scraper_indexes_differently_is_named_at_boot() {
+    let mut served = published(&Shuttles);
+    served.indexed = true;
+    let drift = conforms(&Shuttles, &served);
+    assert!(
+        drift.is_err_and(|e| e.contains("search_live_shuttles") && e.contains("live")),
+        "a live tool over a source the scraper stores is a disagreement"
+    );
+
+    let mut served = published(&Courses);
+    served.indexed = false;
+    assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("stored")));
 }
 
 #[test]
@@ -142,6 +187,10 @@ fn a_bad_argument_is_refused_with_what_would_be_accepted() {
     let date = refused(&StudyRooms, json!({"library": "hayden", "date": "Sep 14"}));
     assert!(date.contains("2026-09-14"), "{date}");
     assert!(refused(&LibraryHours, json!({"library": "hayden"})).contains("it takes: nothing"));
+    assert!(
+        refused(&Shuttles, json!({"stop": "BYENG"})).contains("search_live_shuttles"),
+        "a refusal names the tool as the model sees it"
+    );
     assert!(refused(&Courses, json!(["Fall 2026"])).contains("must be an object"));
 }
 

@@ -61,7 +61,7 @@ stream_block_chars = 160
 mode = "auto"                  # on, off, or auto
 # auto takes the first rule that applies: a call offered no tools does not think; a step with
 # tool results thinks when after_tools is set; a question holding a cue, longer than
-# max_quick_chars, or with no evidence retrieved thinks; anything else does not.
+# max_quick_chars, or that retrieval ran for and found nothing for thinks; anything else does not.
 after_tools = true
 max_quick_chars = 80
 cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
@@ -78,6 +78,9 @@ role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
 evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, or these entries do not answer it, call the matching search_ tool first. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
 no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
+# Written instead when retrieval.router skipped retrieval, one line per reason.
+no_retrieval_line = "The knowledge base was not searched for this message: it asks for no ASU fact. Answer it directly and briefly, and cite nothing."
+live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call the search_ tool that matches the topic and answer from what it returns, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
@@ -134,6 +137,17 @@ lexical = true
 min_score = 0.0
 max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
 
+# The rule gate in front of retrieval, run on every turn. It is rules, not a model call, so it
+# costs nothing on the critical path. Empty lists use the built-in ones. A turn holding a live cue
+# skips retrieval and is answered from a search tool; a turn of at most max_chitchat_words that
+# holds a chitchat marker and no live cue skips it and is answered directly. A skipped turn also
+# does not think: the no_evidence thinking rule applies only when retrieval actually ran.
+[retrieval.router]
+enabled = true
+max_chitchat_words = 4
+chitchat = []
+live = []
+
 # ---------------------------------------------------------------- what may run
 # Risk classes in order: read_public, read_authenticated, prepare_write, external_write,
 # destructive, forbidden.
@@ -144,7 +158,9 @@ confirm_from = "external_write"
 
 [tools]
 disabled = []
-search = true                  # one search_<source> tool per live source the scraper publishes
+# One tool per source the scraper publishes: search_<source> for a source whose answer is stored
+# and can be cited later, search_live_<source> for one that is only true now and is never indexed.
+search = true
 
 # The classifier and the graph agent, detached from the request that produced the turn.
 # Enabled, every turn costs two extra model calls.
@@ -292,7 +308,7 @@ tree_max_level = 3
 tree_cluster_size = 5
 tree_min_chunks = 12
 
-# SearXNG behind the search_web tool (just search). base_url is per-machine and lives in .env.
+# SearXNG behind the search_live_web tool (just search). base_url is per-machine and lives in .env.
 [search]
 engines = "google,brave,bing"
 language = "en-US"

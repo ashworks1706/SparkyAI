@@ -222,6 +222,7 @@ async fn a_draft_the_guardrail_refuses_is_withdrawn_and_never_shown_again() {
         policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
         retriever: None,
+        router: None,
         conversations: None,
         memory: None,
         confirmations: None,

@@ -2,4 +2,5 @@
 
 pub mod query;
 pub mod retrieval;
+pub mod route;
 pub mod skills;

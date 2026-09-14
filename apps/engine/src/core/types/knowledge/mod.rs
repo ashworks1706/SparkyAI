@@ -3,4 +3,5 @@
 pub mod evidence;
 pub mod query;
 pub mod retrieval;
+pub mod route;
 pub mod skill;

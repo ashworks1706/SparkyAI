@@ -6,6 +6,7 @@ use std::time::Instant;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::knowledge::evidence::{Citation, Evidence};
+use crate::core::types::knowledge::route::Route;
 use crate::core::types::memory::Memory;
 use crate::core::types::model::Usage;
 use crate::core::types::tools::ToolRun;
@@ -15,6 +16,8 @@ pub(super) struct Inputs {
     pub(super) history: Vec<Message>,
     pub(super) memory: Vec<Memory>,
     pub(super) evidence: Vec<Evidence>,
+    /// What the router decided about retrieval for this request.
+    pub(super) route: Route,
 }
 
 /// Mutable state carried across steps.

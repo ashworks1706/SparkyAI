@@ -13,6 +13,8 @@ pub struct StepSignals<'a> {
     pub tool_results: bool,
     /// The question of this request. Empty when resuming after an approval.
     pub input: &'a str,
+    /// Retrieval ran for the question. False when the router skipped it.
+    pub retrieved: bool,
     /// Evidence chunks retrieval found for the question.
     pub evidence: usize,
 }
@@ -33,7 +35,7 @@ pub fn decide(rules: &ThinkingRules, step: &StepSignals<'_>) -> ThinkingChoice {
         choose(true, ThinkingReason::Cue)
     } else if step.input.chars().count() > rules.max_quick_chars {
         choose(true, ThinkingReason::Long)
-    } else if step.evidence == 0 {
+    } else if step.retrieved && step.evidence == 0 {
         choose(true, ThinkingReason::NoEvidence)
     } else {
         choose(false, ThinkingReason::Quick)

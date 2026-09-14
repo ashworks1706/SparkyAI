@@ -1,4 +1,4 @@
-//! ReadPublic: one search tool per live ASU source. A call checks arguments, queues a scraper job.
+//! ReadPublic: one search tool per ASU source. A call checks arguments, queues a scraper job.
 
 pub mod campus_map;
 pub mod clubs;
@@ -33,9 +33,36 @@ use crate::runtime::tools::structured;
 /// Prefix of every search tool name. The rest is the source key.
 pub const PREFIX: &str = "search_";
 
-/// The tool name a source is offered under.
-pub fn tool_name(key: &str) -> String {
-    format!("{PREFIX}{key}")
+/// Prefix of a search tool over a source whose answer is never indexed.
+pub const LIVE_PREFIX: &str = "search_live_";
+
+/// How long the answer of a source stays true.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Freshness {
+    /// The answer holds long enough to be worth a stored copy, so the scraper indexes it.
+    Stored,
+    /// The answer goes stale within minutes, so it reaches the model and nothing else.
+    Live,
+}
+
+impl Freshness {
+    /// Whether the scraper writes an answer of this kind into the retrieval index.
+    pub fn indexed(self) -> bool {
+        self == Self::Stored
+    }
+
+    /// The tool name prefix of a source of this kind.
+    pub fn prefix(self) -> &'static str {
+        match self {
+            Self::Stored => PREFIX,
+            Self::Live => LIVE_PREFIX,
+        }
+    }
+}
+
+/// The tool name a source is offered under. The registry key the scraper serves is unchanged.
+pub fn tool_name(key: &str, freshness: Freshness) -> String {
+    format!("{}{key}", freshness.prefix())
 }
 
 /// Every live source the engine offers, in the order the model sees them.
@@ -255,6 +282,11 @@ pub trait LiveSource: Send + Sync {
     /// The parameters it takes.
     fn params(&self) -> &'static [Param];
 
+    /// How long its answer stays true. Live answers are never indexed.
+    fn freshness(&self) -> Freshness {
+        Freshness::Stored
+    }
+
     /// Checks normalized arguments beyond what each parameter accepts. Err is shown to the model.
     fn check(&self, _params: &Map<String, Value>) -> Result<(), String> {
         Ok(())
@@ -272,7 +304,7 @@ pub fn definition(source: &dyn LiveSource, timeout_secs: u64) -> ToolDefinition 
         }
     }
     ToolDefinition {
-        name: tool_name(source.key()),
+        name: tool_name(source.key(), source.freshness()),
         description: source.description().to_owned(),
         parameters: json!({ "type": "object", "properties": properties, "required": required }),
         risk: RiskClass::ReadPublic,
@@ -300,7 +332,7 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
     if let Some(unknown) = given.keys().find(|k| !params.iter().any(|p| p.name == *k)) {
         return Err(format!(
             "{} has no parameter {unknown}; it takes: {}",
-            tool_name(source.key()),
+            tool_name(source.key(), source.freshness()),
             taken()
         ));
     }
@@ -312,7 +344,11 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
         };
         if value.is_empty() {
             if param.required {
-                return Err(format!("{} needs {}", tool_name(source.key()), param.name));
+                return Err(format!(
+                    "{} needs {}",
+                    tool_name(source.key(), source.freshness()),
+                    param.name
+                ));
             }
             continue;
         }
@@ -324,7 +360,18 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
 
 /// Whether source's parameters match what the scraper published for its key. Err names the diff.
 pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<(), String> {
-    let name = tool_name(source.key());
+    let name = tool_name(source.key(), source.freshness());
+    if published.indexed != source.freshness().indexed() {
+        return Err(format!(
+            "{name} is offered as {} but the scraper indexes its answers: {}",
+            if source.freshness().indexed() {
+                "stored"
+            } else {
+                "live"
+            },
+            published.indexed
+        ));
+    }
     for param in source.params() {
         let Some(served) = published.params.iter().find(|p| p.name == param.name) else {
             return Err(format!(

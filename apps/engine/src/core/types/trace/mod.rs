@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
@@ -163,6 +164,11 @@ pub enum TraceEvent {
         /// Wall time.
         duration_ms: u64,
     },
+    /// The router skipped retrieval for this question.
+    RetrievalSkipped {
+        /// Why it was skipped.
+        reason: Skipped,
+    },
     /// The loop finished.
     Completed {
         /// How it ended.
@@ -199,6 +205,7 @@ impl TraceEvent {
             Self::ToolCall { .. } => "tool_call",
             Self::MemoryRecalled { .. } => "memory_recalled",
             Self::Retrieval { .. } => "retrieval",
+            Self::RetrievalSkipped { .. } => "retrieval_skipped",
             Self::Completed { .. } => "completed",
         }
     }
@@ -274,7 +281,9 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            Self::RequestStarted { .. }
+            // The tool call the skip leads to writes its own line.
+            Self::RetrievalSkipped { .. }
+            | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }
             | Self::ModelAnswered { .. }

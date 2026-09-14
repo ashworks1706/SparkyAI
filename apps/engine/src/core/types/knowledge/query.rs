@@ -25,6 +25,14 @@ pub struct QuerySourceInfo {
     pub key: String,
     /// Parameters it accepts.
     pub params: Vec<QueryParam>,
+    /// Whether the scraper writes a result of this source to the retrieval index.
+    #[serde(default = "indexed_by_default")]
+    pub indexed: bool,
+}
+
+/// A source published before the scraper reported the flag is read as indexed.
+fn indexed_by_default() -> bool {
+    true
 }
 
 /// One live query to run.

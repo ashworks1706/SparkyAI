@@ -121,6 +121,7 @@ impl Agent {
                 system: &self.system_prompt,
                 memory: &inputs.memory,
                 evidence: &inputs.evidence,
+                route: inputs.route,
                 history: &inputs.history,
                 turn,
                 capabilities: &self.capabilities,

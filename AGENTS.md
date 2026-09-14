@@ -27,7 +27,7 @@ just phoenix          # Phoenix trace UI on :6006: one conversation as a tree
 just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
-just search           # self-hosted SearXNG on :8888 behind the search_web tool
+just search           # self-hosted SearXNG on :8888 behind the search_live_web tool
 just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just web              # Vite dev server on :5173

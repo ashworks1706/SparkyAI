@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod compact;
+pub mod knowledge;
 pub mod memory;
 pub mod safety;
 pub mod tools;

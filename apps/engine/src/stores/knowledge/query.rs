@@ -67,10 +67,12 @@ pub(crate) fn deadline_interval(remaining: Duration) -> Result<PgInterval, Query
 impl SourceQueries for PgSourceQueries {
     async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError> {
         let store = |e: sqlx::Error| QueryError::Store(e.to_string());
-        let rows = sqlx::query("select key, params from query_sources where enabled order by key")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(store)?;
+        let rows = sqlx::query(
+            "select key, params, indexed from query_sources where enabled order by key",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store)?;
         let mut out = Vec::with_capacity(rows.len());
         for row in &rows {
             let params: Value = row.try_get("params").map_err(store)?;
@@ -79,6 +81,7 @@ impl SourceQueries for PgSourceQueries {
             out.push(QuerySourceInfo {
                 key: row.try_get("key").map_err(store)?,
                 params,
+                indexed: row.try_get("indexed").map_err(store)?,
             });
         }
         Ok(out)

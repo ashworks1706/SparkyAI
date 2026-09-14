@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 
 use crate::core::types::conversation::message::Message;
 use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::route::Route;
 use crate::core::types::memory::Memory;
 
 /// Budgets for one assembled prompt, in estimated tokens. Default is implemented in core::config.
@@ -36,6 +37,10 @@ pub struct Templates<'a> {
     pub evidence_header: &'a str,
     /// Line written when retrieval found nothing.
     pub no_evidence_line: &'a str,
+    /// Line written when the router skipped retrieval as small talk.
+    pub no_retrieval_line: &'a str,
+    /// Line written when the router skipped retrieval because the answer has to be current.
+    pub live_only_line: &'a str,
     /// Heading above what the model may do.
     pub capabilities_header: &'a str,
     /// Line naming the current date, with {date}.
@@ -64,6 +69,15 @@ pub const EVIDENCE_HEADER: &str = "Stored copies of pages from the knowledge bas
 pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
                                     Call the search_ tool for the topic before you answer, or \
                                     say you do not have it.";
+/// Default line written when the router skipped retrieval as small talk.
+pub const NO_RETRIEVAL_LINE: &str = "The knowledge base was not searched for this message: it \
+                                     asks for no ASU fact. Answer it directly and briefly, and \
+                                     cite nothing.";
+/// Default line written when the router skipped retrieval because the answer has to be current.
+pub const LIVE_ONLY_LINE: &str = "The knowledge base was not searched for this question: the \
+                                  answer has to be current, and a stored copy would be out of \
+                                  date. Call the search_ tool that matches the topic and answer \
+                                  from what it returns, or say you do not have it.";
 /// Default line added to a call that is offered no tools.
 pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the user now in plain \
                                     text from what you already have, or say what you could not \
@@ -80,6 +94,8 @@ impl Default for Templates<'_> {
             memory_header: MEMORY_HEADER,
             evidence_header: EVIDENCE_HEADER,
             no_evidence_line: NO_EVIDENCE_LINE,
+            no_retrieval_line: NO_RETRIEVAL_LINE,
+            live_only_line: LIVE_ONLY_LINE,
             capabilities_header: CAPABILITIES_HEADER,
             date_line: DATE_LINE,
         }
@@ -95,6 +111,8 @@ pub struct Sections<'a> {
     pub memory: &'a [Memory],
     /// Retrieved evidence, best first.
     pub evidence: &'a [Evidence],
+    /// What the router decided about retrieval for this question.
+    pub route: Route,
     /// Prior turns, oldest first.
     pub history: &'a [Message],
     /// Messages after the input: tool calls and results, oldest first, always kept.

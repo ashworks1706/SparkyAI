@@ -1,6 +1,6 @@
-//! search_shuttles: live next-bus times at every stop of the ASU intercampus shuttles.
+//! search_live_shuttles: live next-bus times at every stop of the ASU intercampus shuttles.
 
-use super::{LiveSource, Param};
+use super::{Freshness, LiveSource, Param};
 
 /// The ASU shuttle tracker.
 pub struct Shuttles;
@@ -29,5 +29,9 @@ impl LiveSource for Shuttles {
 
     fn params(&self) -> &'static [Param] {
         PARAMS
+    }
+
+    fn freshness(&self) -> Freshness {
+        Freshness::Live
     }
 }

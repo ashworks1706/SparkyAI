@@ -1,6 +1,6 @@
-//! search_web: web results from Google, Brave and Bing through self-hosted SearXNG.
+//! search_live_web: web results from Google, Brave and Bing through self-hosted SearXNG.
 
-use super::{LiveSource, Param};
+use super::{Freshness, LiveSource, Param};
 
 /// Web search.
 pub struct Web;
@@ -29,5 +29,9 @@ impl LiveSource for Web {
 
     fn params(&self) -> &'static [Param] {
         PARAMS
+    }
+
+    fn freshness(&self) -> Freshness {
+        Freshness::Live
     }
 }

@@ -7,6 +7,7 @@ use crate::core::config::Config;
 use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::Embedder;
+use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::knowledge::skills::SkillStore;
 use crate::core::traits::memory::detector::FactDetector;
 use crate::core::traits::memory::profile::ProfileGraph;
@@ -26,6 +27,7 @@ use crate::runtime::harness::agent::prompt::capability;
 use crate::runtime::harness::agent::task::{Task, TaskConfig};
 use crate::runtime::harness::agent::{Agent, AgentDeps, PromptText};
 use crate::runtime::harness::compact::{self, ChatCompactor};
+use crate::runtime::harness::knowledge::route::{RuleRouter, Rules as RouterRules};
 use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
 use crate::runtime::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
 use crate::runtime::harness::safety::guardrail::{RuleGuardrail, Rules};
@@ -66,13 +68,17 @@ library and dining hours, transit, deadlines, campus services, and the society i
 
 ## Using your capabilities
 The knowledge base results were retrieved for you before you were called. Read them first.
-- Each search_ tool fetches one ASU source live, now, with the arguments you give: courses,
-  scholarships, events, clubs, news, the library catalog, library hours, study rooms, sports
-  schedules, sports news, live shuttle times, the campus map, official social media posts,
-  student jobs, and search_web for the open web. Call one only when the results in this prompt do not answer, are missing the
-  detail asked for, or the answer must be current, such as open seats, the next shuttle, or
-  study room slots.
-- Call the one search_ tool that matches the topic, with the fewest arguments that narrow it.
+- Each search_ tool fetches one ASU source now, with the arguments you give: courses,
+  scholarships, events, clubs, news, the library catalog, library hours, sports schedules,
+  sports news, the campus map, official social media posts, and student jobs. What they return
+  is kept, so it can be cited again later. Call one only when the results in this prompt do not
+  answer or are missing the detail asked for.
+- A search_live_ tool answers something that is only true right now and is never kept:
+  search_live_shuttles, search_live_study_rooms, and search_live_web for the open web. Nothing
+  in this prompt can answer what one of them answers, so call it rather than reading a stored
+  copy.
+- Call the one search_ or search_live_ tool that matches the topic, with the fewest arguments
+  that narrow it.
 - An empty result means the answer is not held. Say so rather than calling the same tool again
   with reworded arguments.
 - An action that needs approval waits for the user to press the button. Never say you did
@@ -85,12 +91,12 @@ Examples of the judgement wanted:
   intelligence, then answer from what came back.
 - "does CSE 310 have open seats this fall": search_courses with term Fall 2026, keywords
   CSE 310, open_only true, then answer.
-- "when is the next shuttle to Poly": search_shuttles with route polytechnic-tempe, then answer
-  with the stop and the time.
+- "when is the next shuttle to Poly": search_live_shuttles with route polytechnic-tempe, then
+  answer with the stop and the time.
 - "where is BYENG": search_campus_map with place BYENG, then answer with the map link.
-- "what was the score of the ASU game last night": search_web with that query and time_range
-  day, then answer from the results and cite them. Use search_web only when no search_ tool for
-  an ASU source fits.
+- "what was the score of the ASU game last night": search_live_web with that query and
+  time_range day, then answer from the results and cite them. Use search_live_web only when no
+  tool for an ASU source fits.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
 
 ## Never
@@ -98,7 +104,7 @@ Examples of the judgement wanted:
 - Never repeat a tool call that already returned nothing.
 - Never quote a result you were not given.
 - Never tell the user to check the official site when you have just cited it.
-- Never use run_sandbox to fetch a page or reach a site: it has no network. Use the search_ tool
+- Never use run_sandbox to fetch a page or reach a site: it has no network. Use the search tool
   for the topic."#;
 
 /// Serves until shutdown.
@@ -171,6 +177,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         policy: Arc::new(RiskPolicy::from(&cfg.policy)),
         trace,
         retriever: Some(retriever),
+        router: router(&cfg),
         conversations: Some(conversations.clone()),
         memory: Some(memory),
         confirmations: Some(confirmations.clone()),
@@ -468,6 +475,13 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         stream: cfg.agent.stream,
         stream_block_chars: cfg.agent.stream_block_chars,
     }
+}
+
+/// The gate retrieval passes, when it is on. Off retrieves for every turn.
+fn router(cfg: &Config) -> Option<Arc<dyn Router>> {
+    cfg.retrieval.router.enabled.then(|| {
+        Arc::new(RuleRouter::new(RouterRules::from(&cfg.retrieval.router))) as Arc<dyn Router>
+    })
 }
 
 /// The registry and queue the scraper serves.

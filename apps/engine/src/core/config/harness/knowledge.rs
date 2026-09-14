@@ -1,4 +1,4 @@
-//! Settings for retrieval and live source queries.
+//! Settings for retrieval, the gate in front of it, and live source queries.
 
 use serde::Deserialize;
 
@@ -24,6 +24,33 @@ pub struct Retrieval {
     pub max_distance: f32,
     /// Drop a chunk when the summary covering it is already in the result.
     pub collapse_tree: bool,
+    /// The gate retrieval passes before it runs.
+    pub router: Router,
+}
+
+/// The rule gate on retrieval, run on every turn. Empty lists use the built-in ones.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Router {
+    /// Run the gate. Off retrieves for every turn.
+    pub enabled: bool,
+    /// Longest turn, in words, a chitchat marker may skip retrieval for.
+    pub max_chitchat_words: usize,
+    /// Markers of small talk.
+    pub chitchat: Vec<String>,
+    /// Cues that the answer has to be current.
+    pub live: Vec<String>,
+}
+
+impl Default for Router {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_chitchat_words: 4,
+            chitchat: Vec::new(),
+            live: Vec::new(),
+        }
+    }
 }
 
 impl Default for Retrieval {
@@ -38,6 +65,7 @@ impl Default for Retrieval {
             min_score: 0.0,
             max_distance: 0.6,
             collapse_tree: true,
+            router: Router::default(),
         }
     }
 }

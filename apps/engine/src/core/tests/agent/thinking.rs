@@ -17,12 +17,13 @@ fn rules() -> ThinkingRules {
     AgentConfig::default().thinking
 }
 
-/// A first step on input with evidence found.
+/// A first step on input that retrieval ran for and found evidence chunks for.
 fn first(input: &str, evidence: usize) -> StepSignals<'_> {
     StepSignals {
         answer_only: false,
         tool_results: false,
         input,
+        retrieved: true,
         evidence,
     }
 }

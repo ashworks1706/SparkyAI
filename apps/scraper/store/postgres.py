@@ -242,11 +242,12 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
     with conn.cursor() as cur:
         cur.executemany(
             """
-            insert into query_sources (key, description, params, enabled, updated_at)
-            values (%s, %s, %s::jsonb, true, now())
+            insert into query_sources (key, description, params, indexed, enabled, updated_at)
+            values (%s, %s, %s::jsonb, %s, true, now())
             on conflict (key) do update
               set description = excluded.description,
                   params = excluded.params,
+                  indexed = excluded.indexed,
                   enabled = true,
                   updated_at = now()
             """,
@@ -267,6 +268,7 @@ def upsert_query_sources(conn: psycopg.Connection, sources: Sequence[QuerySource
                             for p in s.params
                         ]
                     ),
+                    s.index,
                 )
                 for s in sources
             ],
