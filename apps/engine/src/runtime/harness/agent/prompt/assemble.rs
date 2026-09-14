@@ -1,10 +1,9 @@
 //! Context assembly: fixed order, per-section budgets. Evidence and history trim first; rest kept.
 
-use chrono::{DateTime, Utc};
-
 use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role};
+use crate::core::types::knowledge::evidence::age;
 use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::tokens::estimate;
 
@@ -143,17 +142,6 @@ fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize
         count += 1;
     }
     (block, spent, count)
-}
-
-/// How long before now a page was fetched, in hours under two days and in days after.
-pub(crate) fn age(fetched: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let hours = (now - fetched).num_hours();
-    match hours {
-        ..1 => "under an hour ago".to_owned(),
-        1 => "1 hour ago".to_owned(),
-        2..48 => format!("{hours} hours ago"),
-        _ => format!("{} days ago", hours / 24),
-    }
 }
 
 /// The memory section: the header and every memory that fits budget. None when there is no memory.

@@ -53,6 +53,9 @@ pub struct QueryOutcome {
     pub url: String,
     /// Readable text of the page.
     pub text: String,
+    /// When the fetch happened, set only when the answer is a reused one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a live query did not answer.

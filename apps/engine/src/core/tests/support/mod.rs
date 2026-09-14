@@ -24,7 +24,7 @@ use crate::runtime::harness::safety::policy::RiskPolicy;
 use crate::runtime::harness::tools::ToolSet;
 
 pub use self::conversation::{Recording, Rooms, Row, history_of, push_row};
-pub use self::knowledge::FakeQueries;
+pub use self::knowledge::{FakeCache, FakeQueries};
 pub use self::memory::{Known, Recalling};
 pub use self::model::{Scripted, calls, only_thought, text};
 pub use self::safety::Held;

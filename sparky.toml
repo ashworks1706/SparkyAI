@@ -218,6 +218,41 @@ timeout_secs = 90
 poll_ms = 100
 claim_secs = 5                 # a query the scraper does not claim in this long reports that it is not running
 
+# Tool output caching for live queries, in Redis, shared by every engine replica. url is
+# per-machine and lives in .env as SPARKY_REDIS__URL; without it this must be off.
+#
+# Two things happen here. An answer within its lifetime is returned without touching the scraper.
+# And whatever the lifetime, only one request fetches a given query at a time: the rest wait on its
+# lease and read the answer it writes, so a hundred students asking at once is one fetch, not a
+# hundred. A cached answer carries how old it is into the tool output, so the model never calls a
+# reused result current.
+#
+# handoff_secs is the floor under every source: an answer has to outlive its own fetch for the
+# requests that waited on it to read it. So a source at ttl 0 is reused for that long and no
+# longer, which is what every search_live_ source defaults to. Coalescing itself costs no
+# freshness: a request that waited gets an answer fetched after it asked. Reuse does, so keep the
+# floor small.
+#
+# Caching is safe here because a source query only ever reads: the search tools are all
+# ReadPublic and anything that writes goes through Policy, never through this path.
+[query.cache]
+enabled = true
+default_ttl_secs = 900         # a search_<source> answer, which is indexed and citable anyway
+live_ttl_secs = 0              # a search_live_<source> answer: only the handoff floor below
+handoff_secs = 5               # floor under every lifetime, so the requests that waited read it
+lease_secs = 120               # must cover query.timeout_secs, or two requests fetch the same query
+poll_ms = 100                  # how often a waiting request looks for the answer
+timeout_ms = 500               # a cache slower than this is treated as one that is not there
+
+# Per source, by registry key. Anything not named here takes the default for its kind above.
+[query.cache.ttl_secs]
+library_hours = 3600
+campus_map = 86400
+social_media = 1800
+sports_news = 900
+news = 900
+courses = 300                  # open seat counts move during registration
+
 # ---------------------------------------------------------------- MCP
 # Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
 [mcp]

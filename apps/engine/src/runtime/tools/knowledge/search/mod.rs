@@ -25,7 +25,7 @@ use serde_json::{Map, Value, json};
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::evidence::Citation;
+use crate::core::types::knowledge::evidence::{Citation, age};
 use crate::core::types::knowledge::query::{QueryError, QueryRequest, QuerySourceInfo};
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::structured;
@@ -459,9 +459,13 @@ impl Tool for Search {
             absent @ QueryError::NoWorker(_) => ToolError::Failed(absent.to_string()),
             store @ QueryError::Store(_) => ToolError::Failed(store.to_string()),
         })?;
+        let when = outcome
+            .fetched_at
+            .map(|at| format!(", fetched {}", age(at, chrono::Utc::now())))
+            .unwrap_or_default();
         Ok(ToolOutput {
             content: format!(
-                "Live result from {} ({}):\n\n{}",
+                "Live result from {} ({}{when}):\n\n{}",
                 outcome.source, outcome.url, outcome.text
             ),
             data: structured(&outcome),

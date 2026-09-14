@@ -7,9 +7,10 @@ use crate::core::tests::support::ctx;
 use crate::core::types::agent::assemble::{Budget, Sections, Templates};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::evidence::age;
 use crate::core::types::knowledge::route::{Route, Skipped};
 use crate::core::types::memory::{Memory, MemoryKind};
-use crate::runtime::harness::agent::prompt::assemble::{age, assemble};
+use crate::runtime::harness::agent::prompt::assemble::assemble;
 
 fn evidence(n: usize) -> Vec<Evidence> {
     (0..n)

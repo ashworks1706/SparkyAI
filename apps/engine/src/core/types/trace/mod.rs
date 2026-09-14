@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
@@ -169,6 +170,13 @@ pub enum TraceEvent {
         /// Why it was skipped.
         reason: Skipped,
     },
+    /// What the query cache did for a live query.
+    QueryCache {
+        /// Registry key of the source asked for.
+        source: String,
+        /// What the cache did.
+        outcome: CacheOutcome,
+    },
     /// The loop finished.
     Completed {
         /// How it ended.
@@ -206,6 +214,7 @@ impl TraceEvent {
             Self::MemoryRecalled { .. } => "memory_recalled",
             Self::Retrieval { .. } => "retrieval",
             Self::RetrievalSkipped { .. } => "retrieval_skipped",
+            Self::QueryCache { .. } => "query_cache",
             Self::Completed { .. } => "completed",
         }
     }
@@ -281,8 +290,9 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            // The tool call the skip leads to writes its own line.
-            Self::RetrievalSkipped { .. }
+            // The tool call the skip leads to writes its own line, and so does a cached one.
+            Self::QueryCache { .. }
+            | Self::RetrievalSkipped { .. }
             | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }

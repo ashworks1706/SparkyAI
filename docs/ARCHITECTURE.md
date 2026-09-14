@@ -21,7 +21,7 @@ This document describes the current shape of the system and the rules it keeps. 
 | Embeddings | Qwen3-Embedding-0.6B, 1024 dimensions, on `llama-server` | compose service `embed`, profile `model` |
 | Database, vector store, job queue | PostgreSQL 17 with pgvector | schema in `apps/scraper/migrations` |
 | Object storage | S3-compatible, MinIO locally | `apps/scraper` |
-| Cache | Redis 7, provisioned and unused | `deploy/compose.yml` |
+| Cache | Redis 7, live query answers and their leases | `deploy/compose.yml` |
 | Observability | OpenTelemetry spans to PostHog and Phoenix, product events to PostHog, JSONL traces and logs under `.sparky/` | profiles `posthog`, `phoenix`, `metrics` |
 | Config | `sparky.toml`, then `SPARKY_*` env vars | `sparky.toml`, `.env.example` |
 | Build, gate | `just` recipes, pre-commit hook, CI | `justfile`, `.githooks`, `.github/workflows` |
@@ -259,7 +259,7 @@ pub trait TraceSink {
 }
 ```
 
-The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Router`, `Sandbox`.
+The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Router`, `QueryCache`, `Sandbox`.
 
 ## Request lifecycle
 
@@ -541,6 +541,20 @@ Any scraper failure (unknown source, missing parameter, unreadable page, an exce
 
 Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login) and anything behind a student login, such as Workday jobs.
 
+### Caching live results
+
+`query.cache` puts a Redis cache in front of every live query, as `CachedQueries` wrapping `SourceQueries`. It does two separate things.
+
+**Reuse.** An answer within its lifetime is returned without a `jobs` row, without waking the scraper, and without a fetch. The key is a UUIDv5 over the tenant, the source key, and the parameters sorted by name, so the same question from different students is the same key, and the order the model happened to write the arguments in does not matter. A reused answer carries the time it was fetched, and `Search` renders that age into the tool output, so the model can never present a stored answer as current.
+
+**One fetch per query.** Whatever the lifetime, the first request to ask for a query takes a lease (`SET NX`) and fetches; every request that arrives while it runs waits on that lease and reads the answer it writes. A hundred students asking about CSE 310 at once is one fetch of the ASU catalog, not a hundred. Coalescing costs no freshness at all, because a request that waited gets an answer fetched after it asked. Reuse does cost freshness, which is why every `search_live_` source defaults to a lifetime of zero.
+
+`query.cache.handoff_secs` is the floor under every lifetime: an answer has to outlive its own fetch for the requests that waited on it to read it, so a source at zero is reused for that long and no longer. `lease_secs` must cover `query.timeout_secs` or a lease can expire mid-fetch and let a second request fetch the same query; `Config::validate` rejects that at boot, along with a cache enabled without a `redis` section.
+
+A refusal is cached for the handoff window too, so a source rejecting an argument is not hammered. Every other failure releases the lease, because a timeout or an absent scraper says nothing about the query and the next request should start over.
+
+The cache is never load-bearing. Any Redis error is logged and the request fetches as if the cache were not there, recorded on the trace as `CacheOutcome::Unavailable`. Caching is safe on this path by construction: a source query only ever reads, the search tools are all `ReadPublic`, and anything that writes goes through `Policy`, never through `SourceQueries`.
+
 ### Indexing live results
 
 A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.
@@ -603,7 +617,7 @@ erDiagram
     chunks ||--o{ chunks : summarizes
 ```
 
-`jobs`, `query_sources`, and `skills` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis is provisioned but unused until multiple engine replicas need shared ephemeral state.
+`jobs`, `query_sources`, and `skills` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis holds the live query cache: answers within their lifetime and the leases that keep one fetch per query. It is shared ephemeral state, so several engine replicas coalesce against each other rather than each fetching once.
 
 ## Failure behavior
 
@@ -680,7 +694,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval` (with `retrieval.router`), `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query`, `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval` (with `retrieval.router`), `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct. Adapters build themselves from those structs and declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. A `prompt.system_file` that cannot be read also stops the boot. Nothing is clamped at runtime.
 

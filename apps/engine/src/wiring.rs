@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::core::config::Config;
 use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::Embedder;
 use crate::core::traits::knowledge::route::Router;
@@ -27,6 +28,7 @@ use crate::runtime::harness::agent::prompt::capability;
 use crate::runtime::harness::agent::task::{Task, TaskConfig};
 use crate::runtime::harness::agent::{Agent, AgentDeps, PromptText};
 use crate::runtime::harness::compact::{self, ChatCompactor};
+use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 use crate::runtime::harness::knowledge::route::{RuleRouter, Rules as RouterRules};
 use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
 use crate::runtime::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
@@ -41,6 +43,7 @@ use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::skills::GetSkillTool;
 use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
+use crate::stores::knowledge::cache::{self as redis_cache, RedisQueryCache};
 use crate::stores::knowledge::skills::PgSkills;
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::postgres::{
@@ -155,7 +158,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
-    let (tools, mcp_names) = build_tools(&cfg, &pool, source_queries(&cfg, &pool)).await?;
+    let queries = source_queries(&cfg, &pool, Arc::clone(&trace)).await?;
+    let (tools, mcp_names) = build_tools(&cfg, &pool, queries).await?;
     let capabilities = capability::render(&capability::from_definitions(
         &tools.definitions(),
         &mcp_names,
@@ -484,13 +488,65 @@ fn router(cfg: &Config) -> Option<Arc<dyn Router>> {
     })
 }
 
-/// The registry and queue the scraper serves.
-fn source_queries(cfg: &Config, pool: &sqlx::PgPool) -> Arc<dyn SourceQueries> {
-    Arc::new(PgSourceQueries::new(
+/// The registry and queue the scraper serves, behind the shared cache when one is configured.
+async fn source_queries(
+    cfg: &Config,
+    pool: &sqlx::PgPool,
+    trace: Arc<dyn TraceSink>,
+) -> anyhow::Result<Arc<dyn SourceQueries>> {
+    let queries: Arc<dyn SourceQueries> = Arc::new(PgSourceQueries::new(
         pool.clone(),
         Duration::from_millis(cfg.query.poll_ms),
         Duration::from_secs(cfg.query.claim_secs),
-    ))
+    ));
+    if !(cfg.tools.search && cfg.query.cache.enabled) {
+        tracing::info!("the live query cache is off; every query is fetched");
+        return Ok(queries);
+    }
+    // Config::validate rejects the cache without a redis section.
+    let Some(redis) = &cfg.redis else {
+        return Ok(queries);
+    };
+    let conn = redis_cache::connect(&redis.url, Duration::from_secs(redis.connect_timeout_secs))
+        .await
+        .map_err(|e| anyhow::anyhow!("redis: {e}"))?;
+    let cache: Arc<dyn QueryCache> = Arc::new(RedisQueryCache::new(
+        conn,
+        Duration::from_millis(cfg.query.cache.timeout_ms),
+    ));
+    let rules = cache_rules(cfg);
+    let reused = rules.ttl.values().filter(|ttl| !ttl.is_zero()).count();
+    tracing::info!(
+        sources = rules.ttl.len(),
+        reused,
+        "live query cache registered"
+    );
+    Ok(Arc::new(CachedQueries::new(queries, cache, trace, rules)))
+}
+
+/// How long each source's answers are reused: the per-source setting, else the one for its kind.
+fn cache_rules(cfg: &Config) -> CacheRules {
+    let settings = &cfg.query.cache;
+    let mut ttl = std::collections::HashMap::new();
+    for source in search::catalog() {
+        let default = if source.freshness().indexed() {
+            settings.default_ttl_secs
+        } else {
+            settings.live_ttl_secs
+        };
+        let secs = settings
+            .ttl_secs
+            .get(source.key())
+            .copied()
+            .unwrap_or(default);
+        ttl.insert(source.key().to_owned(), Duration::from_secs(secs));
+    }
+    CacheRules {
+        ttl,
+        handoff: Duration::from_secs(settings.handoff_secs),
+        lease: Duration::from_secs(settings.lease_secs),
+        poll: Duration::from_millis(settings.poll_ms),
+    }
 }
 
 /// Every tool the model may call, with tools.disabled removed at registration.

@@ -64,3 +64,14 @@ impl Evidence {
             .collect()
     }
 }
+
+/// How long before now a page was fetched, in hours under two days and in days after.
+pub fn age(fetched: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    let hours = (now - fetched).num_hours();
+    match hours {
+        ..1 => "under an hour ago".to_owned(),
+        1 => "1 hour ago".to_owned(),
+        2..48 => format!("{hours} hours ago"),
+        _ => format!("{} days ago", hours / 24),
+    }
+}

@@ -80,6 +80,8 @@ pub struct Query {
     pub poll_ms: u64,
     /// How long a query may wait for the scraper to claim it before reporting it not running.
     pub claim_secs: u64,
+    /// The cache in front of live queries.
+    pub cache: QueryCache,
 }
 
 impl Default for Query {
@@ -88,6 +90,44 @@ impl Default for Query {
             timeout_secs: 90,
             poll_ms: 100,
             claim_secs: 5,
+            cache: QueryCache::default(),
+        }
+    }
+}
+
+/// Reuse of live query answers, and the lease that keeps one fetch per query.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct QueryCache {
+    /// Use the cache. Off fetches every query, every time.
+    pub enabled: bool,
+    /// How long an answer of a source with no entry in ttl_secs is reused.
+    pub default_ttl_secs: u64,
+    /// How long an answer of a source the engine offers as search_live_ is reused.
+    pub live_ttl_secs: u64,
+    /// How long an answer of one source is reused, by registry key. Zero takes handoff_secs.
+    pub ttl_secs: std::collections::HashMap<String, u64>,
+    /// Floor under every source's lifetime: long enough for the requests that waited to read it.
+    pub handoff_secs: u64,
+    /// Longest one request holds the lease. Must cover a whole fetch.
+    pub lease_secs: u64,
+    /// How often a request waiting on the lease looks for the answer.
+    pub poll_ms: u64,
+    /// Budget for one call to the cache. A slow cache is treated as one that is not there.
+    pub timeout_ms: u64,
+}
+
+impl Default for QueryCache {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_ttl_secs: 900,
+            live_ttl_secs: 0,
+            ttl_secs: std::collections::HashMap::new(),
+            handoff_secs: 5,
+            lease_secs: 120,
+            poll_ms: 100,
+            timeout_ms: 500,
         }
     }
 }
