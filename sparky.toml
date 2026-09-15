@@ -61,7 +61,7 @@ stream_block_chars = 160
 mode = "auto"                  # on, off, or auto
 # auto takes the first rule that applies: a call offered no tools does not think; a step with
 # tool results thinks when after_tools is set; a question holding a cue, longer than
-# max_quick_chars, or with no evidence retrieved thinks; anything else does not.
+# max_quick_chars, or that retrieval ran for and found nothing for thinks; anything else does not.
 after_tools = true
 max_quick_chars = 80
 cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
@@ -78,6 +78,9 @@ role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
 evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, or these entries do not answer it, call the matching search_ tool first. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
 no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
+# Written instead when retrieval.router skipped retrieval, one line per reason.
+no_retrieval_line = "The knowledge base was not searched for this message: it asks for no ASU fact. Answer it directly and briefly, and cite nothing."
+live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call the search_ tool that matches the topic and answer from what it returns, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
@@ -134,6 +137,17 @@ lexical = true
 min_score = 0.0
 max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
 
+# The rule gate in front of retrieval, run on every turn. It is rules, not a model call, so it
+# costs nothing on the critical path. Empty lists use the built-in ones. A turn holding a live cue
+# skips retrieval and is answered from a search tool; a turn of at most max_chitchat_words that
+# holds a chitchat marker and no live cue skips it and is answered directly. A skipped turn also
+# does not think: the no_evidence thinking rule applies only when retrieval actually ran.
+[retrieval.router]
+enabled = true
+max_chitchat_words = 4
+chitchat = []
+live = []
+
 # ---------------------------------------------------------------- what may run
 # Risk classes in order: read_public, read_authenticated, prepare_write, external_write,
 # destructive, forbidden.
@@ -144,7 +158,9 @@ confirm_from = "external_write"
 
 [tools]
 disabled = []
-search = true                  # one search_<source> tool per live source the scraper publishes
+# One tool per source the scraper publishes: search_<source> for a source whose answer is stored
+# and can be cited later, search_live_<source> for one that is only true now and is never indexed.
+search = true
 
 # The classifier and the graph agent, detached from the request that produced the turn.
 # Enabled, every turn costs two extra model calls.
@@ -197,10 +213,55 @@ timeout_secs = 30
 # instructions = "You compact a conversation..."
 
 # Live source queries. They need just scraper serve running.
+#
+# The engine waits on the scraper by polling the jobs row. poll_ms is the first wait and it doubles
+# up to poll_max_ms, so a 30 second fetch costs a handful of round trips rather than one every
+# 100ms for its whole duration. max_in_flight caps how many fetches reach the database at once,
+# across every replica, held in the same Redis as the cache below. Over the cap a search tool is
+# refused with something the model can act on, which beats queueing onto the connection pool until
+# it times out. The cap sits under the cache, so a reused answer and a request that waited on
+# another cost the database nothing and take no slot.
 [query]
 timeout_secs = 90
 poll_ms = 100
+poll_max_ms = 1000
+max_in_flight = 16             # 0 removes the cap; keep it under postgres.max_connections
 claim_secs = 5                 # a query the scraper does not claim in this long reports that it is not running
+
+# Tool output caching for live queries, in Redis, shared by every engine replica. url is
+# per-machine and lives in .env as SPARKY_REDIS__URL; without it this must be off.
+#
+# Two things happen here. An answer within its lifetime is returned without touching the scraper.
+# And whatever the lifetime, only one request fetches a given query at a time: the rest wait on its
+# lease and read the answer it writes, so a hundred students asking at once is one fetch, not a
+# hundred. A cached answer carries how old it is into the tool output, so the model never calls a
+# reused result current.
+#
+# handoff_secs is the floor under every source: an answer has to outlive its own fetch for the
+# requests that waited on it to read it. So a source at ttl 0 is reused for that long and no
+# longer, which is what every search_live_ source defaults to. Coalescing itself costs no
+# freshness: a request that waited gets an answer fetched after it asked. Reuse does, so keep the
+# floor small.
+#
+# Caching is safe here because a source query only ever reads: the search tools are all
+# ReadPublic and anything that writes goes through Policy, never through this path.
+[query.cache]
+enabled = true
+default_ttl_secs = 900         # a search_<source> answer, which is indexed and citable anyway
+live_ttl_secs = 0              # a search_live_<source> answer: only the handoff floor below
+handoff_secs = 5               # floor under every lifetime, so the requests that waited read it
+lease_secs = 120               # must cover query.timeout_secs, or two requests fetch the same query
+poll_ms = 100                  # how often a waiting request looks for the answer
+timeout_ms = 500               # a cache slower than this is treated as one that is not there
+
+# Per source, by registry key. Anything not named here takes the default for its kind above.
+[query.cache.ttl_secs]
+library_hours = 3600
+campus_map = 86400
+social_media = 1800
+sports_news = 900
+news = 900
+courses = 300                  # open seat counts move during registration
 
 # ---------------------------------------------------------------- MCP
 # Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
@@ -281,6 +342,13 @@ serve_poll_secs = 0.5              # longest a lane of scraper serve waits befor
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
 job_lease_secs = 1800.0            # a background job running longer is queued again
 query_max_chars = 6000             # a live result is always kept in the prompt; about 1500 tokens
+# Back pressure on the one table every process writes to. Past index_backlog_limit queued
+# live_index jobs a live result is answered but not indexed: answering is what a student is
+# waiting on, and the source is refetched on its schedule anyway. Finished jobs are removed after
+# job_retention_hours so the queue stays small enough to claim from quickly.
+index_backlog_limit = 500
+job_retention_hours = 72.0         # 0 keeps every finished job forever
+job_prune_batch = 5000             # finished jobs removed per scheduling cycle
 parser_version = "bs4-text-v1"
 # A fetch yielding less than this fraction of the last good run is refused.
 quality_floor_ratio = 0.5
@@ -292,7 +360,7 @@ tree_max_level = 3
 tree_cluster_size = 5
 tree_min_chunks = 12
 
-# SearXNG behind the search_web tool (just search). base_url is per-machine and lives in .env.
+# SearXNG behind the search_live_web tool (just search). base_url is per-machine and lives in .env.
 [search]
 engines = "google,brave,bing"
 language = "en-US"

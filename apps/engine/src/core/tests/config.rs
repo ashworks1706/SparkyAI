@@ -39,6 +39,8 @@ name = "m"
 max_tokens = 256
 [postgres]
 url = "postgres://localhost/x"
+[redis]
+url = "redis://localhost:6379"
 [embedding]
 base_url = "http://localhost:8001/v1"
 api_key = ""
@@ -77,6 +79,33 @@ fn a_bare_config_is_valid_and_takes_every_default() {
     assert_eq!(cfg.agent.chars_per_token, 4);
     assert!(cfg.trace.enabled);
     assert_eq!(cfg.policy.write_roles, vec!["MANAGE_GUILD".to_owned()]);
+}
+
+#[test]
+fn the_live_query_cache_needs_somewhere_to_keep_answers() {
+    // The cache is on by default, so a deployment without redis is told rather than left uncached.
+    let without = load("[query.cache]\nenabled = true\n");
+    assert!(without.is_ok(), "the base config names a redis section");
+
+    let e = err("[query]\ntimeout_secs = 90\n[query.cache]\nlease_secs = 30\n");
+    assert!(
+        e.contains("lease_secs") && e.contains("timeout_secs"),
+        "a lease shorter than a fetch lets two requests fetch the same query: {e}"
+    );
+
+    let e = err("[query.cache]\nhandoff_secs = 0\n");
+    assert!(e.contains("handoff_secs"), "{e}");
+
+    // Turning it off needs no redis at all.
+    assert!(load("[query.cache]\nenabled = false\n").is_ok());
+    // Nor does an engine that offers no search tools.
+    assert!(load("[tools]\nsearch = false\n").is_ok());
+}
+
+#[test]
+fn the_wait_between_looks_cannot_shrink() {
+    let e = err("[query]\npoll_ms = 500\npoll_max_ms = 100\n");
+    assert!(e.contains("poll_max_ms") && e.contains("poll_ms"), "{e}");
 }
 
 #[test]

@@ -18,6 +18,7 @@ use tracing::field::Empty;
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
@@ -28,6 +29,7 @@ use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
 use crate::core::types::conversation::message::{Message, ToolCall};
+use crate::core::types::knowledge::route::Route;
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::{ConfirmationRequest, PendingAction};
 use crate::core::types::tools::ToolRun;
@@ -51,6 +53,8 @@ pub struct AgentDeps {
     pub trace: Arc<dyn TraceSink>,
     /// Evidence, when configured.
     pub retriever: Option<Arc<dyn Retriever>>,
+    /// Decides whether a question is retrieved for, when configured. None retrieves for every turn.
+    pub router: Option<Arc<dyn Router>>,
     /// Conversation history, when configured.
     pub conversations: Option<Arc<dyn ConversationStore>>,
     /// Cross-conversation memory, when configured.
@@ -222,6 +226,7 @@ impl Agent {
             history: self.history(ctx).await?,
             memory: Vec::new(),
             evidence: Vec::new(),
+            route: Route::Retrieve,
         };
         self.loop_until_done(&mut run, &inputs).await
     }

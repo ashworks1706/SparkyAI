@@ -7,6 +7,7 @@ import uuid
 import pytest
 from scraper import jobs
 from scraper.core.types import Job, QueryError, QueryResult, RunResult
+from scraper.store import postgres
 
 
 class Recorder:
@@ -14,6 +15,7 @@ class Recorder:
 
     def __init__(self) -> None:
         self.queued: list[tuple[str, dict, int]] = []
+        self.backlog_full = False
 
 
 def job(kind: str, **input: object) -> Job:
@@ -27,6 +29,9 @@ def recorder(monkeypatch) -> Recorder:
         jobs.postgres,
         "enqueue_job",
         lambda _conn, kind, input, priority: rec.queued.append((kind, input, priority)) or True,
+    )
+    monkeypatch.setattr(
+        jobs.postgres, "backlog_at_least", lambda _conn, _kind, _limit: rec.backlog_full
     )
     return rec
 
@@ -65,6 +70,15 @@ def test_an_answer_from_a_source_that_is_not_indexed_queues_nothing(monkeypatch,
     assert recorder.queued == []
 
 
+def test_a_deep_index_backlog_answers_the_caller_and_drops_the_indexing(monkeypatch, recorder):
+    # A student is waiting on the answer; the source is refetched on its schedule anyway.
+    answered(monkeypatch, "news", "stories")
+    recorder.backlog_full = True
+    result = jobs.handle(recorder, job(jobs.QUERY, source="news", params={}))
+    assert result["text"] == "stories", "the answer is unaffected"
+    assert recorder.queued == [], "nothing is added to a queue that is already deep"
+
+
 def test_indexing_can_be_switched_off(monkeypatch, recorder):
     answered(monkeypatch, "news", "stories")
     monkeypatch.setattr(jobs.settings().scraper, "index_live_results", False)
@@ -101,3 +115,86 @@ def test_a_run_job_runs_its_registered_source(monkeypatch, recorder):
 def test_a_kind_with_no_handler_is_rejected(recorder):
     with pytest.raises(QueryError, match="no handler"):
         jobs.handle(recorder, job("mystery"))
+
+
+class FakeCursor:
+    """Records the SQL a pruning or backlog call issues and answers it."""
+
+    def __init__(self, row: tuple | None = None, rowcount: int = 0) -> None:
+        self.row = row
+        self.rowcount = rowcount
+        self.sql: list[str] = []
+        self.args: list[tuple] = []
+
+    def execute(self, sql: str, args: tuple = ()) -> FakeCursor:
+        self.sql.append(" ".join(sql.split()))
+        self.args.append(args)
+        return self
+
+    def fetchone(self) -> tuple | None:
+        return self.row
+
+
+def test_a_backlog_check_reads_no_further_than_the_limit():
+    conn = FakeCursor(row=(1,))
+    assert postgres.backlog_at_least(conn, "live_index", 500)
+    assert conn.args[-1] == ("live_index", 499), "it looks for one row past the limit"
+    assert "limit 1" in conn.sql[-1], "and never reads the whole backlog"
+
+    empty = FakeCursor(row=None)
+    assert not postgres.backlog_at_least(empty, "live_index", 500)
+
+    # A limit of zero is no limit at all, so nothing is read.
+    unread = FakeCursor(row=(1,))
+    assert not postgres.backlog_at_least(unread, "live_index", 0)
+    assert unread.sql == []
+
+
+def test_pruning_finished_jobs_is_batched_and_leaves_running_ones_alone():
+    conn = FakeCursor(rowcount=12)
+    assert postgres.prune_jobs(conn, 3600.0, 5_000) == 12
+    sql = conn.sql[-1]
+    assert "delete from jobs" in sql
+    assert "status in ('done', 'failed', 'cancelled')" in sql, "queued and running are kept"
+    assert "limit %s" in sql, "one cycle never deletes unbounded rows"
+    assert conn.args[-1] == (3600.0, 5_000)
+
+    # Retention off keeps everything and issues nothing.
+    off = FakeCursor(rowcount=9)
+    assert postgres.prune_jobs(off, 0, 5_000) == 0
+    assert off.sql == []
+
+
+def test_a_migration_that_cannot_run_in_a_transaction_is_split_into_its_statements():
+    # Several statements in one execute put Postgres in an implicit transaction, which
+    # create index concurrently refuses, so such a file is sent one statement at a time.
+    sql = """
+    -- concurrent: a comment; with a semicolon in it
+    set lock_timeout = '5s';
+
+    create index concurrently if not exists a_idx on jobs (kind) where status = 'queued';
+    drop index if exists old_idx;
+    """
+    split = postgres.statements(sql)
+    assert len(split) == 3, split
+    assert split[0].endswith("'5s'"), "the comment above it rides along, its semicolon ignored"
+    assert split[1].startswith("create index concurrently")
+    assert split[2] == "drop index if exists old_idx"
+
+    # A semicolon inside a quoted value does not end a statement.
+    quoted = postgres.statements("select ';' as a; select 2")
+    assert quoted == ["select ';' as a", "select 2"]
+
+    # Trailing whitespace and comment-only tails produce no empty statement.
+    assert postgres.statements("select 1;\n-- done\n") == ["select 1"]
+
+
+def test_every_migration_using_concurrently_says_it_runs_outside_a_transaction():
+    from pathlib import Path
+
+    for path in sorted(postgres.MIGRATIONS_DIR.glob("*.sql")):
+        sql = path.read_text(encoding="utf-8")
+        if "concurrently" in sql.lower():
+            assert sql.lstrip().startswith(postgres.CONCURRENT_MARKER), (
+                f"{Path(path).name} would fail inside a transaction"
+            )

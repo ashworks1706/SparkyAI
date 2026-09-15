@@ -69,3 +69,33 @@ fn a_query_deadline_with_nanoseconds_is_kept_to_microseconds() {
     assert_eq!(interval.microseconds, 88_100_127);
     assert_eq!((interval.months, interval.days), (0, 0));
 }
+
+#[test]
+fn the_wait_between_looks_at_a_queued_job_doubles_up_to_its_cap() {
+    use std::time::Duration;
+
+    use crate::stores::knowledge::query::backoff;
+
+    let most = Duration::from_millis(1_000);
+    let mut wait = Duration::from_millis(100);
+    let mut waits = vec![wait];
+    for _ in 0..6 {
+        wait = backoff(wait, most);
+        waits.push(wait);
+    }
+    assert_eq!(
+        waits.iter().map(Duration::as_millis).collect::<Vec<_>>(),
+        [100, 200, 400, 800, 1000, 1000, 1000]
+    );
+
+    // A 30 second fetch is looked at far fewer times than a fixed 100ms poll would look.
+    let mut elapsed = Duration::ZERO;
+    let mut looks = 0;
+    let mut wait = Duration::from_millis(100);
+    while elapsed < Duration::from_secs(30) {
+        elapsed += wait;
+        looks += 1;
+        wait = backoff(wait, most);
+    }
+    assert!(looks < 40, "{looks} looks, a fixed poll would take 300");
+}

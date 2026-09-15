@@ -173,6 +173,20 @@ pub struct Postgres {
     pub acquire_timeout_secs: u64,
 }
 
+/// Redis connection, shared by every engine replica that caches live queries.
+#[derive(Debug, Deserialize)]
+pub struct Redis {
+    /// Connection URL, for example redis://localhost:6379.
+    pub url: SecretString,
+    /// Budget for connecting at boot.
+    #[serde(default = "default_connect_timeout_secs")]
+    pub connect_timeout_secs: u64,
+}
+
+fn default_connect_timeout_secs() -> u64 {
+    5
+}
+
 /// Rejects a model section leaving no room to answer, or with a non-finite sampling value.
 pub fn validate_model(model: &Model) -> Result<(), ConfigError> {
     if model.max_tokens == 0 || model.max_tokens_without_thinking == 0 {

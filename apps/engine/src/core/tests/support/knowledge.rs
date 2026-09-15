@@ -1,9 +1,11 @@
-//! Knowledge doubles: a fixed source query registry.
+//! Knowledge doubles: a fixed source query registry and an in-memory query cache.
 
 use async_trait::async_trait;
 
+use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::cache::{CacheError, Entry};
 use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryRequest, QuerySourceInfo,
 };
@@ -13,6 +15,7 @@ pub struct FakeQueries {
     sources: Vec<QuerySourceInfo>,
     answers: std::collections::HashMap<String, Result<QueryOutcome, String>>,
     sent: std::sync::Arc<std::sync::Mutex<Vec<QueryRequest>>>,
+    takes: std::time::Duration,
 }
 
 impl FakeQueries {
@@ -22,7 +25,14 @@ impl FakeQueries {
             sources,
             answers: std::collections::HashMap::new(),
             sent: std::sync::Arc::default(),
+            takes: std::time::Duration::ZERO,
         }
+    }
+
+    /// Makes every fetch take this long, so two requests for one query overlap.
+    pub fn taking(mut self, takes: std::time::Duration) -> Self {
+        self.takes = takes;
+        self
     }
 
     /// The requests this double is sent, readable after it moves into a tool.
@@ -38,6 +48,7 @@ impl FakeQueries {
                 source: source.to_owned(),
                 url: format!("https://example.test/{source}"),
                 text: text.to_owned(),
+                fetched_at: None,
             }),
         );
         self
@@ -65,6 +76,9 @@ impl SourceQueries for FakeQueries {
         if let Ok(mut sent) = self.sent.lock() {
             sent.push(request.clone());
         }
+        if !self.takes.is_zero() {
+            tokio::time::sleep(self.takes).await;
+        }
         match self.answers.get(&request.source) {
             Some(Ok(outcome)) => Ok(outcome.clone()),
             Some(Err(reason)) => Err(QueryError::Rejected(reason.clone())),
@@ -73,5 +87,109 @@ impl SourceQueries for FakeQueries {
                 request.source
             ))),
         }
+    }
+}
+
+/// A QueryCache double: an in-memory map with lifetimes the test controls.
+#[derive(Default)]
+pub struct FakeCache {
+    entries: std::sync::Mutex<std::collections::HashMap<String, (Entry, std::time::Instant)>>,
+    /// Calls that fail instead of answering, for the path where the cache is not there.
+    broken: bool,
+}
+
+impl FakeCache {
+    /// A working cache holding nothing.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// A cache that fails every call, as an unreachable Redis does.
+    pub fn broken() -> Self {
+        Self {
+            broken: true,
+            ..Self::default()
+        }
+    }
+
+    /// How many keys hold something that has not expired.
+    pub fn len(&self) -> usize {
+        self.entries.lock().map(|e| e.len()).unwrap_or_default()
+    }
+
+    /// Whether the cache holds nothing.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn fail<T>(what: &str) -> Result<T, CacheError> {
+        Err(CacheError::Backend(format!("{what}: no cache here")))
+    }
+}
+
+#[async_trait]
+impl QueryCache for FakeCache {
+    async fn get(&self, key: &str) -> Result<Option<Entry>, CacheError> {
+        if self.broken {
+            return Self::fail("get");
+        }
+        let Ok(mut entries) = self.entries.lock() else {
+            return Ok(None);
+        };
+        let expired = entries
+            .get(key)
+            .is_some_and(|(_, until)| *until <= std::time::Instant::now());
+        if expired {
+            entries.remove(key);
+        }
+        Ok(entries.get(key).map(|(entry, _)| entry.clone()))
+    }
+
+    async fn claim(&self, key: &str, lease: std::time::Duration) -> Result<bool, CacheError> {
+        if self.broken {
+            return Self::fail("claim");
+        }
+        let Ok(mut entries) = self.entries.lock() else {
+            return Ok(false);
+        };
+        let held = entries
+            .get(key)
+            .is_some_and(|(_, until)| *until > std::time::Instant::now());
+        if held {
+            return Ok(false);
+        }
+        entries.insert(
+            key.to_owned(),
+            (Entry::Pending, std::time::Instant::now() + lease),
+        );
+        Ok(true)
+    }
+
+    async fn put(
+        &self,
+        key: &str,
+        entry: &Entry,
+        ttl: std::time::Duration,
+    ) -> Result<(), CacheError> {
+        if self.broken {
+            return Self::fail("put");
+        }
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.insert(
+                key.to_owned(),
+                (entry.clone(), std::time::Instant::now() + ttl),
+            );
+        }
+        Ok(())
+    }
+
+    async fn release(&self, key: &str) -> Result<(), CacheError> {
+        if self.broken {
+            return Self::fail("release");
+        }
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.remove(key);
+        }
+        Ok(())
     }
 }

@@ -31,6 +31,9 @@ pub struct Config {
     pub model: Model,
     /// PostgreSQL, the source of truth and the retrieval index.
     pub postgres: Postgres,
+    /// Redis, the shared cache in front of live queries. Absent turns query.cache off.
+    #[serde(default)]
+    pub redis: Option<Redis>,
     /// Embedding endpoint, used to embed queries at retrieval time.
     pub embedding: Embedding,
     /// OpenTelemetry export.
@@ -206,6 +209,13 @@ impl Config {
         if self.tools.search && (self.query.poll_ms == 0 || self.query.claim_secs == 0) {
             return invalid("query.poll_ms and query.claim_secs must be at least 1".into());
         }
+        if self.tools.search && self.query.poll_max_ms < self.query.poll_ms {
+            return invalid(format!(
+                "query.poll_max_ms ({}) is below query.poll_ms ({})",
+                self.query.poll_max_ms, self.query.poll_ms
+            ));
+        }
+        validate_query_cache(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
         }
@@ -272,6 +282,39 @@ impl Config {
 }
 
 /// Rejects telemetry settings that cannot export. An empty ai_path turns the AI endpoint off.
+/// Rejects a query cache that cannot keep one fetch per query, or that has nowhere to keep it.
+fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
+    let invalid = |m: String| Err(ConfigError::Invalid(m));
+    let cache = &cfg.query.cache;
+    if !(cfg.tools.search && cache.enabled) {
+        return Ok(());
+    }
+    if cfg.redis.is_none() {
+        return invalid(
+            "query.cache.enabled needs a redis section; set SPARKY_REDIS__URL or turn it off"
+                .into(),
+        );
+    }
+    // A lease that expires mid fetch lets a second request fetch the same query.
+    if cache.lease_secs < cfg.query.timeout_secs {
+        return invalid(format!(
+            "query.cache.lease_secs ({}) is below query.timeout_secs ({}), so a lease can expire \
+             while its fetch is still running",
+            cache.lease_secs, cfg.query.timeout_secs
+        ));
+    }
+    if cache.handoff_secs == 0 {
+        return invalid(
+            "query.cache.handoff_secs must be at least 1, or a request that waited reads nothing"
+                .into(),
+        );
+    }
+    if cache.poll_ms == 0 || cache.timeout_ms == 0 {
+        return invalid("query.cache.poll_ms and query.cache.timeout_ms must be at least 1".into());
+    }
+    Ok(())
+}
+
 fn validate_telemetry(telemetry: &Telemetry) -> Result<(), ConfigError> {
     let invalid = |m: String| Err(ConfigError::Invalid(m));
     if !(0.0..=1.0).contains(&telemetry.sample_ratio) {

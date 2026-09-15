@@ -19,6 +19,7 @@ use crate::core::types::knowledge::query::{
 pub struct PgSourceQueries {
     pool: PgPool,
     poll: Duration,
+    poll_max: Duration,
     claim: Duration,
 }
 
@@ -29,11 +30,13 @@ const QUERY_JOB_KIND: &str = "source_query";
 const QUERY_CHANNEL: &str = "source_query";
 
 impl PgSourceQueries {
-    /// Polls a queued job every interval; unclaimed by the scraper in claim reports not running.
-    pub fn new(pool: PgPool, interval: Duration, claim: Duration) -> Self {
+    /// Polls a queued job, backing off from interval to poll_max between looks; unclaimed by the
+    /// scraper in claim reports not running.
+    pub fn new(pool: PgPool, interval: Duration, poll_max: Duration, claim: Duration) -> Self {
         Self {
             pool,
             poll: interval,
+            poll_max: poll_max.max(interval),
             claim,
         }
     }
@@ -53,6 +56,11 @@ impl PgSourceQueries {
     }
 }
 
+/// The next wait between looks at a queued job: double the last, never past most.
+pub(crate) fn backoff(last: Duration, most: Duration) -> Duration {
+    last.saturating_mul(2).min(most)
+}
+
 /// A query deadline as a Postgres interval, kept to the microseconds an interval holds.
 pub(crate) fn deadline_interval(remaining: Duration) -> Result<PgInterval, QueryError> {
     let micros = u64::try_from(remaining.as_micros()).unwrap_or(u64::MAX);
@@ -67,10 +75,12 @@ pub(crate) fn deadline_interval(remaining: Duration) -> Result<PgInterval, Query
 impl SourceQueries for PgSourceQueries {
     async fn sources(&self) -> Result<Vec<QuerySourceInfo>, QueryError> {
         let store = |e: sqlx::Error| QueryError::Store(e.to_string());
-        let rows = sqlx::query("select key, params from query_sources where enabled order by key")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(store)?;
+        let rows = sqlx::query(
+            "select key, params, indexed from query_sources where enabled order by key",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store)?;
         let mut out = Vec::with_capacity(rows.len());
         for row in &rows {
             let params: Value = row.try_get("params").map_err(store)?;
@@ -79,6 +89,7 @@ impl SourceQueries for PgSourceQueries {
             out.push(QuerySourceInfo {
                 key: row.try_get("key").map_err(store)?,
                 params,
+                indexed: row.try_get("indexed").map_err(store)?,
             });
         }
         Ok(out)
@@ -113,6 +124,9 @@ impl SourceQueries for PgSourceQueries {
             .map_err(store)?;
 
         let queued = std::time::Instant::now();
+        // A long fetch is looked at fewer times: the wait doubles up to poll_max, so one query
+        // costs a handful of round trips rather than one every poll for its whole duration.
+        let mut wait = self.poll;
         loop {
             if ctx.cancel.is_cancelled() {
                 self.cancel(job_id).await;
@@ -157,7 +171,8 @@ impl SourceQueries for PgSourceQueries {
                 }
             }
             // The sleep never runs past the deadline.
-            tokio::time::sleep(self.poll.min(ctx.remaining())).await;
+            tokio::time::sleep(wait.min(ctx.remaining())).await;
+            wait = backoff(wait, self.poll_max);
         }
     }
 }

@@ -7,8 +7,10 @@ use crate::core::tests::support::ctx;
 use crate::core::types::agent::assemble::{Budget, Sections, Templates};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::knowledge::evidence::Evidence;
+use crate::core::types::knowledge::evidence::age;
+use crate::core::types::knowledge::route::{Route, Skipped};
 use crate::core::types::memory::{Memory, MemoryKind};
-use crate::runtime::harness::agent::prompt::assemble::{age, assemble};
+use crate::runtime::harness::agent::prompt::assemble::assemble;
 
 fn evidence(n: usize) -> Vec<Evidence> {
     (0..n)
@@ -123,6 +125,7 @@ fn a_resumed_run_appends_no_input_of_its_own() {
             system: "sys",
             memory: &[],
             evidence: &[],
+            route: Route::Retrieve,
             history: &history,
             turn: &[],
             capabilities: "",
@@ -219,6 +222,43 @@ fn a_question_retrieval_found_nothing_for_says_so_instead_of_going_quiet() {
     );
     let text: String = found.messages.iter().map(|m| m.content.clone()).collect();
     assert!(!text.contains("NOTHING FOUND"), "{text}");
+}
+
+#[test]
+fn a_turn_the_router_skipped_is_told_why_rather_than_that_nothing_was_found() {
+    let templates = Templates {
+        no_evidence_line: "NOTHING FOUND",
+        no_retrieval_line: "NOT SEARCHED",
+        live_only_line: "TOO OLD TO HELP",
+        ..Templates::default()
+    };
+    let line = |route| {
+        let out = assemble(
+            &ctx(),
+            &Sections {
+                system: "s",
+                input: "q",
+                route,
+                templates,
+                ..Sections::default()
+            },
+            Budget::default(),
+        );
+        out.messages
+            .iter()
+            .map(|m| m.content.clone())
+            .collect::<String>()
+    };
+    assert!(line(Route::Retrieve).contains("NOTHING FOUND"));
+    let chitchat = line(Route::Skip(Skipped::Chitchat));
+    assert!(chitchat.contains("NOT SEARCHED"), "{chitchat}");
+    assert!(
+        !chitchat.contains("NOTHING FOUND"),
+        "a skipped turn is never told retrieval came back empty"
+    );
+    let current = line(Route::Skip(Skipped::Live));
+    assert!(current.contains("TOO OLD TO HELP"), "{current}");
+    assert!(!current.contains("NOTHING FOUND"), "{current}");
 }
 
 #[test]

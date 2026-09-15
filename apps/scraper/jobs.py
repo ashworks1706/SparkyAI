@@ -59,12 +59,17 @@ def handle(conn: psycopg.Connection, job: Job) -> dict:
     if job.kind == QUERY:
         result = run_job(job)
         if should_index(QUERY_SOURCES[result.source], cfg.index_live_results):
-            postgres.enqueue_job(
-                conn,
-                INDEX,
-                {"source": result.source, "url": result.url, "text": result.text},
-                INDEX_PRIORITY,
-            )
+            # Indexing is dropped rather than queued when the backlog is already this deep: a
+            # live query must stay answerable, and the source is refetched on its schedule anyway.
+            if postgres.backlog_at_least(conn, INDEX, cfg.index_backlog_limit):
+                log.warning("index backlog full; live result not queued", source=result.source)
+            else:
+                postgres.enqueue_job(
+                    conn,
+                    INDEX,
+                    {"source": result.source, "url": result.url, "text": result.text},
+                    INDEX_PRIORITY,
+                )
         return {
             "source": result.source,
             "url": result.url,
@@ -108,10 +113,11 @@ def poll_once(kinds: Sequence[str]) -> bool:
 
 
 def enqueue_due(now: datetime) -> int:
-    """Queues a run for every due source; requeues jobs a stopped process left running."""
+    """Queues a run for every due source; requeues stale jobs and removes finished ones."""
     cfg = settings().scraper
     with postgres.connection() as conn:
         stale = postgres.requeue_stale(conn, BACKGROUND_KINDS, cfg.job_lease_secs)
+        pruned = postgres.prune_jobs(conn, cfg.job_retention_hours * 3600.0, cfg.job_prune_batch)
         rows = {r["key"]: r for r in postgres.status_rows(conn)}
         queued = sum(
             postgres.enqueue_job(conn, RUN, {"source": key}, RUN_PRIORITY)
@@ -119,8 +125,8 @@ def enqueue_due(now: datetime) -> int:
             if is_due(rows.get(key), now)
         )
         conn.commit()
-    if stale or queued:
-        log.info("queue topped up", runs=queued, requeued=stale)
+    if stale or queued or pruned:
+        log.info("queue topped up", runs=queued, requeued=stale, pruned=pruned)
     return queued
 
 

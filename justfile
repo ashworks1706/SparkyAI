@@ -142,7 +142,7 @@ phoenix *ARGS:
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
 
-# Self-hosted metasearch for search_web tool on http://localhost:8888 (loopback)
+# Self-hosted metasearch for the search_live_web tool on http://localhost:8888 (loopback)
 search *ARGS:
     docker compose -f deploy/compose.yml --profile search up -d {{ARGS}} searxng
 

@@ -25,6 +25,14 @@ pub struct QuerySourceInfo {
     pub key: String,
     /// Parameters it accepts.
     pub params: Vec<QueryParam>,
+    /// Whether the scraper writes a result of this source to the retrieval index.
+    #[serde(default = "indexed_by_default")]
+    pub indexed: bool,
+}
+
+/// A source published before the scraper reported the flag is read as indexed.
+fn indexed_by_default() -> bool {
+    true
 }
 
 /// One live query to run.
@@ -45,6 +53,9 @@ pub struct QueryOutcome {
     pub url: String,
     /// Readable text of the page.
     pub text: String,
+    /// When the fetch happened, set only when the answer is a reused one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fetched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a live query did not answer.
@@ -61,6 +72,11 @@ pub enum QueryError {
         "the scraper is not running, so {0} cannot be fetched now; start it with just scraper serve"
     )]
     NoWorker(String),
+    /// As many live queries are already running as the engine allows.
+    #[error(
+        "too many live searches are running right now; answer without {0} or ask again shortly"
+    )]
+    Busy(String),
     /// The scraper did not answer inside the budget.
     #[error("the scraper did not answer within {0:?}")]
     Timeout(std::time::Duration),

@@ -85,7 +85,12 @@ fn services() -> Vec<Unit> {
             "pgvector 17; the retrieval index and conversations",
             Some("localhost:5432"),
         ),
-        service("redis", None, "queue backend", Some("localhost:6379")),
+        service(
+            "redis",
+            None,
+            "live query cache, its leases and the cap on fetches",
+            Some("localhost:6379"),
+        ),
         service("minio", None, "object store", Some("http://localhost:9001")),
         service(
             "posthog",
@@ -138,7 +143,7 @@ fn services() -> Vec<Unit> {
         service(
             "searxng",
             Some("search"),
-            "self-hosted metasearch behind search_web",
+            "self-hosted metasearch behind search_live_web",
             Some("http://localhost:8888"),
         ),
         service(

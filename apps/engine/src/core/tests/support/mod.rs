@@ -12,6 +12,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::core::traits::conversation::ConversationStore;
+use crate::core::traits::knowledge::retrieval::Retriever;
+use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
@@ -22,7 +24,7 @@ use crate::runtime::harness::safety::policy::RiskPolicy;
 use crate::runtime::harness::tools::ToolSet;
 
 pub use self::conversation::{Recording, Rooms, Row, history_of, push_row};
-pub use self::knowledge::FakeQueries;
+pub use self::knowledge::{FakeCache, FakeQueries};
 pub use self::memory::{Known, Recalling};
 pub use self::model::{Scripted, calls, only_thought, text};
 pub use self::safety::Held;
@@ -38,6 +40,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
         retriever: None,
+        router: None,
         conversations: None,
         memory: None,
         confirmations: None,
@@ -61,6 +64,7 @@ pub fn agent_with_store(
         policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::default()),
         retriever: None,
+        router: None,
         conversations: Some(conversations),
         memory: None,
         confirmations: None,
@@ -85,6 +89,7 @@ pub fn agent_holding(
         policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::default()),
         retriever: None,
+        router: None,
         conversations: Some(conversations),
         memory: None,
         confirmations: Some(confirmations),
@@ -94,6 +99,32 @@ pub fn agent_holding(
         profile_graph: None,
     };
     Agent::new(deps, AgentConfig::default(), "sys")
+}
+
+/// An agent whose retriever is gated by a router, for the routing path.
+pub fn agent_routing(
+    model: Scripted,
+    cfg: AgentConfig,
+    retriever: Arc<dyn Retriever>,
+    router: Arc<dyn Router>,
+) -> (Agent, Arc<MemorySink>) {
+    let sink = Arc::new(MemorySink::default());
+    let deps = AgentDeps {
+        model: Arc::new(model),
+        tools: ToolSet::new(),
+        policy: Arc::new(RiskPolicy::default()),
+        trace: sink.clone(),
+        retriever: Some(retriever),
+        router: Some(router),
+        conversations: None,
+        memory: None,
+        confirmations: None,
+        compactor: None,
+        guardrail: None,
+        profile: None,
+        profile_graph: None,
+    };
+    (Agent::new(deps, cfg, "sys"), sink)
 }
 
 pub fn ctx() -> RequestContext {
@@ -113,6 +144,7 @@ pub fn agent_recalling(
         policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::default()),
         retriever: None,
+        router: None,
         conversations: None,
         memory: Some(memory),
         confirmations: None,

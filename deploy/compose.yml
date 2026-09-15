@@ -65,6 +65,7 @@ services:
       - { path: ../.env, required: false }
     environment:
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
+      SPARKY_REDIS__URL: redis://redis:6379
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__HOST: http://posthog
@@ -72,6 +73,7 @@ services:
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     restart: unless-stopped
 
   discord:
@@ -280,6 +282,11 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   minio:
     image: quay.io/minio/minio

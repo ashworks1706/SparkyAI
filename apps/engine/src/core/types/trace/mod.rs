@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::types::knowledge::cache::CacheOutcome;
+use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
@@ -163,6 +165,23 @@ pub enum TraceEvent {
         /// Wall time.
         duration_ms: u64,
     },
+    /// The router skipped retrieval for this question.
+    RetrievalSkipped {
+        /// Why it was skipped.
+        reason: Skipped,
+    },
+    /// What the query cache did for a live query.
+    QueryCache {
+        /// Registry key of the source asked for.
+        source: String,
+        /// What the cache did.
+        outcome: CacheOutcome,
+    },
+    /// A live query was refused because as many were already running as the engine allows.
+    QueryRefused {
+        /// Registry key of the source asked for.
+        source: String,
+    },
     /// The loop finished.
     Completed {
         /// How it ended.
@@ -199,6 +218,9 @@ impl TraceEvent {
             Self::ToolCall { .. } => "tool_call",
             Self::MemoryRecalled { .. } => "memory_recalled",
             Self::Retrieval { .. } => "retrieval",
+            Self::RetrievalSkipped { .. } => "retrieval_skipped",
+            Self::QueryCache { .. } => "query_cache",
+            Self::QueryRefused { .. } => "query_refused",
             Self::Completed { .. } => "completed",
         }
     }
@@ -266,6 +288,9 @@ impl TraceEvent {
                 chunk_ids.len(),
                 plural(chunk_ids.len(), "source", "sources")
             )),
+            Self::QueryRefused { source, .. } => {
+                Some(format!("\u{1f6a6} `{source}` is busy right now"))
+            }
             Self::PolicyDecision { tool, decision, .. } => match decision {
                 Decision::Deny { .. } => Some(format!("\u{1f6ab} `{tool}` was not allowed")),
                 Decision::Confirm(_) => Some(format!("\u{270b} `{tool}` needs your approval")),
@@ -274,7 +299,10 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            Self::RequestStarted { .. }
+            // The tool call the skip leads to writes its own line, and so does a cached one.
+            Self::QueryCache { .. }
+            | Self::RetrievalSkipped { .. }
+            | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }
             | Self::ModelAnswered { .. }

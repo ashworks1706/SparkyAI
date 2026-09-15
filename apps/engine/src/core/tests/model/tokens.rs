@@ -1,6 +1,6 @@
 //! The prompt token estimator, and the settings the harness types are built from.
 
-use crate::core::config::{Agent, Retrieval};
+use crate::core::config::{Agent, Retrieval, Router};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::conversation::message::Message;
@@ -80,6 +80,7 @@ fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
         min_score: 0.01,
         max_distance: 0.5,
         collapse_tree: true,
+        router: Router::default(),
         top_k: 9,
     };
     let tuning = RetrievalTuning::from(&settings);

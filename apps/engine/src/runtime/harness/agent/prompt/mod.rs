@@ -18,6 +18,10 @@ pub struct PromptText {
     pub evidence_header: String,
     /// Line written when retrieval found nothing.
     pub no_evidence_line: String,
+    /// Line written when the router skipped retrieval as small talk.
+    pub no_retrieval_line: String,
+    /// Line written when the router skipped retrieval because the answer has to be current.
+    pub live_only_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
     /// Line naming the current date, with {date}.
@@ -42,6 +46,8 @@ impl From<&crate::core::config::Prompt> for PromptText {
             memory_header: cfg.memory_header.clone(),
             evidence_header: cfg.evidence_header.clone(),
             no_evidence_line: cfg.no_evidence_line.clone(),
+            no_retrieval_line: cfg.no_retrieval_line.clone(),
+            live_only_line: cfg.live_only_line.clone(),
             capabilities_header: cfg.capabilities_header.clone(),
             date_line: cfg.date_line.clone(),
             answer_only_line: cfg.answer_only_line.clone(),
@@ -77,6 +83,8 @@ impl PromptText {
             memory_header: &self.memory_header,
             evidence_header: &self.evidence_header,
             no_evidence_line: &self.no_evidence_line,
+            no_retrieval_line: &self.no_retrieval_line,
+            live_only_line: &self.live_only_line,
             capabilities_header: &self.capabilities_header,
             date_line: &self.date_line,
         }

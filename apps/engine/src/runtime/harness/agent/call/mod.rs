@@ -39,6 +39,7 @@ impl Agent {
                 answer_only: run.force_answer,
                 tool_results: run.new_turns.iter().any(|m| m.role == Role::Tool),
                 input: run.input,
+                retrieved: inputs.route.skipped().is_none(),
                 evidence: inputs.evidence.len(),
             },
         )
