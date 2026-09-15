@@ -1,0 +1,29 @@
+name: Bug
+description: Sparky did something wrong or failed
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you asked, what Sparky did, what you expected.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      placeholder: a thread, a direct message, the HTTP API, the console
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The image tag, or the commit for a source run.
+  - type: textarea
+    id: trace
+    attributes:
+      label: Trace
+      description: >-
+        The request id and its trace, with message text, emails and names removed. Never paste
+        .env or a token.
+      render: text
