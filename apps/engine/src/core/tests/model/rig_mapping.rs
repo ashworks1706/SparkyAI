@@ -79,3 +79,57 @@ fn each_call_sets_the_thinking_switch_and_keeps_other_template_arguments() {
     let off = with_thinking(&json!({}), false);
     assert_eq!(off["chat_template_kwargs"]["enable_thinking"], false);
 }
+
+#[test]
+fn an_attached_image_becomes_an_image_block_beside_the_text() {
+    use ::rig_core::message::{DocumentSourceKind, ImageMediaType, UserContent};
+
+    use crate::core::types::conversation::image::Attachment;
+
+    let attached = Attachment::new("https://cdn/one.png", "image/png");
+    assert!(attached.is_some(), "a png is an image a model is sent");
+    let turn = Message::user_with_images("what is this?", attached.into_iter().collect());
+
+    let (_, history) = rig(&[turn]);
+    let RigMessage::User { content } = &history[0] else {
+        unreachable!("a user turn")
+    };
+    assert_eq!(content.len(), 2, "the text and the image");
+    assert!(matches!(content[0], UserContent::Text(_)));
+    match &content[1] {
+        UserContent::Image(image) => {
+            assert_eq!(image.data, DocumentSourceKind::url("https://cdn/one.png"));
+            assert_eq!(image.media_type, Some(ImageMediaType::PNG));
+        }
+        other => unreachable!("an image block, not {other:?}"),
+    }
+}
+
+#[test]
+fn a_turn_with_no_images_stays_one_text_block() {
+    let (_, history) = rig(&[Message::user("hi")]);
+    let RigMessage::User { content } = &history[0] else {
+        unreachable!("a user turn")
+    };
+    assert_eq!(content.len(), 1);
+}
+
+#[test]
+fn the_http_surface_drops_an_image_type_it_was_not_promised() {
+    use crate::core::types::conversation::image::Attachment;
+
+    // The edge filters; a caller of the HTTP API is not trusted to have done so.
+    let claimed = vec![
+        Attachment {
+            url: "https://cdn/one.png".into(),
+            media_type: "image/png".into(),
+        },
+        Attachment {
+            url: "https://cdn/payload.svg".into(),
+            media_type: "text/html".into(),
+        },
+    ];
+    let accepted = Attachment::accepted(claimed, 4);
+    assert_eq!(accepted.len(), 1);
+    assert_eq!(accepted[0].url, "https://cdn/one.png");
+}

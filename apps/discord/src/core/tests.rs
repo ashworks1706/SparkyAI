@@ -677,6 +677,7 @@ fn each_place_sets_visibility_and_continuation() {
             vec![],
             "q".into(),
             None,
+            Vec::new(),
         )
     };
 
@@ -1247,6 +1248,7 @@ fn a_direct_message_is_private_so_personal_memory_applies_and_a_thread_is_public
             vec![],
             "q".into(),
             None,
+            Vec::new(),
         )
     };
 
@@ -1274,6 +1276,7 @@ fn the_quoted_message_rides_the_request_and_is_left_out_when_there_is_none() {
             vec![],
             "and on Sunday?".into(),
             reply_to,
+            Vec::new(),
         )
     };
 
@@ -1302,4 +1305,71 @@ fn only_a_reply_to_the_bots_own_words_is_quoted_back() {
     // A reply to nothing, and a reply to a message that carries no text.
     assert_eq!(quoted(None, "text", me), None);
     assert_eq!(quoted(Some(me), "   ", me), None);
+}
+
+#[test]
+fn only_attachments_discord_calls_an_image_reach_the_model() {
+    use crate::access::route::images;
+
+    let sent = images(
+        [
+            ("https://cdn/one.png", Some("image/png")),
+            ("https://cdn/sheet.csv", Some("text/csv")),
+            ("https://cdn/two.jpg", Some("image/jpeg; charset=binary")),
+            // Discord reports no type for some uploads; a guess is not made for it.
+            ("https://cdn/three", None),
+        ],
+        10,
+    );
+
+    assert_eq!(
+        sent.iter().map(|a| a.url.as_str()).collect::<Vec<_>>(),
+        ["https://cdn/one.png", "https://cdn/two.jpg"]
+    );
+    // The parameter is dropped, so the media type is the one the model is sent.
+    assert_eq!(sent[1].media_type, "image/jpeg");
+}
+
+#[test]
+fn no_more_than_max_images_of_one_message_are_sent() {
+    use crate::access::route::images;
+
+    let many: Vec<(&str, Option<&str>)> = (0..10)
+        .map(|_| ("https://cdn/x.png", Some("image/png")))
+        .collect();
+
+    assert_eq!(images(many.clone(), 4).len(), 4);
+    assert!(images(many, 0).is_empty());
+}
+
+#[test]
+fn a_message_with_only_an_image_is_still_a_question() {
+    use crate::access::route::{Place, chat_request, images};
+    use serenity::all::{ChannelId, GuildId, UserId};
+
+    let attached = images([("https://cdn/one.png", Some("image/png"))], 4);
+    let req = chat_request(
+        Place::Thread(ChannelId::new(5)),
+        UserId::new(1),
+        GuildId::new(2),
+        vec![],
+        String::new(),
+        None,
+        attached,
+    );
+    let wire = serde_json::to_value(&req).unwrap_or_default();
+    assert_eq!(wire["images"][0]["url"], "https://cdn/one.png");
+    assert_eq!(wire["images"][0]["media_type"], "image/png");
+
+    let none = chat_request(
+        Place::Thread(ChannelId::new(5)),
+        UserId::new(1),
+        GuildId::new(2),
+        vec![],
+        "q".into(),
+        None,
+        Vec::new(),
+    );
+    let wire = serde_json::to_value(&none).unwrap_or_default();
+    assert!(wire.get("images").is_none(), "no images writes no field");
 }

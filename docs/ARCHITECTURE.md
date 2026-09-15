@@ -612,6 +612,12 @@ A direct message is private, which is what `agent.recall_in_public` keys on: per
 profile graph reach a direct message and never an answer in a server. `bot.direct_messages` turns
 the direct channel off.
 
+Up to `bot.max_images` image attachments ride the request and are attached to the user turn as
+image blocks. The engine filters them again in `Attachment::accepted`, because the HTTP surface
+takes any caller holding the bearer token. Only the link travels, so the model server fetches it,
+and history stores none of them: the link the edge issues expires. Whether the model reads them is
+a property of the model, not the harness; see `deploy/inference/README.md`.
+
 Reading a reply whose author turned its ping off needs the privileged Message Content intent, which
 is enabled on the application at discord.com/developers. Without it Discord withholds the text and
 the reply goes unanswered.

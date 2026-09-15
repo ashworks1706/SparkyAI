@@ -25,6 +25,7 @@ use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
+use crate::core::types::conversation::image::Attachment;
 use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
 use crate::core::types::model::ModelError;
 use crate::core::types::store::StoreError;
@@ -46,6 +47,8 @@ pub struct ChatState {
     pub request_budget: Duration,
     /// Tenant used when the client sends none (single-guild deployments).
     pub default_tenant: String,
+    /// Images of one message sent to the model.
+    pub max_images: usize,
     /// Bearer token every caller must present.
     pub service_token: SecretString,
     /// Per-user request limit.
@@ -243,7 +246,8 @@ async fn run_turn(
     let ctx = RequestContext::new(tenant, req.user_id, state.request_budget)
         .with_roles(req.roles)
         .with_visibility(req.visibility)
-        .replying_to(req.reply_to);
+        .replying_to(req.reply_to)
+        .with_images(Attachment::accepted(req.images, state.max_images));
     let mut ctx = open(
         &state,
         ctx,

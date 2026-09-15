@@ -103,7 +103,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 
     if !s.input.is_empty() {
-        messages.push(Message::user(s.input));
+        messages.push(Message::user_with_images(s.input, ctx.images.clone()));
     }
     used += input_cost;
     messages.extend(s.turn.iter().cloned());

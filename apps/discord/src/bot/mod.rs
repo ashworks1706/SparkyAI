@@ -47,6 +47,8 @@ struct Handler {
     thread_archive: AutoArchiveDuration,
     /// Whether a direct message is answered.
     direct_messages: bool,
+    /// Images of one message sent to the model.
+    max_images: usize,
     /// The bot user, set once the gateway is ready.
     me: OnceLock<UserId>,
     /// When each user last asked, for the cooldown.
@@ -85,6 +87,7 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         write_capability: cfg.bot.write_capability.clone(),
         thread_archive: archive_after(cfg.bot.thread_auto_archive_minutes),
         direct_messages: cfg.bot.direct_messages,
+        max_images: cfg.bot.max_images,
         me: OnceLock::new(),
         last_ask: Mutex::new(HashMap::new()),
     };

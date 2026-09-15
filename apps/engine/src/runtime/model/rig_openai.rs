@@ -6,7 +6,10 @@ use ::rig_core::completion::{
     FinishReason as RigFinish, ToolDefinition as RigTool,
 };
 use ::rig_core::embeddings::EmbeddingModel as _;
-use ::rig_core::message::{Message as RigMessage, ReasoningContent, ToolChoice, UserContent};
+use ::rig_core::message::{
+    DocumentSourceKind, Image as RigImage, ImageMediaType, Message as RigMessage, ReasoningContent,
+    ToolChoice, UserContent,
+};
 use ::rig_core::providers::openai::{CompletionModel, CompletionsClient, GenericEmbeddingModel};
 use ::rig_core::streaming::StreamedAssistantContent;
 use async_trait::async_trait;
@@ -87,7 +90,7 @@ pub(crate) fn to_rig(
             Role::System => preamble.push(m.content.clone()),
             // A summary joins the preamble as operator context.
             Role::Summary => preamble.push(format!("Summary of earlier turns: {}", m.content)),
-            Role::User => history.push(RigMessage::user(&m.content)),
+            Role::User => history.push(user_message(m)),
             Role::Assistant => {
                 let mut content = Vec::with_capacity(m.tool_calls.len() + 1);
                 if !m.content.is_empty() {
@@ -122,6 +125,42 @@ pub(crate) fn to_rig(
     }
     let preamble = (!preamble.is_empty()).then(|| preamble.join("\n\n"));
     Ok((preamble, history))
+}
+
+/// A user turn, with an image block per attachment. Text only when it carries none.
+fn user_message(m: &Message) -> RigMessage {
+    if m.images.is_empty() {
+        return RigMessage::user(&m.content);
+    }
+    let mut content = Vec::with_capacity(m.images.len() + 1);
+    if !m.content.is_empty() {
+        content.push(UserContent::Text(::rig_core::message::Text::new(
+            &m.content,
+        )));
+    }
+    content.extend(m.images.iter().map(|image| {
+        UserContent::Image(RigImage {
+            data: DocumentSourceKind::url(&image.url),
+            media_type: media_type(&image.media_type),
+            detail: None,
+            additional_params: None,
+        })
+    }));
+    match ::rig_core::message::non_empty(content) {
+        Some(content) => RigMessage::User { content },
+        None => RigMessage::user(&m.content),
+    }
+}
+
+/// The Rig media type for one of IMAGE_MEDIA_TYPES. None lets the provider sniff it.
+fn media_type(kind: &str) -> Option<ImageMediaType> {
+    match kind {
+        "image/png" => Some(ImageMediaType::PNG),
+        "image/jpeg" => Some(ImageMediaType::JPEG),
+        "image/gif" => Some(ImageMediaType::GIF),
+        "image/webp" => Some(ImageMediaType::WEBP),
+        _ => None,
+    }
 }
 
 fn tool_to_rig(t: &ToolDefinition) -> RigTool {

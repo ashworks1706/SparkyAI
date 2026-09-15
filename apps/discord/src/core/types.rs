@@ -13,6 +13,42 @@ pub enum Visibility {
     Private,
 }
 
+/// Media types a model is sent. Anything else is dropped rather than guessed at.
+pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/// One image attached to a message. Mirrors engine::core::types::conversation::image::Attachment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Attachment {
+    /// Direct link to the image.
+    pub url: String,
+    /// Media type Discord reported, one of IMAGE_MEDIA_TYPES.
+    pub media_type: String,
+}
+
+impl Attachment {
+    /// An attachment, or None when the media type is not one a model is sent.
+    pub fn new(url: impl Into<String>, media_type: impl Into<String>) -> Option<Self> {
+        let kind = media_type
+            .into()
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        if !IMAGE_MEDIA_TYPES.contains(&kind.as_str()) {
+            return None;
+        }
+        let url = url.into();
+        if url.is_empty() {
+            return None;
+        }
+        Some(Self {
+            url,
+            media_type: kind,
+        })
+    }
+}
+
 /// What the bot sends. Mirrors engine::core::types::chat::ChatRequest.
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
@@ -36,6 +72,9 @@ pub struct ChatRequest {
     /// The bot message this one replies to, when it replies to one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<String>,
+    /// Images attached to the message.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<Attachment>,
 }
 
 /// An action the engine is holding until the caller who asked answers it.

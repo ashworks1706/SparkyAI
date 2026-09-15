@@ -328,6 +328,9 @@ thread_auto_archive_minutes = 1440   # 60, 1440, 4320, or 10080; threads the bot
 # A direct message is private, so the profile graph and personal memory apply to it and not to
 # an answer in a server. See agent.recall_in_public.
 direct_messages = true
+# Images of one message sent to the model. The model has to be one that reads images; see
+# deploy/inference/README.md. 0 sends none.
+max_images = 4
 
 # ---------------------------------------------------------------- postgres
 # url carries the password and lives in .env.
