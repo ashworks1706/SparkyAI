@@ -168,6 +168,13 @@ fn a_dense_distance_cutoff_outside_the_cosine_range_is_rejected() {
 }
 
 #[test]
+fn a_negative_retrieval_window_is_rejected() {
+    // 0 turns widening off; a negative value is a typo, and is not read as 0.
+    let e = err("[retrieval]\nwindow = -1\n");
+    assert!(e.contains("retrieval.window"), "{e}");
+}
+
+#[test]
 fn a_section_budget_above_the_prompt_budget_is_rejected() {
     let e = err("[agent]\nprompt_budget_tokens = 1000\nevidence_budget_tokens = 4000\n");
     assert!(e.contains("evidence_budget_tokens"), "{e}");

@@ -66,3 +66,13 @@ def test_overlap_starts_on_a_line_boundary() -> None:
     assert len(chunks) > 1
     for c in chunks[1:]:
         assert c.startswith("Library "), f"chunk opens mid-line: {c[:60]!r}"
+
+
+def test_chunker_version_records_the_settings_the_chunks_were_cut_with() -> None:
+    from scraper.core.settings import Scraper
+
+    # A source is reindexed when this string changes, so both values have to be in it.
+    narrow = Scraper(chunk_chars=300, chunk_overlap_chars=0).chunker_version()
+    wide = Scraper(chunk_chars=1200, chunk_overlap_chars=200).chunker_version()
+    assert narrow != wide
+    assert "300" in narrow
