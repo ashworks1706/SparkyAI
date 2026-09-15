@@ -36,6 +36,7 @@ fn state(rooms: Arc<Rooms>) -> ChatState {
         confirmations: Some(Arc::new(Held::default())),
         request_budget: Duration::from_secs(5),
         default_tenant: "g".into(),
+        max_images: 4,
         service_token: SecretString::from("t"),
         rate_limit: RateLimiter::new(0),
     }

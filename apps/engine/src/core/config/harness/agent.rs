@@ -45,6 +45,8 @@ pub struct Agent {
     pub capabilities_budget_tokens: usize,
     /// Cap on the quoted message a reply answers.
     pub reply_budget_tokens: usize,
+    /// Images of one message sent to the model. 0 sends none.
+    pub max_images: usize,
     /// Characters per token the budget estimator assumes.
     pub chars_per_token: usize,
     /// First retry wait, doubled per attempt.
@@ -87,6 +89,7 @@ impl Default for Agent {
             memory_budget_tokens: 300,
             capabilities_budget_tokens: 600,
             reply_budget_tokens: 200,
+            max_images: 4,
             chars_per_token: 4,
             retry_base_ms: 250,
             retry_cap_ms: 8_000,

@@ -12,6 +12,23 @@ OpenAI-compatible API, the only surface `apps/engine` and `apps/scraper` use.
 
 Override either with `SPARKY_CHAT_GGUF` or `SPARKY_EMBED_GGUF`.
 
+## Images
+
+`bot.max_images` attachments of a message reach the model as image blocks, filtered to
+`image/png`, `image/jpeg`, `image/gif` and `image/webp`. The link goes, not the bytes, so the
+server running the model has to be able to fetch the Discord CDN.
+
+The chat GGUF above reads text only, so the blocks are sent and ignored. Reading them needs a
+vision model and its projector:
+
+```bash
+SPARKY_CHAT_GGUF=ggml-org/Qwen2.5-VL-7B-Instruct-GGUF just model
+```
+
+llama-server loads the matching `mmproj` file from the same repository. A vision model is larger
+than the text one, so size the card for it or point `[model]` at a hosted vision model instead.
+Set `bot.max_images = 0` to stop sending images at all.
+
 ## Concurrency
 
 `--parallel N` gives the server N slots. Continuous batching interleaves their decode steps in

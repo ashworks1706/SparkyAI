@@ -2,7 +2,7 @@
 
 use serenity::all::{ChannelId, ChannelType, GuildId, MessageFlags, UserId};
 
-use crate::core::types::{ChatRequest, Visibility};
+use crate::core::types::{Attachment, ChatRequest, Visibility};
 
 /// Longest thread name Discord accepts, in characters.
 pub const THREAD_NAME_MAX: usize = 100;
@@ -117,6 +117,7 @@ pub fn chat_request(
     roles: Vec<String>,
     message: String,
     reply_to: Option<String>,
+    images: Vec<Attachment>,
 ) -> ChatRequest {
     let (channel, visibility, continue_channel) = match place {
         Place::Private(c) => (c, Visibility::Private, true),
@@ -133,6 +134,7 @@ pub fn chat_request(
         visibility,
         continue_channel,
         reply_to,
+        images,
     }
 }
 
@@ -161,6 +163,21 @@ pub fn thread_name(question: &str) -> String {
         return "Question".into();
     }
     truncate(&line, THREAD_NAME_MAX)
+}
+
+/// The images of a message, the ones a model is sent, at most most of them.
+///
+/// Discord reports a content type per attachment; anything that is not an image it names is
+/// dropped rather than guessed at, so a spreadsheet never reaches the model as a picture.
+pub fn images<'a>(
+    attachments: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+    most: usize,
+) -> Vec<Attachment> {
+    attachments
+        .into_iter()
+        .filter_map(|(url, kind)| Attachment::new(url, kind.unwrap_or_default()))
+        .take(most)
+        .collect()
 }
 
 /// The text of the message a reply answers, when the bot wrote it and it holds text.

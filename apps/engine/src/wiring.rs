@@ -245,6 +245,7 @@ fn chat_state(
         conversations: Some(conversations),
         request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
         default_tenant: cfg.discord.guild_id.to_string(),
+        max_images: cfg.agent.max_images,
         service_token: cfg.engine.service_token.clone(),
         rate_limit: RateLimiter::new(cfg.http.rate_limit_per_min),
     }

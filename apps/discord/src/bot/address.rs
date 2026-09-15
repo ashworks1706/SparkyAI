@@ -72,7 +72,13 @@ impl Handler {
             return;
         }
         let question = route::strip_mentions(&msg.content, me);
-        if question.is_empty() {
+        let images = route::images(
+            msg.attachments
+                .iter()
+                .map(|a| (a.url.as_str(), a.content_type.as_deref())),
+            self.max_images,
+        );
+        if question.is_empty() && images.is_empty() {
             here.say(&ctx.http, "Ask me something.").await;
             return;
         }
@@ -95,7 +101,15 @@ impl Handler {
             Trigger::Reply => (here, Place::Thread(msg.channel_id)),
             Trigger::Opening => self.open_thread(ctx, msg, &question, here).await,
         };
-        let req = route::chat_request(place, msg.author.id, self.guild_id, roles, question, quoted);
+        let req = route::chat_request(
+            place,
+            msg.author.id,
+            self.guild_id,
+            roles,
+            question,
+            quoted,
+            images,
+        );
         let span = tracing::info_span!(
             "discord.message",
             "discord.command" = trigger_name(trigger),
