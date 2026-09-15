@@ -24,6 +24,8 @@ pub struct Retrieval {
     pub max_distance: f32,
     /// Drop a chunk when the summary covering it is already in the result.
     pub collapse_tree: bool,
+    /// Rows either side of a hit read back with it. 0 hands back the hit alone.
+    pub window: i32,
     /// The gate retrieval passes before it runs.
     pub router: Router,
 }
@@ -65,6 +67,7 @@ impl Default for Retrieval {
             min_score: 0.0,
             max_distance: 0.6,
             collapse_tree: true,
+            window: 2,
             router: Router::default(),
         }
     }
