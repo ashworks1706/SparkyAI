@@ -32,6 +32,8 @@ jobs:
             shared: &shared
               - justfile
               - .github/workflows/ci.yml
+              # Every unit reads it, and a test holds the committed file to what the engine accepts.
+              - sparky.toml
             rust:
               - *shared
               - apps/engine/**
