@@ -114,8 +114,11 @@ class Scraper(BaseModel):
     job_retention_hours: float = 72.0
     # Finished jobs removed per scheduling cycle.
     job_prune_batch: int = 5000
-    chunk_chars: int = 1200
-    chunk_overlap_chars: int = 200
+    # Indexed narrow so a match points at the passage that answers, not at a whole section.
+    # retrieval.window reads the neighbours back with the hit, so overlap would only repeat
+    # text inside the passage the model is handed.
+    chunk_chars: int = 300
+    chunk_overlap_chars: int = 0
     parser_version: str = "bs4-text-v1"
     # A run whose text is below this fraction of the last indexed version is refused.
     quality_floor_ratio: float = 0.5

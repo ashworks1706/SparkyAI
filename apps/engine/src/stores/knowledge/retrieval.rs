@@ -34,6 +34,8 @@ pub struct RetrievalTuning {
     pub max_distance: f32,
     /// Drop a chunk when the summary covering it is already in the result.
     pub collapse_tree: bool,
+    /// Rows either side of a hit read back with it. 0 hands back the hit alone.
+    pub window: i32,
 }
 
 impl From<&crate::core::config::Retrieval> for RetrievalTuning {
@@ -47,6 +49,7 @@ impl From<&crate::core::config::Retrieval> for RetrievalTuning {
             min_score: cfg.min_score,
             max_distance: cfg.max_distance,
             collapse_tree: cfg.collapse_tree,
+            window: cfg.window,
         }
     }
 }
@@ -79,6 +82,12 @@ struct Candidate {
     url: Option<String>,
     content: String,
     fetched_at: DateTime<Utc>,
+    /// The source version the row belongs to. Rows of one version are contiguous by ordinal.
+    version_id: Uuid,
+    /// Position within the version.
+    ordinal: i32,
+    /// 0 for a chunk of the page, higher for a summary over chunks.
+    level: i32,
 }
 
 fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Error> {
@@ -90,16 +99,112 @@ fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Erro
         url: row.try_get("url")?,
         content: row.try_get("content")?,
         fetched_at: row.try_get("fetched_at")?,
+        version_id: row.try_get("version_id")?,
+        ordinal: row.try_get("ordinal")?,
+        level: row.try_get("level")?,
     })
 }
 
 /// The candidate columns of a chunk.
 const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, \
-                       c.fetched_at, c.parent_id";
+                       c.fetched_at, c.parent_id, c.version_id, c.ordinal, c.level";
 
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
 const FROM: &str = "from chunks c join sources s on s.id = c.source_id
     where (c.tenant_id = $1 or c.tenant_id = 'public')";
+
+/// One run of rows a hit reads back with, and the hit that earned it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Span {
+    /// The source version the run belongs to.
+    pub version_id: Uuid,
+    /// First ordinal of the run.
+    pub lo: i32,
+    /// Last ordinal of the run.
+    pub hi: i32,
+}
+
+impl Span {
+    /// The run text, its rows in ordinal order separated by a space, absent rows skipped.
+    pub(crate) fn join(&self, rows: &HashMap<(Uuid, i32), String>) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+        for ordinal in self.lo..=self.hi {
+            if let Some(text) = rows.get(&(self.version_id, ordinal)) {
+                parts.push(text);
+            }
+        }
+        parts.join(" ")
+    }
+}
+
+/// The spans hits read back with, overlapping ones merged.
+///
+/// Two hits a sentence apart would otherwise hand the model the same neighbours twice. Merging
+/// them is what makes a narrow index cheaper than a wide one rather than more expensive.
+pub(crate) fn spans(hits: &[(Uuid, i32)], window: i32) -> Vec<Span> {
+    let mut wanted: Vec<Span> = hits
+        .iter()
+        .map(|(version_id, ordinal)| Span {
+            version_id: *version_id,
+            lo: ordinal.saturating_sub(window).max(0),
+            hi: ordinal.saturating_add(window),
+        })
+        .collect();
+    wanted.sort_by_key(|s| (s.version_id, s.lo));
+
+    let mut merged: Vec<Span> = Vec::with_capacity(wanted.len());
+    for span in wanted {
+        match merged.last_mut() {
+            // Touching counts as overlapping: an adjacent run is one passage, not two.
+            Some(last)
+                if last.version_id == span.version_id && span.lo <= last.hi.saturating_add(1) =>
+            {
+                last.hi = last.hi.max(span.hi);
+            }
+            _ => merged.push(span),
+        }
+    }
+    merged
+}
+
+/// The index of the span holding a row, if one does.
+pub(crate) fn locate(spans: &[Span], version_id: Uuid, ordinal: i32) -> Option<usize> {
+    spans
+        .iter()
+        .position(|s| s.version_id == version_id && s.lo <= ordinal && ordinal <= s.hi)
+}
+
+/// What a ranked row contributes to the evidence handed back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Take {
+    /// Dropped: a higher ranked row already carries this span.
+    Skip,
+    /// Kept with its own text.
+    Own,
+    /// Kept with the text of the span at this index.
+    Span(usize),
+}
+
+/// What each ranked row contributes, highest ranked first.
+///
+/// A summary keeps its own text: it already covers its chunks, so widening one would hand back
+/// the same passage twice. A chunk takes the span holding it, and a span is handed back once
+/// however many of its rows were hit.
+pub(crate) fn takes(rows: &[(i32, Uuid, i32)], spans: &[Span]) -> Vec<Take> {
+    let mut seen: HashSet<usize> = HashSet::new();
+    rows.iter()
+        .map(|(level, version_id, ordinal)| {
+            if *level != 0 {
+                return Take::Own;
+            }
+            match locate(spans, *version_id, *ordinal) {
+                Some(at) if seen.insert(at) => Take::Span(at),
+                Some(_) => Take::Skip,
+                None => Take::Own,
+            }
+        })
+        .collect()
+}
 
 /// Drops a row whose summary is already in the result, keeping the higher ranked of the two.
 pub(crate) fn collapse(rows: &[(Uuid, Option<Uuid>)]) -> Vec<bool> {
@@ -210,6 +315,92 @@ impl PgRetriever {
     }
 }
 
+impl PgRetriever {
+    /// The text of each span, its rows joined in order, aligned with the spans given.
+    ///
+    /// Only level 0 rows are read: a summary already covers its chunks, so widening one would
+    /// hand back the same passage twice.
+    async fn windows(
+        &self,
+        ctx: &RequestContext,
+        spans: &[Span],
+    ) -> Result<Vec<String>, RetrievalError> {
+        if spans.is_empty() {
+            return Ok(Vec::new());
+        }
+        let versions: Vec<Uuid> = spans.iter().map(|s| s.version_id).collect();
+        let los: Vec<i32> = spans.iter().map(|s| s.lo).collect();
+        let his: Vec<i32> = spans.iter().map(|s| s.hi).collect();
+        let sql = "select c.version_id, c.ordinal, c.content
+             from unnest($2::uuid[], $3::int4[], $4::int4[]) as w(version_id, lo, hi)
+             join chunks c
+               on c.version_id = w.version_id
+              and c.ordinal between w.lo and w.hi
+              and c.level = 0
+             where (c.tenant_id = $1 or c.tenant_id = 'public')";
+        let rows = sqlx::query(sql)
+            .bind(&ctx.tenant_id)
+            .bind(&versions)
+            .bind(&los)
+            .bind(&his)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(store)?;
+
+        let mut by_row: HashMap<(Uuid, i32), String> = HashMap::new();
+        for row in &rows {
+            let version_id: Uuid = row.try_get("version_id").map_err(store)?;
+            let ordinal: i32 = row.try_get("ordinal").map_err(store)?;
+            let content: String = row.try_get("content").map_err(store)?;
+            by_row.insert((version_id, ordinal), content);
+        }
+        Ok(spans.iter().map(|span| span.join(&by_row)).collect())
+    }
+
+    /// Each hit with the passage around it, or its own text when it is a summary or stands alone.
+    async fn widened(
+        &self,
+        ctx: &RequestContext,
+        ordered: Vec<(Candidate, f32)>,
+    ) -> Result<Vec<Evidence>, RetrievalError> {
+        let leaves: Vec<(Uuid, i32)> = ordered
+            .iter()
+            .filter(|(c, _)| c.level == 0)
+            .map(|(c, _)| (c.version_id, c.ordinal))
+            .collect();
+        let spans = spans(&leaves, self.tuning.window);
+        let widened = self.windows(ctx, &spans).await?;
+
+        let rows: Vec<(i32, Uuid, i32)> = ordered
+            .iter()
+            .map(|(c, _)| (c.level, c.version_id, c.ordinal))
+            .collect();
+        let mut evidence = Vec::with_capacity(ordered.len());
+        for ((c, score), take) in ordered.into_iter().zip(takes(&rows, &spans)) {
+            let content = match take {
+                Take::Skip => continue,
+                Take::Own => c.content,
+                // A span with no rows behind it, such as one whose version another tenant owns,
+                // falls back to the text of the hit.
+                Take::Span(at) => match widened.get(at) {
+                    Some(text) if !text.is_empty() => text.clone(),
+                    _ => c.content,
+                },
+            };
+            evidence.push(Evidence {
+                source_id: c.source_id,
+                chunk_id: c.chunk_id,
+                title: c.title,
+                content,
+                url: c.url,
+                fetched_at: c.fetched_at,
+                score,
+            });
+        }
+        Ok(evidence)
+    }
+}
+
 #[async_trait]
 impl Retriever for PgRetriever {
     async fn retrieve(
@@ -252,18 +443,21 @@ impl Retriever for PgRetriever {
             ordered
         };
 
-        Ok(ordered
-            .into_iter()
-            .take(query.top_k)
-            .map(|(c, score)| Evidence {
-                source_id: c.source_id,
-                chunk_id: c.chunk_id,
-                title: c.title,
-                content: c.content,
-                url: c.url,
-                fetched_at: c.fetched_at,
-                score,
-            })
-            .collect())
+        let top: Vec<(Candidate, f32)> = ordered.into_iter().take(query.top_k).collect();
+        if self.tuning.window <= 0 {
+            return Ok(top
+                .into_iter()
+                .map(|(c, score)| Evidence {
+                    source_id: c.source_id,
+                    chunk_id: c.chunk_id,
+                    title: c.title,
+                    content: c.content,
+                    url: c.url,
+                    fetched_at: c.fetched_at,
+                    score,
+                })
+                .collect());
+        }
+        self.widened(ctx, top).await
     }
 }

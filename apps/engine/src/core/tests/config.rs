@@ -2,6 +2,27 @@
 
 use crate::core::config::{Agent, Config, Trace};
 
+/// The values sparky.toml leaves to .env, so the committed file can be loaded on its own.
+const SECRETS: &str = r#"
+[app]
+env = "test"
+http_addr = "127.0.0.1:0"
+[engine]
+service_token = "t"
+[discord]
+guild_id = 1
+[model]
+base_url = "http://localhost:8000/v1"
+api_key = ""
+[postgres]
+url = "postgres://localhost/x"
+[redis]
+url = "redis://localhost:6379"
+[embedding]
+base_url = "http://localhost:8001/v1"
+api_key = ""
+"#;
+
 #[test]
 fn traces_default_to_the_sparky_state_directory() {
     assert_eq!(Trace::default().dir, ".sparky/traces");
@@ -16,6 +37,29 @@ fn every_section_budget_fits_inside_the_prompt_budget() {
         a.memory_budget_tokens,
     ] {
         assert!(section <= a.prompt_budget_tokens);
+    }
+}
+
+#[test]
+fn the_committed_sparky_toml_loads_and_validates() {
+    use figment::providers::{Format, Toml};
+
+    // sparky.toml is what every deployment reads, and validate rejects a bad combination at boot.
+    // The tests around this one build their own TOML, so without this the committed file is the
+    // one configuration nothing checks.
+    let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
+    let cfg: Result<Config, String> = figment::Figment::new()
+        .merge(Toml::string(SECRETS))
+        .merge(Toml::file(file))
+        .extract()
+        .map_err(|e| e.to_string());
+    match cfg {
+        Ok(cfg) => {
+            if let Err(e) = cfg.validate() {
+                unreachable!("sparky.toml does not validate: {e}")
+            }
+        }
+        Err(e) => unreachable!("sparky.toml does not load: {e}"),
     }
 }
 
@@ -121,6 +165,13 @@ fn a_dense_distance_cutoff_outside_the_cosine_range_is_rejected() {
     assert!(e.contains("retrieval.max_distance"), "{e}");
     let e = err("[retrieval]\nmax_distance = 2.5\n");
     assert!(e.contains("retrieval.max_distance"), "{e}");
+}
+
+#[test]
+fn a_negative_retrieval_window_is_rejected() {
+    // 0 turns widening off; a negative value is a typo, and is not read as 0.
+    let e = err("[retrieval]\nwindow = -1\n");
+    assert!(e.contains("retrieval.window"), "{e}");
 }
 
 #[test]

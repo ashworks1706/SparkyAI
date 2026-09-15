@@ -228,6 +228,12 @@ impl Config {
         if self.retrieval.rrf_k < 0.0 {
             return invalid("retrieval.rrf_k must not be negative".into());
         }
+        if self.retrieval.window < 0 {
+            return invalid(format!(
+                "retrieval.window must not be negative, got {}",
+                self.retrieval.window
+            ));
+        }
         if self.agent.retry_cap_ms < self.agent.retry_base_ms {
             return invalid("agent.retry_cap_ms is below agent.retry_base_ms".into());
         }
