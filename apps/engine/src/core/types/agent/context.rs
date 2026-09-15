@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::core::types::conversation::Visibility;
+use crate::core::types::conversation::image::Attachment;
 use crate::core::types::trace::progress::Progress;
 
 /// Per-request state, created at the edge and threaded through every model call, tool call, event.
@@ -26,6 +27,8 @@ pub struct RequestContext {
     pub visibility: Visibility,
     /// The message of ours the caller replied to, when they replied to one.
     pub reply_to: Option<String>,
+    /// Images attached to the caller's message.
+    pub images: Vec<Attachment>,
     /// Hard stop for the whole request.
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
@@ -45,6 +48,7 @@ impl RequestContext {
             conversation_id: Uuid::new_v4(),
             visibility: Visibility::Public,
             reply_to: None,
+            images: Vec::new(),
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
             progress: None,
@@ -72,6 +76,12 @@ impl RequestContext {
     /// Names the message of ours the caller replied to.
     pub fn replying_to(mut self, quoted: Option<String>) -> Self {
         self.reply_to = quoted;
+        self
+    }
+
+    /// Attaches images to the caller's message. More than most are dropped by the caller.
+    pub fn with_images(mut self, images: Vec<Attachment>) -> Self {
+        self.images = images;
         self
     }
 

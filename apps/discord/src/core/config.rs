@@ -46,6 +46,8 @@ pub struct Bot {
     pub thread_auto_archive_minutes: u16,
     /// Answer direct messages. A direct message is private, so personal memory applies to it.
     pub direct_messages: bool,
+    /// Images of one message sent to the model. 0 sends none, whatever the model can read.
+    pub max_images: usize,
 }
 
 /// Smallest bot.max_message_chars accepted.
@@ -64,6 +66,7 @@ impl Default for Bot {
             write_capability: WRITE_CAPABILITY.to_owned(),
             thread_auto_archive_minutes: 1_440,
             direct_messages: true,
+            max_images: 4,
         }
     }
 }

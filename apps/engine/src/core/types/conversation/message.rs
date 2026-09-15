@@ -1,5 +1,6 @@
 //! Message, tool-call, and tool-result types exchanged with the model.
 
+use crate::core::types::conversation::image::Attachment;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -46,6 +47,9 @@ pub struct Message {
     /// For Role::Tool: the tool that produced it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_name: Option<String>,
+    /// Images attached to a user turn. Never stored: the links the edge issues expire.
+    #[serde(skip)]
+    pub images: Vec<Attachment>,
 }
 
 impl Message {
@@ -77,6 +81,7 @@ impl Message {
             tool_calls,
             tool_call_id: None,
             tool_name: None,
+            images: Vec::new(),
         }
     }
 
@@ -92,6 +97,7 @@ impl Message {
             tool_calls: Vec::new(),
             tool_call_id: Some(call_id.into()),
             tool_name: Some(name.into()),
+            images: Vec::new(),
         }
     }
 
@@ -102,6 +108,15 @@ impl Message {
             tool_calls: Vec::new(),
             tool_call_id: None,
             tool_name: None,
+            images: Vec::new(),
+        }
+    }
+
+    /// The same user message carrying images.
+    pub fn user_with_images(content: impl Into<String>, images: Vec<Attachment>) -> Self {
+        Self {
+            images,
+            ..Self::plain(Role::User, content)
         }
     }
 
