@@ -38,6 +38,9 @@ memory_budget_tokens = 300
 capabilities_budget_tokens = 600
 # Cap on the message of Sparky's that a reply quotes back into the prompt.
 reply_budget_tokens = 200
+# Images of one message the engine passes to the model. The edge caps what it sends in
+# bot.max_images; this caps what the HTTP surface accepts from any caller holding the token.
+max_images = 4
 chars_per_token = 4
 # Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
 # model.max_tokens_without_thinking, must fit one slot of the chat server.
