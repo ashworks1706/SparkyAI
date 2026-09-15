@@ -97,6 +97,11 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     used += spent;
     messages.extend(kept.into_iter().cloned());
 
+    if let Some(block) = reply_block(ctx, s, budget.reply, cpt) {
+        used += estimate(&block, cpt);
+        messages.push(Message::system(block));
+    }
+
     if !s.input.is_empty() {
         messages.push(Message::user(s.input));
     }
@@ -163,4 +168,39 @@ fn memory_block(s: &Sections<'_>, budget: usize, cpt: usize) -> Option<(String, 
         count += 1;
     }
     Some((block, spent, count))
+}
+
+/// The message of ours the caller replied to, quoted under its header and cut to budget.
+/// None when the caller replied to nothing, or the quote holds no text.
+fn reply_block(
+    ctx: &RequestContext,
+    s: &Sections<'_>,
+    budget: usize,
+    cpt: usize,
+) -> Option<String> {
+    let quoted = ctx.reply_to.as_deref()?.trim();
+    if quoted.is_empty() {
+        return None;
+    }
+    let header = s.templates.reply_header.trim();
+    let room = budget.saturating_sub(estimate(header, cpt));
+    if room == 0 {
+        return None;
+    }
+    let mut kept = String::new();
+    for line in quoted.lines() {
+        let candidate = if kept.is_empty() {
+            line.to_owned()
+        } else {
+            format!("{kept}\n{line}")
+        };
+        if estimate(&candidate, cpt) > room {
+            break;
+        }
+        kept = candidate;
+    }
+    if kept.is_empty() {
+        kept = quoted.chars().take(room.saturating_mul(cpt)).collect();
+    }
+    Some(format!("{header}\n{kept}"))
 }

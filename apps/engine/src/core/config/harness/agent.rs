@@ -43,6 +43,8 @@ pub struct Agent {
     pub memory_budget_tokens: usize,
     /// Cap on the capabilities section.
     pub capabilities_budget_tokens: usize,
+    /// Cap on the quoted message a reply answers.
+    pub reply_budget_tokens: usize,
     /// Characters per token the budget estimator assumes.
     pub chars_per_token: usize,
     /// First retry wait, doubled per attempt.
@@ -84,6 +86,7 @@ impl Default for Agent {
             history_budget_tokens: 1_000,
             memory_budget_tokens: 300,
             capabilities_budget_tokens: 600,
+            reply_budget_tokens: 200,
             chars_per_token: 4,
             retry_base_ms: 250,
             retry_cap_ms: 8_000,
@@ -115,6 +118,7 @@ impl Agent {
             history: self.history_budget_tokens,
             memory: self.memory_budget_tokens,
             capabilities: self.capabilities_budget_tokens,
+            reply: self.reply_budget_tokens,
             chars_per_token: self.chars_per_token,
         }
     }
@@ -195,6 +199,8 @@ pub struct Prompt {
     pub live_only_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
+    /// Heading above the message of ours a reply answers.
+    pub reply_header: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
     /// Line added to a call that is offered no tools.
@@ -216,6 +222,7 @@ impl Default for Prompt {
             no_retrieval_line: assemble::NO_RETRIEVAL_LINE.into(),
             live_only_line: assemble::LIVE_ONLY_LINE.into(),
             capabilities_header: assemble::CAPABILITIES_HEADER.into(),
+            reply_header: assemble::REPLY_HEADER.into(),
             date_line: assemble::DATE_LINE.into(),
             answer_only_line: assemble::ANSWER_ONLY_LINE.into(),
             utc_offset_hours: -7,

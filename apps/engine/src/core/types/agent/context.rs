@@ -24,6 +24,8 @@ pub struct RequestContext {
     pub conversation_id: Uuid,
     /// Who can read the exchange this request belongs to.
     pub visibility: Visibility,
+    /// The message of ours the caller replied to, when they replied to one.
+    pub reply_to: Option<String>,
     /// Hard stop for the whole request.
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
@@ -42,6 +44,7 @@ impl RequestContext {
             roles: Vec::new(),
             conversation_id: Uuid::new_v4(),
             visibility: Visibility::Public,
+            reply_to: None,
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
             progress: None,
@@ -63,6 +66,12 @@ impl RequestContext {
     /// Sets who can read the exchange.
     pub fn with_visibility(mut self, visibility: Visibility) -> Self {
         self.visibility = visibility;
+        self
+    }
+
+    /// Names the message of ours the caller replied to.
+    pub fn replying_to(mut self, quoted: Option<String>) -> Self {
+        self.reply_to = quoted;
         self
     }
 

@@ -1,29 +1,19 @@
-//! Where the messages of one turn go: interaction followups, or a channel.
+//! Where the messages of one turn go: a channel or the thread opened for the answer.
 
 use serenity::all::{
-    ChannelId, CommandInteraction, CreateActionRow, CreateAllowedMentions,
-    CreateInteractionResponseFollowup, CreateMessage, EditMessage, Http, Message, MessageId,
+    ChannelId, CreateActionRow, CreateAllowedMentions, CreateMessage, EditMessage, Http, Message,
+    MessageId,
 };
 
 /// The target of every message a turn posts.
-pub(super) enum Destination<'a> {
-    /// Followups on the command, visible only to the asker when ephemeral.
-    Followup {
-        /// The command being answered.
-        cmd: &'a CommandInteraction,
-        /// Whether only the asker sees them.
-        ephemeral: bool,
-    },
-    /// Plain messages in a channel or thread.
-    Channel {
-        /// Where to post.
-        channel: ChannelId,
-        /// The message the first reply points at, if any.
-        reply_to: Option<MessageId>,
-    },
+pub(super) struct Destination {
+    /// Where to post.
+    pub(super) channel: ChannelId,
+    /// The message the first reply points at, if any.
+    pub(super) reply_to: Option<MessageId>,
 }
 
-impl Destination<'_> {
+impl Destination {
     /// Posts one message with rows of buttons. reply marks it as a reply to reply_to.
     pub(super) async fn send(
         &self,
@@ -32,30 +22,16 @@ impl Destination<'_> {
         rows: Vec<CreateActionRow>,
         reply: bool,
     ) -> serenity::Result<Message> {
-        match self {
-            Self::Followup { cmd, ephemeral } => {
-                let mut builder = CreateInteractionResponseFollowup::new()
-                    .content(content)
-                    .ephemeral(*ephemeral)
-                    .allowed_mentions(CreateAllowedMentions::new());
-                if !rows.is_empty() {
-                    builder = builder.components(rows);
-                }
-                cmd.create_followup(http, builder).await
-            }
-            Self::Channel { channel, reply_to } => {
-                let mut builder = CreateMessage::new()
-                    .content(content)
-                    .allowed_mentions(CreateAllowedMentions::new().replied_user(true));
-                if !rows.is_empty() {
-                    builder = builder.components(rows);
-                }
-                if reply && let Some(to) = reply_to {
-                    builder = builder.reference_message((*channel, *to));
-                }
-                channel.send_message(http, builder).await
-            }
+        let mut builder = CreateMessage::new()
+            .content(content)
+            .allowed_mentions(CreateAllowedMentions::new().replied_user(true));
+        if !rows.is_empty() {
+            builder = builder.components(rows);
         }
+        if reply && let Some(to) = self.reply_to {
+            builder = builder.reference_message((self.channel, to));
+        }
+        self.channel.send_message(http, builder).await
     }
 
     /// Replaces a posted message's text; some rows replace buttons, empty clears, None keeps them.
@@ -66,30 +42,16 @@ impl Destination<'_> {
         content: String,
         rows: Option<Vec<CreateActionRow>>,
     ) -> serenity::Result<Message> {
-        match self {
-            Self::Followup { cmd, .. } => {
-                let mut builder = CreateInteractionResponseFollowup::new().content(content);
-                if let Some(rows) = rows {
-                    builder = builder.components(rows);
-                }
-                cmd.edit_followup(http, id, builder).await
-            }
-            Self::Channel { channel, .. } => {
-                let mut builder = EditMessage::new().content(content);
-                if let Some(rows) = rows {
-                    builder = builder.components(rows);
-                }
-                channel.edit_message(http, id, builder).await
-            }
+        let mut builder = EditMessage::new().content(content);
+        if let Some(rows) = rows {
+            builder = builder.components(rows);
         }
+        self.channel.edit_message(http, id, builder).await
     }
 
     /// Deletes a message this destination posted.
     pub(super) async fn delete(&self, http: &Http, id: MessageId) -> serenity::Result<()> {
-        match self {
-            Self::Followup { cmd, .. } => cmd.delete_followup(http, id).await,
-            Self::Channel { channel, .. } => channel.delete_message(http, id).await,
-        }
+        self.channel.delete_message(http, id).await
     }
 
     /// Posts one plain line, logging a failure.

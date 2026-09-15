@@ -44,6 +44,8 @@ pub struct Bot {
     pub write_capability: String,
     /// Minutes of silence before a thread the bot opens archives. One of THREAD_ARCHIVE_MINUTES.
     pub thread_auto_archive_minutes: u16,
+    /// Answer direct messages. A direct message is private, so personal memory applies to it.
+    pub direct_messages: bool,
 }
 
 /// Smallest bot.max_message_chars accepted.
@@ -61,6 +63,7 @@ impl Default for Bot {
             cooldown_secs: 0,
             write_capability: WRITE_CAPABILITY.to_owned(),
             thread_auto_archive_minutes: 1_440,
+            direct_messages: true,
         }
     }
 }

@@ -7,25 +7,52 @@ use crate::core::types::{ChatRequest, Visibility};
 /// Longest thread name Discord accepts, in characters.
 pub const THREAD_NAME_MAX: usize = 100;
 
-/// Where an /ask answer goes, decided before anything is posted.
+/// Why a message is one the bot answers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AskMode {
-    /// Ephemeral followups only the asker sees.
-    Private,
-    /// Followups in the thread the command ran in.
-    InThread,
-    /// A new public thread opened from the question.
-    NewThread,
+pub enum Trigger {
+    /// A direct message. Every one is a turn, and no thread exists to open.
+    Direct,
+    /// A message in a channel that addresses the bot. The answer opens a thread.
+    Opening,
+    /// A reply in a thread to something the bot said there.
+    Reply,
 }
 
-/// Picks the AskMode for the private option and the kind of the channel the command ran in.
-pub fn ask_mode(private: bool, kind: Option<ChannelType>) -> AskMode {
-    if private {
-        AskMode::Private
-    } else if kind.is_some_and(is_thread) {
-        AskMode::InThread
-    } else {
-        AskMode::NewThread
+/// The kind of place a message arrived in. The three are exclusive.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Arrived {
+    /// A direct message: no guild, and no thread to open.
+    Direct,
+    /// A thread, which is where a conversation lives.
+    Thread,
+    /// A guild channel outside any thread.
+    #[default]
+    Channel,
+}
+
+/// Where one message arrived and how it addresses the bot.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Arrival {
+    /// The kind of place it arrived in.
+    pub at: Arrived,
+    /// It mentions the bot.
+    pub mentions_bot: bool,
+    /// It replies to something the bot said.
+    pub replies_to_bot: bool,
+}
+
+/// Why the bot answers this message, or None when the message is not for it.
+///
+/// A thread is the conversation: inside one, only a reply to something the bot said continues it,
+/// so people talk in the thread without the bot answering every line. Outside a thread, addressing
+/// the bot opens one. A direct message needs neither.
+pub fn trigger(arrival: Arrival) -> Option<Trigger> {
+    match arrival.at {
+        Arrived::Direct => Some(Trigger::Direct),
+        Arrived::Thread => arrival.replies_to_bot.then_some(Trigger::Reply),
+        Arrived::Channel => {
+            (arrival.mentions_bot || arrival.replies_to_bot).then_some(Trigger::Opening)
+        }
     }
 }
 
@@ -89,6 +116,7 @@ pub fn chat_request(
     tenant: GuildId,
     roles: Vec<String>,
     message: String,
+    reply_to: Option<String>,
 ) -> ChatRequest {
     let (channel, visibility, continue_channel) = match place {
         Place::Private(c) => (c, Visibility::Private, true),
@@ -104,6 +132,7 @@ pub fn chat_request(
         message,
         visibility,
         continue_channel,
+        reply_to,
     }
 }
 
@@ -134,11 +163,15 @@ pub fn thread_name(question: &str) -> String {
     truncate(&line, THREAD_NAME_MAX)
 }
 
-/// The line that shows who asked what, within limit characters.
-pub fn asked_header(name: &str, question: &str, limit: usize) -> String {
-    let prefix = format!("**{name} asked:** ");
-    let room = limit.saturating_sub(prefix.chars().count());
-    format!("{prefix}{}", truncate(question.trim(), room))
+/// The text of the message a reply answers, when the bot wrote it and it holds text.
+///
+/// A reply to a person, or to another bot, is not a turn: the thread belongs to everyone in it.
+pub fn quoted(author: Option<UserId>, content: &str, me: UserId) -> Option<String> {
+    if author != Some(me) {
+        return None;
+    }
+    let text = content.trim();
+    (!text.is_empty()).then(|| text.to_owned())
 }
 
 /// The message content with every mention of the bot removed, trimmed.

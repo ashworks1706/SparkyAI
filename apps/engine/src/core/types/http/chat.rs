@@ -34,6 +34,9 @@ pub struct ChatRequest {
     pub continue_channel: bool,
     /// The message.
     pub message: String,
+    /// The message of ours this one replies to, when it replies to one.
+    #[serde(default)]
+    pub reply_to: Option<String>,
 }
 
 fn default_channel() -> String {

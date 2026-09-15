@@ -663,23 +663,22 @@ fn thread_names_fit_discord_and_are_never_empty() {
 }
 
 #[test]
-fn the_asked_header_stays_within_the_limit() {
-    use crate::access::route::asked_header;
-
-    assert_eq!(asked_header("Ash", "hi", 2_000), "**Ash asked:** hi");
-    let long = asked_header("Ash", &"x".repeat(5_000), 2_000);
-    assert_eq!(long.chars().count(), 2_000);
-    assert!(long.ends_with("..."));
-}
-
-#[test]
 fn each_place_sets_visibility_and_continuation() {
-    use crate::access::route::{AskMode, Place, ask_mode, chat_request};
+    use crate::access::route::{Place, chat_request};
     use crate::core::types::Visibility;
-    use serenity::all::{ChannelId, ChannelType, GuildId, UserId};
+    use serenity::all::{ChannelId, GuildId, UserId};
 
     let at = ChannelId::new(5);
-    let make = |place| chat_request(place, UserId::new(1), GuildId::new(2), vec![], "q".into());
+    let make = |place| {
+        chat_request(
+            place,
+            UserId::new(1),
+            GuildId::new(2),
+            vec![],
+            "q".into(),
+            None,
+        )
+    };
 
     let private = make(Place::Private(at));
     assert_eq!(private.visibility, Visibility::Private);
@@ -698,21 +697,6 @@ fn each_place_sets_visibility_and_continuation() {
     let wire = serde_json::to_value(&private).unwrap_or_default();
     assert_eq!(wire["visibility"], "private");
     assert_eq!(wire["continue_channel"], true);
-
-    assert_eq!(
-        ask_mode(true, Some(ChannelType::PublicThread)),
-        AskMode::Private
-    );
-    assert_eq!(
-        ask_mode(false, Some(ChannelType::PrivateThread)),
-        AskMode::InThread
-    );
-    assert_eq!(
-        ask_mode(false, Some(ChannelType::NewsThread)),
-        AskMode::InThread
-    );
-    assert_eq!(ask_mode(false, Some(ChannelType::Text)), AskMode::NewThread);
-    assert_eq!(ask_mode(false, None), AskMode::NewThread);
 }
 
 #[test]
@@ -1197,4 +1181,125 @@ fn a_character_split_across_two_network_chunks_arrives_whole() {
         "no replacement characters"
     );
     assert!(pending.is_empty());
+}
+
+#[test]
+fn a_thread_answers_a_reply_and_stays_quiet_for_everything_else() {
+    use crate::access::route::{Arrival, Arrived, Trigger, trigger};
+
+    let in_thread = |mentions_bot, replies_to_bot| {
+        trigger(Arrival {
+            at: Arrived::Thread,
+            mentions_bot,
+            replies_to_bot,
+        })
+    };
+
+    assert_eq!(in_thread(false, true), Some(Trigger::Reply));
+    assert_eq!(in_thread(true, true), Some(Trigger::Reply));
+    // People talk in the thread without the bot answering every line.
+    assert_eq!(in_thread(false, false), None);
+    // A mention alone is not the reply the thread continues on.
+    assert_eq!(in_thread(true, false), None);
+}
+
+#[test]
+fn addressing_the_bot_in_a_channel_opens_a_thread() {
+    use crate::access::route::{Arrival, Arrived, Trigger, trigger};
+
+    let in_channel = |mentions_bot, replies_to_bot| {
+        trigger(Arrival {
+            at: Arrived::Channel,
+            mentions_bot,
+            replies_to_bot,
+        })
+    };
+
+    assert_eq!(in_channel(true, false), Some(Trigger::Opening));
+    assert_eq!(in_channel(false, true), Some(Trigger::Opening));
+    assert_eq!(in_channel(false, false), None);
+}
+
+#[test]
+fn every_direct_message_is_a_turn() {
+    use crate::access::route::{Arrival, Arrived, Trigger, trigger};
+
+    assert_eq!(
+        trigger(Arrival {
+            at: Arrived::Direct,
+            ..Arrival::default()
+        }),
+        Some(Trigger::Direct)
+    );
+}
+
+#[test]
+fn a_direct_message_is_private_so_personal_memory_applies_and_a_thread_is_public() {
+    use crate::access::route::{Place, chat_request};
+    use crate::core::types::Visibility;
+    use serenity::all::{ChannelId, GuildId, UserId};
+
+    let make = |place| {
+        chat_request(
+            place,
+            UserId::new(1),
+            GuildId::new(2),
+            vec![],
+            "q".into(),
+            None,
+        )
+    };
+
+    // recall_in_public gates the profile graph on this, so a DM is the only place it applies.
+    assert_eq!(
+        make(Place::Private(ChannelId::new(7))).visibility,
+        Visibility::Private
+    );
+    assert_eq!(
+        make(Place::Thread(ChannelId::new(7))).visibility,
+        Visibility::Public
+    );
+}
+
+#[test]
+fn the_quoted_message_rides_the_request_and_is_left_out_when_there_is_none() {
+    use crate::access::route::{Place, chat_request};
+    use serenity::all::{ChannelId, GuildId, UserId};
+
+    let make = |reply_to| {
+        chat_request(
+            Place::Thread(ChannelId::new(5)),
+            UserId::new(1),
+            GuildId::new(2),
+            vec![],
+            "and on Sunday?".into(),
+            reply_to,
+        )
+    };
+
+    let quoted = make(Some("The library closes at 10pm.".to_owned()));
+    let wire = serde_json::to_value(&quoted).unwrap_or_default();
+    assert_eq!(wire["reply_to"], "The library closes at 10pm.");
+
+    let plain = serde_json::to_value(make(None)).unwrap_or_default();
+    assert!(plain.get("reply_to").is_none());
+}
+
+#[test]
+fn only_a_reply_to_the_bots_own_words_is_quoted_back() {
+    use crate::access::route::quoted;
+    use serenity::all::UserId;
+
+    let me = UserId::new(9);
+    let someone = UserId::new(10);
+
+    assert_eq!(
+        quoted(Some(me), " The library closes at 10pm. ", me),
+        Some("The library closes at 10pm.".to_owned())
+    );
+    // A reply to a person is theirs, not a turn for the bot.
+    assert_eq!(quoted(Some(someone), "what do you think?", me), None);
+    // A reply to nothing, and a reply to a message that carries no text.
+    assert_eq!(quoted(None, "text", me), None);
+    assert_eq!(quoted(Some(me), "   ", me), None);
 }

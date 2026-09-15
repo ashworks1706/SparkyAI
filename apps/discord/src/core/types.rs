@@ -33,6 +33,9 @@ pub struct ChatRequest {
     pub visibility: Visibility,
     /// Continue the latest open conversation of this user in channel_id with this visibility.
     pub continue_channel: bool,
+    /// The bot message this one replies to, when it replies to one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
 }
 
 /// An action the engine is holding until the caller who asked answers it.

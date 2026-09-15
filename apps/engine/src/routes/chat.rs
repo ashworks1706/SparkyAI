@@ -242,7 +242,8 @@ async fn run_turn(
         .unwrap_or_else(|| state.default_tenant.clone());
     let ctx = RequestContext::new(tenant, req.user_id, state.request_budget)
         .with_roles(req.roles)
-        .with_visibility(req.visibility);
+        .with_visibility(req.visibility)
+        .replying_to(req.reply_to);
     let mut ctx = open(
         &state,
         ctx,
