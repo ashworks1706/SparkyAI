@@ -65,14 +65,16 @@ pub const EVIDENCE_HEADER: &str = "Stored copies of pages from the knowledge bas
                                    first, each with when it was fetched. They may be out of date \
                                    or may not answer the question. When the question needs current \
                                    information, such as hours today, shuttles, events, news or \
-                                   scores, or these entries do not answer it, call the matching \
-                                   search_ tool first. Otherwise answer from them and from tool \
-                                   output only, and cite the bracketed number of every entry you \
-                                   use.";
+                                   scores, call search_live first. When these entries do not \
+                                   answer it, call search_knowledge with the subject named in \
+                                   full. Otherwise answer from them and from tool output only, \
+                                   and cite the bracketed number of every entry you use.";
 /// Default line written when retrieval found nothing.
 pub const NO_EVIDENCE_LINE: &str = "The knowledge base returned nothing for this question. \
-                                    Call the search_ tool for the topic before you answer, or \
-                                    say you do not have it.";
+                                    Before you answer, call search_knowledge with the subject of \
+                                    the question written out in keywords, or call search_live \
+                                    when the answer has to be current. Say you do not have it \
+                                    only after one of them comes back empty.";
 /// Default line written when the router skipped retrieval as small talk.
 pub const NO_RETRIEVAL_LINE: &str = "The knowledge base was not searched for this message: it \
                                      asks for no ASU fact. Answer it directly and briefly, and \
@@ -80,8 +82,9 @@ pub const NO_RETRIEVAL_LINE: &str = "The knowledge base was not searched for thi
 /// Default line written when the router skipped retrieval because the answer has to be current.
 pub const LIVE_ONLY_LINE: &str = "The knowledge base was not searched for this question: the \
                                   answer has to be current, and a stored copy would be out of \
-                                  date. Call the search_ tool that matches the topic and answer \
-                                  from what it returns, or say you do not have it.";
+                                  date. Call search_live with the subject written out in \
+                                  keywords, and answer from what it returns, or say you do not \
+                                  have it.";
 /// Default line added to a call that is offered no tools.
 pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the user now in plain \
                                     text from what you already have, or say what you could not \

@@ -1,4 +1,4 @@
-//! search_live_shuttles: live next-bus times at every stop of the ASU intercampus shuttles.
+//! Live next-bus times at every stop of the ASU intercampus shuttles.
 
 use super::{Freshness, LiveSource, Param};
 
@@ -23,8 +23,12 @@ impl LiveSource for Shuttles {
         "shuttles"
     }
 
-    fn description(&self) -> &'static str {
-        "Live next-bus times at every stop of the ASU intercampus shuttles."
+    fn hint(&self) -> &'static str {
+        "intercampus shuttle times"
+    }
+
+    fn category(&self) -> &'static str {
+        "transit"
     }
 
     fn params(&self) -> &'static [Param] {

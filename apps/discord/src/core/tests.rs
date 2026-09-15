@@ -248,7 +248,7 @@ fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
     resp.memories = vec!["You study CSE.".into()];
     let steps = vec![
         "\u{1f914} thinking".to_owned(),
-        "\u{2705} `search_courses` \u{2192} three passages".to_owned(),
+        "\u{2705} `search_live` \u{2192} three passages".to_owned(),
     ];
 
     let out = answer(&steps, &resp, 2_000);
@@ -257,7 +257,7 @@ fn the_final_card_keeps_steps_then_answer_then_footers_in_order() {
     assert!(!card.contains(THINKING), "the header goes once answered");
     let order = [
         "-# \u{1f914} thinking",
-        "-# \u{2705} `search_courses`",
+        "-# \u{2705} `search_live`",
         "Hayden closes at 2am.",
         "Also from** desk note",
         "Memory used**\n- You study CSE.",

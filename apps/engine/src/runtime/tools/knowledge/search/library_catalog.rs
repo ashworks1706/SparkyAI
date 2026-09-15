@@ -1,4 +1,4 @@
-//! search_library_catalog: books, articles, journals and media in the ASU Library.
+//! Books, articles, journals and media in the ASU Library.
 
 use super::{LiveSource, Param};
 
@@ -29,8 +29,12 @@ impl LiveSource for LibraryCatalog {
         "library_catalog"
     }
 
-    fn description(&self) -> &'static str {
-        "Search the ASU Library catalog for books, articles, journals and media."
+    fn hint(&self) -> &'static str {
+        "books, articles and media"
+    }
+
+    fn category(&self) -> &'static str {
+        "library"
     }
 
     fn params(&self) -> &'static [Param] {

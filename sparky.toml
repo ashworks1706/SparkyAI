@@ -81,11 +81,11 @@ retry_without = true
 role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
-evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, or these entries do not answer it, call the matching search_ tool first. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
-no_evidence_line = "The knowledge base returned nothing for this question. Call the search_ tool for the topic before you answer, or say you do not have it."
+evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, call search_live first. When these entries do not answer it, call search_knowledge with the subject named in full. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
+no_evidence_line = "The knowledge base returned nothing for this question. Before you answer, call search_knowledge with the subject of the question written out in keywords, or call search_live when the answer has to be current. Say you do not have it only after one of them comes back empty."
 # Written instead when retrieval.router skipped retrieval, one line per reason.
 no_retrieval_line = "The knowledge base was not searched for this message: it asks for no ASU fact. Answer it directly and briefly, and cite nothing."
-live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call the search_ tool that matches the topic and answer from what it returns, or say you do not have it."
+live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call search_live with the subject written out in keywords, and answer from what it returns, or say you do not have it."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
@@ -166,11 +166,24 @@ write_roles = ["MANAGE_GUILD"]
 allow_authenticated_reads = false
 confirm_from = "external_write"
 
+# Two search tools over the same set of ASU sources: search_knowledge reads the stored index,
+# search_live queues a fetch for the scraper. Both take a query and an optional source filter.
+#
+# The wording below is what the model reads immediately before it writes a query, so it is the
+# highest-leverage text in the prompt. With one tool per source the tool name carried half the
+# intent; with two tools the query string has to carry all of it, which is what query_description
+# is for. Keep it concrete and short: a 4B model follows a bad-then-good pair and ignores an
+# adjective. The per-source hints appended to source_description come from the catalog.
 [tools]
 disabled = []
-# One tool per source the scraper publishes: search_<source> for a source whose answer is stored
-# and can be cited later, search_live_<source> for one that is only true now and is never indexed.
 search = true
+# The source search_live fetches when a call names none. Must be a source the engine offers.
+live_default_source = "web"
+knowledge_description = "Search the stored knowledge base of ASU pages. Use it when the results already in this prompt do not answer, or you need a different part of the same page."
+live_description = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, such as hours today, open seats, shuttle times, events, news or scores, or when the knowledge base holds nothing."
+query_description = "What to search for, in keywords. This string is the whole request: the tool reads nothing else from the conversation, so name the subject in full and write no pronoun and no bare word. Bad: hours. Good: Hayden Library hours Sunday. Bad: does it have space left. Good: CSE 310 Fall 2026 open seats."
+source_description = "Narrows the search to one source. Leave it out to search all of them, which is right unless you already know which source holds the answer."
+nothing_stored = "The knowledge base holds nothing for that query. Either search again with the subject named differently, or call search_live, or say you do not have it."
 
 # The classifier and the graph agent, detached from the request that produced the turn.
 # Enabled, every turn costs two extra model calls.
@@ -249,7 +262,7 @@ claim_secs = 5                 # a query the scraper does not claim in this long
 #
 # handoff_secs is the floor under every source: an answer has to outlive its own fetch for the
 # requests that waited on it to read it. So a source at ttl 0 is reused for that long and no
-# longer, which is what every search_live_ source defaults to. Coalescing itself costs no
+# longer, which is what every source that is never indexed defaults to. Coalescing itself costs no
 # freshness: a request that waited gets an answer fetched after it asked. Reuse does, so keep the
 # floor small.
 #
@@ -257,8 +270,8 @@ claim_secs = 5                 # a query the scraper does not claim in this long
 # ReadPublic and anything that writes goes through Policy, never through this path.
 [query.cache]
 enabled = true
-default_ttl_secs = 900         # a search_<source> answer, which is indexed and citable anyway
-live_ttl_secs = 0              # a search_live_<source> answer: only the handoff floor below
+default_ttl_secs = 900         # an answer of a source the scraper indexes, citable anyway
+live_ttl_secs = 0              # an answer of a source that is never indexed: the floor below only
 handoff_secs = 5               # floor under every lifetime, so the requests that waited read it
 lease_secs = 120               # must cover query.timeout_secs, or two requests fetch the same query
 poll_ms = 100                  # how often a waiting request looks for the answer
@@ -380,7 +393,7 @@ tree_max_level = 3
 tree_cluster_size = 5
 tree_min_chunks = 12
 
-# SearXNG behind the search_live_web tool (just search). base_url is per-machine and lives in .env.
+# SearXNG behind the web source of search_live (just search). base_url is per-machine and lives in .env.
 [search]
 engines = "google,brave,bing"
 language = "en-US"

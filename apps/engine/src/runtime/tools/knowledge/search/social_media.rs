@@ -1,4 +1,4 @@
-//! search_social_media: latest posts on the official ASU and Sun Devil Athletics channels.
+//! Latest posts on the official ASU and Sun Devil Athletics channels.
 
 use super::{LiveSource, Param};
 
@@ -17,8 +17,12 @@ impl LiveSource for SocialMedia {
         "social_media"
     }
 
-    fn description(&self) -> &'static str {
-        "Latest posts on the official ASU and Sun Devil Athletics YouTube channels."
+    fn hint(&self) -> &'static str {
+        "official ASU video posts"
+    }
+
+    fn category(&self) -> &'static str {
+        "social"
     }
 
     fn params(&self) -> &'static [Param] {

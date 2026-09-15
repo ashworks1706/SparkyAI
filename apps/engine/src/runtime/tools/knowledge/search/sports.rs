@@ -1,4 +1,4 @@
-//! search_sports: the Sun Devil schedule and recent results for one sport.
+//! The Sun Devil schedule and recent results for one sport.
 
 use super::{LiveSource, Param};
 
@@ -24,8 +24,12 @@ impl LiveSource for Sports {
         "sports"
     }
 
-    fn description(&self) -> &'static str {
-        "Fetch the Sun Devil schedule and recent results for one sport."
+    fn hint(&self) -> &'static str {
+        "Sun Devil schedules and results"
+    }
+
+    fn category(&self) -> &'static str {
+        "sports"
     }
 
     fn params(&self) -> &'static [Param] {

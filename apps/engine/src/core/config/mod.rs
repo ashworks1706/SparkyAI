@@ -215,6 +215,7 @@ impl Config {
                 self.query.poll_max_ms, self.query.poll_ms
             ));
         }
+        validate_tools(&self.tools)?;
         validate_query_cache(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
@@ -285,6 +286,32 @@ impl Config {
             .unwrap_or(fallback)
             .to_owned())
     }
+}
+
+/// Rejects search wording the model would read as an empty string, and a missing fallback source.
+fn validate_tools(tools: &Tools) -> Result<(), ConfigError> {
+    if !tools.search {
+        return Ok(());
+    }
+    if tools.live_default_source.trim().is_empty() {
+        return Err(ConfigError::Invalid(
+            "tools.live_default_source is empty; name the source search_live falls back to".into(),
+        ));
+    }
+    for (name, text) in [
+        ("knowledge_description", &tools.knowledge_description),
+        ("live_description", &tools.live_description),
+        ("query_description", &tools.query_description),
+        ("source_description", &tools.source_description),
+        ("nothing_stored", &tools.nothing_stored),
+    ] {
+        if text.trim().is_empty() {
+            return Err(ConfigError::Invalid(format!(
+                "tools.{name} is empty; the model would be given no wording for the search tools"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// Rejects telemetry settings that cannot export. An empty ai_path turns the AI endpoint off.

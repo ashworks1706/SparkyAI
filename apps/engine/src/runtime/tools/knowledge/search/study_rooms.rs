@@ -1,4 +1,4 @@
-//! search_live_study_rooms: bookable study room slots at one ASU library on one date.
+//! Bookable study room slots at one ASU library on one date.
 
 use super::{Freshness, LiveSource, Param};
 
@@ -19,8 +19,12 @@ impl LiveSource for StudyRooms {
         "study_rooms"
     }
 
-    fn description(&self) -> &'static str {
-        "List open study room slots at one ASU library on one date."
+    fn hint(&self) -> &'static str {
+        "bookable library study rooms"
+    }
+
+    fn category(&self) -> &'static str {
+        "library"
     }
 
     fn params(&self) -> &'static [Param] {

@@ -378,7 +378,7 @@ The harness runs more than one prompt. Each sub-agent is a `runtime::harness::ag
 
 | Kind | Executed by | Risk |
 |---|---|---|
-| `tool` | a built-in `Tool`: the `search_<source>` and `search_live_<source>` tools, `get_skill`, `run_sandbox` | declared per tool |
+| `tool` | a built-in `Tool`: `search_knowledge`, `search_live`, `get_skill`, `run_sandbox` | declared per tool |
 | `mcp` | a remote MCP server | derived from the tool name |
 | `skill` | fetched by `get_skill`, then followed | the risk of each capability it uses |
 
@@ -427,7 +427,7 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 
 | Class | Examples | Default behavior |
 |---|---|---|
-| `ReadPublic` | `search_<source>`, `get_skill` | run |
+| `ReadPublic` | `search_knowledge`, `search_live`, `get_skill` | run |
 | `ReadAuthenticated` | a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
 | `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
@@ -512,7 +512,11 @@ The tree is off by default. It costs a model call per cluster per level.
 
 Scheduled ingestion keeps the index current on an interval. A live query answers from a source now, with parameters the model picks: a term, subject and level of the class catalog, a scholarship search filtered by the student's situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, a web search, or a refetch of this week's library hours.
 
-The engine offers one tool per source. A source whose answer is worth a stored copy is named `search_<source>`; one whose answer is only true now and is never indexed is named `search_live_<source>`. The name is the engine's own: the registry key the scraper serves under is unchanged, so the prefix carries no migration. `LiveSource::freshness` declares it, the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` names a disagreement at boot the way it does for parameters. The tool description tells the model what the source answers. The prompt tells it to use the evidence first, to call a `search_` tool when the evidence does not answer, and to call a `search_live_` tool whenever the question is one only it can answer, because nothing in the prompt ever holds that.
+The engine offers two search tools, not one per source: `search_knowledge(query, source?)` reads the stored index and `search_live(query, source?)` queues a fetch. `source` is a filter, never a forced guess: leaving it out searches every source, and each variant carries a few words from `LiveSource::hint` so the model can pick one when it knows. `search_knowledge` offers only the sources the scraper indexes, and maps the key it is given to the `chunks.category` it filters on. `search_live` answers a call that names no source from `tools.live_default_source`, which is `web`.
+
+The query string is the whole request. With one tool per source the tool name carried half the intent; with two tools it does not, so `tools.query_description` is the highest-leverage wording in the prompt and says in a bad-then-good pair what a self-contained keyword query looks like. `search::params_for` turns that one string into the parameters the scraper takes: the query fills the source's text parameter, a choice the query names fills a choice parameter, a `YYYY-MM-DD` in the query fills a date, a required date falls back to today at `prompt.utc_offset_hours`, and `Courses::derived` reads the term out of the query or takes the one running today. A required parameter nothing filled comes back to the model naming what the query has to say. Two schemas cost about 748 estimated tokens where fifteen cost 1578.
+
+`LiveSource::freshness` declares whether a source's answers are stored, the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` names a disagreement at boot the way it does for parameters. The prompt tells the model to use the evidence first, to call `search_knowledge` when the evidence does not answer, and to call `search_live` whenever the question is one only it can answer, because nothing in the prompt ever holds that.
 
 ```mermaid
 sequenceDiagram
@@ -523,8 +527,8 @@ sequenceDiagram
     participant BG as scraper background lane
     participant W as source site or SearXNG
 
-    M->>T: search_courses with arguments
-    T->>T: check and normalize arguments
+    M->>T: search_live with a query and a source
+    T->>T: turn the query into the parameters the source takes
     T->>PG: insert source_query, priority 0, deadline
     T->>PG: pg_notify source_query
     PG-->>L: notification wakes the lane
@@ -540,13 +544,13 @@ sequenceDiagram
     Note over T,PG: unclaimed after query.claim_secs, the job is cancelled and the tool reports the scraper is not running
 ```
 
-A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the description, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. Arguments are checked and normalized there, so a bad call is corrected by the model without queueing a job. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into those parameters and checked there, so a bad call is corrected by the model without queueing a job. The two tools themselves live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
 
-`query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine registers every tool in its catalog and logs a warning when a tool and the published source disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks the parameters of every query again before it runs it.
+`query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine checks every source in its catalog and logs a warning when a source and the published one disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks the parameters of every query again before it runs it.
 
 Any scraper failure (unknown source, missing parameter, unreadable page, an exception) marks the job failed. The tool returns the reason as `InvalidArguments`, which the loop feeds to the model. A caller that is cancelled or runs out of time cancels its job. The text handed back is held to `scraper.query_max_chars`, and the page is cited in `Answer.sources`.
 
-`search_live_web` uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
+The `web` source uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
 
 Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login) and anything behind a student login, such as Workday jobs.
 
@@ -554,9 +558,9 @@ Not covered: X and Instagram posts (the public X timeline endpoint serves old po
 
 `query.cache` puts a Redis cache in front of every live query, as `CachedQueries` wrapping `SourceQueries`. It does two separate things.
 
-**Reuse.** An answer within its lifetime is returned without a `jobs` row, without waking the scraper, and without a fetch. The key is a UUIDv5 over the tenant, the source key, and the parameters sorted by name, so the same question from different students is the same key, and the order the model happened to write the arguments in does not matter. A reused answer carries the time it was fetched, and `Search` renders that age into the tool output, so the model can never present a stored answer as current.
+**Reuse.** An answer within its lifetime is returned without a `jobs` row, without waking the scraper, and without a fetch. The key is a UUIDv5 over the tenant, the source key, and the parameters sorted by name, so the same question from different students is the same key, and the order the model happened to write the arguments in does not matter. A reused answer carries the time it was fetched, and `LiveSearch` renders that age into the tool output, so the model can never present a stored answer as current.
 
-**One fetch per query.** Whatever the lifetime, the first request to ask for a query takes a lease (`SET NX`) and fetches; every request that arrives while it runs waits on that lease and reads the answer it writes. A hundred students asking about CSE 310 at once is one fetch of the ASU catalog, not a hundred. Coalescing costs no freshness at all, because a request that waited gets an answer fetched after it asked. Reuse does cost freshness, which is why every `search_live_` source defaults to a lifetime of zero.
+**One fetch per query.** Whatever the lifetime, the first request to ask for a query takes a lease (`SET NX`) and fetches; every request that arrives while it runs waits on that lease and reads the answer it writes. A hundred students asking about CSE 310 at once is one fetch of the ASU catalog, not a hundred. Coalescing costs no freshness at all, because a request that waited gets an answer fetched after it asked. Reuse does cost freshness, which is why every source the scraper never indexes defaults to a lifetime of zero.
 
 `query.cache.handoff_secs` is the floor under every lifetime: an answer has to outlive its own fetch for the requests that waited on it to read it, so a source at zero is reused for that long and no longer. `lease_secs` must cover `query.timeout_secs` or a lease can expire mid-fetch and let a second request fetch the same query; `Config::validate` rejects that at boot, along with a cache enabled without a `redis` section.
 
@@ -584,7 +588,7 @@ Two partial indexes serve this, added in `0013_job_queue_pressure.sql`: `(kind, 
 
 A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.
 
-A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. Those are the sources the engine offers as `search_live_<source>`, so the name says the answer is not kept. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
+A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. Those are the sources `search_knowledge` never offers as a filter, because nothing of theirs is ever in the index. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
 
 ## Job queue
 
@@ -592,7 +596,7 @@ The scraper does all its work from the `jobs` table in one process, `scraper ser
 
 | kind | queued by | priority | lane |
 |---|---|---|---|
-| `source_query` | the engine, for a `search_<source>` call | 0 | live |
+| `source_query` | the engine, for a `search_live` call | 0 | live |
 | `live_index` | the scraper, with the answer to a `source_query` | -10 | background |
 | `source_run` | the scraper, when a registered source falls due | -20 | background |
 

@@ -1,4 +1,4 @@
-//! search_events: upcoming events on the ASU events calendar.
+//! Upcoming events on the ASU events calendar.
 
 use super::{LiveSource, Param};
 
@@ -13,8 +13,12 @@ impl LiveSource for Events {
         "events"
     }
 
-    fn description(&self) -> &'static str {
-        "Search the ASU events calendar for upcoming events."
+    fn hint(&self) -> &'static str {
+        "the events calendar"
+    }
+
+    fn category(&self) -> &'static str {
+        "events"
     }
 
     fn params(&self) -> &'static [Param] {

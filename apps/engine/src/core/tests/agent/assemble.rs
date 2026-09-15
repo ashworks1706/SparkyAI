@@ -468,7 +468,10 @@ fn every_evidence_entry_says_it_is_a_stored_copy_and_how_old_it_is() {
     let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
     assert!(text.contains("(stored copy, fetched "), "{text}");
     assert!(text.contains(", 3 days ago)"), "{text}");
-    assert!(text.contains("call the matching search_ tool"), "{text}");
+    assert!(
+        text.contains("call search_knowledge with the subject"),
+        "{text}"
+    );
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! search_live_web: web results from Google, Brave and Bing through self-hosted SearXNG.
+//! Web results from Google, Brave and Bing through self-hosted SearXNG.
 
 use super::{Freshness, LiveSource, Param};
 
@@ -23,8 +23,12 @@ impl LiveSource for Web {
         "web"
     }
 
-    fn description(&self) -> &'static str {
-        "Search the web through Google, Brave and Bing for anything the ASU sources do not cover."
+    fn hint(&self) -> &'static str {
+        "the open web, when no ASU source fits"
+    }
+
+    fn category(&self) -> &'static str {
+        "web"
     }
 
     fn params(&self) -> &'static [Param] {

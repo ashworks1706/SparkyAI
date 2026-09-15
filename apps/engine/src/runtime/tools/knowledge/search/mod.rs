@@ -1,4 +1,4 @@
-//! ReadPublic: one search tool per ASU source. A call checks arguments, queues a scraper job.
+//! ReadPublic: two search tools over the ASU sources, one over the stored index and one live.
 
 pub mod campus_map;
 pub mod clubs;
@@ -7,34 +7,35 @@ pub mod events;
 pub mod jobs;
 pub mod library_catalog;
 pub mod library_hours;
+pub mod live;
 pub mod news;
 pub mod scholarships;
 pub mod shuttles;
 pub mod social_media;
 pub mod sports;
 pub mod sports_news;
+pub mod stored;
 pub mod study_rooms;
 pub mod web;
 
 use std::fmt::Write as _;
-use std::sync::Arc;
 
-use async_trait::async_trait;
+use chrono::NaiveDate;
 use serde_json::{Map, Value, json};
 
-use crate::core::traits::knowledge::query::SourceQueries;
-use crate::core::traits::tools::Tool;
-use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::evidence::{Citation, age};
-use crate::core::types::knowledge::query::{QueryError, QueryRequest, QuerySourceInfo};
-use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::tools::structured;
+use crate::core::types::knowledge::query::QuerySourceInfo;
 
-/// Prefix of every search tool name. The rest is the source key.
-pub const PREFIX: &str = "search_";
+/// Name of the tool that searches the stored index.
+pub const KNOWLEDGE: &str = "search_knowledge";
 
-/// Prefix of a search tool over a source whose answer is never indexed.
-pub const LIVE_PREFIX: &str = "search_live_";
+/// Name of the tool that fetches a source now.
+pub const LIVE: &str = "search_live";
+
+/// Name of the query parameter both tools take.
+pub const QUERY: &str = "query";
+
+/// Name of the optional source filter both tools take.
+pub const SOURCE: &str = "source";
 
 /// How long the answer of a source stays true.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,19 +51,6 @@ impl Freshness {
     pub fn indexed(self) -> bool {
         self == Self::Stored
     }
-
-    /// The tool name prefix of a source of this kind.
-    pub fn prefix(self) -> &'static str {
-        match self {
-            Self::Stored => PREFIX,
-            Self::Live => LIVE_PREFIX,
-        }
-    }
-}
-
-/// The tool name a source is offered under. The registry key the scraper serves is unchanged.
-pub fn tool_name(key: &str, freshness: Freshness) -> String {
-    format!("{}{key}", freshness.prefix())
 }
 
 /// Every live source the engine offers, in the order the model sees them.
@@ -101,16 +89,16 @@ pub enum Accepts {
     Flag,
 }
 
-/// One parameter a search tool takes.
+/// One parameter the scraper takes for a source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
-    /// Name the model passes.
+    /// Name the scraper takes.
     pub name: &'static str,
-    /// What it means, for the model.
+    /// What it means.
     pub description: &'static str,
-    /// Whether the call is refused without it.
+    /// Whether the query is refused without it.
     pub required: bool,
-    /// An example value shown to the model.
+    /// An example value.
     pub example: Option<&'static str>,
     /// What values it accepts.
     pub accepts: Accepts,
@@ -184,69 +172,6 @@ impl Param {
         }
     }
 
-    /// The JSON Schema of the parameter.
-    fn schema(&self) -> Value {
-        let mut description = self.description.to_owned();
-        if let Some(example) = self.example {
-            let _ = write!(description, " e.g. {example}");
-        }
-        match self.accepts {
-            Accepts::Text => json!({ "type": "string", "description": description }),
-            Accepts::OneOf(choices) => {
-                json!({ "type": "string", "enum": choices, "description": description })
-            }
-            Accepts::AnyOf(choices) => json!({
-                "type": "array",
-                "items": { "type": "string", "enum": choices },
-                "description": description
-            }),
-            Accepts::Date => {
-                json!({ "type": "string", "format": "date", "description": description })
-            }
-            Accepts::Flag => json!({ "type": "boolean", "description": description }),
-        }
-    }
-
-    /// The argument as the string the scraper takes. Err names what was wrong with it.
-    fn normalize(&self, value: &Value) -> Result<String, String> {
-        let text = match value {
-            Value::String(text) => text.trim().to_owned(),
-            Value::Bool(flag) => flag.to_string(),
-            Value::Number(number) => number.to_string(),
-            Value::Array(items) => items
-                .iter()
-                .map(|item| match item {
-                    Value::String(text) => Ok(text.trim().to_owned()),
-                    other => Err(format!("{} takes text values, got {other}", self.name)),
-                })
-                .collect::<Result<Vec<_>, _>>()?
-                .join(","),
-            other => return Err(format!("{} takes text, got {other}", self.name)),
-        };
-        match self.accepts {
-            Accepts::Text => Ok(text),
-            Accepts::OneOf(choices) => match pick(&text, choices) {
-                Some(choice) => Ok(choice.to_owned()),
-                None => Err(not_one_of(self.name, &text, choices)),
-            },
-            Accepts::AnyOf(choices) => text
-                .split(',')
-                .map(str::trim)
-                .filter(|part| !part.is_empty())
-                .map(|part| pick(part, choices).ok_or_else(|| not_one_of(self.name, part, choices)))
-                .collect::<Result<Vec<_>, _>>()
-                .map(|picked| picked.join(",")),
-            Accepts::Date => chrono::NaiveDate::parse_from_str(&text, "%Y-%m-%d")
-                .map(|date| date.format("%Y-%m-%d").to_string())
-                .map_err(|_| format!("{} must be a date like 2026-09-14, got {text:?}", self.name)),
-            Accepts::Flag => match text.to_ascii_lowercase().as_str() {
-                "true" => Ok("true".to_owned()),
-                "false" => Ok("false".to_owned()),
-                _ => Err(format!("{} must be true or false, got {text:?}", self.name)),
-            },
-        }
-    }
-
     /// The values the scraper has to accept for this parameter, and whether it takes a list.
     fn values(&self) -> Option<(&'static [&'static str], bool)> {
         match self.accepts {
@@ -258,101 +183,231 @@ impl Param {
     }
 }
 
-/// The choice text names, compared without case.
-fn pick<'a>(text: &str, choices: &[&'a str]) -> Option<&'a str> {
-    choices
-        .iter()
-        .find(|choice| choice.eq_ignore_ascii_case(text))
-        .copied()
-}
-
-/// The refusal for a value that is not one of choices.
-fn not_one_of(name: &str, value: &str, choices: &[&str]) -> String {
-    format!("{name} {value:?} is not one of: {}", choices.join(", "))
-}
-
-/// One live ASU source the model may search.
+/// One live ASU source, reached through the source filter of the two search tools.
 pub trait LiveSource: Send + Sync {
-    /// Registry key the scraper serves it under.
+    /// Registry key the scraper serves it under, and the value of the source filter.
     fn key(&self) -> &'static str;
 
-    /// What it answers, for the model.
-    fn description(&self) -> &'static str;
+    /// A few words naming what it answers, listed beside its key in the source filter.
+    fn hint(&self) -> &'static str;
 
-    /// The parameters it takes.
+    /// The chunks category the scraper writes its pages under.
+    fn category(&self) -> &'static str;
+
+    /// The parameters the scraper takes.
     fn params(&self) -> &'static [Param];
+
+    /// The text parameter the query fills. None takes the first text parameter.
+    fn query_param(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Values for parameters the query cannot carry, applied to what it left empty.
+    fn derived(&self, _query: &str, _today: NaiveDate) -> Vec<(&'static str, String)> {
+        Vec::new()
+    }
 
     /// How long its answer stays true. Live answers are never indexed.
     fn freshness(&self) -> Freshness {
         Freshness::Stored
     }
 
-    /// Checks normalized arguments beyond what each parameter accepts. Err is shown to the model.
+    /// Checks filled parameters beyond what each parameter accepts. Err is shown to the model.
     fn check(&self, _params: &Map<String, Value>) -> Result<(), String> {
         Ok(())
     }
 }
 
-/// The tool definition of a source.
-pub fn definition(source: &dyn LiveSource, timeout_secs: u64) -> ToolDefinition {
-    let mut properties = Map::new();
-    let mut required = Vec::new();
-    for param in source.params() {
-        properties.insert(param.name.to_owned(), param.schema());
-        if param.required {
-            required.push(param.name);
-        }
-    }
-    ToolDefinition {
-        name: tool_name(source.key(), source.freshness()),
-        description: source.description().to_owned(),
-        parameters: json!({ "type": "object", "properties": properties, "required": required }),
-        risk: RiskClass::ReadPublic,
-        sequential: false,
-        timeout_secs: Some(timeout_secs),
-    }
+/// The keys of sources, in catalog order, keeping only those the scraper indexes when stored_only.
+pub fn source_keys(sources: &[Box<dyn LiveSource>], stored_only: bool) -> Vec<&'static str> {
+    sources
+        .iter()
+        .filter(|s| !stored_only || s.freshness().indexed())
+        .map(|s| s.key())
+        .collect()
 }
 
-/// The arguments of a call as the parameters the scraper takes. Err is shown to the model.
-pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Value>, String> {
+/// The source filter description: lead, then one key and hint per source offered.
+pub fn source_help(lead: &str, sources: &[Box<dyn LiveSource>], stored_only: bool) -> String {
+    let mut out = lead.trim().to_owned();
+    for source in sources {
+        if stored_only && !source.freshness().indexed() {
+            continue;
+        }
+        let _ = write!(
+            out,
+            " {}: {}.",
+            source.key(),
+            source.hint().trim_end_matches('.')
+        );
+    }
+    out
+}
+
+/// The JSON Schema both search tools take: a required query and an optional source filter.
+pub fn parameters(query: &str, source: &str, keys: &[&'static str]) -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            QUERY: { "type": "string", "description": query },
+            SOURCE: { "type": "string", "enum": keys, "description": source },
+        },
+        "required": [QUERY],
+    })
+}
+
+/// The query and source a call carries. Err is shown to the model.
+pub fn arguments(
+    args: Value,
+    keys: &[&'static str],
+    tool: &str,
+) -> Result<(String, Option<String>), String> {
     let given = match args {
         Value::Object(given) => given,
         Value::Null => Map::new(),
         other => return Err(format!("arguments must be an object, got {other}")),
     };
-    let params = source.params();
-    let taken = || {
-        let names: Vec<&str> = params.iter().map(|p| p.name).collect();
-        if names.is_empty() {
-            "nothing".to_owned()
-        } else {
-            names.join(", ")
-        }
-    };
-    if let Some(unknown) = given.keys().find(|k| !params.iter().any(|p| p.name == *k)) {
+    if let Some(unknown) = given.keys().find(|k| *k != QUERY && *k != SOURCE) {
         return Err(format!(
-            "{} has no parameter {unknown}; it takes: {}",
-            tool_name(source.key(), source.freshness()),
-            taken()
+            "{tool} has no parameter {unknown}; it takes: {QUERY}, {SOURCE}"
         ));
     }
-    let mut out = Map::new();
-    for param in params {
-        let value = match given.get(param.name) {
-            None | Some(Value::Null) => String::new(),
-            Some(value) => param.normalize(value)?,
-        };
-        if value.is_empty() {
-            if param.required {
-                return Err(format!(
-                    "{} needs {}",
-                    tool_name(source.key(), source.freshness()),
-                    param.name
-                ));
+    let query = match given.get(QUERY) {
+        Some(Value::String(text)) => text.trim().to_owned(),
+        None | Some(Value::Null) => String::new(),
+        Some(other) => return Err(format!("{QUERY} takes text, got {other}")),
+    };
+    if query.is_empty() {
+        return Err(format!(
+            "{tool} needs {QUERY}: the words to search for, naming the subject in full"
+        ));
+    }
+    let source = match given.get(SOURCE) {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) if text.trim().is_empty() => None,
+        Some(Value::String(text)) => {
+            let text = text.trim();
+            match keys.iter().find(|k| k.eq_ignore_ascii_case(text)) {
+                Some(key) => Some((*key).to_owned()),
+                None => {
+                    return Err(format!(
+                        "{SOURCE} {text:?} is not one of: {}",
+                        keys.join(", ")
+                    ));
+                }
             }
+        }
+        Some(other) => return Err(format!("{SOURCE} takes text, got {other}")),
+    };
+    Ok((query, source))
+}
+
+/// Whether choice sits in query on its own, rather than inside a longer word.
+fn standalone(query: &str, at: usize, len: usize) -> bool {
+    let before = query[..at].chars().next_back();
+    let after = query[at + len..].chars().next();
+    !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
+}
+
+/// The choices query names, in declared order. A longer choice wins the words it covers.
+pub fn named(query: &str, choices: &[&'static str]) -> Vec<&'static str> {
+    let lower = query.to_lowercase();
+    let mut longest: Vec<&'static str> = choices.to_vec();
+    longest.sort_by_key(|choice| std::cmp::Reverse(choice.len()));
+    let mut taken: Vec<(usize, usize)> = Vec::new();
+    for choice in longest {
+        let needle = choice.to_lowercase();
+        let Some(at) = lower
+            .match_indices(&needle)
+            .map(|(at, _)| at)
+            .find(|at| standalone(&lower, *at, needle.len()))
+        else {
+            continue;
+        };
+        let span = (at, at + needle.len());
+        if taken.iter().any(|(lo, hi)| span.0 < *hi && *lo < span.1) {
             continue;
         }
-        out.insert(param.name.to_owned(), Value::String(value));
+        taken.push(span);
+    }
+    choices
+        .iter()
+        .filter(|choice| {
+            let needle = choice.to_lowercase();
+            taken
+                .iter()
+                .any(|(lo, hi)| hi - lo == needle.len() && lower[*lo..*hi] == needle)
+        })
+        .copied()
+        .collect()
+}
+
+/// The first YYYY-MM-DD in query.
+pub fn dated(query: &str) -> Option<NaiveDate> {
+    query
+        .split(|c: char| !(c.is_ascii_digit() || c == '-'))
+        .find_map(|word| NaiveDate::parse_from_str(word, "%Y-%m-%d").ok())
+}
+
+/// The parameters the scraper takes for source, filled from one query. Err names what is missing.
+pub fn params_for(
+    source: &dyn LiveSource,
+    query: &str,
+    today: NaiveDate,
+) -> Result<Map<String, Value>, String> {
+    let params = source.params();
+    let fills = source.query_param().or_else(|| {
+        params
+            .iter()
+            .find(|p| p.accepts == Accepts::Text)
+            .map(|p| p.name)
+    });
+    let mut out = Map::new();
+    for param in params {
+        let value = match param.accepts {
+            Accepts::Text if Some(param.name) == fills => query.trim().to_owned(),
+            Accepts::OneOf(choices) => named(query, choices)
+                .first()
+                .map(|choice| (*choice).to_owned())
+                .unwrap_or_default(),
+            Accepts::AnyOf(choices) => named(query, choices).join(","),
+            Accepts::Date => match dated(query) {
+                Some(date) => date.format("%Y-%m-%d").to_string(),
+                None if param.required => today.format("%Y-%m-%d").to_string(),
+                None => String::new(),
+            },
+            Accepts::Text | Accepts::Flag => String::new(),
+        };
+        if !value.is_empty() {
+            out.insert(param.name.to_owned(), Value::String(value));
+        }
+    }
+    for (name, value) in source.derived(query, today) {
+        if !value.is_empty() && !out.contains_key(name) {
+            out.insert(name.to_owned(), Value::String(value));
+        }
+    }
+    let missing: Vec<&str> = params
+        .iter()
+        .filter(|p| p.required && !out.contains_key(p.name))
+        .map(|p| p.name)
+        .collect();
+    if let Some(first) = missing.first() {
+        let wanted = params
+            .iter()
+            .find(|p| p.name == *first)
+            .and_then(|p| match p.accepts {
+                Accepts::OneOf(choices) | Accepts::AnyOf(choices) => {
+                    Some(format!("one of: {}", choices.join(", ")))
+                }
+                _ => p.example.map(|e| format!("something like {e}")),
+            })
+            .unwrap_or_else(|| "it".to_owned());
+        return Err(format!(
+            "{} needs {} in the query; name {wanted}",
+            source.key(),
+            missing.join(" and ")
+        ));
     }
     source.check(&out)?;
     Ok(out)
@@ -360,7 +415,7 @@ pub fn arguments(source: &dyn LiveSource, args: Value) -> Result<Map<String, Val
 
 /// Whether source's parameters match what the scraper published for its key. Err names the diff.
 pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<(), String> {
-    let name = tool_name(source.key(), source.freshness());
+    let name = source.key();
     if published.indexed != source.freshness().indexed() {
         return Err(format!(
             "{name} is offered as {} but the scraper indexes its answers: {}",
@@ -414,66 +469,4 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
         ));
     }
     Ok(())
-}
-
-/// A search tool over one live source.
-pub struct Search {
-    source: Box<dyn LiveSource>,
-    queries: Arc<dyn SourceQueries>,
-    definition: ToolDefinition,
-}
-
-impl Search {
-    /// Builds the tool for source. timeout_secs overrides the default of the agent.
-    pub fn new(
-        source: Box<dyn LiveSource>,
-        queries: Arc<dyn SourceQueries>,
-        timeout_secs: u64,
-    ) -> Self {
-        let definition = definition(source.as_ref(), timeout_secs);
-        Self {
-            source,
-            queries,
-            definition,
-        }
-    }
-}
-
-#[async_trait]
-impl Tool for Search {
-    fn definition(&self) -> ToolDefinition {
-        self.definition.clone()
-    }
-
-    async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        let params = arguments(self.source.as_ref(), args).map_err(ToolError::InvalidArguments)?;
-        let request = QueryRequest {
-            source: self.source.key().to_owned(),
-            params,
-        };
-        let outcome = self.queries.run(ctx, &request).await.map_err(|e| match e {
-            // A rejection reaches the model as an argument error.
-            QueryError::Rejected(reason) => ToolError::InvalidArguments(reason),
-            QueryError::Cancelled => ToolError::Cancelled,
-            QueryError::Timeout(_) => ToolError::Timeout,
-            absent @ QueryError::NoWorker(_) => ToolError::Failed(absent.to_string()),
-            busy @ QueryError::Busy(_) => ToolError::Failed(busy.to_string()),
-            store @ QueryError::Store(_) => ToolError::Failed(store.to_string()),
-        })?;
-        let when = outcome
-            .fetched_at
-            .map(|at| format!(", fetched {}", age(at, chrono::Utc::now())))
-            .unwrap_or_default();
-        Ok(ToolOutput {
-            content: format!(
-                "Live result from {} ({}{when}):\n\n{}",
-                outcome.source, outcome.url, outcome.text
-            ),
-            data: structured(&outcome),
-            sources: vec![Citation {
-                title: outcome.source.clone(),
-                url: Some(outcome.url.clone()),
-            }],
-        })
-    }
 }

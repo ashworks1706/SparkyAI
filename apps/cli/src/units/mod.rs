@@ -143,7 +143,7 @@ fn services() -> Vec<Unit> {
         service(
             "searxng",
             Some("search"),
-            "self-hosted metasearch behind search_live_web",
+            "self-hosted metasearch behind the web source of search_live",
             Some("http://localhost:8888"),
         ),
         service(

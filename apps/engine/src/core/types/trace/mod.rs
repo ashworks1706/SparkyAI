@@ -402,13 +402,12 @@ fn clip(text: &str, limit: usize) -> String {
 }
 
 /// What a tool is shown as while it runs. A search tool names what it searches.
-fn running(tool: &str) -> String {
-    if tool == "get_skill" {
-        return "reading a saved procedure".to_owned();
-    }
-    match tool.strip_prefix("search_") {
-        Some(source) => format!("searching live {}", source.replace('_', " ")),
-        None => "running".to_owned(),
+pub fn running(tool: &str) -> String {
+    match tool {
+        "get_skill" => "reading a saved procedure".to_owned(),
+        "search_knowledge" => "searching the knowledge base".to_owned(),
+        "search_live" => "searching live".to_owned(),
+        _ => "running".to_owned(),
     }
 }
 
