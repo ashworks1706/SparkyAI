@@ -1,0 +1,29 @@
+name: Wrong answer
+description: Sparky answered with something that is not true, or cited the wrong thing
+labels: [answer]
+body:
+  - type: textarea
+    id: asked
+    attributes:
+      label: What you asked
+    validations:
+      required: true
+  - type: textarea
+    id: answered
+    attributes:
+      label: What Sparky answered
+      description: Include the citations it gave.
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: What is actually true
+      description: The ASU page that says so, if there is one.
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: The search_ tool or scraped source the answer should have come from.

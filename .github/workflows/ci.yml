@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Gate a branch on demand. A pull request into anything but main runs no other trigger, so a
+  # stacked branch has no gate without this.
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,8 +20,8 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-      web: ${{ steps.filter.outputs.web }}
+      rust: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      web: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.web == 'true' }}
       python: ${{ steps.python.outputs.pkgs }}
     steps:
       - uses: actions/checkout@v4
@@ -48,12 +51,13 @@ jobs:
               - apps/training/**
       - id: python
         env:
+          ALL: ${{ github.event_name == 'workflow_dispatch' }}
           SCRAPER: ${{ steps.filter.outputs.scraper }}
           TRAINING: ${{ steps.filter.outputs.training }}
         run: |
           pkgs=()
-          [ "$SCRAPER" = true ] && pkgs+=(scraper)
-          [ "$TRAINING" = true ] && pkgs+=(training)
+          { [ "$SCRAPER" = true ] || [ "$ALL" = true ]; } && pkgs+=(scraper)
+          { [ "$TRAINING" = true ] || [ "$ALL" = true ]; } && pkgs+=(training)
           echo "pkgs=$(printf '%s\n' "${pkgs[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   rust:
