@@ -52,7 +52,7 @@ apps/
     src/wiring.rs   builds every dependency from config and serves
   discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
     src/core/       config, telemetry, types, tests
-    src/bot/        client, slash commands, mentions, approvals, the streamed turn
+    src/bot/        client, addressed messages, memory commands, approvals, the streamed turn
     src/engine/     HTTP client of the engine and SSE frame parsing
     src/render/     the turn card, reply text, buttons and their custom ids
     src/access/     roles, permissions, and where a turn is answered
@@ -272,7 +272,7 @@ sequenceDiagram
     participant M as llama-server
     participant S as scraper
 
-    U->>B: /ask or @mention
+    U->>B: @mention, a reply in the thread, or a direct message
     B->>B: resolve roles, destination, visibility
     B->>E: POST /chat/stream with bearer token and traceparent
     E->>PG: ensure conversation, load recent turns
@@ -298,7 +298,7 @@ sequenceDiagram
     E->>E: spawn profile writer, detached
 ```
 
-1. `discord` receives a slash command or a mention and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, and `continue_channel`.
+1. `discord` receives a message addressed to it and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, `continue_channel`, and the message of its own a reply answers. A question is never a slash command; the remaining commands only read and clear memory.
 2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility, and otherwise a new conversation starts.
 3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question, unless the router skipped it.
 4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs.
@@ -597,10 +597,24 @@ Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for e
 
 | Entry | Where the answer goes | Visibility |
 |---|---|---|
-| `/ask` in a text channel | a thread opened from the question | public |
 | mention in a text channel | a thread opened from the message, or inline if the thread cannot be made | public |
-| `/ask` or mention in a thread | that thread | public |
-| `/ask private:true` | an ephemeral reply | private |
+| reply to a Sparky message in a thread | that thread | public |
+| any other message in a thread | nowhere; the bot stays quiet | |
+| mention or reply in a text channel | a thread opened from the message | public |
+| direct message | the direct message channel | private |
+
+A thread is the conversation. Inside one, only a reply to something Sparky said continues it, so
+people talk in the thread without Sparky answering every line, and the message replied to rides the
+request as `reply_to` and is quoted into the prompt under `prompt.reply_header`, capped by
+`agent.reply_budget_tokens`. A reply to a person, or to another bot, is not a turn.
+
+A direct message is private, which is what `agent.recall_in_public` keys on: personal memory and the
+profile graph reach a direct message and never an answer in a server. `bot.direct_messages` turns
+the direct channel off.
+
+Reading a reply whose author turned its ping off needs the privileged Message Content intent, which
+is enabled on the application at discord.com/developers. Without it Discord withholds the text and
+the reply goes unanswered.
 
 A turn is one message, edited in place. It opens with a spinner header and gains one line per progress event. The engine writes the text of each line; the bot renders it and never keeps its own copy of the event enum. A line that carries a `slot` writes over the earlier line in that slot, so a tool result replaces its own start line. A `clear` event removes a line. A `draft` event sets or withdraws the answer shown under the steps. Edits are paced to one per `bot.edit_every_ms`, and a change inside the gap waits for the next edit.
 

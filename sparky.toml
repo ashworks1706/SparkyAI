@@ -36,6 +36,8 @@ evidence_budget_tokens = 1200
 history_budget_tokens = 1000
 memory_budget_tokens = 300
 capabilities_budget_tokens = 600
+# Cap on the message of Sparky's that a reply quotes back into the prompt.
+reply_budget_tokens = 200
 chars_per_token = 4
 # Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
 # model.max_tokens_without_thinking, must fit one slot of the chat server.
@@ -84,6 +86,7 @@ live_only_line = "The knowledge base was not searched for this question: the ans
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
+reply_header = "The user replied to this earlier message of yours. It is what they are answering, so read it as the immediate context of what they say next."
 answer_only_line = "You have no tools on this step. Answer the user now in plain text from what you already have, or say what you could not find. Do not write a tool call."
 utc_offset_hours = -7          # Arizona, no daylight saving
 
@@ -322,6 +325,9 @@ edit_every_ms = 1500
 cooldown_secs = 0
 write_capability = "MANAGE_GUILD"
 thread_auto_archive_minutes = 1440   # 60, 1440, 4320, or 10080; threads the bot opens for answers
+# A direct message is private, so the profile graph and personal memory apply to it and not to
+# an answer in a server. See agent.recall_in_public.
+direct_messages = true
 
 # ---------------------------------------------------------------- postgres
 # url carries the password and lives in .env.

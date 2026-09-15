@@ -20,6 +20,8 @@ pub struct Budget {
     pub memory: usize,
     /// Cap on the capabilities section.
     pub capabilities: usize,
+    /// Cap on the quoted message a reply answers.
+    pub reply: usize,
     /// Characters per token the estimator assumes. Never zero.
     pub chars_per_token: usize,
 }
@@ -45,6 +47,8 @@ pub struct Templates<'a> {
     pub capabilities_header: &'a str,
     /// Line naming the current date, with {date}.
     pub date_line: &'a str,
+    /// Heading above the message of yours a reply answers.
+    pub reply_header: &'a str,
 }
 
 /// Default line naming the user, with {user} and {roles}.
@@ -82,6 +86,10 @@ pub const LIVE_ONLY_LINE: &str = "The knowledge base was not searched for this q
 pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the user now in plain \
                                     text from what you already have, or say what you could not \
                                     find. Do not write a tool call.";
+/// Default heading above the message of yours a reply answers.
+pub const REPLY_HEADER: &str = "The user replied to this earlier message of yours. It is what \
+                                they are answering, so read it as the immediate context of what \
+                                they say next.";
 /// Default heading above what the model may do.
 pub const CAPABILITIES_HEADER: &str = "What you can do. Each line is a name, how it runs, and \
                                        what it does.";
@@ -98,6 +106,7 @@ impl Default for Templates<'_> {
             live_only_line: LIVE_ONLY_LINE,
             capabilities_header: CAPABILITIES_HEADER,
             date_line: DATE_LINE,
+            reply_header: REPLY_HEADER,
         }
     }
 }

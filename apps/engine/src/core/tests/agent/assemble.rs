@@ -479,3 +479,89 @@ fn a_page_age_reads_in_hours_under_two_days_and_in_days_after() {
     assert_eq!(age(now - Duration::hours(30), now), "30 hours ago");
     assert_eq!(age(now - Duration::hours(50), now), "2 days ago");
 }
+
+#[test]
+fn a_reply_quotes_the_message_it_answers_just_before_the_input() {
+    let mut ctx = ctx();
+    ctx.reply_to = Some("The library closes at 10pm.".to_owned());
+    let out = assemble(
+        &ctx,
+        &Sections {
+            system: "s",
+            input: "and on Sunday?",
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let quoted = out
+        .messages
+        .iter()
+        .rposition(|m| m.content.contains("The library closes at 10pm."));
+    let input = out
+        .messages
+        .iter()
+        .rposition(|m| m.content == "and on Sunday?");
+    assert_eq!(
+        quoted.map(|i| out.messages[i].role),
+        Some(Role::System),
+        "the quote is a system block"
+    );
+    assert_eq!(quoted.map(|i| i + 1), input, "the quote precedes the input");
+}
+
+#[test]
+fn no_reply_writes_no_quote() {
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            input: "hello",
+            ..Sections::default()
+        },
+        Budget::default(),
+    );
+    let header = Templates::default().reply_header;
+    assert!(!out.messages.iter().any(|m| m.content.contains(header)));
+}
+
+#[test]
+fn a_quoted_reply_is_cut_to_its_budget() {
+    let mut ctx = ctx();
+    ctx.reply_to = Some(
+        (0..40)
+            .map(|i| format!("line {i} of a very long answer"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    let budget = Budget {
+        reply: 60,
+        ..Budget::default()
+    };
+    let out = assemble(
+        &ctx,
+        &Sections {
+            system: "s",
+            input: "q",
+            ..Sections::default()
+        },
+        budget,
+    );
+    let header = Templates::default().reply_header;
+    let block = out.messages.iter().find(|m| m.content.contains(header));
+    assert!(block.is_some(), "the quote is in the prompt");
+    assert_eq!(
+        block.map(|m| m.content.contains("line 0")),
+        Some(true),
+        "the quote starts at the top of the message"
+    );
+    assert_eq!(
+        block.map(|m| m.content.contains("line 39")),
+        Some(false),
+        "the tail is cut"
+    );
+    assert_eq!(
+        block.map(|m| m.estimated_tokens(budget.chars_per_token) <= budget.reply),
+        Some(true),
+        "the quote stays inside its budget"
+    );
+}

@@ -1,11 +1,10 @@
 //! serenity client setup, the guards every question passes, and event dispatch.
 
 mod account;
-mod ask;
+mod address;
 mod commands;
 mod confirm;
 mod destination;
-mod mention;
 mod turn;
 
 use std::collections::HashMap;
@@ -46,6 +45,8 @@ struct Handler {
     write_capability: String,
     /// How long a thread the bot opens stays active without messages.
     thread_archive: AutoArchiveDuration,
+    /// Whether a direct message is answered.
+    direct_messages: bool,
     /// The bot user, set once the gateway is ready.
     me: OnceLock<UserId>,
     /// When each user last asked, for the cooldown.
@@ -83,10 +84,14 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         cooldown: Duration::from_secs(cfg.bot.cooldown_secs),
         write_capability: cfg.bot.write_capability.clone(),
         thread_archive: archive_after(cfg.bot.thread_auto_archive_minutes),
+        direct_messages: cfg.bot.direct_messages,
         me: OnceLock::new(),
         last_ask: Mutex::new(HashMap::new()),
     };
-    let intents = GatewayIntents::non_privileged();
+    // MESSAGE_CONTENT is privileged: without it Discord withholds the text of a reply whose
+    // ping the author turned off, and a reply is how a thread continues. Enable it on the
+    // application at discord.com/developers.
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
         .event_handler(handler)
         .await?;
@@ -211,15 +216,6 @@ fn option_str(cmd: &CommandInteraction, name: &str) -> Option<String> {
         })
 }
 
-/// The boolean value of a command option. Absent is false.
-fn option_bool(cmd: &CommandInteraction, name: &str) -> bool {
-    cmd.data
-        .options()
-        .into_iter()
-        .find(|o| o.name == name)
-        .is_some_and(|o| matches!(o.value, ResolvedValue::Boolean(true)))
-}
-
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
@@ -234,7 +230,7 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        self.mentioned(&ctx, &msg).await;
+        self.addressed(&ctx, &msg).await;
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -256,7 +252,6 @@ impl EventHandler for Handler {
                 }
             },
             Interaction::Command(cmd) => match cmd.data.name.as_str() {
-                commands::ASK => self.ask(&ctx, &cmd).await,
                 commands::RESET => self.reset(&ctx, &cmd).await,
                 commands::MEMORY => self.memory(&ctx, &cmd).await,
                 commands::FORGET => self.forget(&ctx, &cmd).await,

@@ -25,7 +25,7 @@ impl Handler {
     pub(super) async fn converse(
         &self,
         ctx: &Context,
-        dest: &Destination<'_>,
+        dest: &Destination,
         req: &ChatRequest,
         span: tracing::Span,
         place: &'static str,
@@ -108,7 +108,7 @@ impl Handler {
     async fn show(
         &self,
         ctx: &Context,
-        dest: &Destination<'_>,
+        dest: &Destination,
         card_id: Option<MessageId>,
         messages: Vec<String>,
         rows: &[Vec<ButtonSpec>],
@@ -160,7 +160,7 @@ impl Handler {
     async fn watch(
         &self,
         ctx: &Context,
-        dest: &Destination<'_>,
+        dest: &Destination,
         card_id: Option<MessageId>,
         rx: &mut UnboundedReceiver<Update>,
         steps: &mut Steps,
