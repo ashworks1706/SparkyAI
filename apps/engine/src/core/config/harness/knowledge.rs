@@ -112,7 +112,7 @@ pub struct QueryCache {
     pub enabled: bool,
     /// How long an answer of a source with no entry in ttl_secs is reused.
     pub default_ttl_secs: u64,
-    /// How long an answer of a source the engine offers as search_live_ is reused.
+    /// How long an answer of a source the engine offers as search_live is reused.
     pub live_ttl_secs: u64,
     /// How long an answer of one source is reused, by registry key. Zero takes handoff_secs.
     pub ttl_secs: std::collections::HashMap<String, u64>,
