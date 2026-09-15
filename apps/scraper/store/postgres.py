@@ -18,6 +18,10 @@ from scraper.core.types import ChunkRow, Job, QuerySource, SourceRow, StoreError
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
+#: First line of a migration that runs one statement at a time outside a transaction,
+#: for statements such as create index concurrently that Postgres refuses inside one.
+CONCURRENT_MARKER = "-- concurrent:"
+
 _pool: ConnectionPool | None = None
 
 
@@ -57,11 +61,66 @@ def migrate(conn: psycopg.Connection) -> list[str]:
     for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
         if path.name in applied:
             continue
-        conn.execute(path.read_text(encoding="utf-8"))
+        sql = path.read_text(encoding="utf-8")
+        if sql.lstrip().startswith(CONCURRENT_MARKER):
+            _apply_unwrapped(conn, sql)
+        else:
+            conn.execute(sql)
         conn.execute("insert into schema_migrations (name) values (%s)", (path.name,))
         done.append(path.name)
     conn.commit()
     return done
+
+
+def statements(sql: str) -> list[str]:
+    """Splits SQL on the semicolons that end a statement, ignoring quotes and line comments."""
+    out: list[str] = []
+    current: list[str] = []
+    quoted = False
+    commented = False
+    previous = ""
+    for ch in sql:
+        if commented:
+            current.append(ch)
+            if ch == "\n":
+                commented = False
+        elif quoted:
+            current.append(ch)
+            if ch == "'":
+                quoted = False
+        elif ch == "'":
+            quoted = True
+            current.append(ch)
+        elif ch == "-" and previous == "-":
+            commented = True
+            current.append(ch)
+        elif ch == ";":
+            out.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+        previous = ch
+    out.append("".join(current))
+    return [s for s in (part.strip() for part in out) if s and not _only_comments(s)]
+
+
+def _only_comments(statement: str) -> bool:
+    """Whether a statement is nothing but comment and blank lines."""
+    return all(not line.strip() or line.strip().startswith("--") for line in statement.splitlines())
+
+
+def _apply_unwrapped(conn: psycopg.Connection, sql: str) -> None:
+    """Runs a migration one statement at a time outside a transaction. Several statements in one
+    execute would put Postgres in an implicit transaction, which create index concurrently
+    refuses, so such a migration holds only statements this splitter can separate."""
+    conn.commit()
+    was = conn.autocommit
+    conn.autocommit = True
+    try:
+        for statement in statements(sql):
+            conn.execute(statement)
+    finally:
+        conn.autocommit = was
 
 
 def upsert_source(
@@ -333,6 +392,35 @@ def enqueue_job(conn: psycopg.Connection, kind: str, input: dict, priority: int)
         (kind, json.dumps(input), priority),
     ).fetchone()
     return row is not None
+
+
+def backlog_at_least(conn: psycopg.Connection, kind: str, limit: int) -> bool:
+    """Whether at least limit jobs of kind are queued. Reads no further than limit rows."""
+    if limit <= 0:
+        return False
+    row = conn.execute(
+        "select 1 from jobs where kind = %s and status = 'queued' offset %s limit 1",
+        (kind, limit - 1),
+    ).fetchone()
+    return row is not None
+
+
+def prune_jobs(conn: psycopg.Connection, older_than_secs: float, batch: int) -> int:
+    """Removes finished jobs older than older_than_secs, at most batch of them. Returns how many."""
+    if older_than_secs <= 0 or batch <= 0:
+        return 0
+    cursor = conn.execute(
+        """
+        delete from jobs where id in (
+            select id from jobs
+            where status in ('done', 'failed', 'cancelled')
+              and updated_at < now() - make_interval(secs => %s)
+            limit %s
+        )
+        """,
+        (older_than_secs, batch),
+    )
+    return cursor.rowcount
 
 
 def requeue_stale(conn: psycopg.Connection, kinds: Sequence[str], lease_secs: float) -> int:

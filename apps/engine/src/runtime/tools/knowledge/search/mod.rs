@@ -457,6 +457,7 @@ impl Tool for Search {
             QueryError::Cancelled => ToolError::Cancelled,
             QueryError::Timeout(_) => ToolError::Timeout,
             absent @ QueryError::NoWorker(_) => ToolError::Failed(absent.to_string()),
+            busy @ QueryError::Busy(_) => ToolError::Failed(busy.to_string()),
             store @ QueryError::Store(_) => ToolError::Failed(store.to_string()),
         })?;
         let when = outcome

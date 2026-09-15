@@ -1,4 +1,5 @@
-//! The Redis query cache: answers, refusals, and the leases that keep one fetch per query.
+//! Redis: live query answers, the leases that keep one fetch per query, and the cap on how
+//! many of those fetches reach the database at once.
 
 use std::time::Duration;
 
@@ -7,6 +8,7 @@ use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::core::traits::knowledge::admission::Admission;
 use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::types::knowledge::cache::{CacheError, Entry};
 
@@ -95,5 +97,84 @@ impl QueryCache for RedisQueryCache {
     async fn release(&self, key: &str) -> Result<(), CacheError> {
         let mut conn = self.conn.clone();
         self.within("release", conn.del::<_, ()>(key)).await
+    }
+}
+
+/// Live queries in flight, as a sorted set scored by when each slot was taken. Holders that
+/// never give a slot back fall out of the set once they are older than the lease.
+pub struct RedisAdmission {
+    conn: ConnectionManager,
+    budget: Duration,
+    key: String,
+    limit: usize,
+    lease: Duration,
+    /// Held so its hash is computed once and every call can be an evalsha.
+    enter: redis::Script,
+}
+
+/// Prunes expired holders, then takes a slot if the set is below the limit. Returns 1 or 0.
+const ENTER: &str = r"
+local pruned = tonumber(ARGV[1]) - tonumber(ARGV[2])
+redis.call('zremrangebyscore', KEYS[1], '-inf', pruned)
+if redis.call('zcard', KEYS[1]) >= tonumber(ARGV[3]) then
+  return 0
+end
+redis.call('zadd', KEYS[1], ARGV[1], ARGV[4])
+redis.call('expire', KEYS[1], ARGV[2])
+return 1
+";
+
+impl RedisAdmission {
+    /// Caps live queries at limit across every replica sharing this Redis.
+    pub fn new(
+        conn: ConnectionManager,
+        budget: Duration,
+        key: impl Into<String>,
+        limit: usize,
+        lease: Duration,
+    ) -> Self {
+        Self {
+            conn,
+            budget,
+            key: key.into(),
+            limit,
+            lease,
+            enter: redis::Script::new(ENTER),
+        }
+    }
+
+    /// Seconds since the epoch, as the score a slot is held at.
+    fn now() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_secs())
+            .unwrap_or_default()
+    }
+}
+
+#[async_trait]
+impl Admission for RedisAdmission {
+    async fn enter(&self, holder: &str) -> Result<bool, CacheError> {
+        let mut conn = self.conn.clone();
+        let mut call = self.enter.prepare_invoke();
+        call.key(&self.key)
+            .arg(Self::now())
+            .arg(self.lease.as_secs().max(1))
+            .arg(self.limit)
+            .arg(holder);
+        let taken: i64 = tokio::time::timeout(self.budget, call.invoke_async(&mut conn))
+            .await
+            .map_err(|_| CacheError::Backend(format!("enter timed out after {:?}", self.budget)))?
+            .map_err(|e| CacheError::Backend(format!("enter: {e}")))?;
+        Ok(taken == 1)
+    }
+
+    async fn leave(&self, holder: &str) -> Result<(), CacheError> {
+        let mut conn = self.conn.clone();
+        let call = conn.zrem::<_, _, ()>(&self.key, holder);
+        tokio::time::timeout(self.budget, call)
+            .await
+            .map_err(|_| CacheError::Backend(format!("leave timed out after {:?}", self.budget)))?
+            .map_err(|e| CacheError::Backend(format!("leave: {e}")))
     }
 }

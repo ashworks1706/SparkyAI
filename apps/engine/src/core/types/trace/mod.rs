@@ -177,6 +177,11 @@ pub enum TraceEvent {
         /// What the cache did.
         outcome: CacheOutcome,
     },
+    /// A live query was refused because as many were already running as the engine allows.
+    QueryRefused {
+        /// Registry key of the source asked for.
+        source: String,
+    },
     /// The loop finished.
     Completed {
         /// How it ended.
@@ -215,6 +220,7 @@ impl TraceEvent {
             Self::Retrieval { .. } => "retrieval",
             Self::RetrievalSkipped { .. } => "retrieval_skipped",
             Self::QueryCache { .. } => "query_cache",
+            Self::QueryRefused { .. } => "query_refused",
             Self::Completed { .. } => "completed",
         }
     }
@@ -282,6 +288,9 @@ impl TraceEvent {
                 chunk_ids.len(),
                 plural(chunk_ids.len(), "source", "sources")
             )),
+            Self::QueryRefused { source, .. } => {
+                Some(format!("\u{1f6a6} `{source}` is busy right now"))
+            }
             Self::PolicyDecision { tool, decision, .. } => match decision {
                 Decision::Deny { .. } => Some(format!("\u{1f6ab} `{tool}` was not allowed")),
                 Decision::Confirm(_) => Some(format!("\u{270b} `{tool}` needs your approval")),

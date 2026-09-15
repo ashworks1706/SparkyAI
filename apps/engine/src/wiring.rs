@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::core::config::Config;
 use crate::core::traits::conversation::compaction::Compactor;
+use crate::core::traits::knowledge::admission::Admission;
 use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::Embedder;
@@ -28,6 +29,7 @@ use crate::runtime::harness::agent::prompt::capability;
 use crate::runtime::harness::agent::task::{Task, TaskConfig};
 use crate::runtime::harness::agent::{Agent, AgentDeps, PromptText};
 use crate::runtime::harness::compact::{self, ChatCompactor};
+use crate::runtime::harness::knowledge::admit::AdmittedQueries;
 use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 use crate::runtime::harness::knowledge::route::{RuleRouter, Rules as RouterRules};
 use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
@@ -43,7 +45,7 @@ use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::skills::GetSkillTool;
 use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
-use crate::stores::knowledge::cache::{self as redis_cache, RedisQueryCache};
+use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::knowledge::skills::PgSkills;
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::postgres::{
@@ -494,34 +496,52 @@ async fn source_queries(
     pool: &sqlx::PgPool,
     trace: Arc<dyn TraceSink>,
 ) -> anyhow::Result<Arc<dyn SourceQueries>> {
-    let queries: Arc<dyn SourceQueries> = Arc::new(PgSourceQueries::new(
+    let mut queries: Arc<dyn SourceQueries> = Arc::new(PgSourceQueries::new(
         pool.clone(),
         Duration::from_millis(cfg.query.poll_ms),
+        Duration::from_millis(cfg.query.poll_max_ms),
         Duration::from_secs(cfg.query.claim_secs),
     ));
-    if !(cfg.tools.search && cfg.query.cache.enabled) {
-        tracing::info!("the live query cache is off; every query is fetched");
+    let caching = cfg.tools.search && cfg.query.cache.enabled;
+    let capping = cfg.tools.search && cfg.query.max_in_flight > 0;
+    if !(caching || capping) {
+        tracing::info!("the live query cache and cap are off; every query is fetched");
         return Ok(queries);
     }
-    // Config::validate rejects the cache without a redis section.
+    // Config::validate rejects either of them without a redis section.
     let Some(redis) = &cfg.redis else {
         return Ok(queries);
     };
     let conn = redis_cache::connect(&redis.url, Duration::from_secs(redis.connect_timeout_secs))
         .await
         .map_err(|e| anyhow::anyhow!("redis: {e}"))?;
-    let cache: Arc<dyn QueryCache> = Arc::new(RedisQueryCache::new(
-        conn,
-        Duration::from_millis(cfg.query.cache.timeout_ms),
-    ));
-    let rules = cache_rules(cfg);
-    let reused = rules.ttl.values().filter(|ttl| !ttl.is_zero()).count();
-    tracing::info!(
-        sources = rules.ttl.len(),
-        reused,
-        "live query cache registered"
-    );
-    Ok(Arc::new(CachedQueries::new(queries, cache, trace, rules)))
+    let call_budget = Duration::from_millis(cfg.query.cache.timeout_ms);
+
+    // The cap goes on first so the cache sits above it: a reused answer and a request that
+    // waited on another cost the database nothing and take no slot.
+    if capping {
+        let admission: Arc<dyn Admission> = Arc::new(RedisAdmission::new(
+            conn.clone(),
+            call_budget,
+            "sparky:query:v1:in-flight",
+            cfg.query.max_in_flight,
+            Duration::from_secs(cfg.query.cache.lease_secs),
+        ));
+        tracing::info!(limit = cfg.query.max_in_flight, "live query cap registered");
+        queries = Arc::new(AdmittedQueries::new(queries, admission, Arc::clone(&trace)));
+    }
+    if caching {
+        let cache: Arc<dyn QueryCache> = Arc::new(RedisQueryCache::new(conn, call_budget));
+        let rules = cache_rules(cfg);
+        let reused = rules.ttl.values().filter(|ttl| !ttl.is_zero()).count();
+        tracing::info!(
+            sources = rules.ttl.len(),
+            reused,
+            "live query cache registered"
+        );
+        queries = Arc::new(CachedQueries::new(queries, cache, trace, rules));
+    }
+    Ok(queries)
 }
 
 /// How long each source's answers are reused: the per-source setting, else the one for its kind.

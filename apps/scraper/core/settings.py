@@ -108,6 +108,12 @@ class Scraper(BaseModel):
     schedule_every_secs: float = 60.0
     # A job running longer than this is treated as abandoned and requeued.
     job_lease_secs: float = 1800.0
+    # Queued live_index jobs past which a live result is answered but not indexed.
+    index_backlog_limit: int = 500
+    # How long a finished job is kept before it is removed. Zero keeps every job forever.
+    job_retention_hours: float = 72.0
+    # Finished jobs removed per scheduling cycle.
+    job_prune_batch: int = 5000
     chunk_chars: int = 1200
     chunk_overlap_chars: int = 200
     parser_version: str = "bs4-text-v1"

@@ -19,6 +19,7 @@ use crate::core::types::knowledge::query::{
 pub struct PgSourceQueries {
     pool: PgPool,
     poll: Duration,
+    poll_max: Duration,
     claim: Duration,
 }
 
@@ -29,11 +30,13 @@ const QUERY_JOB_KIND: &str = "source_query";
 const QUERY_CHANNEL: &str = "source_query";
 
 impl PgSourceQueries {
-    /// Polls a queued job every interval; unclaimed by the scraper in claim reports not running.
-    pub fn new(pool: PgPool, interval: Duration, claim: Duration) -> Self {
+    /// Polls a queued job, backing off from interval to poll_max between looks; unclaimed by the
+    /// scraper in claim reports not running.
+    pub fn new(pool: PgPool, interval: Duration, poll_max: Duration, claim: Duration) -> Self {
         Self {
             pool,
             poll: interval,
+            poll_max: poll_max.max(interval),
             claim,
         }
     }
@@ -51,6 +54,11 @@ impl PgSourceQueries {
             tracing::warn!(error = %e, %job_id, "could not cancel query job");
         }
     }
+}
+
+/// The next wait between looks at a queued job: double the last, never past most.
+pub(crate) fn backoff(last: Duration, most: Duration) -> Duration {
+    last.saturating_mul(2).min(most)
 }
 
 /// A query deadline as a Postgres interval, kept to the microseconds an interval holds.
@@ -116,6 +124,9 @@ impl SourceQueries for PgSourceQueries {
             .map_err(store)?;
 
         let queued = std::time::Instant::now();
+        // A long fetch is looked at fewer times: the wait doubles up to poll_max, so one query
+        // costs a handful of round trips rather than one every poll for its whole duration.
+        let mut wait = self.poll;
         loop {
             if ctx.cancel.is_cancelled() {
                 self.cancel(job_id).await;
@@ -160,7 +171,8 @@ impl SourceQueries for PgSourceQueries {
                 }
             }
             // The sleep never runs past the deadline.
-            tokio::time::sleep(self.poll.min(ctx.remaining())).await;
+            tokio::time::sleep(wait.min(ctx.remaining())).await;
+            wait = backoff(wait, self.poll_max);
         }
     }
 }

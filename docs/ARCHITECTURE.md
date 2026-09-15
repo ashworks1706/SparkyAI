@@ -555,6 +555,22 @@ A refusal is cached for the handoff window too, so a source rejecting an argumen
 
 The cache is never load-bearing. Any Redis error is logged and the request fetches as if the cache were not there, recorded on the trace as `CacheOutcome::Unavailable`. Caching is safe on this path by construction: a source query only ever reads, the search tools are all `ReadPublic`, and anything that writes goes through `Policy`, never through `SourceQueries`.
 
+### Keeping the database standing under a spike
+
+Every live query costs the one table every process writes to. Four things bound that cost, and only one of them is Redis.
+
+**The wait backs off.** The engine waits on the scraper by polling the `jobs` row. `query.poll_ms` is the first wait and it doubles up to `query.poll_max_ms`, so a 30 second fetch costs under 40 round trips rather than one every 100ms for its whole duration. This is the largest single reduction and it needs nothing shared.
+
+**The number of fetches is capped.** `query.max_in_flight` caps how many live queries reach the database at once, across every replica, as a sorted set in Redis scored by when each slot was taken. Over the cap a search tool is refused with `QueryError::Busy`, which reaches the model as a tool error naming the source. Refusing beats queueing onto the connection pool until `postgres.acquire_timeout_secs` expires: the model can answer without that source, and the student gets an answer rather than a timeout. Keep the cap under `postgres.max_connections`. A slot whose holder never gives it back falls out of the set once it is older than the lease, so a killed replica does not leak capacity.
+
+`AdmittedQueries` sits **under** `CachedQueries`, which is what makes a reused answer free: a cache hit and a request that waited on another request's lease take no slot and touch no database. Only an actual fetch is counted.
+
+**Background indexing sheds load.** Past `scraper.index_backlog_limit` queued `live_index` jobs, a live result is answered but not indexed, and the drop is logged. Answering is what a student is waiting on, and the source is refetched on its schedule anyway. The check reads no further than the limit, so measuring the backlog is never itself the expensive part.
+
+**Finished jobs are removed.** `scraper.job_retention_hours` bounds the table: each scheduling cycle deletes at most `scraper.job_prune_batch` terminal jobs older than the retention, so claiming stays fast and one cycle never takes an unbounded number of row locks. Queued and running jobs are never pruned, however old.
+
+Two partial indexes serve this, added in `0013_job_queue_pressure.sql`: `(kind, priority desc, created_at) where status = 'queued'` for claiming and for the backlog check, and `(updated_at) where status in ('done','failed','cancelled')` for pruning. The first carries `kind`, which the old queued index did not, so it replaces it. Both are built `CONCURRENTLY`, which Postgres refuses inside a transaction, so the migration runner sends a file marked `-- concurrent:` one statement at a time outside one.
+
 ### Indexing live results
 
 A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.

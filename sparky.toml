@@ -213,9 +213,19 @@ timeout_secs = 30
 # instructions = "You compact a conversation..."
 
 # Live source queries. They need just scraper serve running.
+#
+# The engine waits on the scraper by polling the jobs row. poll_ms is the first wait and it doubles
+# up to poll_max_ms, so a 30 second fetch costs a handful of round trips rather than one every
+# 100ms for its whole duration. max_in_flight caps how many fetches reach the database at once,
+# across every replica, held in the same Redis as the cache below. Over the cap a search tool is
+# refused with something the model can act on, which beats queueing onto the connection pool until
+# it times out. The cap sits under the cache, so a reused answer and a request that waited on
+# another cost the database nothing and take no slot.
 [query]
 timeout_secs = 90
 poll_ms = 100
+poll_max_ms = 1000
+max_in_flight = 16             # 0 removes the cap; keep it under postgres.max_connections
 claim_secs = 5                 # a query the scraper does not claim in this long reports that it is not running
 
 # Tool output caching for live queries, in Redis, shared by every engine replica. url is
@@ -332,6 +342,13 @@ serve_poll_secs = 0.5              # longest a lane of scraper serve waits befor
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
 job_lease_secs = 1800.0            # a background job running longer is queued again
 query_max_chars = 6000             # a live result is always kept in the prompt; about 1500 tokens
+# Back pressure on the one table every process writes to. Past index_backlog_limit queued
+# live_index jobs a live result is answered but not indexed: answering is what a student is
+# waiting on, and the source is refetched on its schedule anyway. Finished jobs are removed after
+# job_retention_hours so the queue stays small enough to claim from quickly.
+index_backlog_limit = 500
+job_retention_hours = 72.0         # 0 keeps every finished job forever
+job_prune_batch = 5000             # finished jobs removed per scheduling cycle
 parser_version = "bs4-text-v1"
 # A fetch yielding less than this fraction of the last good run is refused.
 quality_floor_ratio = 0.5

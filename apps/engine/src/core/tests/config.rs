@@ -103,6 +103,12 @@ fn the_live_query_cache_needs_somewhere_to_keep_answers() {
 }
 
 #[test]
+fn the_wait_between_looks_cannot_shrink() {
+    let e = err("[query]\npoll_ms = 500\npoll_max_ms = 100\n");
+    assert!(e.contains("poll_max_ms") && e.contains("poll_ms"), "{e}");
+}
+
+#[test]
 fn turning_off_both_retrieval_legs_is_rejected() {
     // With neither leg the engine retrieves no evidence.
     let e = err("[retrieval]\ndense = false\nlexical = false\n");

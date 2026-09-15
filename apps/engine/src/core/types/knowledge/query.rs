@@ -72,6 +72,11 @@ pub enum QueryError {
         "the scraper is not running, so {0} cannot be fetched now; start it with just scraper serve"
     )]
     NoWorker(String),
+    /// As many live queries are already running as the engine allows.
+    #[error(
+        "too many live searches are running right now; answer without {0} or ask again shortly"
+    )]
+    Busy(String),
     /// The scraper did not answer inside the budget.
     #[error("the scraper did not answer within {0:?}")]
     Timeout(std::time::Duration),

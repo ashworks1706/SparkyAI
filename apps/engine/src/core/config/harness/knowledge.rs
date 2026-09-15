@@ -76,8 +76,12 @@ impl Default for Retrieval {
 pub struct Query {
     /// Budget for one live query, end to end. Overrides agent.tool_timeout_secs for this tool.
     pub timeout_secs: u64,
-    /// How often the engine checks whether the scraper has answered.
+    /// How soon after queueing the engine first checks whether the scraper has answered.
     pub poll_ms: u64,
+    /// Longest the engine waits between checks. The wait doubles from poll_ms up to this.
+    pub poll_max_ms: u64,
+    /// Live queries that may reach the database at once, across replicas. Zero removes the cap.
+    pub max_in_flight: usize,
     /// How long a query may wait for the scraper to claim it before reporting it not running.
     pub claim_secs: u64,
     /// The cache in front of live queries.
@@ -89,6 +93,8 @@ impl Default for Query {
         Self {
             timeout_secs: 90,
             poll_ms: 100,
+            poll_max_ms: 1_000,
+            max_in_flight: 16,
             claim_secs: 5,
             cache: QueryCache::default(),
         }

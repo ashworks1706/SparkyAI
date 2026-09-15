@@ -209,6 +209,12 @@ impl Config {
         if self.tools.search && (self.query.poll_ms == 0 || self.query.claim_secs == 0) {
             return invalid("query.poll_ms and query.claim_secs must be at least 1".into());
         }
+        if self.tools.search && self.query.poll_max_ms < self.query.poll_ms {
+            return invalid(format!(
+                "query.poll_max_ms ({}) is below query.poll_ms ({})",
+                self.query.poll_max_ms, self.query.poll_ms
+            ));
+        }
         validate_query_cache(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
