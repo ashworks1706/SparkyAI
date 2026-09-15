@@ -38,6 +38,9 @@ memory_budget_tokens = 300
 capabilities_budget_tokens = 600
 # Cap on the message of Sparky's that a reply quotes back into the prompt.
 reply_budget_tokens = 200
+# Images of one message the engine passes to the model. The edge caps what it sends in
+# bot.max_images; this caps what the HTTP surface accepts from any caller holding the token.
+max_images = 4
 chars_per_token = 4
 # Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
 # model.max_tokens_without_thinking, must fit one slot of the chat server.
@@ -139,6 +142,10 @@ dense = true
 lexical = true
 min_score = 0.0
 max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
+# Rows either side of a hit read back with it, joined into one passage. Chunks are indexed
+# narrow so a match is precise; the window is what gives the model enough around it to read.
+# Overlapping windows merge, so nearby hits cost one passage, not two. 0 hands back the hit alone.
+window = 2
 
 # The rule gate in front of retrieval, run on every turn. It is rules, not a model call, so it
 # costs nothing on the critical path. Empty lists use the built-in ones. A turn holding a live cue
@@ -344,8 +351,12 @@ tenant_id = "public"           # public ASU content, readable by every guild
 fetcher = "firecrawl"          # firecrawl renders JS and returns markdown; http is plain httpx
 user_agent = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
 request_timeout_secs = 30.0
-chunk_chars = 1200
-chunk_overlap_chars = 200
+# Indexed narrow so a match points at the passage that answers, not at a whole section.
+# retrieval.window reads the neighbours back with the hit at query time, so overlap here
+# would only repeat text inside the passage the model is handed. Changing either value
+# changes chunker_version, so the next run of a source reindexes it.
+chunk_chars = 300
+chunk_overlap_chars = 0
 index_live_results = true          # index a live result after answering, for sources that allow it
 serve_poll_secs = 0.5              # longest a lane of scraper serve waits before looking again
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
