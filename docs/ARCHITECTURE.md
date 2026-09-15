@@ -451,7 +451,7 @@ flowchart TD
     HASH -->|yes| SKIP(["unchanged, nothing written"])
     HASH -->|no| SNAP["raw snapshot to object storage"]
     SNAP --> EXTRACT["extract text<br/>source extractor or shared heuristic"]
-    EXTRACT --> CHUNK["chunk<br/>scraper.chunk_chars with overlap"]
+    EXTRACT --> CHUNK["chunk<br/>scraper.chunk_chars"]
     CHUNK --> FLOOR{"text above the quality floor<br/>of the last version?"}
     FLOOR -->|no| REFUSE(["PipelineError, old index kept"])
     FLOOR -->|yes| EMBED["prefix the page title<br/>embed the batch, 1024 dims"]
@@ -486,10 +486,19 @@ flowchart TD
     RRF --> MIN["drop below retrieval.min_score"]
     MIN --> TREE["drop a row whose summary<br/>ranked higher"]
     TREE --> TOPK["top retrieval.top_k"]
-    TOPK --> EV["Evidence"]
+    TOPK --> WIN["widen each hit by<br/>retrieval.window rows"]
+    WIN --> EV["Evidence"]
 ```
 
 Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. The dense leg drops a row farther than `retrieval.max_distance` from the question, so a question the index does not cover gets no evidence. Fusion combines ranks, not the legs' incompatible raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
+
+### Sentence windows
+
+What is matched and what is read are different sizes. Chunks are cut at `scraper.chunk_chars`, narrow enough that a match points at the passage that answers rather than at a whole section, and `scraper.chunk_overlap_chars` is 0 because the window supplies the continuity overlap used to.
+
+After the top `retrieval.top_k` rows are chosen, each one is read back with the `retrieval.window` rows either side of it, joined in ordinal order into one passage. Windows that overlap or touch merge, so two hits a row apart cost one passage rather than two copies of the middle. A span is handed back once however many of its rows were hit, and two hits far apart on one page stay two passages. Summaries are not widened: a summary already covers its chunks. `retrieval.window = 0` hands each hit back alone.
+
+Chunk ordinals are contiguous within a version, and tree summaries are ordinalled after the leaves, so widening is a range read on `(version_id, ordinal)` and reads only `level = 0` rows. Changing `scraper.chunk_chars` or `scraper.chunk_overlap_chars` changes `chunker_version`, which reindexes a source on its next run. Citations are unaffected: a `Citation` is the source title and URL, not an offset.
 
 ### Hierarchical index
 
