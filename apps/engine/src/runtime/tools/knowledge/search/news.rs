@@ -1,4 +1,4 @@
-//! search_news: recent stories on ASU News.
+//! Recent stories on ASU News.
 
 use super::{LiveSource, Param};
 
@@ -16,8 +16,12 @@ impl LiveSource for News {
         "news"
     }
 
-    fn description(&self) -> &'static str {
-        "The newest ASU News stories, or a search of ASU News by topic."
+    fn hint(&self) -> &'static str {
+        "ASU News stories"
+    }
+
+    fn category(&self) -> &'static str {
+        "news"
     }
 
     fn params(&self) -> &'static [Param] {

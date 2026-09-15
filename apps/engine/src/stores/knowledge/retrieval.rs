@@ -110,8 +110,15 @@ const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key as title, s.url, c.c
                        c.fetched_at, c.parent_id, c.version_id, c.ordinal, c.level";
 
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
-const FROM: &str = "from chunks c join sources s on s.id = c.source_id
-    where (c.tenant_id = $1 or c.tenant_id = 'public')";
+///
+/// Each leg binds the category at its own position. An empty category matches every row.
+fn from(at: usize) -> String {
+    format!(
+        "from chunks c join sources s on s.id = c.source_id
+    where (c.tenant_id = $1 or c.tenant_id = 'public')
+      and (${at} = '' or c.category = ${at})"
+    )
+}
 
 /// One run of rows a hit reads back with, and the hit that earned it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -277,9 +284,10 @@ impl PgRetriever {
                 self.embedder.dim()
             )));
         }
+        let scoped = from(5);
         let sql = format!(
             "select * from (
-                select {COLUMNS}, c.embedding <=> $2::vector as distance {FROM}
+                select {COLUMNS}, c.embedding <=> $2::vector as distance {scoped}
                 order by distance limit $3
             ) nearest where distance <= $4"
         );
@@ -288,6 +296,7 @@ impl PgRetriever {
             .bind(vector_literal(&vector))
             .bind(self.tuning.candidates)
             .bind(f64::from(self.tuning.max_distance))
+            .bind(query.category.clone().unwrap_or_default())
             .fetch_all(&self.pool)
             .await
             .map_err(store)
@@ -301,14 +310,16 @@ impl PgRetriever {
     ) -> Result<Vec<sqlx::postgres::PgRow>, RetrievalError> {
         // The text search configuration is validated at load and quoted as a literal.
         let cfg = quote_literal(&self.tuning.text_search_config);
+        let scoped = from(4);
         let sql = format!(
-            "select {COLUMNS} {FROM} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
+            "select {COLUMNS} {scoped} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
              order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $2)) desc limit $3"
         );
         sqlx::query(&sql)
             .bind(&ctx.tenant_id)
             .bind(&query.text)
             .bind(self.tuning.candidates)
+            .bind(query.category.clone().unwrap_or_default())
             .fetch_all(&self.pool)
             .await
             .map_err(store)

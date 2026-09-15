@@ -1,4 +1,4 @@
-//! search_clubs: student organizations on Sun Devil Central.
+//! Student organizations on Sun Devil Central.
 
 use super::{LiveSource, Param};
 
@@ -14,8 +14,12 @@ impl LiveSource for Clubs {
         "clubs"
     }
 
-    fn description(&self) -> &'static str {
-        "Search ASU student organizations and clubs on Sun Devil Central."
+    fn hint(&self) -> &'static str {
+        "student organizations"
+    }
+
+    fn category(&self) -> &'static str {
+        "clubs"
     }
 
     fn params(&self) -> &'static [Param] {

@@ -1,4 +1,4 @@
-//! search_library_hours: this week's opening hours at every ASU library.
+//! This week's opening hours at every ASU library.
 
 use super::{LiveSource, Param};
 
@@ -10,8 +10,12 @@ impl LiveSource for LibraryHours {
         "library_hours"
     }
 
-    fn description(&self) -> &'static str {
-        "Fetch this week's opening hours for every ASU library."
+    fn hint(&self) -> &'static str {
+        "library opening hours"
+    }
+
+    fn category(&self) -> &'static str {
+        "library"
     }
 
     fn params(&self) -> &'static [Param] {

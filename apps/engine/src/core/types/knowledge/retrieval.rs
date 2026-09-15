@@ -7,6 +7,8 @@ pub struct RetrievalQuery {
     pub text: String,
     /// How many chunks to return after fusion.
     pub top_k: usize,
+    /// Chunks category to search. None searches every category.
+    pub category: Option<String>,
 }
 
 impl RetrievalQuery {
@@ -15,6 +17,15 @@ impl RetrievalQuery {
         Self {
             text: text.into(),
             top_k,
+            category: None,
+        }
+    }
+
+    /// The same query, narrowed to one chunks category.
+    pub fn in_category(self, category: impl Into<String>) -> Self {
+        Self {
+            category: Some(category.into()),
+            ..self
         }
     }
 }

@@ -1,17 +1,52 @@
-//! Which tools are registered and the MCP servers exposed as tools.
+//! Which tools are registered, how the search tools are worded, and the MCP servers.
 
 use serde::Deserialize;
 
-/// Which tools are registered.
+/// Default description of search_knowledge.
+pub const KNOWLEDGE_DESCRIPTION: &str = "Search the stored knowledge base of ASU pages. Use it when the results already in this \
+     prompt do not answer, or you need a different part of the same page.";
+
+/// Default description of search_live.
+pub const LIVE_DESCRIPTION: &str = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, \
+     such as hours today, open seats, shuttle times, events, news or scores, or when the \
+     knowledge base holds nothing.";
+
+/// Default description of the query parameter of both search tools.
+pub const QUERY_DESCRIPTION: &str = "What to search for, in keywords. This string is the whole request: the tool reads nothing \
+     else from the conversation, so name the subject in full and write no pronoun and no bare \
+     word. Bad: hours. Good: Hayden Library hours Sunday. Bad: does it have space left. Good: \
+     CSE 310 Fall 2026 open seats.";
+
+/// Default lead of the source parameter of both search tools.
+pub const SOURCE_DESCRIPTION: &str = "Narrows the search to one source. Leave it out to search all of them, which is right \
+     unless you already know which source holds the answer.";
+
+/// Default answer of search_knowledge when the index holds nothing for the query.
+pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that query. Either search again with the subject \
+     named differently, or call search_live, or say you do not have it.";
+
+/// Which tools are registered and how the two search tools are worded.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Tools {
     /// Tool names never registered, whatever their source.
     pub disabled: Vec<String>,
-    /// Register one search tool per live source the scraper has published.
+    /// Register search_knowledge and search_live over the sources the scraper has published.
     pub search: bool,
     /// Register the get_skill tool, when a reviewed skill exists.
     pub get_skill: bool,
+    /// Source search_live fetches when a call names none.
+    pub live_default_source: String,
+    /// What search_knowledge does, for the model.
+    pub knowledge_description: String,
+    /// What search_live does, for the model.
+    pub live_description: String,
+    /// What the query parameter of both search tools must carry.
+    pub query_description: String,
+    /// Lead of the source parameter, before the key and hint of each source.
+    pub source_description: String,
+    /// What search_knowledge answers when the index holds nothing.
+    pub nothing_stored: String,
 }
 
 impl Default for Tools {
@@ -20,6 +55,12 @@ impl Default for Tools {
             disabled: Vec::new(),
             search: true,
             get_skill: true,
+            live_default_source: "web".into(),
+            knowledge_description: KNOWLEDGE_DESCRIPTION.into(),
+            live_description: LIVE_DESCRIPTION.into(),
+            query_description: QUERY_DESCRIPTION.into(),
+            source_description: SOURCE_DESCRIPTION.into(),
+            nothing_stored: NOTHING_STORED.into(),
         }
     }
 }

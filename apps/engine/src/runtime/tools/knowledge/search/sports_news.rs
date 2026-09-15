@@ -1,4 +1,4 @@
-//! search_sports_news: Sun Devil Athletics news and outside coverage, for one sport or all.
+//! Sun Devil Athletics news and outside coverage, for one sport or all.
 
 use super::{LiveSource, Param};
 
@@ -38,8 +38,12 @@ impl LiveSource for SportsNews {
         "sports_news"
     }
 
-    fn description(&self) -> &'static str {
-        "Latest Sun Devil Athletics news, and outside coverage, for one sport or all."
+    fn hint(&self) -> &'static str {
+        "Sun Devil Athletics news"
+    }
+
+    fn category(&self) -> &'static str {
+        "sports"
     }
 
     fn params(&self) -> &'static [Param] {

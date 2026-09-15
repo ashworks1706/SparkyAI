@@ -381,3 +381,28 @@ fn a_profile_list_limit_of_zero_is_rejected() {
     assert!(err("[profile]\nlist_limit = 0").contains("profile.list_limit"));
     assert_eq!(ok("").profile.list_limit, 50);
 }
+
+#[test]
+fn a_search_tool_left_with_no_wording_is_rejected() {
+    // The descriptions are what the model reads before it writes a query, so none may be blank.
+    for setting in [
+        "knowledge_description",
+        "live_description",
+        "query_description",
+        "source_description",
+        "nothing_stored",
+    ] {
+        let e = err(&format!("[tools]\n{setting} = \"   \"\n"));
+        assert!(e.contains(setting), "{e}");
+    }
+    assert!(
+        load("[tools]\nsearch = false\nquery_description = \"\"\n").is_ok(),
+        "wording nobody is shown is not checked"
+    );
+}
+
+#[test]
+fn a_live_search_with_no_fallback_source_is_rejected() {
+    let e = err("[tools]\nlive_default_source = \"\"\n");
+    assert!(e.contains("live_default_source"), "{e}");
+}

@@ -1,4 +1,4 @@
-//! search_scholarships: ASU scholarships by keyword, citizenship, year of study and field.
+//! ASU scholarships by keyword, citizenship, year of study and field.
 
 use super::{LiveSource, Param};
 
@@ -51,8 +51,12 @@ impl LiveSource for Scholarships {
         "scholarships"
     }
 
-    fn description(&self) -> &'static str {
-        "Search ASU scholarships by keyword, citizenship, year of study and field of focus."
+    fn hint(&self) -> &'static str {
+        "scholarships and who may apply"
+    }
+
+    fn category(&self) -> &'static str {
+        "scholarships"
     }
 
     fn params(&self) -> &'static [Param] {

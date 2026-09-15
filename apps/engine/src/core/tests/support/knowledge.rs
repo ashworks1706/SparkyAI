@@ -1,14 +1,68 @@
-//! Knowledge doubles: a fixed source query registry and an in-memory query cache.
+//! Knowledge doubles: a fixed source query registry, an index of canned hits, a query cache.
 
 use async_trait::async_trait;
 
 use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
+use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::knowledge::cache::{CacheError, Entry};
+use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::query::{
     QueryError, QueryOutcome, QueryRequest, QuerySourceInfo,
 };
+use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
+
+/// A Retriever double: one canned hit, and the queries it was asked, readable after it moves.
+pub struct Stored {
+    hits: Vec<Evidence>,
+    asked: std::sync::Arc<std::sync::Mutex<Vec<RetrievalQuery>>>,
+}
+
+impl Stored {
+    /// An index holding one passage of text under title.
+    pub fn holding(title: &str, content: &str) -> Self {
+        Self {
+            hits: vec![Evidence {
+                source_id: uuid::Uuid::nil(),
+                chunk_id: uuid::Uuid::nil(),
+                title: title.to_owned(),
+                content: content.to_owned(),
+                url: Some(format!("https://example.test/{title}")),
+                fetched_at: chrono::Utc::now() - chrono::Duration::hours(3),
+                score: 1.0,
+            }],
+            asked: std::sync::Arc::default(),
+        }
+    }
+
+    /// An index holding nothing.
+    pub fn empty() -> Self {
+        Self {
+            hits: Vec::new(),
+            asked: std::sync::Arc::default(),
+        }
+    }
+
+    /// The queries this double is asked, readable after it moves into a tool.
+    pub fn asked(&self) -> std::sync::Arc<std::sync::Mutex<Vec<RetrievalQuery>>> {
+        std::sync::Arc::clone(&self.asked)
+    }
+}
+
+#[async_trait]
+impl Retriever for Stored {
+    async fn retrieve(
+        &self,
+        _ctx: &RequestContext,
+        query: &RetrievalQuery,
+    ) -> Result<Vec<Evidence>, RetrievalError> {
+        if let Ok(mut asked) = self.asked.lock() {
+            asked.push(query.clone());
+        }
+        Ok(self.hits.clone())
+    }
+}
 
 /// A SourceQueries double: a fixed registry and a canned outcome per source.
 pub struct FakeQueries {

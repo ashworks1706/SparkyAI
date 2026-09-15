@@ -1,5 +1,6 @@
-//! search_courses: sections, instructors, meeting days and open seats for one term.
+//! Sections, instructors, meeting days and open seats for one term.
 
+use chrono::{Datelike, NaiveDate};
 use serde_json::{Map, Value};
 
 use super::{LiveSource, Param};
@@ -32,6 +33,28 @@ const SESSIONS: &[&str] = &["a", "b", "c", "other"];
 
 const SEASONS: &[&str] = &["spring", "summer", "fall"];
 
+/// The term running on date: spring through April, summer through July, fall after it.
+pub fn term_for(date: NaiveDate) -> String {
+    let season = match date.month() {
+        1..=4 => "Spring",
+        5..=7 => "Summer",
+        _ => "Fall",
+    };
+    format!("{season} {}", date.year())
+}
+
+/// The term query names, as the catalog spells it.
+pub fn term_in(query: &str) -> Option<String> {
+    let words: Vec<&str> = query.split_whitespace().collect();
+    words.windows(2).find_map(|pair| {
+        let season = SEASONS.iter().find(|s| {
+            s.eq_ignore_ascii_case(pair[0].trim_matches(|c: char| !c.is_alphanumeric()))
+        })?;
+        let year: String = pair[1].chars().filter(char::is_ascii_digit).collect();
+        (year.len() == 4).then(|| format!("{}{} {year}", season[..1].to_uppercase(), &season[1..]))
+    })
+}
+
 const PARAMS: &[Param] = &[
     Param::text("term", "Term to search: spring, summer or fall and a year.")
         .required()
@@ -48,13 +71,24 @@ impl LiveSource for Courses {
         "courses"
     }
 
-    fn description(&self) -> &'static str {
-        "Search the ASU class catalog for one term: sections, instructors, meeting days, and \
-         open seats."
+    fn hint(&self) -> &'static str {
+        "class sections, instructors, open seats"
+    }
+
+    fn category(&self) -> &'static str {
+        "courses"
     }
 
     fn params(&self) -> &'static [Param] {
         PARAMS
+    }
+
+    fn query_param(&self) -> Option<&'static str> {
+        Some("keywords")
+    }
+
+    fn derived(&self, query: &str, today: NaiveDate) -> Vec<(&'static str, String)> {
+        vec![("term", term_in(query).unwrap_or_else(|| term_for(today)))]
     }
 
     fn check(&self, params: &Map<String, Value>) -> Result<(), String> {

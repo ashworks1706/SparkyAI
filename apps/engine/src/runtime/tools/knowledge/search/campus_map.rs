@@ -1,4 +1,4 @@
-//! search_campus_map: a building or place on the ASU campus map, with a map link.
+//! A building or place on the ASU campus map, with a map link.
 
 use super::{LiveSource, Param};
 
@@ -14,8 +14,12 @@ impl LiveSource for CampusMap {
         "campus_map"
     }
 
-    fn description(&self) -> &'static str {
-        "Find a building or place on the ASU campus map: what it is and a map link."
+    fn hint(&self) -> &'static str {
+        "where a building or place is"
+    }
+
+    fn category(&self) -> &'static str {
+        "campus"
     }
 
     fn params(&self) -> &'static [Param] {

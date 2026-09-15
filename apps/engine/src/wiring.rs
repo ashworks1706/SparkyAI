@@ -8,7 +8,7 @@ use crate::core::traits::conversation::compaction::Compactor;
 use crate::core::traits::knowledge::admission::Admission;
 use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
-use crate::core::traits::knowledge::retrieval::Embedder;
+use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
 use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::knowledge::skills::SkillStore;
 use crate::core::traits::memory::detector::FactDetector;
@@ -42,6 +42,8 @@ use crate::runtime::model::limit::Limited;
 use crate::runtime::model::props;
 use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::runtime::tools::knowledge::search;
+use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
+use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
 use crate::runtime::tools::knowledge::skills::GetSkillTool;
 use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
@@ -73,43 +75,40 @@ library and dining hours, transit, deadlines, campus services, and the society i
 
 ## Using your capabilities
 The knowledge base results were retrieved for you before you were called. Read them first.
-- Each search_ tool fetches one ASU source now, with the arguments you give: courses,
-  scholarships, events, clubs, news, the library catalog, library hours, sports schedules,
-  sports news, the campus map, official social media posts, and student jobs. What they return
-  is kept, so it can be cited again later. Call one only when the results in this prompt do not
-  answer or are missing the detail asked for.
-- A search_live_ tool answers something that is only true right now and is never kept:
-  search_live_shuttles, search_live_study_rooms, and search_live_web for the open web. Nothing
-  in this prompt can answer what one of them answers, so call it rather than reading a stored
-  copy.
-- Call the one search_ or search_live_ tool that matches the topic, with the fewest arguments
-  that narrow it.
-- An empty result means the answer is not held. Say so rather than calling the same tool again
-  with reworded arguments.
-- An action that needs approval waits for the user to press the button. Never say you did
-  something you have only proposed.
+- You have two searches. search_knowledge reads the stored copies of ASU pages. search_live
+  fetches a source, or the open web, as it is right now.
+- Call search_live when the answer has to be current: hours today, open seats, shuttle times,
+  events, news, scores. Nothing in this prompt can answer one of those.
+- Call search_knowledge when the results here do not answer or are missing a detail.
+- Both take a query and, optionally, a source. Leave source out unless you already know which
+  source holds the answer.
 
-Examples of the judgement wanted:
+The query carries the whole request. The tool reads nothing else from the conversation, so
+write the subject in full, in keywords, every time. Never send a pronoun, a single bare word,
+or a word you only have from an earlier message.
+- "any AI clubs", nothing relevant in the results: search_knowledge with query artificial
+  intelligence student club, source clubs.
+- "does CSE 310 have open seats this fall": search_live with query CSE 310 open seats, source
+  courses.
+- "when is the next shuttle to Poly": search_live with query polytechnic-tempe shuttle next
+  departure, source shuttles.
+- "where is BYENG": search_live with query BYENG building, source campus_map.
+- "what was the score of the ASU game last night": search_live with query ASU football score
+  last night, no source.
 - "when does hayden close tonight", library hours in the results: answer from them, cite them,
   call nothing.
-- "any AI clubs", nothing relevant in the results: search_clubs with keywords artificial
-  intelligence, then answer from what came back.
-- "does CSE 310 have open seats this fall": search_courses with term Fall 2026, keywords
-  CSE 310, open_only true, then answer.
-- "when is the next shuttle to Poly": search_live_shuttles with route polytechnic-tempe, then
-  answer with the stop and the time.
-- "where is BYENG": search_campus_map with place BYENG, then answer with the map link.
-- "what was the score of the ASU game last night": search_live_web with that query and
-  time_range day, then answer from the results and cite them. Use search_live_web only when no
-  tool for an ASU source fits.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
+
+An empty result means the answer is not held. Say so, or search once more with the subject
+named differently. An action that needs approval waits for the user to press the button; never
+say you did something you have only proposed.
 
 ## Never
 - Never guess a date, room, price, deadline, policy, or person.
-- Never repeat a tool call that already returned nothing.
+- Never repeat a search whose query you would write the same way twice.
 - Never quote a result you were not given.
 - Never tell the user to check the official site when you have just cited it.
-- Never use run_sandbox to fetch a page or reach a site: it has no network. Use the search tool
+- Never use run_sandbox to fetch a page or reach a site: it has no network. Use a search tool
   for the topic."#;
 
 /// Serves until shutdown.
@@ -151,7 +150,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     )
     .await
     .map_err(|e| anyhow::anyhow!("postgres: {e}"))?;
-    let retriever = Arc::new(PgRetriever::new(
+    let retriever: Arc<dyn Retriever> = Arc::new(PgRetriever::new(
         pool.clone(),
         Arc::clone(&embedder) as Arc<dyn Embedder>,
         RetrievalTuning::from(&cfg.retrieval),
@@ -161,7 +160,13 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
     let queries = source_queries(&cfg, &pool, Arc::clone(&trace)).await?;
-    let (tools, mcp_names) = build_tools(&cfg, &pool, queries).await?;
+    let (tools, mcp_names) = build_tools(
+        &cfg,
+        &pool,
+        queries,
+        Arc::clone(&retriever) as Arc<dyn Retriever>,
+    )
+    .await?;
     let capabilities = capability::render(&capability::from_definitions(
         &tools.definitions(),
         &mcp_names,
@@ -207,7 +212,20 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     tracing::info!(addr = %cfg.app.http_addr, "listening");
     let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
     let router = crate::routes::router(state, health, profile, limits, &cfg.http.cors_origins);
-    let grace = Duration::from_secs(cfg.http.shutdown_grace_secs);
+    until_shutdown(
+        listener,
+        router,
+        Duration::from_secs(cfg.http.shutdown_grace_secs),
+    )
+    .await
+}
+
+/// Serves until the shutdown signal, then gives in-flight requests grace to finish.
+async fn until_shutdown(
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+    grace: Duration,
+) -> anyhow::Result<()> {
     let (signalled, wait) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router).with_graceful_shutdown(async move {
         shutdown().await;
@@ -570,45 +588,81 @@ fn cache_rules(cfg: &Config) -> CacheRules {
     }
 }
 
+/// The stored and live search tools, after checking the catalog against the published registry.
+async fn search_tools(
+    cfg: &Config,
+    queries: Arc<dyn SourceQueries>,
+    retriever: Arc<dyn Retriever>,
+) -> anyhow::Result<Vec<Arc<dyn Tool>>> {
+    let sources = search::catalog();
+    let fallback = cfg.tools.live_default_source.trim();
+    if !sources.iter().any(|s| s.key() == fallback) {
+        anyhow::bail!(
+            "tools.live_default_source is {fallback:?}, which is not a source the engine offers: {}",
+            search::source_keys(&sources, false).join(", ")
+        );
+    }
+    // A mismatch with the published registry is logged, not fatal.
+    let published = queries.sources().await?;
+    for source in &sources {
+        let Some(served) = published.iter().find(|p| p.key == source.key()) else {
+            tracing::warn!(
+                source = source.key(),
+                "the scraper has not published this source; run `just scraper serve`"
+            );
+            continue;
+        };
+        if let Err(difference) = search::conforms(source.as_ref(), served) {
+            tracing::warn!(
+                source = source.key(),
+                %difference,
+                "the tool and the scraper registry disagree; restart `just scraper serve` if it runs older code"
+            );
+        }
+    }
+    let stored: Arc<dyn Tool> = Arc::new(StoredSearch::new(
+        &sources,
+        retriever,
+        cfg.retrieval.top_k,
+        &StoredWording {
+            tool: cfg.tools.knowledge_description.clone(),
+            query: cfg.tools.query_description.clone(),
+            source: cfg.tools.source_description.clone(),
+            empty: cfg.tools.nothing_stored.clone(),
+        },
+    ));
+    let live: Arc<dyn Tool> = Arc::new(LiveSearch::new(
+        sources,
+        queries,
+        fallback,
+        cfg.prompt.utc_offset_hours,
+        &LiveWording {
+            tool: cfg.tools.live_description.clone(),
+            query: cfg.tools.query_description.clone(),
+            source: cfg.tools.source_description.clone(),
+        },
+        cfg.query.timeout_secs,
+    ));
+    tracing::info!(fallback, "search tools registered");
+    Ok(vec![stored, live])
+}
+
 /// Every tool the model may call, with tools.disabled removed at registration.
 async fn build_tools(
     cfg: &Config,
     pool: &sqlx::PgPool,
     queries: Arc<dyn SourceQueries>,
+    retriever: Arc<dyn Retriever>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
     let mut mcp_names = Vec::new();
     if cfg.tools.search {
-        // Every catalog tool is offered; a mismatch with the published registry is logged.
-        let published = queries.sources().await?;
-        let mut registered = 0;
-        for source in search::catalog() {
-            if let Some(served) = published.iter().find(|p| p.key == source.key()) {
-                if let Err(difference) = search::conforms(source.as_ref(), served) {
-                    tracing::warn!(
-                        source = source.key(),
-                        %difference,
-                        "the tool and the scraper registry disagree; restart `just scraper serve` if it runs older code"
-                    );
-                }
-            } else {
-                tracing::warn!(
-                    source = source.key(),
-                    "the scraper has not published this source; run `just scraper serve`"
-                );
-            }
-            let tool: Arc<dyn Tool> = Arc::new(search::Search::new(
-                source,
-                Arc::clone(&queries),
-                cfg.query.timeout_secs,
-            ));
+        for tool in search_tools(cfg, queries, retriever).await? {
             if !disabled(&tool.definition().name) {
                 tools = tools.with(tool);
-                registered += 1;
             }
         }
-        tracing::info!(count = registered, "search tools registered");
     }
     if cfg.tools.get_skill {
         // get_skill registers only when reviewed skills exist.

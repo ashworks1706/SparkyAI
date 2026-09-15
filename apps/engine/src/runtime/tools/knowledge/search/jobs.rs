@@ -1,4 +1,4 @@
-//! search_jobs: ASU student employment listings and how to apply.
+//! ASU student employment listings and how to apply.
 
 use super::{LiveSource, Param};
 
@@ -10,8 +10,12 @@ impl LiveSource for Jobs {
         "jobs"
     }
 
-    fn description(&self) -> &'static str {
-        "Fetch ASU student employment listings and how to apply."
+    fn hint(&self) -> &'static str {
+        "student employment listings"
+    }
+
+    fn category(&self) -> &'static str {
+        "jobs"
     }
 
     fn params(&self) -> &'static [Param] {
