@@ -23,6 +23,8 @@
 
 ## 6 — Public beta v0.6
 
+- [ ] run on existing benchmarks
+- [ ] make short tech writeup on readme
 - [ ] Staging + prod; canary releases; alerting; inference that scales under load
 
 ## 7 — sparky-model-v0.1
