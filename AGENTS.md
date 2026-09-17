@@ -22,8 +22,7 @@ just scraper serve    # the scraper: live searches, their indexing, and schedule
 just migrate
 just train | eval | data ...
 just infra            # postgres, redis, minio
-just posthog          # self-hosted PostHog on :8010: traces, LLM generations, product events
-just phoenix          # Phoenix trace UI on :6006: one conversation as a tree
+just phoenix          # Phoenix on :6006: traces, LLM generations, product events, as a tree
 just db               # pgweb, browse the database on :8081
 just model            # llama-server chat and embed
 just crawl            # self-hosted Firecrawl for the scraper
@@ -45,16 +44,16 @@ One repo. Everything that runs is under `apps/`. Language is never a folder; ASU
 
 ```
 apps/engine/      Rust bin — the agent + HTTP surface. Modules: core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
-apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. Exports one span per interaction and product events to PostHog.
+apps/discord/     Rust bin — serenity bot; HTTP client of engine. Never links engine. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. Exports one span per interaction and one span per product event.
 apps/cli/         Rust bin `sparky` — developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
-apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. `scraper serve` runs it all from the `jobs` queue: the engine's live `search_live` jobs, the indexing of their results, and scheduled source runs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run to PostHog.
+apps/scraper/     Python — ingestion: fetch, chunk, embed, write the index. `scraper serve` runs it all from the `jobs` queue: the engine's live `search_live` jobs, the indexing of their results, and scheduled source runs. Migrations live here. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/training/    Python — datasets, post-training, eval runners + eval cases (GPU, occasional)
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
-Processes talk only via: discord → engine, engine → PostgreSQL / Redis / llama-server, scraper → Firecrawl / SearXNG / PostgreSQL / llama-server embed, and every app → PostHog for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `search_live` jobs, which reach the scraper through the `jobs` table. Redis is the engine's alone: the live query cache and the leases that keep one fetch per query. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord → engine, engine → PostgreSQL / Redis / llama-server, scraper → Firecrawl / SearXNG / PostgreSQL / llama-server embed, and every app → Phoenix for spans and events. The scraper never serves a request; it and the engine meet only in the database, including live `search_live` jobs, which reach the scraper through the `jobs` table. Redis is the engine's alone: the live query cache and the leases that keep one fetch per query. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 

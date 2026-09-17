@@ -12,7 +12,7 @@ fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Un
         id: id.into(),
         group: match profile {
             Some("model") => Group::Models,
-            Some("posthog" | "phoenix" | "metrics" | "gpu-metrics" | "db") | None => Group::Infra,
+            Some("phoenix" | "metrics" | "gpu-metrics" | "db") | None => Group::Infra,
             Some(_) => Group::Tools,
         },
         kind: Kind::Service {
@@ -92,12 +92,6 @@ fn services() -> Vec<Unit> {
             Some("localhost:6379"),
         ),
         service("minio", None, "object store", Some("http://localhost:9001")),
-        service(
-            "posthog",
-            Some("posthog"),
-            "PostHog UI and ingestion, brings up the posthog stack",
-            Some("http://localhost:8010"),
-        ),
         service(
             "phoenix",
             Some("phoenix"),
@@ -196,7 +190,7 @@ fn tasks() -> Vec<Unit> {
         task_static(&["check"], "fmt, lint, test every unit"),
         task_static(
             &["data", "export"],
-            "PostHog llm generations to .sparky/training/data",
+            "Phoenix llm spans to .sparky/training/data",
         ),
         task_static(&["data", "verify"], "verify and deduplicate training data"),
         task_static(&["data", "stats"], "dataset summary"),

@@ -162,7 +162,7 @@ class SftPlan(BaseModel):
 
 
 class ExportError(RuntimeError):
-    """PostHog answered with something other than complete llm generations."""
+    """Phoenix answered with something other than complete llm generations."""
 
 
 class RunnerError(RuntimeError):

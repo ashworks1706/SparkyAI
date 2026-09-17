@@ -54,8 +54,8 @@ impl Default for Model {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Cli {
-    /// PostHog UI, probed at /_health and shown in the status bar.
-    pub posthog_url: String,
+    /// Phoenix trace UI, probed and shown in the status bar.
+    pub phoenix_url: String,
     /// Lines kept per unit.
     pub log_lines: usize,
     /// Directory for persistent unit logs.
@@ -69,7 +69,7 @@ pub struct Cli {
 impl Default for Cli {
     fn default() -> Self {
         Self {
-            posthog_url: "http://localhost:8010".into(),
+            phoenix_url: "http://localhost:6006".into(),
             log_lines: 5000,
             log_dir: PathBuf::from(".sparky/logs"),
             health_interval_secs: 5,

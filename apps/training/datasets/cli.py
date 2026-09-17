@@ -37,7 +37,7 @@ def main() -> None:
 def export_cmd(
     out: Path = typer.Option(None, help="Defaults under .sparky/training/data/raw."),
 ) -> None:
-    """Pull every complete llm generation from PostHog, redact it, and write raw JSONL."""
+    """Pull every complete llm generation from Phoenix, redact it, and write raw JSONL."""
     out = out or settings().training.data_dir / "raw" / "llm_spans.jsonl"
     examples = [redact.redact_example(ex) for ex in export.export_examples()]
     _write(out, examples)

@@ -159,8 +159,6 @@ impl Agent {
             "output.value" = Empty,
             "session.id" = %ctx.conversation_id,
             "user.id" = %ctx.user_id,
-            "$ai_session_id" = %ctx.conversation_id,
-            "posthog.distinct_id" = %ctx.user_id,
             "otel.status_code" = Empty,
         );
         let found = retriever

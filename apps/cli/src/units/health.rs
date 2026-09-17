@@ -1,4 +1,4 @@
-//! Health probes for the engine, chat model, and PostHog, plus the port-in-use check.
+//! Health probes for the engine, chat model, and Phoenix, plus the port-in-use check.
 
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -13,7 +13,7 @@ use crate::core::types::{Event, Health, Probe};
 pub struct Targets {
     engine: String,
     model: String,
-    posthog: String,
+    phoenix: String,
     every: Duration,
 }
 
@@ -23,7 +23,7 @@ impl Targets {
         Self {
             engine: format!("{}/health/ready", cfg.engine.base_url.trim_end_matches('/')),
             model: format!("{}/models", cfg.model.base_url.trim_end_matches('/')),
-            posthog: format!("{}/_health", cfg.cli.posthog_url.trim_end_matches('/')),
+            phoenix: cfg.cli.phoenix_url.trim_end_matches('/').to_owned(),
             every: Duration::from_secs(cfg.cli.health_interval_secs.max(1)),
         }
     }
@@ -43,22 +43,22 @@ pub async fn poll(targets: Targets, tx: UnboundedSender<Event>) {
             let _ = tx.send(Event::Health(Health {
                 engine: failed.clone(),
                 model: failed.clone(),
-                posthog: failed,
+                phoenix: failed,
             }));
             return;
         }
     };
     loop {
-        let (engine, model, posthog) = tokio::join!(
+        let (engine, model, phoenix) = tokio::join!(
             probe(&http, &targets.engine),
             probe(&http, &targets.model),
-            probe(&http, &targets.posthog)
+            probe(&http, &targets.phoenix)
         );
         if tx
             .send(Event::Health(Health {
                 engine,
                 model,
-                posthog,
+                phoenix,
             }))
             .is_err()
         {

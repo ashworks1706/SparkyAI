@@ -20,7 +20,7 @@ SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no ho
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, and no host ports except engine `:8080`. PostHog, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
+`deploy/compose.prod.yml` overrides `compose.yml`: prebuilt images instead of builds, and no host ports except engine `:8080`. Phoenix, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of engine. `llama-server` runs on a GPU host; see `deploy/inference`.
 
 ## Models
 
@@ -37,13 +37,12 @@ CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper`
 
 ## Observability
 
-- Traces, LLM analytics, product events: self-hosted PostHog, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__HOST` (default `http://localhost:8010`; compose sets `http://posthog`) with `SPARKY_TELEMETRY__PROJECT_TOKEN`; an empty token disables export. Model spans become `$ai_generation` events; a Discord conversation is one `$ai_session_id`.
-- Reading one conversation: Phoenix, below. The same spans also go to `SPARKY_TELEMETRY__PHOENIX_URL` when it is set, and the two destinations are independent.
+- Traces, LLM generations, product events: self-hosted Phoenix, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__PHOENIX_URL` (compose sets `SPARKY_PHOENIX_URL`); an empty URL disables export. Spans land in the project named by `telemetry.project_name`. A Discord conversation is one `session.id`, and each product event is a span of its own.
 - Logs: pretty in development and JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
 - Database: `just db` starts pgweb on http://localhost:8081, loopback only. It browses the same database the engine reads and writes, so a change made there is a change to live data. `chunks.embedding` is a 1024-dimension vector and does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback only. They scrape `llama-server`, which exports Prometheus format on its own port; `chat` and `embed` run with `--metrics`. On a GPU host add `just gpu-metrics` for the utilisation, VRAM and temperature panels. The exporter shells out to `nvidia-smi`, so it runs under the nvidia container runtime with the `utility` driver capability rather than binding the driver library in by path.
 
-PostHog holds one `$ai_generation` per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. Prometheus holds server-side time series: throughput, queue depth, batching. Phoenix holds the same spans as a trace tree: one conversation, its model calls, tool calls and retrievals, in order and with timings.
+Phoenix holds one `llm` span per model call: the full prompt, the full reply, token counts, and latency. It is the source the training pipeline reads. It holds the same spans as a trace tree too: one conversation, its model calls, tool calls and retrievals, in order and with timings. Prometheus holds server-side time series: throughput, queue depth, batching.
 
 ### Phoenix
 
@@ -51,25 +50,9 @@ PostHog holds one `$ai_generation` per model call: the full prompt, the full rep
 just phoenix       # trace UI on http://localhost:6006, loopback
 ```
 
-One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata` volume, UI and OTLP endpoint on the same port. Export is off until `SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006` is in `.env`, so an app started without Phoenix never retries a dead endpoint. For the compose apps set `SPARKY_PHOENIX_URL=http://phoenix:6006`, which compose passes through. Spans carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those. It has no authentication and holds full prompts and replies, so in production it has no host port; reach it over a tunnel.
+One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata` volume, UI and OTLP endpoint on the same port. Export is off until `SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006` is in `.env`, so an app started without Phoenix never retries a dead endpoint. For the compose apps set `SPARKY_PHOENIX_URL=http://phoenix:6006`, which compose passes through. Spans carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI keys off those. It has no authentication by default and holds full prompts and replies, so in production it has no host port; reach it over a tunnel. Set `SPARKY_TELEMETRY__PHOENIX_API_KEY` when it does authenticate; every app and `just data export` send it as a bearer token.
 
-### PostHog
-
-```bash
-just posthog       # fetch pinned upstream files into .sparky/posthog, then start the posthog profile
-```
-
-The hobby stack of `github.com/PostHog/posthog` at the commit in `deploy/posthog/VERSION`, flattened into the `posthog-*` services of `compose.yml` and cut to what Sparky sends: 17 containers for OTLP traces, product events, and the UI and query API that read them. Session replay, error tracking, screenshots, live events, feature flags, surveys, CDP destinations and webhooks, batch exports (Temporal and Elasticsearch), logs, property definitions, and the LLM analytics capture service are left out, so those pages of the UI do not work. `scripts/posthog.sh` sparse-checks-out that commit into `.sparky/posthog/src` (ClickHouse config and Kafka topics); set `SPARKY_POSTHOG_DIR` to an absolute path to keep it elsewhere. Image pins live once, in the `x-posthog-images` block at the top of `compose.yml`.
-
-The UI and every ingestion path sit behind `posthog` on http://localhost:8010, loopback only: `/i/v1/traces` (OTLP traces) and `/batch/` (events). There is no LLM analytics capture service, so `telemetry.ai_path` stays empty locally; set it only against PostHog Cloud. The first start runs migrations for several minutes; `curl -s localhost:8010/_health` returns 200 when it is up.
-
-First run:
-
-1. Open http://localhost:8010, create the account, organization, and project.
-2. Put the project token (Settings, Project, Project token, `phc_...`) in `.env` as `SPARKY_TELEMETRY__PROJECT_TOKEN`.
-3. For `just data export`, create a personal API key with the Query Read scope and set `SPARKY_TRAINING__POSTHOG_HOST=http://localhost:8010`, `SPARKY_TRAINING__POSTHOG_PROJECT_ID` (the number in the project URL), and `SPARKY_TRAINING__POSTHOG_API_KEY`.
-
-`SPARKY_POSTHOG_SECRET` and `SPARKY_POSTHOG_ENCRYPTION_SALT_KEYS` have local-only defaults; set real values in `.env` before the first start on any shared host, and keep them afterwards (the salt encrypts stored data). `SPARKY_POSTHOG_SITE_URL` changes the URL PostHog puts in links. In production `posthog` has no host port.
+`just data export` reads the `llm` spans of `telemetry.project_name` back through `GET /v1/projects/<project>/spans`, so it needs the same `SPARKY_TELEMETRY__PHOENIX_URL`.
 
 ### Reading the dashboard
 

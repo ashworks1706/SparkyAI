@@ -110,8 +110,6 @@ impl Task {
             "sparky.tools" = "[]",
             "sparky.step" = 0,
             "sparky.attempt" = 0,
-            "$ai_session_id" = %ctx.conversation_id,
-            "posthog.distinct_id" = %ctx.user_id,
         );
         let budget = self.cfg.timeout.min(ctx.remaining());
         let call = self.model.generate(ctx, request).instrument(span.clone());

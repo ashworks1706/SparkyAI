@@ -230,10 +230,8 @@ impl Runner {
     }
 }
 
-fn all_profiles() -> [&'static str; 14] {
+fn all_profiles() -> [&'static str; 12] {
     [
-        "--profile",
-        "posthog",
         "--profile",
         "phoenix",
         "--profile",

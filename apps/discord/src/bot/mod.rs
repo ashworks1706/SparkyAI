@@ -30,7 +30,7 @@ use crate::render::components::CustomId;
 /// Per-process bot state and the serenity event handler.
 struct Handler {
     engine: EngineClient,
-    /// Product events for PostHog.
+    /// Product events, exported as spans.
     analytics: Analytics,
     guild_id: GuildId,
     /// Channels the bot answers in. Empty answers everywhere it can see.
@@ -69,7 +69,7 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         Duration::from_secs(cfg.engine.connect_timeout_secs),
         Duration::from_secs(cfg.engine.request_timeout_secs),
     )?;
-    let (analytics, flusher) = Analytics::start(&cfg.analytics, &cfg.telemetry);
+    let analytics = Analytics::start(&cfg.analytics);
     let handler = Handler {
         engine,
         analytics,
@@ -107,11 +107,6 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
             Ok(())
         }
     };
-    if let Some(flusher) = flusher {
-        flusher
-            .finish(Duration::from_secs(cfg.telemetry.export_timeout_secs))
-            .await;
-    }
     result
 }
 

@@ -1,4 +1,4 @@
-//! Span fields shared by loop and task model calls: gen_ai for PostHog, OpenInference for Phoenix.
+//! Span fields shared by loop and task model calls: gen_ai and OpenInference for Phoenix.
 
 use tracing::Span;
 

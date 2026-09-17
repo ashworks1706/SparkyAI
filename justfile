@@ -112,7 +112,7 @@ up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix down
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix down
 
 # Start production with GHCR images; no host ports for datastores
 prod-up *ARGS:
@@ -125,14 +125,9 @@ prod-down:
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores (postgres, redis, minio) for host-side engine. PostHog: just posthog
+# Datastores (postgres, redis, minio) for host-side engine. Traces: just phoenix
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
-
-# PostHog (traces and events) on http://localhost:8010 (loopback); 17 containers
-posthog *ARGS:
-    ./scripts/posthog.sh
-    docker compose -f deploy/compose.yml --profile posthog up -d --no-build {{ARGS}} $(docker compose -f deploy/compose.yml --profile posthog config --services | grep -E '^posthog(-|$)')
 
 # Phoenix trace UI on http://localhost:6006 (loopback); set SPARKY_TELEMETRY__PHOENIX_URL to export
 phoenix *ARGS:
@@ -164,10 +159,10 @@ gpu-metrics *ARGS:
 
 # What's running, across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix ps -a
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix ps -a
 
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile posthog --profile phoenix logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix logs -f {{ARGS}}
 
 # Build both images locally
 images:

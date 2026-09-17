@@ -314,7 +314,6 @@ fn validate_tools(tools: &Tools) -> Result<(), ConfigError> {
     Ok(())
 }
 
-/// Rejects telemetry settings that cannot export. An empty ai_path turns the AI endpoint off.
 /// Rejects a query cache that cannot keep one fetch per query, or that has nowhere to keep it.
 fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
     let invalid = |m: String| Err(ConfigError::Invalid(m));
@@ -348,6 +347,7 @@ fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// Rejects telemetry settings that cannot export.
 fn validate_telemetry(telemetry: &Telemetry) -> Result<(), ConfigError> {
     let invalid = |m: String| Err(ConfigError::Invalid(m));
     if !(0.0..=1.0).contains(&telemetry.sample_ratio) {
@@ -356,16 +356,11 @@ fn validate_telemetry(telemetry: &Telemetry) -> Result<(), ConfigError> {
             telemetry.sample_ratio
         ));
     }
-    for (name, path) in [
-        ("traces_path", &telemetry.traces_path),
-        ("ai_path", &telemetry.ai_path),
-    ] {
-        if !(path.starts_with('/') || (name == "ai_path" && path.is_empty())) {
-            return invalid(format!("telemetry.{name} must start with /, got {path:?}"));
-        }
-    }
     if telemetry.provider_name.trim().is_empty() {
         return invalid("telemetry.provider_name is empty".into());
+    }
+    if telemetry.project_name.trim().is_empty() {
+        return invalid("telemetry.project_name is empty".into());
     }
     Ok(())
 }

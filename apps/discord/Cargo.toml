@@ -33,6 +33,7 @@ opentelemetry-otlp.workspace = true
 
 [dev-dependencies]
 axum.workspace = true
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 
 [lints]
 workspace = true

@@ -115,8 +115,6 @@ impl Agent {
             "sparky.attempt" = attempt,
             "sparky.thinking" = request.thinking,
             "sparky.thinking_reason" = thinking.as_str(),
-            "$ai_session_id" = %ctx.conversation_id,
-            "posthog.distinct_id" = %ctx.user_id,
             "otel.status_code" = Empty,
             "otel.status_message" = Empty,
         )

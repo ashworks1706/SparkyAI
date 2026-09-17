@@ -3,14 +3,13 @@ import json
 import httpx
 import pytest
 from pydantic import SecretStr
-from training.core.settings import Training
+from training.core.settings import Telemetry, Training
 from training.core.types import ExportError
-from training.datasets.export import export_examples, hogql, row_to_example
+from training.datasets.export import export_examples, span_to_example, spans_url
 
-_COLUMNS = ["uuid", "timestamp", "attributes"]
-_U1 = "0191a000-0000-7000-8000-000000000001"
-_U2 = "0191a000-0000-7000-8000-000000000002"
-_U3 = "0191a000-0000-7000-8000-000000000003"
+_S1 = "0191a0000000000001"
+_S2 = "0191a0000000000002"
+_S3 = "0191a0000000000003"
 
 _INPUT = [{"role": "system", "content": "s"}, {"role": "user", "content": "hi"}]
 _OUTPUT = [{"role": "assistant", "content": "hello"}]
@@ -22,49 +21,75 @@ def _attrs(inp=_INPUT, out=_OUTPUT, span="llm", **extra):
         "gen_ai.input.messages": json.dumps(inp) if isinstance(inp, list) else inp,
         "gen_ai.output.messages": json.dumps(out) if isinstance(out, list) else out,
         "gen_ai.request.model": "m",
-        "$ai_session_id": "s1",
-        "posthog.distinct_id": "u1",
+        "session.id": "s1",
+        "user.id": "u1",
         "sparky.tools": json.dumps([{"name": "a"}, {"name": "b"}]),
     }
     attrs.update(extra)
     return attrs
 
 
-def _row(attrs, row_id=_U1, ts="2026-09-11T10:00:00.123456Z", as_string=False):
+def _span(attrs, span_id=_S1, name="llm"):
     return {
-        "uuid": row_id,
-        "timestamp": ts,
-        "attributes": json.dumps(attrs) if as_string else attrs,
+        "id": span_id,
+        "name": name,
+        "context": {"trace_id": "t1", "span_id": span_id},
+        "attributes": attrs,
     }
 
 
-def _cfg(rows=2):
-    return Training(
-        posthog_host="http://ph:8010/",
-        posthog_project_id="7",
-        posthog_api_key=SecretStr("phx_key"),
-        posthog_page_rows=rows,
+def _telemetry():
+    return Telemetry(
+        phoenix_url="http://phoenix:6006/",
+        phoenix_api_key=SecretStr("px_key"),
+        project_name="sparky",
     )
 
 
+def _cfg(spans=2):
+    return Training(phoenix_page_spans=spans)
+
+
 def test_span_attributes_become_an_example():
-    ex = row_to_example(_row(_attrs()))
+    ex = span_to_example(_span(_attrs()))
 
     assert ex is not None
-    assert ex.id == _U1 and ex.model == "m" and ex.session_id == "s1" and ex.user_id == "u1"
+    assert ex.id == _S1 and ex.model == "m" and ex.session_id == "s1" and ex.user_id == "u1"
     assert ex.tool_count == 2
     assert [m.role for m in ex.messages] == ["system", "user"]
     assert ex.response.content == "hello"
 
 
-def test_attributes_as_a_json_string_are_accepted():
-    ex = row_to_example(_row(_attrs(), as_string=True))
+def test_nested_attributes_are_read_the_same_as_flat_ones():
+    nested = {
+        "sparky": {"span": "llm", "tools": json.dumps([{"name": "a"}])},
+        "gen_ai": {
+            "input": {"messages": json.dumps(_INPUT)},
+            "output": {"messages": json.dumps(_OUTPUT)},
+            "request": {"model": "m"},
+        },
+        "session": {"id": "s1"},
+        "user": {"id": "u1"},
+    }
 
-    assert ex is not None and ex.response.content == "hello"
+    ex = span_to_example(_span(nested))
+
+    assert ex is not None
+    assert ex.model == "m" and ex.session_id == "s1" and ex.user_id == "u1"
+    assert ex.tool_count == 1 and ex.response.content == "hello"
+
+
+def test_the_span_id_falls_back_to_the_trace_context():
+    span = _span(_attrs())
+    del span["id"]
+
+    ex = span_to_example(span)
+
+    assert ex is not None and ex.id == _S1
 
 
 def test_parsed_message_lists_are_accepted():
-    ex = row_to_example(_row(_attrs(inp=_INPUT, out=_OUTPUT) | {"gen_ai.input.messages": _INPUT}))
+    ex = span_to_example(_span(_attrs() | {"gen_ai.input.messages": _INPUT}))
 
     assert ex is not None and [m.role for m in ex.messages] == ["system", "user"]
 
@@ -78,7 +103,7 @@ def test_parts_messages_are_converted():
     ]
     out = [{"role": "assistant", "parts": [{"type": "text", "content": "ok"}]}]
 
-    ex = row_to_example(_row(_attrs(inp=inp, out=out)))
+    ex = span_to_example(_span(_attrs(inp=inp, out=out)))
 
     assert ex is not None
     assert ex.messages[0].content == "ab" and ex.response.content == "ok"
@@ -87,7 +112,7 @@ def test_parts_messages_are_converted():
 def test_openai_text_content_lists_are_converted():
     inp = [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]
 
-    ex = row_to_example(_row(_attrs(inp=inp)))
+    ex = span_to_example(_span(_attrs(inp=inp)))
 
     assert ex is not None and ex.messages[0].content == "hi"
 
@@ -101,15 +126,16 @@ def test_tool_calls_survive():
         }
     ]
 
-    ex = row_to_example(_row(_attrs(out=out)))
+    ex = span_to_example(_span(_attrs(out=out)))
 
     assert ex is not None and ex.response.tool_calls[0]["name"] == "t"
 
 
-def test_non_llm_and_replyless_rows_are_skipped():
-    assert row_to_example(_row(_attrs(span="task"))) is None
-    assert row_to_example(_row(_attrs(out=None))) is None
-    assert row_to_example(_row(_attrs(out=[]))) is None
+def test_non_llm_and_replyless_spans_are_skipped():
+    assert span_to_example(_span(_attrs(span="task"))) is None
+    assert span_to_example(_span(_attrs(out=None))) is None
+    assert span_to_example(_span(_attrs(out=[]))) is None
+    assert span_to_example(_span({}, name="retrieve")) is None
 
 
 @pytest.mark.parametrize(
@@ -125,68 +151,53 @@ def test_non_llm_and_replyless_rows_are_skipped():
         _attrs(**{"sparky.tools": {"n": 1}}),
     ],
 )
-def test_malformed_llm_rows_raise(attrs):
+def test_malformed_llm_spans_raise(attrs):
     with pytest.raises(ExportError):
-        row_to_example(_row(attrs))
+        span_to_example(_span(attrs))
 
 
-def test_query_reads_llm_spans_in_keyset_order():
-    first = hogql(10)
-    assert "FROM posthog.trace_spans" in first
-    assert "name = 'llm'" in first
-    assert first.endswith("ORDER BY timestamp ASC, uuid ASC LIMIT 10")
-    assert "OFFSET" not in first
-
-    later = hogql(10, ("2026-09-11T10:00:00.123456Z", _U2))
-    assert "timestamp > toDateTime('2026-09-11 10:00:00.123456', 'UTC')" in later
-    assert f"uuid > '{_U2}'" in later
+def test_spans_are_read_from_the_project_endpoint():
+    assert spans_url(_telemetry()) == "http://phoenix:6006/v1/projects/sparky/spans"
 
 
-def test_cursor_values_are_validated():
-    with pytest.raises(ExportError):
-        hogql(10, ("2026-09-11", "x' OR 1=1 --"))
-
-
-def test_pages_follow_the_keyset_cursor():
+def test_pages_follow_the_cursor():
     pages = [
-        [_row(_attrs(), _U1, "2026-09-11T10:00:00Z"), _row(_attrs(), _U2, "2026-09-11T10:00:01Z")],
-        [_row(_attrs(), _U3, "2026-09-11T10:00:02Z")],
+        ([_span(_attrs(), _S1), _span(_attrs(), _S2)], "cur1"),
+        ([_span(_attrs(), _S3)], None),
     ]
     seen = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url == "http://ph:8010/api/projects/7/query/"
-        assert request.headers["authorization"] == "Bearer phx_key"
-        body = json.loads(request.content)
-        assert body["query"]["kind"] == "HogQLQuery"
-        seen.append(body["query"]["query"])
-        rows = pages[len(seen) - 1]
-        return httpx.Response(
-            200, json={"columns": _COLUMNS, "results": [[r[c] for c in _COLUMNS] for r in rows]}
-        )
+        assert request.url.path == "/v1/projects/sparky/spans"
+        assert request.headers["authorization"] == "Bearer px_key"
+        assert request.url.params["name"] == "llm"
+        assert request.url.params["limit"] == "2"
+        seen.append(request.url.params.get("cursor"))
+        data, cursor = pages[len(seen) - 1]
+        return httpx.Response(200, json={"data": data, "next_cursor": cursor})
 
-    examples = export_examples(_cfg(rows=2), transport=httpx.MockTransport(handler))
+    examples = export_examples(_cfg(spans=2), _telemetry(), transport=httpx.MockTransport(handler))
 
-    assert [e.id for e in examples] == [_U1, _U2, _U3]
-    assert len(seen) == 2
-    assert "uuid >" not in seen[0]
-    assert "toDateTime('2026-09-11 10:00:01.000000', 'UTC')" in seen[1] and _U2 in seen[1]
+    assert [e.id for e in examples] == [_S1, _S2, _S3]
+    assert seen == [None, "cur1"]
 
 
 def test_error_status_raises():
     transport = httpx.MockTransport(lambda r: httpx.Response(403, text="forbidden"))
 
     with pytest.raises(ExportError, match="403"):
-        export_examples(_cfg(), transport=transport)
+        export_examples(_cfg(), _telemetry(), transport=transport)
 
 
 def test_unexpected_response_shape_raises():
-    transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"rows": []}))
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, json={"spans": []}))
 
     with pytest.raises(ExportError):
-        export_examples(_cfg(), transport=transport)
+        export_examples(_cfg(), _telemetry(), transport=transport)
 
 
 def test_missing_settings_raise():
     with pytest.raises(ExportError):
-        export_examples(Training(posthog_project_id=""))
+        export_examples(_cfg(), Telemetry(phoenix_url=""))
+    with pytest.raises(ExportError):
+        export_examples(_cfg(), Telemetry(phoenix_url="http://phoenix:6006", project_name=" "))

@@ -751,92 +751,27 @@ fn memory_renders_things_and_relations_or_says_it_is_empty() {
 }
 
 #[test]
-fn an_analytics_event_serializes_to_the_posthog_batch_shape() {
-    use crate::core::types::{AnalyticsBatch, AnalyticsEvent};
+fn an_analytics_event_carries_its_asker_and_properties() {
+    use crate::core::types::AnalyticsEvent;
 
     let event = AnalyticsEvent::new("discord_ask", &42_u64)
         .with("place", "thread")
         .with("latency_ms", 120);
-    let batch = [event];
-    let wire = serde_json::to_value(AnalyticsBatch {
-        api_key: "phc_test",
-        batch: &batch,
-    })
-    .unwrap_or_default();
-    assert_eq!(wire["api_key"], "phc_test");
-    let first = &wire["batch"][0];
-    assert_eq!(first["event"], "discord_ask");
-    assert_eq!(first["distinct_id"], "42");
-    assert_eq!(first["properties"]["place"], "thread");
-    assert_eq!(first["properties"]["latency_ms"], 120);
-    let stamp = first["timestamp"].as_str().unwrap_or_default();
-    assert!(stamp.ends_with('Z') && stamp.contains('.'), "{stamp}");
+    assert_eq!(event.event, "discord_ask");
+    assert_eq!(event.distinct_id, "42");
+    assert_eq!(event.properties["place"], "thread");
+    assert_eq!(event.properties["latency_ms"], 120);
 }
 
 #[test]
-fn a_full_analytics_queue_drops_instead_of_waiting() {
+fn analytics_stays_off_without_the_switch() {
     use crate::analytics::Analytics;
+    use crate::core::config::Analytics as Settings;
     use crate::core::types::AnalyticsEvent;
 
-    let (handle, mut rx) = Analytics::channel(1);
-    assert!(handle.record(AnalyticsEvent::new("a", &1_u64)));
-    assert!(!handle.record(AnalyticsEvent::new("b", &1_u64)), "full");
-    assert_eq!(rx.try_recv().map(|e| e.event).ok(), Some("a"));
-    drop(rx);
-    assert!(!handle.record(AnalyticsEvent::new("c", &1_u64)), "closed");
-    assert!(!Analytics::disabled().record(AnalyticsEvent::new("d", &1_u64)));
-}
-
-#[test]
-fn analytics_stays_off_without_the_switch_or_a_project_token() {
-    use crate::analytics::Analytics;
-    use crate::core::config::{Analytics as Settings, Telemetry};
-    use crate::core::types::AnalyticsEvent;
-
-    let off = Settings {
-        enabled: false,
-        ..Settings::default()
-    };
-    let (handle, flusher) = Analytics::start(&off, &Telemetry::default());
-    assert!(flusher.is_none());
-    assert!(!handle.record(AnalyticsEvent::new("a", &1_u64)));
-
-    let (handle, flusher) = Analytics::start(&Settings::default(), &Telemetry::default());
-    assert!(flusher.is_none(), "the default token is empty");
-    assert!(!handle.record(AnalyticsEvent::new("a", &1_u64)));
-}
-
-#[test]
-fn the_export_target_needs_a_host_and_a_token_and_trims_the_slash() {
-    use crate::core::config::Telemetry;
-    use crate::core::telemetry::export_target;
-    use secrecy::{ExposeSecret, SecretString};
-
-    let mut cfg = Telemetry::default();
-    assert!(export_target(&cfg).is_none(), "empty token");
-    cfg.project_token = SecretString::from("phc_x".to_owned());
-    cfg.host = Some(" http://posthog:8000/ ".into());
-    let target = export_target(&cfg).map(|(h, t)| (h.to_owned(), t.expose_secret().to_owned()));
-    assert_eq!(
-        target,
-        Some(("http://posthog:8000".to_owned(), "phc_x".to_owned()))
-    );
-    cfg.host = Some("  ".into());
-    assert!(export_target(&cfg).is_none(), "blank host");
-    cfg.host = None;
-    assert!(export_target(&cfg).is_none());
-}
-
-#[test]
-fn analytics_settings_reject_an_empty_queue() {
-    use crate::core::config::Analytics;
-
-    assert!(Analytics::default().validate().is_ok());
-    let bad = Analytics {
-        queue_capacity: 0,
-        ..Analytics::default()
-    };
-    assert!(bad.validate().is_err());
+    let off = Settings { enabled: false };
+    assert!(!Analytics::start(&off).record(AnalyticsEvent::new("a", &1_u64)));
+    assert!(Analytics::start(&Settings::default()).record(AnalyticsEvent::new("a", &1_u64)));
 }
 
 /// Requests a local server received: path, authorization header, body.
@@ -901,103 +836,43 @@ fn wait_for(seen: &Seen, n: usize) -> Vec<(String, String, String)> {
 }
 
 #[test]
-fn analytics_batches_reach_the_batch_path_with_the_api_key() {
-    use crate::analytics::Analytics;
-    use crate::core::config::{Analytics as Settings, Telemetry};
+fn a_product_event_is_exported_as_its_own_span() {
+    use crate::analytics::{Analytics, SCOPE};
+    use crate::core::config::Analytics as Settings;
     use crate::core::types::AnalyticsEvent;
-    use secrecy::SecretString;
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 
-    let seen = Seen::default();
-    let addr = serve(std::sync::Arc::clone(&seen));
-    assert!(addr.is_some());
-    let Some(addr) = addr else {
-        return;
-    };
-    let telemetry = Telemetry {
-        host: Some(format!("http://{addr}/")),
-        project_token: SecretString::from("phc_test".to_owned()),
-        ..Telemetry::default()
-    };
-    let settings = Settings {
-        flush_ms: 50,
-        ..Settings::default()
-    };
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
         .build();
-    assert!(rt.is_ok());
-    let Ok(rt) = rt else {
-        return;
-    };
-    rt.block_on(async {
-        let (handle, flusher) = Analytics::start(&settings, &telemetry);
-        assert!(handle.record(AnalyticsEvent::new("discord_ask", &42_u64).with("place", "thread")));
-        assert!(flusher.is_some());
-        if let Some(flusher) = flusher {
-            flusher.finish(std::time::Duration::from_secs(5)).await;
-        }
-    });
+    opentelemetry::global::set_tracer_provider(provider.clone());
+    let _ = provider.tracer(SCOPE);
 
-    let got = wait_for(&seen, 1);
-    assert_eq!(got.len(), 1, "{got:?}");
-    let Some((path, _, body)) = got.first() else {
-        return;
-    };
-    assert_eq!(path, "/batch/");
-    let wire: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
-    assert_eq!(wire["api_key"], "phc_test");
-    assert_eq!(wire["batch"][0]["event"], "discord_ask");
-    assert_eq!(wire["batch"][0]["distinct_id"], "42");
-    assert_eq!(wire["batch"][0]["properties"]["place"], "thread");
-}
-
-#[test]
-fn discord_spans_reach_the_traces_path_with_the_bearer_token() {
-    use crate::core::config::Telemetry;
-    use crate::core::telemetry::provider;
-    use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
-    use secrecy::SecretString;
-
-    let seen = Seen::default();
-    let addr = serve(std::sync::Arc::clone(&seen));
-    assert!(addr.is_some());
-    let Some(addr) = addr else {
-        return;
-    };
-    let cfg = Telemetry {
-        host: Some(format!("http://{addr}")),
-        project_token: SecretString::from("phc_test".to_owned()),
-        // The AI path is empty by default and set here.
-        ai_path: "/i/v0/ai/otel".into(),
-        ..Telemetry::default()
-    };
-    let built = provider(&cfg, "discord-test", "test");
-    assert!(built.as_ref().is_ok_and(Option::is_some), "{built:?}");
-    let Ok(Some(provider)) = built else {
-        return;
-    };
-    let mut span = provider.tracer("discord-test").start("probe");
-    span.end();
-    let flushed = provider.force_flush();
-    assert!(flushed.is_ok(), "{flushed:?}");
-
-    let got = wait_for(&seen, 2);
-    let _ = provider.shutdown();
-    let mut paths: Vec<&str> = got.iter().map(|(p, _, _)| p.as_str()).collect();
-    paths.sort_unstable();
-    assert_eq!(paths, ["/i/v0/ai/otel", "/i/v1/traces"]);
+    let recorded = Analytics::start(&Settings::default())
+        .record(AnalyticsEvent::new("discord_ask", &42_u64).with("place", "thread"));
+    assert!(recorded);
+    let _ = provider.force_flush();
+    let spans = exporter.get_finished_spans().unwrap_or_default();
+    let ask = spans.iter().find(|s| s.name == "discord_ask");
     assert!(
-        got.iter().all(|(_, auth, _)| auth == "Bearer phc_test"),
-        "{got:?}"
+        ask.is_some(),
+        "{:?}",
+        spans.iter().map(|s| &s.name).collect::<Vec<_>>()
     );
-}
-
-#[test]
-fn the_ai_path_is_off_unless_it_is_configured() {
-    use crate::core::config::Telemetry;
-
-    assert!(Telemetry::default().ai_path.is_empty());
-    assert!(Telemetry::default().validate().is_ok());
+    let Some(ask) = ask else {
+        return;
+    };
+    let attr = |key: &str| {
+        ask.attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.to_string())
+    };
+    assert_eq!(attr("user.id").as_deref(), Some("42"));
+    assert_eq!(attr("place").as_deref(), Some("thread"));
+    let _ = provider.shutdown();
 }
 
 #[test]
@@ -1012,9 +887,7 @@ fn discord_spans_reach_phoenix_without_a_token() {
     let Some(addr) = addr else {
         return;
     };
-    // PostHog off, Phoenix on: the two destinations are independent.
     let cfg = Telemetry {
-        host: None,
         phoenix_url: Some(format!(" http://{addr}/ ")),
         ..Telemetry::default()
     };
@@ -1042,22 +915,72 @@ fn discord_spans_reach_phoenix_without_a_token() {
 }
 
 #[test]
-fn export_is_off_only_when_every_destination_is_unset() {
+fn a_phoenix_api_key_is_sent_as_a_bearer_token() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::provider;
+    use opentelemetry::trace::{Span as _, Tracer as _, TracerProvider as _};
+    use secrecy::SecretString;
+
+    let seen = Seen::default();
+    let addr = serve(std::sync::Arc::clone(&seen));
+    assert!(addr.is_some());
+    let Some(addr) = addr else {
+        return;
+    };
+    let cfg = Telemetry {
+        phoenix_url: Some(format!("http://{addr}")),
+        phoenix_api_key: SecretString::from("px_test".to_owned()),
+        ..Telemetry::default()
+    };
+    let built = provider(&cfg, "discord-test", "test");
+    let Ok(Some(provider)) = built else {
+        unreachable!("a set phoenix_url builds a provider")
+    };
+    let mut span = provider.tracer("discord-test").start("probe");
+    span.end();
+    let _ = provider.force_flush();
+
+    let got = wait_for(&seen, 1);
+    let _ = provider.shutdown();
+    assert!(
+        got.iter().all(|(_, auth, _)| auth == "Bearer px_test"),
+        "{got:?}"
+    );
+}
+
+#[test]
+fn export_is_off_until_phoenix_is_set() {
     use crate::core::config::Telemetry;
     use crate::core::telemetry::provider;
 
-    let off = Telemetry {
-        host: None,
-        phoenix_url: None,
-        ..Telemetry::default()
-    };
-    assert!(matches!(provider(&off, "d", "test"), Ok(None)));
-    let phoenix_only = Telemetry {
-        host: None,
+    assert!(matches!(
+        provider(&Telemetry::default(), "d", "test"),
+        Ok(None)
+    ));
+    let phoenix = Telemetry {
         phoenix_url: Some("http://localhost:6006".into()),
         ..Telemetry::default()
     };
-    assert!(matches!(provider(&phoenix_only, "d", "test"), Ok(Some(_))));
+    assert!(matches!(provider(&phoenix, "d", "test"), Ok(Some(_))));
+}
+
+#[test]
+fn the_discord_resource_names_the_phoenix_project() {
+    use crate::core::config::Telemetry;
+    use crate::core::telemetry::resource;
+    use opentelemetry::Key;
+
+    let cfg = Telemetry {
+        project_name: "sparky-test".into(),
+        ..Telemetry::default()
+    };
+    let resource = resource(&cfg, "discord-test", "test");
+    assert_eq!(
+        resource
+            .get(&Key::from_static_str("openinference.project.name"))
+            .map(|v| v.to_string()),
+        Some("sparky-test".to_owned())
+    );
 }
 
 /// A progress update as the engine sends it.

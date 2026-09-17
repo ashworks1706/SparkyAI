@@ -56,19 +56,6 @@ fn catalog_ids_are_unique_and_grouped() {
 }
 
 #[test]
-fn posthog_is_an_infra_service_behind_its_profile() {
-    let units = catalog();
-    let posthog = units.iter().find(|u| u.id == "posthog");
-    assert!(posthog.is_some_and(|u| u.group == Group::Infra
-        && u.url.as_deref() == Some("http://localhost:8010")
-        && u.kind
-            == Kind::Service {
-                service: "posthog".into(),
-                profile: Some("posthog".into()),
-            }));
-}
-
-#[test]
 fn phoenix_is_an_infra_service_behind_its_profile() {
     let units = catalog();
     let phoenix = units.iter().find(|u| u.id == "phoenix");
@@ -82,8 +69,8 @@ fn phoenix_is_an_infra_service_behind_its_profile() {
 }
 
 #[test]
-fn cli_defaults_point_at_local_posthog() {
-    assert_eq!(Cli::default().posthog_url, "http://localhost:8010");
+fn cli_defaults_point_at_local_phoenix() {
+    assert_eq!(Cli::default().phoenix_url, "http://localhost:6006");
 }
 
 #[test]

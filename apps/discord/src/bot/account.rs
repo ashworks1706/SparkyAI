@@ -33,7 +33,7 @@ impl Handler {
         let span = tracing::info_span!(
             "discord.reset",
             "discord.command" = "reset",
-            "posthog.distinct_id" = %cmd.user.id,
+            "user.id" = %cmd.user.id,
         );
         let text = match self.engine.reset(&req).instrument(span).await {
             Ok(done) => {
@@ -73,7 +73,7 @@ impl Handler {
         let span = tracing::info_span!(
             "discord.memory",
             "discord.command" = "memory",
-            "posthog.distinct_id" = %cmd.user.id,
+            "user.id" = %cmd.user.id,
         );
         let messages = match self.engine.profile_list(&req).instrument(span).await {
             Ok(profile) => {
@@ -137,7 +137,7 @@ impl Handler {
         let span = tracing::info_span!(
             "discord.forget",
             "discord.command" = "forget",
-            "posthog.distinct_id" = %cmd.user.id,
+            "user.id" = %cmd.user.id,
             "sparky.everything" = false,
         );
         let text = match self.engine.forget(&req).instrument(span).await {
@@ -199,7 +199,7 @@ impl Handler {
                 let span = tracing::info_span!(
                     "discord.forget",
                     "discord.command" = "forget",
-                    "posthog.distinct_id" = %press.user.id,
+                    "user.id" = %press.user.id,
                     "sparky.everything" = true,
                 );
                 match self.engine.forget(&req).instrument(span).await {
