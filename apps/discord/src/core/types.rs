@@ -274,27 +274,24 @@ pub struct ForgetResponse {
     pub removed: u64,
 }
 
-/// One PostHog product event.
-#[derive(Debug, Clone, Serialize)]
+/// One product event, exported as a span.
+#[derive(Debug, Clone)]
 pub struct AnalyticsEvent {
     /// Event name, such as discord_ask.
     pub event: &'static str,
     /// The Discord user id.
     pub distinct_id: String,
-    /// Event properties.
+    /// Event properties, recorded as span attributes.
     pub properties: serde_json::Map<String, serde_json::Value>,
-    /// When it happened, RFC 3339 in UTC.
-    pub timestamp: String,
 }
 
 impl AnalyticsEvent {
-    /// An event named event for distinct_id, stamped now, with no properties.
+    /// An event named event for distinct_id, with no properties.
     pub fn new(event: &'static str, distinct_id: &impl ToString) -> Self {
         Self {
             event,
             distinct_id: distinct_id.to_string(),
             properties: serde_json::Map::new(),
-            timestamp: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         }
     }
 
@@ -304,13 +301,4 @@ impl AnalyticsEvent {
         self.properties.insert(key.to_owned(), value.into());
         self
     }
-}
-
-/// Body of POST /batch/ on PostHog.
-#[derive(Debug, Serialize)]
-pub struct AnalyticsBatch<'a> {
-    /// Project token.
-    pub api_key: &'a str,
-    /// The events.
-    pub batch: &'a [AnalyticsEvent],
 }

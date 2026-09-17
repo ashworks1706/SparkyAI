@@ -113,9 +113,7 @@ impl Handler {
         let span = tracing::info_span!(
             "discord.message",
             "discord.command" = trigger_name(trigger),
-            "posthog.distinct_id" = %msg.author.id,
             "sparky.visibility" = ?req.visibility,
-            "$ai_session_id" = Empty,
             "sparky.input" = %req.message,
             "sparky.output" = Empty,
             // OpenInference, read by the Phoenix trace UI.

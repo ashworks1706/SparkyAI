@@ -87,7 +87,6 @@ macro_rules! route_span {
     ($name:literal, $req:expr) => {
         tracing::info_span!(
             $name,
-            "posthog.distinct_id" = %$req.user_id,
             "openinference.span.kind" = "CHAIN",
             "input.value" = %$req.message,
             "output.value" = Empty,

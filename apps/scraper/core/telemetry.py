@@ -1,4 +1,4 @@
-"""OpenTelemetry export over OTLP/HTTP to PostHog and Phoenix. One span per source run or query."""
+"""OpenTelemetry export over OTLP/HTTP to Phoenix. One span per source run or query."""
 
 from __future__ import annotations
 
@@ -19,6 +19,9 @@ log = structlog.get_logger()
 # The OTLP/HTTP traces path, fixed by the protocol. Phoenix serves it under phoenix_url.
 OTLP_TRACES_PATH = "/v1/traces"
 
+# Resource attribute naming the Phoenix project a span belongs to.
+PROJECT_NAME = "openinference.project.name"
+
 _provider: TracerProvider | None = None
 
 
@@ -31,33 +34,21 @@ class ExportTarget:
     timeout_secs: float
 
 
-def export_target(cfg: Telemetry) -> ExportTarget | None:
-    """The PostHog traces endpoint and bearer header, or None when host or token is empty."""
-    host = cfg.host.strip().rstrip("/")
-    token = cfg.project_token.get_secret_value().strip()
-    if not host or not token:
-        return None
-    path = "/" + cfg.traces_path.strip().lstrip("/")
-    return ExportTarget(
-        endpoint=host + path,
-        headers={"Authorization": f"Bearer {token}"},
-        timeout_secs=cfg.export_timeout_secs,
-    )
-
-
 def phoenix_target(cfg: Telemetry) -> ExportTarget | None:
-    """The Phoenix traces endpoint, or None when phoenix_url is empty."""
+    """The Phoenix traces endpoint and its headers, or None when phoenix_url is empty."""
     url = cfg.phoenix_url.strip().rstrip("/")
     if not url:
         return None
+    key = cfg.phoenix_api_key.get_secret_value().strip()
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
     return ExportTarget(
-        endpoint=url + OTLP_TRACES_PATH, headers={}, timeout_secs=cfg.export_timeout_secs
+        endpoint=url + OTLP_TRACES_PATH, headers=headers, timeout_secs=cfg.export_timeout_secs
     )
 
 
-def export_targets(cfg: Telemetry) -> list[ExportTarget]:
-    """Every configured destination, in the order spans are exported to them."""
-    return [t for t in (export_target(cfg), phoenix_target(cfg)) if t is not None]
+def resource(cfg: Telemetry) -> Resource:
+    """The resource every exported span carries: service name and Phoenix project."""
+    return Resource.create({"service.name": "scraper", PROJECT_NAME: cfg.project_name})
 
 
 def exporter(target: ExportTarget) -> OTLPSpanExporter:
@@ -72,16 +63,13 @@ def init() -> None:
     global _provider
     if _provider is not None:
         return
-    targets = export_targets(settings().telemetry)
-    if not targets:
-        log.warning(
-            "telemetry.disabled",
-            reason="telemetry host, project token and phoenix url are empty",
-        )
+    cfg = settings().telemetry
+    target = phoenix_target(cfg)
+    if target is None:
+        log.warning("telemetry.disabled", reason="telemetry phoenix url is empty")
         return
-    _provider = TracerProvider(resource=Resource.create({"service.name": "scraper"}))
-    for target in targets:
-        _provider.add_span_processor(BatchSpanProcessor(exporter(target)))
+    _provider = TracerProvider(resource=resource(cfg))
+    _provider.add_span_processor(BatchSpanProcessor(exporter(target)))
     trace.set_tracer_provider(_provider)
     atexit.register(shutdown)
 

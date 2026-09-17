@@ -1,4 +1,4 @@
-"""Settings from sparky.toml and SPARKY_* env: where traces, PostHog, the engine, and data live."""
+"""Settings from sparky.toml and SPARKY_* env: where traces, Phoenix, the engine, and data live."""
 
 from __future__ import annotations
 
@@ -23,15 +23,20 @@ def _toml_files() -> tuple[Path, ...]:
     return (Path("../../sparky.toml"), Path("sparky.toml"))
 
 
+class Telemetry(BaseModel):
+    """Where the export reads spans back from. Shared with every app that writes them."""
+
+    phoenix_url: str = ""
+    phoenix_api_key: SecretStr = SecretStr("")
+    project_name: str = "sparky"
+
+
 class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
     # Bearer token the engine /chat route requires.
     engine_service_token: SecretStr = SecretStr("")
-    posthog_host: str = "http://localhost:8010"
-    posthog_project_id: str = ""
-    # Personal API key with the Query Read scope. A project token is rejected.
-    posthog_api_key: SecretStr = SecretStr("")
-    posthog_page_rows: int = 5000
+    # Spans read per request from the Phoenix spans endpoint.
+    phoenix_page_spans: int = 5000
     state_dir: Path = Path("../../.sparky")
     cases_dir: Path = Path("evals/cases")
     baseline_path: Path = Path("evals/baseline.json")
@@ -64,6 +69,7 @@ class Settings(BaseSettings):
     )
 
     training: Training = Training()
+    telemetry: Telemetry = Telemetry()
 
     @classmethod
     def settings_customise_sources(

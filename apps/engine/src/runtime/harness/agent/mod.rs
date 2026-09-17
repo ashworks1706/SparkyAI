@@ -146,8 +146,6 @@ impl Agent {
             "agent.run",
             "gen_ai.operation.name" = "invoke_agent",
             "gen_ai.agent.name" = "sparky",
-            "$ai_session_id" = %ctx.conversation_id,
-            "posthog.distinct_id" = %ctx.user_id,
             // OpenInference, read by the Phoenix trace UI.
             "openinference.span.kind" = "CHAIN",
             "input.value" = %asked,
@@ -177,8 +175,6 @@ impl Agent {
             "agent.resume",
             "gen_ai.operation.name" = "invoke_agent",
             "gen_ai.agent.name" = "sparky",
-            "$ai_session_id" = %ctx.conversation_id,
-            "posthog.distinct_id" = %ctx.user_id,
             // OpenInference, read by the Phoenix trace UI.
             "openinference.span.kind" = "CHAIN",
             "input.value" = %pending.action.tool,

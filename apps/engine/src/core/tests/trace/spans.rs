@@ -1,4 +1,4 @@
-//! The attributes PostHog reads from the model and agent spans.
+//! The attributes the trace UI reads from the model and agent spans.
 
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
@@ -82,11 +82,8 @@ fn the_llm_span_carries_the_gen_ai_attributes() {
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&output).unwrap_or_default();
     assert_eq!(parsed.len(), 1, "{output}");
     assert!(output.contains("hello"), "{output}");
-    assert_eq!(
-        attr(llm, "posthog.distinct_id").as_deref(),
-        Some(ctx.user_id.as_str())
-    );
-    assert!(attr(llm, "$ai_session_id").is_some());
+    assert_eq!(attr(llm, "user.id").as_deref(), Some(ctx.user_id.as_str()));
+    assert!(attr(llm, "session.id").is_some());
 }
 
 #[test]
@@ -129,11 +126,7 @@ fn every_span_carries_the_openinference_attributes_phoenix_reads() {
             Some(kind),
             "{name}"
         );
-        assert_eq!(
-            attr(span, "session.id").as_deref(),
-            attr(span, "$ai_session_id").as_deref(),
-            "{name}"
-        );
+        assert!(attr(span, "session.id").is_some(), "{name} session.id");
         assert_eq!(attr(span, "user.id").as_deref(), Some(ctx.user_id.as_str()));
         assert!(
             attr(span, "input.value").is_some_and(|v| !v.is_empty()),

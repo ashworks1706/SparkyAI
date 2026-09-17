@@ -62,7 +62,6 @@ impl Handler {
         match outcome {
             Ok(resp) => {
                 let conversation = resp.conversation_id.to_string();
-                span.record("$ai_session_id", conversation.as_str());
                 span.record("session.id", conversation.as_str());
                 let shown = resp.text.chars().take(2_000).collect::<String>();
                 span.record("sparky.output", shown.as_str());

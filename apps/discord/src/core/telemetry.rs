@@ -1,4 +1,4 @@
-//! Logging and OTLP/HTTP export to PostHog and Phoenix; one span per interaction, shares session.
+//! Logging and OTLP/HTTP export to Phoenix; one span per interaction, shares session.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -6,7 +6,7 @@ use std::time::Duration;
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::{Resource, trace::Sampler, trace::SdkTracerProvider};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::ExposeSecret;
 use tracing_subscriber::filter::filter_fn;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -18,7 +18,7 @@ const SERVICE: &str = "discord";
 /// The OTLP/HTTP traces path, fixed by the protocol. Phoenix serves it under phoenix_url.
 const OTLP_TRACES_PATH: &str = "/v1/traces";
 
-/// Keeps the OTLP exporters alive. Flushes on drop.
+/// Keeps the OTLP exporter alive. Flushes on drop.
 pub struct Guard {
     otel: Option<SdkTracerProvider>,
 }
@@ -48,16 +48,8 @@ impl Drop for Guard {
     }
 }
 
-/// The PostHog base URL and project token, when both are set.
-pub fn export_target(cfg: &Telemetry) -> Option<(&str, &SecretString)> {
-    let host = cfg
-        .host
-        .as_deref()
-        .map(str::trim)
-        .filter(|h| !h.is_empty())?;
-    let token = &cfg.project_token;
-    (!token.expose_secret().trim().is_empty()).then_some((host.trim_end_matches('/'), token))
-}
+/// Resource attribute naming the Phoenix project a span belongs to.
+const PROJECT_NAME: &str = "openinference.project.name";
 
 /// The Phoenix traces endpoint, or None when phoenix_url is empty.
 pub fn phoenix_target(cfg: &Telemetry) -> Option<String> {
@@ -68,64 +60,46 @@ pub fn phoenix_target(cfg: &Telemetry) -> Option<String> {
         .map(|url| format!("{url}{OTLP_TRACES_PATH}"))
 }
 
-/// One tracer provider exporting every span to each destination; None when none is configured.
+/// The resource every exported span carries: service, environment, and Phoenix project.
+pub fn resource(cfg: &Telemetry, service: &str, env: &str) -> Resource {
+    Resource::builder()
+        .with_service_name(service.to_owned())
+        .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
+        .with_attribute(KeyValue::new(PROJECT_NAME, cfg.project_name.clone()))
+        .build()
+}
+
+/// One tracer provider exporting every span to Phoenix; None when it is not configured.
 pub fn provider(
     cfg: &Telemetry,
     service: &str,
     env: &str,
 ) -> anyhow::Result<Option<SdkTracerProvider>> {
-    let posthog = export_target(cfg);
-    let phoenix = phoenix_target(cfg);
-    if posthog.is_none() && phoenix.is_none() {
+    let Some(url) = phoenix_target(cfg) else {
         return Ok(None);
-    }
-    let timeout = Duration::from_secs(cfg.export_timeout_secs);
-    let mut builder = SdkTracerProvider::builder();
-    if let Some((host, token)) = posthog {
-        builder = builder.with_batch_exporter(exporter(
-            format!("{host}{}", cfg.traces_path),
-            Some(token),
-            timeout,
-        )?);
-        // An empty ai_path disables the AI exporter.
-        if !cfg.ai_path.trim().is_empty() {
-            builder = builder.with_batch_exporter(exporter(
-                format!("{host}{}", cfg.ai_path),
-                Some(token),
-                timeout,
-            )?);
-        }
-    }
-    if let Some(url) = phoenix {
-        builder = builder.with_batch_exporter(exporter(url, None, timeout)?);
-    }
-    let provider = builder
+    };
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter(
+            url,
+            cfg.phoenix_api_key.expose_secret().trim(),
+            Duration::from_secs(cfg.export_timeout_secs),
+        )?)
         // Samples whole traces by trace id; children follow the root decision.
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             cfg.sample_ratio,
         ))))
-        .with_resource(
-            Resource::builder()
-                .with_service_name(service.to_owned())
-                .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
-                .build(),
-        )
+        .with_resource(resource(cfg, service, env))
         .build();
     Ok(Some(provider))
 }
 
-/// An OTLP/HTTP span exporter to url, with a bearer token when the destination authenticates.
-fn exporter(
-    url: String,
-    token: Option<&SecretString>,
-    timeout: Duration,
-) -> anyhow::Result<SpanExporter> {
-    let headers = token.map_or_else(HashMap::new, |token| {
-        HashMap::from([(
-            "Authorization".to_owned(),
-            format!("Bearer {}", token.expose_secret()),
-        )])
-    });
+/// An OTLP/HTTP span exporter to url, with a bearer token when key is not empty.
+fn exporter(url: String, key: &str, timeout: Duration) -> anyhow::Result<SpanExporter> {
+    let headers = if key.is_empty() {
+        HashMap::new()
+    } else {
+        HashMap::from([("Authorization".to_owned(), format!("Bearer {key}"))])
+    };
     Ok(SpanExporter::builder()
         .with_http()
         .with_protocol(Protocol::HttpBinary)
@@ -174,9 +148,7 @@ pub fn init(cfg: &Telemetry, env: &str, log_level: &str) -> anyhow::Result<Guard
         .with(otel_layer)
         .init();
     if otel.is_none() {
-        tracing::warn!(
-            "telemetry.host, telemetry.project_token and telemetry.phoenix_url are unset; span export is off"
-        );
+        tracing::warn!("telemetry.phoenix_url is unset; span export is off");
     }
     Ok(Guard::new(otel))
 }

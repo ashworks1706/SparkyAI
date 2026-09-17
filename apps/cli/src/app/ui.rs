@@ -56,7 +56,7 @@ fn status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(mode, Style::default().fg(Color::Black).bg(Color::White)),
         probe_span("engine", &app.health.engine),
         probe_span("model", &app.health.model),
-        probe_span("posthog", &app.health.posthog),
+        probe_span("phoenix", &app.health.phoenix),
     ];
     if let Probe::Degraded(why) = &app.health.engine {
         spans.push(Span::styled(
@@ -231,9 +231,9 @@ fn bottom_line(frame: &mut Frame, app: &App, area: Rect) {
             }
             spans.push(Span::styled(
                 format!(
-                    "   engine {} · posthog {}",
+                    "   engine {} · phoenix {}",
                     app.engine_url(),
-                    app.posthog_url()
+                    app.phoenix_url()
                 ),
                 Style::default().fg(DIM),
             ));

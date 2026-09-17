@@ -308,26 +308,20 @@ dir = ".sparky/traces"
 max_file_bytes = 0             # 0 removes the limit
 retention_hours = 0            # 0 keeps them forever
 
-# Spans go to PostHog over OTLP/HTTP at traces_path, and to Phoenix at phoenix_url plus
-# /v1/traces. host and phoenix_url are per-machine and project_token is a secret; all three live
-# in .env. Each destination is independent: an empty project_token turns PostHog off, an empty
-# phoenix_url turns Phoenix off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with
-# just phoenix running to read a conversation as a trace tree.
-# ai_path is empty: self-hosted PostHog does not accept OTLP at /i/v0/ai/otel. Against PostHog
-# Cloud set it to /i/v0/ai/otel.
+# Spans go to Phoenix over OTLP/HTTP at phoenix_url plus /v1/traces. phoenix_url is
+# per-machine and phoenix_api_key is a secret; both live in .env. An empty phoenix_url turns
+# export off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with just phoenix running
+# to read a conversation as a trace tree. project_name is the Phoenix project every app writes
+# to and the training export reads back.
 [telemetry]
+project_name = "sparky"
 sample_ratio = 1.0
 export_timeout_secs = 10
-traces_path = "/i/v1/traces"
-ai_path = ""
 provider_name = "llama.cpp"
 
-# Discord product events to PostHog, through the telemetry host and project token.
+# Discord product events, exported to Phoenix as one span each through telemetry.
 [analytics]
 enabled = true
-queue_capacity = 1024
-max_batch = 100
-flush_ms = 2000
 
 # ---------------------------------------------------------------- the HTTP surface
 [http]
@@ -413,18 +407,18 @@ region = "us-east-1"
 
 # ---------------------------------------------------------------- the developer console
 [cli]
-posthog_url = "http://localhost:8010"
+phoenix_url = "http://localhost:6006"
 log_lines = 5000
 log_dir = ".sparky/logs"
 health_interval_secs = 5
 port_check_ms = 150
 
 # ---------------------------------------------------------------- training and evals
-# engine_url, engine_service_token, posthog_host, posthog_project_id and posthog_api_key are
-# per-machine and live in .env.
+# engine_url and engine_service_token are per-machine and live in .env. The export reads
+# telemetry.phoenix_url and telemetry.project_name.
 [training]
 state_dir = "../../.sparky"
 cases_dir = "evals/cases"
 baseline_path = "evals/baseline.json"
 request_timeout_secs = 180.0
-posthog_page_rows = 5000
+phoenix_page_spans = 5000

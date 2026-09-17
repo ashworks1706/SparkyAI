@@ -82,12 +82,11 @@ class Search(BaseModel):
 
 
 class Telemetry(BaseModel):
-    """OTLP/HTTP span export to PostHog and Phoenix. Empty settings turn either export off."""
+    """OTLP/HTTP span export to Phoenix. An empty phoenix_url turns export off."""
 
-    host: str = "http://localhost:8010"
-    project_token: SecretStr = SecretStr("")
-    traces_path: str = "/i/v1/traces"
     phoenix_url: str = ""
+    phoenix_api_key: SecretStr = SecretStr("")
+    project_name: str = "sparky"
     export_timeout_secs: float = 10.0
 
 

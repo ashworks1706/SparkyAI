@@ -232,20 +232,16 @@ pub struct Embedding {
     pub dim: u32,
 }
 
-/// Trace export to PostHog and Phoenix.
+/// Trace export to Phoenix.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {
-    /// PostHog base URL; unset or empty disables trace export.
-    pub host: Option<String>,
-    /// PostHog project token; empty disables trace export.
-    pub project_token: SecretString,
-    /// Path of the OTLP traces endpoint, joined to host.
-    pub traces_path: String,
-    /// Path of the OTLP AI endpoint, joined to host. Empty exports nothing there.
-    pub ai_path: String,
-    /// Phoenix base URL for the trace UI; unset or empty exports nothing there.
+    /// Phoenix base URL; unset or empty disables trace export.
     pub phoenix_url: Option<String>,
+    /// Bearer token for a Phoenix that authenticates. Empty sends no Authorization header.
+    pub phoenix_api_key: SecretString,
+    /// The Phoenix project exported spans land in.
+    pub project_name: String,
     /// gen_ai.provider.name on model spans.
     pub provider_name: String,
     /// service.name on exported spans. Defaults to the name of the binary.
@@ -261,11 +257,9 @@ pub struct Telemetry {
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
-            host: Some("http://localhost:8010".into()),
-            project_token: SecretString::from(""),
-            traces_path: "/i/v1/traces".into(),
-            ai_path: String::new(),
             phoenix_url: None,
+            phoenix_api_key: SecretString::from(""),
+            project_name: "sparky".into(),
             provider_name: "llama.cpp".into(),
             service_name: None,
             sample_ratio: 1.0,

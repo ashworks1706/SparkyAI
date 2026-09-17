@@ -45,8 +45,8 @@ impl Handler {
         let span = tracing::info_span!(
             "discord.confirm",
             "discord.command" = "confirm",
-            "posthog.distinct_id" = %press.user.id,
-            "$ai_session_id" = %conversation,
+            "user.id" = %press.user.id,
+            "session.id" = %conversation,
             "sparky.approved" = approve,
             "sparky.visibility" = ?visibility,
             "sparky.output" = Empty,

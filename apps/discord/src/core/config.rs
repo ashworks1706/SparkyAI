@@ -17,7 +17,7 @@ pub struct Config {
     /// Trace export.
     #[serde(default)]
     pub telemetry: Telemetry,
-    /// Product events sent to PostHog.
+    /// Product events exported as spans.
     #[serde(default)]
     pub analytics: Analytics,
     /// How the bot behaves in the guild.
@@ -112,20 +112,16 @@ pub struct Discord {
     pub guild_id: u64,
 }
 
-/// Span export to PostHog over OTLP/HTTP. An empty host or project token disables it.
+/// Span export to Phoenix over OTLP/HTTP. An empty phoenix_url disables it.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Telemetry {
-    /// PostHog base URL.
-    pub host: Option<String>,
-    /// PostHog project token, sent as the bearer token and the analytics api key.
-    pub project_token: SecretString,
-    /// Path of the OTLP traces endpoint under host.
-    pub traces_path: String,
-    /// Path of the OTLP LLM observability endpoint under host.
-    pub ai_path: String,
-    /// Phoenix base URL for the trace UI; unset or empty exports nothing there.
+    /// Phoenix base URL for the trace UI; unset or empty exports nothing.
     pub phoenix_url: Option<String>,
+    /// Bearer token for a Phoenix that authenticates. Empty sends no Authorization header.
+    pub phoenix_api_key: SecretString,
+    /// The Phoenix project exported spans land in.
+    pub project_name: String,
     /// The service.name on exported spans. Defaults to discord.
     pub service_name: Option<String>,
     /// Fraction of traces exported, 0.0 to 1.0.
@@ -139,11 +135,9 @@ pub struct Telemetry {
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
-            host: Some("http://localhost:8010".into()),
-            project_token: SecretString::from(String::new()),
-            traces_path: "/i/v1/traces".into(),
-            ai_path: String::new(),
             phoenix_url: None,
+            phoenix_api_key: SecretString::from(String::new()),
+            project_name: "sparky".into(),
             service_name: None,
             sample_ratio: 1.0,
             export_timeout_secs: 10,
@@ -161,60 +155,24 @@ impl Telemetry {
                 self.sample_ratio
             );
         }
-        for (name, path) in [
-            ("traces_path", &self.traces_path),
-            ("ai_path", &self.ai_path),
-        ] {
-            // An empty ai_path disables the AI endpoint.
-            if path.is_empty() && name == "ai_path" {
-                continue;
-            }
-            if !path.starts_with('/') {
-                anyhow::bail!("telemetry.{name} must start with /, got {path:?}");
-            }
+        if self.project_name.trim().is_empty() {
+            anyhow::bail!("telemetry.project_name is empty");
         }
         Ok(())
     }
 }
 
-/// Discord product events sent to PostHog through the telemetry host and project token.
+/// Discord product events, exported as one span each through telemetry.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Analytics {
-    /// Whether events are sent at all.
+    /// Whether events are recorded at all.
     pub enabled: bool,
-    /// Events held before new ones are dropped.
-    pub queue_capacity: usize,
-    /// Most events in one POST.
-    pub max_batch: usize,
-    /// Longest wait before a partial batch is sent, in milliseconds.
-    pub flush_ms: u64,
 }
 
 impl Default for Analytics {
     fn default() -> Self {
-        Self {
-            enabled: true,
-            queue_capacity: 1_024,
-            max_batch: 100,
-            flush_ms: 2_000,
-        }
-    }
-}
-
-impl Analytics {
-    /// Rejects values the queue cannot run with.
-    pub fn validate(&self) -> anyhow::Result<()> {
-        if self.queue_capacity == 0 {
-            anyhow::bail!("analytics.queue_capacity must be above 0");
-        }
-        if self.max_batch == 0 {
-            anyhow::bail!("analytics.max_batch must be above 0");
-        }
-        if self.flush_ms == 0 {
-            anyhow::bail!("analytics.flush_ms must be above 0");
-        }
-        Ok(())
+        Self { enabled: true }
     }
 }
 
@@ -240,7 +198,6 @@ impl Config {
     /// Rejects a bad combination of settings.
     pub fn validate(&self) -> anyhow::Result<()> {
         self.telemetry.validate()?;
-        self.analytics.validate()?;
         if !(MIN_MESSAGE_CHARS..=2_000).contains(&self.bot.max_message_chars) {
             anyhow::bail!(
                 "bot.max_message_chars must be between {MIN_MESSAGE_CHARS} and 2000, got {}",

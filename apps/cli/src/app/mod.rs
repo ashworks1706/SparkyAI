@@ -105,9 +105,9 @@ impl App {
         })
     }
 
-    /// PostHog UI location, for the status bar.
-    pub fn posthog_url(&self) -> &str {
-        &self.cfg.cli.posthog_url
+    /// Phoenix trace UI location, for the status bar.
+    pub fn phoenix_url(&self) -> &str {
+        &self.cfg.cli.phoenix_url
     }
 
     /// Engine location, for the status bar.

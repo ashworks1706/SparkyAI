@@ -22,7 +22,7 @@ This document describes the current shape of the system and the rules it keeps. 
 | Database, vector store, job queue | PostgreSQL 17 with pgvector | schema in `apps/scraper/migrations` |
 | Object storage | S3-compatible, MinIO locally | `apps/scraper` |
 | Cache | Redis 7, live query answers and their leases | `deploy/compose.yml` |
-| Observability | OpenTelemetry spans to PostHog and Phoenix, product events to PostHog, JSONL traces and logs under `.sparky/` | profiles `posthog`, `phoenix`, `metrics` |
+| Observability | OpenTelemetry spans to Phoenix, product events as spans, JSONL traces and logs under `.sparky/` | profiles `phoenix`, `metrics` |
 | Config | `sparky.toml`, then `SPARKY_*` env vars | `sparky.toml`, `.env.example` |
 | Build, gate | `just` recipes, pre-commit hook, CI | `justfile`, `.githooks`, `.github/workflows` |
 | Deploy | Docker Compose, prod pulls GHCR images | `deploy/` |
@@ -56,7 +56,7 @@ apps/
     src/engine/     HTTP client of the engine and SSE frame parsing
     src/render/     the turn card, reply text, buttons and their custom ids
     src/access/     roles, permissions, and where a turn is answered
-    src/analytics/  product events to PostHog, a bounded queue flushed in the background
+    src/analytics/  product events, one exported span each
   cli/            Rust bin sparky. Developer console: runs just recipes and compose services and tails them.
     src/core/       config, types, tests
     src/app/        console state, key map, control, rendering
@@ -70,9 +70,9 @@ apps/
     jobs.py         the job queue: handlers, lanes, scheduling
     store/          postgres and object storage, the only place a connection opens
     migrations/     the schema
-  training/       Python. Datasets from PostHog llm spans, evals with a baseline gate, SFT to GGUF.
+  training/       Python. Datasets from Phoenix llm spans, evals with a baseline gate, SFT to GGUF.
   web/            Vite and React frontend and admin UI
-deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, posthog, search
+deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search
 docs/             ROADMAP.md, this file
 .sparky/          ignored local state: traces, logs, training data, reports
 ```
@@ -117,7 +117,7 @@ flowchart LR
     FC --> SITES
     SCR --> S3[("MinIO snapshots")]
 
-    BOT -->|"spans, product events"| OBS["PostHog and Phoenix"]
+    BOT -->|"spans, product events"| OBS["Phoenix"]
     ENG -->|"spans"| OBS
     SCR -->|"spans"| OBS
 ```
@@ -702,13 +702,12 @@ flowchart TD
     E -.->|"one llm span, one training example"| H["apps/training data export"]
 ```
 
-Traces go to three places:
+Traces go to two places:
 
 - JSONL at `.sparky/traces/<request_id>.jsonl`: the complete local record of trace events.
-- PostHog: spans exported over OTLP/HTTP to `telemetry.traces_path`. They carry `gen_ai.*` attributes, `posthog.distinct_id` for the user, and `$ai_session_id` for the conversation. `apps/training` reads `llm` spans from `posthog.trace_spans` to build datasets. `telemetry.ai_path` is empty by default because the self-hosted capture-ai service does not accept OTLP. Set it against PostHog Cloud.
-- Phoenix: the same spans exported to `telemetry.phoenix_url` plus `/v1/traces`, without authentication, and read as a tree per conversation. Spans carry OpenInference attributes beside the `gen_ai.*` ones because the Phoenix UI reads those.
+- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. `apps/training` reads `llm` spans back through `GET /v1/projects/<project>/spans` to build datasets.
 
-Each destination is independent: an empty project token turns PostHog off, and an empty `phoenix_url` turns Phoenix off. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot also sends product events to PostHog through a bounded queue (`[analytics]`). The local PostHog stack runs only the services traces, events, and the UI need.
+An empty `phoenix_url` turns export off. `telemetry.phoenix_api_key` is sent as a bearer token when it is set, and the local Phoenix needs none. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot records each product event as one span under the interaction (`[analytics]`).
 
 Secrets, credentials, cookies, and sensitive form values are redacted from tool arguments and results before they reach any trace. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`. Deployments keep stdout with the platform log driver.
 
@@ -728,10 +727,10 @@ flowchart LR
     GX --> P
     P --> G["grafana :3000<br/>throughput, queue, batching"]
     EN["engine"] -->|"inference"| CH
-    EN -->|"OTLP spans"| PX["posthog :8010<br/>prompt, reply, tokens, latency"]
+    EN -->|"OTLP spans"| PX["phoenix :6006<br/>prompt, reply, tokens, latency"]
 ```
 
-PostHog holds spans and events. Prometheus holds time series. A slow request shows as the `llm` span's latency in PostHog and as `llamacpp:requests_deferred` in Grafana for the same minute. Dashboard panels and their metric names are in `deploy/README.md`.
+Phoenix holds spans and events. Prometheus holds time series. A slow request shows as the `llm` span's latency in Phoenix and as `llamacpp:requests_deferred` in Grafana for the same minute. Dashboard panels and their metric names are in `deploy/README.md`.
 
 ## Authenticated tasks (Phase 8)
 

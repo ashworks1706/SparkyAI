@@ -1,4 +1,4 @@
-//! Logging and OpenTelemetry export over OTLP/HTTP protobuf to PostHog and Phoenix.
+//! Logging and OpenTelemetry export over OTLP/HTTP protobuf to Phoenix.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::Subscribe
 
 use crate::core::config::Telemetry;
 
-/// Keeps the OTLP exporters alive; flushes on drop. Drop it outside a tokio runtime.
+/// Keeps the OTLP exporter alive; flushes on drop. Drop it outside a tokio runtime.
 pub struct Guard {
     otel: Option<SdkTracerProvider>,
 }
@@ -30,92 +30,74 @@ impl Drop for Guard {
 /// The OTLP/HTTP traces path, fixed by the protocol. Phoenix serves it under phoenix_url.
 const OTLP_TRACES_PATH: &str = "/v1/traces";
 
-/// A base URL without a trailing slash, or None when it is unset or empty.
-fn base(url: Option<&str>) -> Option<&str> {
-    url.map(|h| h.trim().trim_end_matches('/'))
-        .filter(|h| !h.is_empty())
+/// Resource attribute naming the Phoenix project a span belongs to.
+const PROJECT_NAME: &str = "openinference.project.name";
+
+/// The Phoenix traces endpoint, or None when phoenix_url is unset or empty.
+pub fn phoenix_url(cfg: &Telemetry) -> Option<String> {
+    cfg.phoenix_url
+        .as_deref()
+        .map(|url| url.trim().trim_end_matches('/'))
+        .filter(|url| !url.is_empty())
+        .map(|url| format!("{url}{OTLP_TRACES_PATH}"))
 }
 
-/// The PostHog endpoints, empty when the host or the token is empty.
-fn posthog_urls(cfg: &Telemetry) -> Vec<String> {
-    let Some(host) = base(cfg.host.as_deref()) else {
-        return Vec::new();
-    };
-    if cfg.project_token.expose_secret().trim().is_empty() {
-        return Vec::new();
-    }
-    let mut urls = vec![format!("{host}{}", cfg.traces_path)];
-    if !cfg.ai_path.trim().is_empty() {
-        urls.push(format!("{host}{}", cfg.ai_path));
-    }
-    urls
-}
-
-/// The Phoenix endpoint, or None when phoenix_url is empty.
-fn phoenix_url(cfg: &Telemetry) -> Option<String> {
-    base(cfg.phoenix_url.as_deref()).map(|url| format!("{url}{OTLP_TRACES_PATH}"))
-}
-
-/// Why export is off, or None when at least one destination is configured.
+/// Why export is off, or None when Phoenix is configured.
 fn disabled(cfg: &Telemetry) -> Option<&'static str> {
-    (posthog_urls(cfg).is_empty() && phoenix_url(cfg).is_none())
-        .then_some("telemetry.host, telemetry.project_token and telemetry.phoenix_url are unset; trace export is off")
+    phoenix_url(cfg)
+        .is_none()
+        .then_some("telemetry.phoenix_url is unset; trace export is off")
 }
 
-/// One OTLP/HTTP protobuf exporter to url, with the given headers.
-fn exporter(
-    cfg: &Telemetry,
-    url: String,
-    headers: HashMap<String, String>,
-) -> anyhow::Result<SpanExporter> {
+/// The bearer header, empty when phoenix_api_key is empty.
+fn headers(cfg: &Telemetry) -> HashMap<String, String> {
+    let key = cfg.phoenix_api_key.expose_secret().trim();
+    if key.is_empty() {
+        return HashMap::new();
+    }
+    HashMap::from([("Authorization".to_owned(), format!("Bearer {key}"))])
+}
+
+/// One OTLP/HTTP protobuf exporter to url.
+fn exporter(cfg: &Telemetry, url: String) -> anyhow::Result<SpanExporter> {
     Ok(SpanExporter::builder()
         .with_http()
         .with_protocol(Protocol::HttpBinary)
         .with_endpoint(url)
-        .with_headers(headers)
+        .with_headers(headers(cfg))
         .with_timeout(Duration::from_secs(cfg.export_timeout_secs))
         .build()?)
 }
 
-/// The bearer header PostHog authenticates with.
-fn bearer(cfg: &Telemetry) -> HashMap<String, String> {
-    HashMap::from([(
-        "Authorization".to_owned(),
-        format!("Bearer {}", cfg.project_token.expose_secret().trim()),
-    )])
+/// The resource every exported span carries: service, environment, and Phoenix project.
+pub fn resource(cfg: &Telemetry, service: &str, env: &str) -> Resource {
+    Resource::builder()
+        .with_service_name(service.to_owned())
+        .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
+        .with_attribute(KeyValue::new(PROJECT_NAME, cfg.project_name.clone()))
+        .build()
 }
 
-/// The tracer provider exporting every span to each destination, or None when none is configured.
+/// The tracer provider exporting every span to Phoenix, or None when it is not configured.
 pub fn provider(
     cfg: &Telemetry,
     service: &str,
     env: &str,
 ) -> anyhow::Result<Option<SdkTracerProvider>> {
-    if disabled(cfg).is_some() {
+    let Some(url) = phoenix_url(cfg) else {
         return Ok(None);
-    }
-    let mut builder = SdkTracerProvider::builder();
-    for url in posthog_urls(cfg) {
-        builder = builder.with_batch_exporter(exporter(cfg, url, bearer(cfg))?);
-    }
-    if let Some(url) = phoenix_url(cfg) {
-        builder = builder.with_batch_exporter(exporter(cfg, url, HashMap::new())?);
-    }
-    let provider = builder
+    };
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter(cfg, url)?)
         .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
             cfg.sample_ratio,
         ))))
-        .with_resource(
-            Resource::builder()
-                .with_service_name(service.to_owned())
-                .with_attribute(KeyValue::new("deployment.environment", env.to_owned()))
-                .build(),
-        )
+        .with_resource(resource(cfg, service, env))
         .build();
     Ok(Some(provider))
 }
 
-/// Installs the global tracing subscriber with fmt and optional OTLP layers; call outside tokio.
+/// Installs the global tracing subscriber with fmt and an optional OTLP layer; call outside tokio.
 pub fn init(cfg: &Telemetry, service: &str, env: &str, log_level: &str) -> anyhow::Result<Guard> {
     let service = cfg
         .service_name
