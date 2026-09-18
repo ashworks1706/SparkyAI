@@ -49,6 +49,10 @@ prompt_estimate_headroom = 0.3
 retry_base_ms = 250
 retry_cap_ms = 8000
 max_span_value_chars = 32000
+# A tool result longer than this is written to the sandbox workspace and replaced by its head
+# and the path, so it stops riding in the conversation for every later step of the turn. It needs
+# the sandbox. 0 carries every result whole, which is what the loop has always done.
+tool_result_to_file_chars = 0
 # Characters of the arguments and of the result that one live progress line carries to
 # whoever is watching the turn, and of the reasoning the thinking line carries.
 progress_detail_chars = 160
@@ -205,12 +209,16 @@ subjects = []
 cues = []
 min_words = 4
 
-# A command in an isolated environment. The engine needs access to the container runtime.
-# No network, read-only root, dropped capabilities, non-root user.
+# A command in an isolated environment. The engine needs access to the container runtime: under
+# compose that is the sandboxd service, and on the host it is the local docker. No network,
+# read-only root, dropped capabilities, non-root user, workspace wiped with the session.
+# required = true refuses to boot when the runtime is unreachable; false leaves run_sandbox
+# unregistered instead, so the model is never offered a tool that always fails.
 [sandbox]
 enabled = true
+required = true
 runtime = "docker"
-image = "alpine:3.20"
+image = "ghcr.io/ashworks1706/sparkyai-sandbox:main"
 memory = "256m"
 cpus = "1"
 pids = 128
@@ -218,6 +226,11 @@ timeout_secs = 20
 max_output_chars = 4000
 risk = "prepare_write"
 session_idle_secs = 900        # how long a named session stays up with nothing running
+max_sessions = 4               # sessions one user holds at once; a new one reaps the oldest
+workspace_mb = 64
+description = "Run a shell command in an isolated environment. Use it to work something out rather than doing it in your head: arithmetic, dates, sorting, filtering, or reading a file an earlier tool left in the workspace. python3, jq and the usual text tools are installed. There is no network, so it cannot fetch anything or reach ASU."
+command_description = "The shell command to run."
+session_description = "Name a session to keep files in the workspace between calls. Reuse the same name to resume it. Results an earlier tool wrote to the workspace name the session they are in."
 
 # The gate every model response passes, on the capability branch and the answer branch.
 [guardrail]

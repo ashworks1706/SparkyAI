@@ -115,6 +115,7 @@ async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
         guardrail: Some(Arc::new(RuleGuardrail::new(rules(&["ssn"], 0)))),
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     let agent = Agent::new(deps, AgentConfig::default(), "sys");
     let Ok(answer) = agent.run(&ctx(), "what is my ssn").await else {
@@ -163,6 +164,7 @@ async fn a_blocked_capability_branch_stops_before_the_tool_runs() {
         guardrail: Some(Arc::new(RuleGuardrail::new(rules(&["ssn"], 0)))),
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     let agent = Agent::new(deps, AgentConfig::default(), "sys");
     let Ok(answer) = agent.run(&ctx(), "go").await else {

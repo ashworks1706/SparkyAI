@@ -48,6 +48,7 @@ pub fn agent(model: Scripted, tools: ToolSet, cfg: AgentConfig) -> (Agent, Arc<M
         guardrail: None,
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
 }
@@ -72,6 +73,7 @@ pub fn agent_with_store(
         guardrail: None,
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     Agent::new(deps, cfg, "sys")
 }
@@ -97,6 +99,7 @@ pub fn agent_holding(
         guardrail: None,
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     Agent::new(deps, AgentConfig::default(), "sys")
 }
@@ -123,6 +126,7 @@ pub fn agent_routing(
         guardrail: None,
         profile: None,
         profile_graph: None,
+        sandbox: None,
     };
     (Agent::new(deps, cfg, "sys"), sink)
 }
@@ -152,6 +156,7 @@ pub fn agent_recalling(
         guardrail: None,
         profile: None,
         profile_graph: Some(graph),
+        sandbox: None,
     };
     Agent::new(deps, cfg, "sys")
 }

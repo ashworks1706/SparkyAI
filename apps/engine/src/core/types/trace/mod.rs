@@ -149,6 +149,17 @@ pub enum TraceEvent {
         /// Wall time.
         duration_ms: u64,
     },
+    /// A tool result too long to carry was written to the sandbox workspace.
+    ToolResultStored {
+        /// Loop step.
+        step: u32,
+        /// Tool whose result it is.
+        tool: String,
+        /// Where it landed inside the workspace.
+        path: String,
+        /// Size of what was written.
+        bytes: usize,
+    },
     /// Memory and the profile graph were read for the prompt.
     MemoryRecalled {
         /// Memories recalled.
@@ -216,6 +227,7 @@ impl TraceEvent {
             Self::Compaction { .. } => "compaction",
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
+            Self::ToolResultStored { .. } => "tool_result_stored",
             Self::MemoryRecalled { .. } => "memory_recalled",
             Self::Retrieval { .. } => "retrieval",
             Self::RetrievalSkipped { .. } => "retrieval_skipped",
@@ -300,7 +312,8 @@ impl TraceEvent {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
             // The tool call the skip leads to writes its own line, and so does a cached one.
-            Self::QueryCache { .. }
+            Self::ToolResultStored { .. }
+            | Self::QueryCache { .. }
             | Self::RetrievalSkipped { .. }
             | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }

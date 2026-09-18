@@ -10,10 +10,25 @@ services:
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
+      # run_sandbox drives the sandboxd daemon, never the host runtime.
+      DOCKER_HOST: tcp://sandboxd:2375
     ports: ["8080:8080"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      sandboxd: { condition: service_started }
+    restart: unless-stopped
+
+  # The container runtime run_sandbox uses: a daemon of its own, so driving it is not driving
+  # the host runtime. No host port, so it is reachable only from inside the compose network. It
+  # needs egress to pull the sandbox image; the containers it starts get --network none.
+  sandboxd:
+    image: docker:27-dind
+    privileged: true
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"]
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes: [sandboxdata:/var/lib/docker]
     restart: unless-stopped
 
   discord:
@@ -299,4 +314,5 @@ volumes:
   firecrawldata:
   phoenixdata:
   promdata:
+  sandboxdata:
   grafanadata:

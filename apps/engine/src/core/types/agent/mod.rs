@@ -51,6 +51,8 @@ pub struct AgentConfig {
     pub retry_cap_ms: u64,
     /// Longest value recorded on a span; the JSONL trace keeps the rest.
     pub max_span_value_chars: usize,
+    /// Tool result length past which the result is written to the sandbox workspace. 0 keeps all.
+    pub tool_result_to_file_chars: usize,
     /// USD per million prompt tokens, for cost tracking. Zero for local models.
     pub usd_per_m_prompt: f64,
     /// USD per million completion tokens.

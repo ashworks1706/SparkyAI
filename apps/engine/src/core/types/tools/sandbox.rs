@@ -1,4 +1,4 @@
-//! SandboxRequest, SandboxOutput, SandboxError.
+//! SandboxRequest, SandboxOutput, SandboxError, and the names the workspace accepts.
 
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +54,32 @@ pub fn session_name(raw: &str) -> Result<String, SandboxError> {
     {
         return Err(SandboxError::Refused(
             "a session name takes letters, digits, hyphen and underscore".into(),
+        ));
+    }
+    Ok(name.to_owned())
+}
+
+/// A workspace file name; refused if empty, too long, or not alnum, hyphen, underscore, dot.
+///
+/// A name carrying a separator or a parent reference could leave the workspace directory.
+pub fn workspace_path(raw: &str) -> Result<String, SandboxError> {
+    let name = raw.trim();
+    if name.is_empty() || name.len() > 64 {
+        return Err(SandboxError::Refused(
+            "a workspace name is 1 to 64 characters".into(),
+        ));
+    }
+    if !name
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.')
+    {
+        return Err(SandboxError::Refused(
+            "a workspace name takes letters, digits, hyphen, underscore and dot".into(),
+        ));
+    }
+    if name.starts_with('.') || name.contains("..") {
+        return Err(SandboxError::Refused(
+            "a workspace name does not start with a dot or carry two in a row".into(),
         ));
     }
     Ok(name.to_owned())

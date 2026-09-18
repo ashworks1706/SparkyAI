@@ -183,6 +183,7 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
         conversations: Some(store.clone()),
         memory: None,
         confirmations: None,
+        sandbox: None,
         compactor: Some(Arc::new(compactor(vec![Ok(text(
             "Forty exchanges about hours.",
         ))]))),
@@ -234,6 +235,7 @@ async fn a_failed_compaction_leaves_the_run_working() {
         conversations: Some(store.clone()),
         memory: None,
         confirmations: None,
+        sandbox: None,
         // The compactor has no scripted reply, so its model call fails.
         compactor: Some(Arc::new(compactor(Vec::new()))),
         guardrail: None,
@@ -298,6 +300,7 @@ async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
         conversations: Some(store.clone()),
         memory: None,
         confirmations: None,
+        sandbox: None,
         compactor: Some(Arc::new(ChatCompactor::new(Task::new(
             Arc::new(summarizer),
             "compaction",

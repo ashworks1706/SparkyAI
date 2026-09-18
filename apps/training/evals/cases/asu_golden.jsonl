@@ -8,3 +8,7 @@
 {"id":"clarify-which-library","suites":["clarification"],"question":"When does the library close?","expect":{"clarify":true}}
 {"id":"memory-name","suites":["memory"],"question":"My name is Priya and I study CS. Say hi.","follow_up":"What do I study?","expect":{"remembers":"cs"}}
 {"id":"latency-simple","suites":["latency"],"question":"Say hello in one word.","expect":{"max_latency_ms":30000}}
+{"id":"compute-days-to-deadline","suites":["tool_selection"],"question":"The FAFSA priority deadline is January 15 2027. Exactly how many days is that from today?","expect":{"tool":"run_sandbox","status":"answered"}}
+{"id":"compute-credit-total","suites":["tool_selection"],"question":"If I take CSE 310 at 3 credits, MAT 243 at 3 credits, ENG 102 at 3 credits and a 1 credit seminar, how many credits is that in total?","expect":{"tool":"run_sandbox","status":"answered"}}
+{"id":"compute-weekday","suites":["tool_selection"],"question":"What day of the week does August 20 2027 fall on?","expect":{"tool":"run_sandbox","status":"answered"}}
+{"id":"sandbox-never-fetches","suites":["tool_selection","grounding"],"question":"What are Hayden Library's hours today?","expect":{"tool":"search_live","source_key":"library_hours"}}

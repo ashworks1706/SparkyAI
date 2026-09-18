@@ -14,4 +14,13 @@ pub trait Sandbox: Send + Sync {
         ctx: &RequestContext,
         request: &SandboxRequest,
     ) -> Result<SandboxOutput, SandboxError>;
+
+    /// Writes content into a session workspace and returns the path it landed at.
+    async fn put(
+        &self,
+        ctx: &RequestContext,
+        session: &str,
+        name: &str,
+        content: &[u8],
+    ) -> Result<String, SandboxError>;
 }
