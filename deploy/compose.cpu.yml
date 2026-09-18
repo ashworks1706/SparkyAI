@@ -1,0 +1,11 @@
+# Serve the models on the processor, for a machine with no NVIDIA GPU. Used by just model-cpu.
+#
+# The CUDA image and the device reservation both have to go: compose refuses to start a service
+# whose reservation it cannot meet. Offloading no layers keeps the whole model in system memory.
+services:
+  chat:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    deploy: !reset null
+  embed:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    deploy: !reset null

@@ -3,6 +3,9 @@ services:
   engine:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
+    environment:
+      # A production engine without its sandbox is a fault, not a degraded mode.
+      SPARKY_SANDBOX__REQUIRED: "true"
   discord:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}

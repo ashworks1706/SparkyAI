@@ -63,6 +63,82 @@ fn the_committed_sparky_toml_loads_and_validates() {
     }
 }
 
+/// The SPARKY_SECTION__KEY lines of .env.example as the TOML layer they stand for.
+///
+/// A line without the section separator is read by compose or the justfile, not by config.
+fn env_example_as_toml() -> String {
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env.example");
+    let Ok(text) = std::fs::read_to_string(path) else {
+        unreachable!(".env.example is committed beside sparky.toml")
+    };
+    let mut sections: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let Some(rest) = key.trim().strip_prefix("SPARKY_") else {
+            continue;
+        };
+        let Some((section, field)) = rest.split_once("__") else {
+            continue;
+        };
+        sections
+            .entry(section.to_lowercase())
+            .or_default()
+            .push((field.to_lowercase(), value.trim().to_owned()));
+    }
+    let mut out = String::new();
+    for (section, fields) in sections {
+        let _ = writeln!(out, "[{section}]");
+        for (field, value) in fields {
+            // A value figment would coerce from the environment is written as that scalar.
+            if value.parse::<i64>().is_ok() || value.parse::<bool>().is_ok() {
+                let _ = writeln!(out, "{field} = {value}");
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{field} = \"{}\"",
+                    value.replace('\\', "\\\\").replace('"', "\\\"")
+                );
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn a_fresh_clone_boots_on_sparky_toml_plus_the_env_example() {
+    use figment::providers::{Format, Toml};
+
+    // What `just bootstrap` leaves behind: the committed settings, and .env copied from the
+    // example with nothing filled in. A setting the example forgets fails here rather than on
+    // a newcomer's first `just engine`.
+    let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
+    let cfg: Result<Config, String> = figment::Figment::new()
+        .merge(Toml::file(file))
+        .merge(Toml::string(&env_example_as_toml()))
+        .extract()
+        .map_err(|e| e.to_string());
+    match cfg {
+        Ok(cfg) => {
+            if let Err(e) = cfg.validate() {
+                unreachable!(
+                    "a clone that copied .env.example does not boot: {e}. \
+                     Add the setting to .env.example, or change the default it fights."
+                )
+            }
+        }
+        Err(e) => unreachable!("sparky.toml plus .env.example does not load: {e}"),
+    }
+}
+
 /// Loads a config from the sections that have no defaults plus extra.
 fn load(extra: &str) -> Result<Config, String> {
     use figment::providers::{Format, Toml};

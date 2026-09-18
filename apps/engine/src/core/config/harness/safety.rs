@@ -93,7 +93,7 @@ impl Default for SandboxSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            required: true,
+            required: false,
             runtime: "docker".into(),
             image: "ghcr.io/ashworks1706/sparkyai-sandbox:main".into(),
             memory: "256m".into(),
