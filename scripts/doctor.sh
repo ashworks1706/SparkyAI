@@ -17,7 +17,7 @@ echo "runtime:"
 if docker version >/dev/null 2>&1; then
   printf '  ok   %-8s %s\n' "runtime" "run_sandbox has a container runtime"
 else
-  printf '  MISSING %-8s %s\n' "runtime" "run_sandbox needs one; set sandbox.required = false to run without it"
+  printf '  note %-11s %s\n' "runtime" "no container runtime, so run_sandbox is not offered; everything else runs"
 fi
 echo "files:"
 [ -f .env ] && echo "  ok   .env" || echo "  MISSING .env        run: just env"

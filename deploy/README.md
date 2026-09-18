@@ -27,6 +27,15 @@ just prod-logs engine
 Two `llama-server` containers, one per model: chat `:8000`, embeddings `:8001`. Locally `just model` starts them; in deployment run the same image on a GPU host.
 Set `SPARKY_MODEL__BASE_URL` and `SPARKY_EMBEDDING__BASE_URL` accordingly. Details: `deploy/inference/README.md`.
 
+`just model` uses the CUDA image and reserves an NVIDIA device, so it needs a GPU and the
+container toolkit. Without one:
+
+- `just model-cpu` applies `deploy/compose.cpu.yml`, which swaps the CUDA image for the plain one
+  and drops the device reservation. The same GGUFs, on the processor, slowly. Set
+  `SPARKY_CHAT_NGL=0` and `SPARKY_EMBED_NGL=0` to stop asking for layers nothing can offload.
+- Or point `SPARKY_MODEL__BASE_URL` and `SPARKY_EMBEDDING__BASE_URL` at any OpenAI-compatible
+  endpoint with their API keys. The engine and the scraper use nothing else.
+
 ## Web
 
 `apps/web` builds to static files: `npm run build` → `apps/web/dist`. Deploy to Vercel (root directory `apps/web`) or any static host. Not part of the Docker image.

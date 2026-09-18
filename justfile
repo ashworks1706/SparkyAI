@@ -20,9 +20,13 @@ hooks:
     git config core.hooksPath .githooks
     @echo "hooks installed: .githooks/pre-commit"
 
-# Everything a fresh clone needs: tools, .env, hooks, deps, datastores
-bootstrap: env hooks setup infra
-    @echo "ready: 'just cli' for the console, or 'just engine' / 'just discord' in separate shells, or 'just up' for everything in docker"
+# Everything a fresh clone needs: tools, .env, hooks, deps, datastores, schema
+bootstrap: env hooks setup infra migrate
+    @echo "ready. Next a model, because the engine answers nothing without one:"
+    @echo "  GPU:    just model       llama-server on CUDA"
+    @echo "  no GPU: just model-cpu   the same models on the processor, slowly"
+    @echo "  hosted: set SPARKY_MODEL__BASE_URL and SPARKY_MODEL__API_KEY in .env"
+    @echo "Then 'just cli' for the console, or 'just engine' and 'just discord' in separate shells."
 
 # ---------- everything ----------
 
@@ -127,11 +131,15 @@ prod-logs *ARGS:
 
 # Datastores (postgres, redis, minio) for host-side engine. Traces: just phoenix
 infra *ARGS:
-    docker compose -f deploy/compose.yml up -d {{ARGS}} postgres redis minio
+    docker compose -f deploy/compose.yml up -d --wait {{ARGS}} postgres redis minio
 
 # Phoenix trace UI on http://localhost:6006 (loopback); set SPARKY_TELEMETRY__PHOENIX_URL to export
 phoenix *ARGS:
     docker compose -f deploy/compose.yml --profile phoenix up -d {{ARGS}} phoenix
+
+# llama-server on the processor, for a machine with no NVIDIA GPU. Slow but complete.
+model-cpu *ARGS:
+    docker compose -f deploy/compose.yml -f deploy/compose.cpu.yml --profile model up -d {{ARGS}} chat embed
 
 # llama-server for chat (:8000) and embeddings (:8001); GGUFs download on first run
 model *ARGS:

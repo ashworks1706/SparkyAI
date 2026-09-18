@@ -212,11 +212,12 @@ min_words = 4
 # A command in an isolated environment. The engine needs access to the container runtime: under
 # compose that is the sandboxd service, and on the host it is the local docker. No network,
 # read-only root, dropped capabilities, non-root user, workspace wiped with the session.
-# required = true refuses to boot when the runtime is unreachable; false leaves run_sandbox
-# unregistered instead, so the model is never offered a tool that always fails.
+# required decides what an unreachable runtime means: false leaves run_sandbox unregistered and
+# the engine runs without it, true refuses to boot. It is false here so a fresh clone runs with
+# no container runtime; deploy/compose.prod.yml sets it true, where a missing sandbox is a fault.
 [sandbox]
 enabled = true
-required = true
+required = false
 runtime = "docker"
 image = "ghcr.io/ashworks1706/sparkyai-sandbox:main"
 memory = "256m"

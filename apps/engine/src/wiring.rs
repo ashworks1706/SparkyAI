@@ -662,12 +662,10 @@ async fn search_tools(
     }
     // A mismatch with the published registry is logged, not fatal.
     let published = queries.sources().await?;
+    let mut unpublished = Vec::new();
     for source in &sources {
         let Some(served) = published.iter().find(|p| p.key == source.key()) else {
-            tracing::warn!(
-                source = source.key(),
-                "the scraper has not published this source; run `just scraper serve`"
-            );
+            unpublished.push(source.key());
             continue;
         };
         if let Err(difference) = search::conforms(source.as_ref(), served) {
@@ -677,6 +675,14 @@ async fn search_tools(
                 "the tool and the scraper registry disagree; restart `just scraper serve` if it runs older code"
             );
         }
+    }
+    // One line, not one per source: before the first scraper run that is every source.
+    if !unpublished.is_empty() {
+        tracing::warn!(
+            count = unpublished.len(),
+            sources = %unpublished.join(", "),
+            "the scraper has published no registry for these sources; run `just scraper serve`"
+        );
     }
     let stored: Arc<dyn Tool> = Arc::new(StoredSearch::new(
         &sources,
