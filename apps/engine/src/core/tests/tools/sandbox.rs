@@ -538,3 +538,106 @@ async fn a_removed_session_is_started_again() {
     assert_eq!(again.exit_code, 0, "{}", again.stderr);
     assert_eq!(again.stdout.trim(), "back", "the workspace went with it");
 }
+
+#[test]
+fn without_egress_the_container_has_no_network_and_no_proxy() {
+    let sealed = ContainerSandbox::new(Limits::default()).seal();
+    let at = sealed.iter().position(|a| a == "--network");
+    assert_eq!(
+        at.and_then(|i| sealed.get(i + 1)).map(String::as_str),
+        Some("none")
+    );
+    assert!(
+        !sealed
+            .iter()
+            .any(|a| a.contains("_PROXY") || a.contains("_proxy"))
+    );
+}
+
+#[test]
+fn with_egress_the_container_joins_the_internal_network_and_goes_out_through_the_proxy() {
+    use crate::runtime::tools::sandbox::Egress;
+
+    let sealed = ContainerSandbox::new(Limits {
+        egress: Some(Egress {
+            network: "sb-net".into(),
+            proxy_image: "proxy:1".into(),
+            proxy_name: "sb-proxy".into(),
+        }),
+        ..Limits::default()
+    })
+    .seal();
+    let networks: Vec<&String> = sealed
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| a.as_str() == "--network")
+        .filter_map(|(i, _)| sealed.get(i + 1))
+        .collect();
+    assert_eq!(networks, [&"sb-net".to_owned()]);
+    for var in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+        let setting = format!("{var}=http://sb-proxy:3128");
+        let count = sealed.iter().filter(|a| **a == setting).count();
+        assert_eq!(count, 1, "{setting} in {sealed:?}");
+    }
+    // Everything else that seals the container stays in place.
+    for flag in ["--read-only", "--cap-drop", "--security-opt", "--user"] {
+        assert!(sealed.iter().any(|a| a == flag), "{flag} missing");
+    }
+}
+
+/// Live check of egress: cargo test -p engine -- --ignored egress_reaches.
+#[tokio::test]
+#[ignore = "needs a container runtime and the sandbox and proxy images"]
+async fn egress_reaches_the_public_web_and_nothing_private() {
+    use crate::runtime::tools::sandbox::Egress;
+
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        egress: Some(Egress {
+            network: "sparky-sandbox-test".into(),
+            proxy_image: "ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main".into(),
+            proxy_name: "sparky-sandbox-proxy-test".into(),
+        }),
+        ..Limits::default()
+    });
+    assert!(s.prepare_egress().await.is_ok(), "egress is made ready");
+    // A second boot finds everything in place.
+    assert!(s.prepare_egress().await.is_ok(), "egress is ready again");
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let run = |command: &str| SandboxRequest {
+        command: command.into(),
+        session: None,
+    };
+    let code = "curl -s -o /dev/null -w '%{http_code}' --max-time 20";
+
+    let public = s
+        .run(&ctx, &run(&format!("{code} https://www.asu.edu/")))
+        .await;
+    assert!(
+        public
+            .as_ref()
+            .is_ok_and(|o| o.stdout.trim().starts_with('2') || o.stdout.trim().starts_with('3')),
+        "{public:?}"
+    );
+    for private in [
+        "http://169.254.169.254/",
+        "http://172.17.0.1:5432/",
+        "http://127.0.0.1/",
+    ] {
+        let out = s.run(&ctx, &run(&format!("{code} {private}"))).await;
+        assert!(
+            out.as_ref().is_ok_and(|o| o.stdout.trim() == "403"),
+            "{private} is refused: {out:?}"
+        );
+    }
+    let direct = s
+        .run(
+            &ctx,
+            &run(&format!("{code} --noproxy '*' https://1.1.1.1/")),
+        )
+        .await;
+    assert!(
+        direct.as_ref().is_ok_and(|o| o.stdout.trim() == "000"),
+        "no route around the proxy: {direct:?}"
+    );
+}

@@ -199,6 +199,10 @@ fn tasks() -> Vec<Unit> {
         task_static(&["eval", "compare"], "fail on regression"),
         task_static(&["train", "sft", "--dry-run"], "validate config and data"),
         task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
+        task_static(
+            &["scraper", "run", "--all"],
+            "every source and static page, paced per host",
+        ),
         source_run("library_hours"),
         source_run("events"),
         source_run("clubs"),

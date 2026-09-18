@@ -52,21 +52,24 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages.push(Message::system(block));
     }
 
-    let mut evidence_used = 0;
-    let turn_cost: usize = s.turn.iter().map(|m| m.estimated_tokens(cpt)).sum();
-    let input_cost = estimate(s.input, cpt) + turn_cost;
-    if s.evidence.is_empty() {
-        let line = match s.route.skipped() {
-            None => s.templates.no_evidence_line,
-            Some(Skipped::Chitchat) => s.templates.no_retrieval_line,
-            Some(Skipped::Live) => s.templates.live_only_line,
-        };
-        if !line.trim().is_empty() {
-            let block = line.trim().to_owned();
-            used += estimate(&block, cpt);
-            messages.push(Message::system(block));
-        }
+    let no_evidence = no_evidence_line(s);
+    used += no_evidence.as_deref().map_or(0, |b| estimate(b, cpt));
+    let reply = reply_block(ctx, s, budget.reply, cpt);
+    let reply_cost = reply.as_deref().map_or(0, |b| estimate(b, cpt));
+    let input_only = if s.input.is_empty() {
+        0
     } else {
+        estimate(s.input, cpt)
+    };
+    let turn_room = budget.total.saturating_sub(used + reply_cost + input_only);
+    let turn = fit_turn(s.turn, turn_room, cpt, s.templates.result_cut_line);
+    let turn_cost: usize = turn.iter().map(|m| m.estimated_tokens(cpt)).sum();
+
+    let mut evidence_used = 0;
+    let input_cost = input_only + turn_cost + reply_cost;
+    if let Some(block) = no_evidence {
+        messages.push(Message::system(block));
+    } else if !s.evidence.is_empty() {
         // Evidence is capped by its own budget and by what remains after the sections above.
         let evidence_budget = budget
             .evidence
@@ -78,27 +81,11 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     }
 
     let remaining_total = budget.total.saturating_sub(used + input_cost);
-    let history_budget = budget.history.min(remaining_total);
-    let mut kept: Vec<&Message> = Vec::new();
-    let mut spent = 0usize;
-    for m in s.history.iter().rev() {
-        let cost = m.estimated_tokens(cpt);
-        if spent + cost > history_budget {
-            break;
-        }
-        kept.push(m);
-        spent += cost;
-    }
-    // Never start history with an orphaned tool result.
-    while kept.last().is_some_and(|m| m.role == Role::Tool) {
-        kept.pop();
-    }
-    kept.reverse();
+    let (history, spent) = history_within(s.history, budget.history.min(remaining_total), cpt);
     used += spent;
-    messages.extend(kept.into_iter().cloned());
+    messages.extend(history);
 
-    if let Some(block) = reply_block(ctx, s, budget.reply, cpt) {
-        used += estimate(&block, cpt);
+    if let Some(block) = reply {
         messages.push(Message::system(block));
     }
 
@@ -106,7 +93,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages.push(Message::user_with_images(s.input, ctx.images.clone()));
     }
     used += input_cost;
-    messages.extend(s.turn.iter().cloned());
+    messages.extend(turn);
 
     Assembled {
         messages,
@@ -114,6 +101,100 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         evidence_used,
         memory_used,
     }
+}
+
+/// The line standing in for evidence when there is none. It is kept whatever the budget.
+fn no_evidence_line(s: &Sections<'_>) -> Option<String> {
+    if !s.evidence.is_empty() {
+        return None;
+    }
+    let line = match s.route.skipped() {
+        None => s.templates.no_evidence_line,
+        Some(Skipped::Chitchat) => s.templates.no_retrieval_line,
+        Some(Skipped::Live) => s.templates.live_only_line,
+    };
+    Some(line.trim().to_owned()).filter(|l| !l.is_empty())
+}
+
+/// Prior turns within budget, keeping the newest, and what they cost.
+///
+/// A leading summary stands for every turn before the rest, so it is placed before they are.
+/// History never starts on an orphaned tool result.
+fn history_within(history: &[Message], budget: usize, cpt: usize) -> (Vec<Message>, usize) {
+    let (summary, rest) = match history.split_first() {
+        Some((first, rest)) if first.role == Role::Summary => (Some(first), rest),
+        _ => (None, history),
+    };
+    let summary = summary.filter(|m| m.estimated_tokens(cpt) <= budget);
+    let mut spent = summary.map_or(0, |m| m.estimated_tokens(cpt));
+    let mut kept: Vec<&Message> = Vec::new();
+    for m in rest.iter().rev() {
+        let cost = m.estimated_tokens(cpt);
+        if spent + cost > budget {
+            break;
+        }
+        kept.push(m);
+        spent += cost;
+    }
+    while kept.last().is_some_and(|m| m.role == Role::Tool) {
+        if let Some(dropped) = kept.pop() {
+            spent -= dropped.estimated_tokens(cpt);
+        }
+    }
+    kept.reverse();
+    (summary.into_iter().chain(kept).cloned().collect(), spent)
+}
+
+/// The turns of this request within room tokens. Tool results over their share are cut.
+///
+/// Results are visited smallest first, and each takes at most an even share of what is left, so
+/// a short result stays whole and a long one takes the room the short ones did not use.
+fn fit_turn(turn: &[Message], room: usize, cpt: usize, cut_line: &str) -> Vec<Message> {
+    let mut out = turn.to_vec();
+    let cost: usize = out.iter().map(|m| m.estimated_tokens(cpt)).sum();
+    if cost <= room {
+        return out;
+    }
+    let fixed: usize = out
+        .iter()
+        .filter(|m| m.role != Role::Tool)
+        .map(|m| m.estimated_tokens(cpt))
+        .sum();
+    let mut left = room.saturating_sub(fixed);
+    let mut results: Vec<usize> = (0..out.len())
+        .filter(|&i| out.get(i).is_some_and(|m| m.role == Role::Tool))
+        .collect();
+    results.sort_by_key(|&i| out.get(i).map_or(0, |m| m.estimated_tokens(cpt)));
+    let mut waiting = results.len();
+    for i in results {
+        let Some(m) = out.get_mut(i) else {
+            continue;
+        };
+        let share = left / waiting.max(1);
+        if m.estimated_tokens(cpt) > share {
+            m.content = cut(&m.content, share, cpt, cut_line);
+        }
+        left = left.saturating_sub(m.estimated_tokens(cpt));
+        waiting -= 1;
+    }
+    out
+}
+
+/// The head of content that fits tokens, followed by the cut line naming what was left out.
+fn cut(content: &str, tokens: usize, cpt: usize, cut_line: &str) -> String {
+    let line = |dropped: usize| cut_line.trim().replace("{chars}", &dropped.to_string());
+    let reserve = estimate(&line(content.chars().count()), cpt) + 2;
+    let room = tokens.saturating_sub(reserve).saturating_mul(cpt.max(1));
+    let mut end = 0;
+    for (at, ch) in content.char_indices() {
+        if at + ch.len_utf8() > room {
+            break;
+        }
+        end = at + ch.len_utf8();
+    }
+    let head = content.get(..end).unwrap_or_default().trim_end();
+    let dropped = content.chars().count() - head.chars().count();
+    format!("{head}\n{}", line(dropped))
 }
 
 /// The evidence section: header and every chunk that fits budget. Each entry is numbered to cite.

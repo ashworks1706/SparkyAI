@@ -16,6 +16,22 @@ pub struct Compaction {
     pub temperature: f32,
     /// Wall-clock budget for the call.
     pub timeout_secs: u64,
+    /// Share of agent.history_budget_tokens a compaction keeps as recent turns. The rest is
+    /// left for the summary and for the turns that come after it.
+    pub keep_share: f64,
+}
+
+impl Compaction {
+    /// Tokens of recent turns a compaction keeps whole, out of a history budget.
+    pub fn keep_tokens(&self, history: usize) -> usize {
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
+        let keep = (history as f64 * self.keep_share.clamp(0.0, 1.0)).floor() as usize;
+        keep
+    }
 }
 
 impl Default for Compaction {
@@ -26,6 +42,7 @@ impl Default for Compaction {
             max_tokens: 512,
             temperature: 0.0,
             timeout_secs: 30,
+            keep_share: 0.4,
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Starts, stops, streams unit output. Hosts run via setsid; compose runs via docker compose.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
@@ -21,16 +21,24 @@ pub struct Runner {
     groups: HashMap<String, u32>,
     /// The docker compose logs -f children, by service name.
     followers: HashMap<String, Child>,
+    /// Variables this process took from .env rather than from the shell.
+    from_dotenv: HashSet<String>,
 }
 
 impl Runner {
     /// A runner working from the repo root.
     pub fn new(root: PathBuf, tx: UnboundedSender<Event>) -> Self {
+        let from_dotenv = dotenv(&root)
+            .into_iter()
+            .filter(|(key, value)| std::env::var(key).is_ok_and(|v| v == *value))
+            .map(|(key, _)| key)
+            .collect();
         Self {
             root,
             tx,
             groups: HashMap::new(),
             followers: HashMap::new(),
+            from_dotenv,
         }
     }
 
@@ -205,6 +213,15 @@ impl Runner {
             .kill_on_drop(false)
             .env("CARGO_TERM_COLOR", "never")
             .env("NO_COLOR", "1");
+        // Each child sees .env as it is now; a variable the shell set still wins.
+        for key in &self.from_dotenv {
+            cmd.env_remove(key);
+        }
+        for (key, value) in dotenv(&self.root) {
+            if self.from_dotenv.contains(&key) || std::env::var_os(&key).is_none() {
+                cmd.env(key, value);
+            }
+        }
         let mut child = cmd.spawn().map_err(|source| RunnerError::Spawn {
             cmd: line.clone(),
             source,
@@ -228,6 +245,13 @@ impl Runner {
             line: LogLine::now(Stream::Meta, text),
         });
     }
+}
+
+/// The pairs .env holds at this moment, or none when it is missing or unreadable.
+fn dotenv(root: &Path) -> Vec<(String, String)> {
+    dotenvy::from_path_iter(root.join(".env"))
+        .map(|pairs| pairs.filter_map(Result::ok).collect())
+        .unwrap_or_default()
 }
 
 fn all_profiles() -> [&'static str; 12] {

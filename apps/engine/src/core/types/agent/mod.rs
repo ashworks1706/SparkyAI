@@ -41,6 +41,8 @@ pub struct AgentConfig {
     pub retrieval_top_k: usize,
     /// Prior turns to load.
     pub history_turns: usize,
+    /// Tokens of recent turns a compaction keeps whole.
+    pub history_keep: usize,
     /// Memories recalled per request.
     pub memory_recall_limit: usize,
     /// Recall memory and the profile graph for a public request.

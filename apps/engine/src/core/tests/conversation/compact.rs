@@ -196,6 +196,7 @@ async fn history_over_budget_is_replaced_by_one_turn_that_is_kept() {
             history: 200,
             ..Budget::default()
         },
+        history_keep: 80,
         ..AgentConfig::default()
     };
     let agent = Agent::new(deps, cfg, "sys");
@@ -261,8 +262,13 @@ async fn a_failed_compaction_leaves_the_run_working() {
     );
 }
 
-#[tokio::test]
-async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
+fn agent_over(
+    store: Arc<Loaded>,
+    summarizer: Scripted,
+    chat: Scripted,
+    history: usize,
+    keep: usize,
+) -> crate::runtime::harness::agent::Agent {
     use crate::core::tests::support::MemorySink;
     use crate::core::types::agent::AgentConfig;
     use crate::core::types::agent::assemble::Budget;
@@ -270,26 +276,6 @@ async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
     use crate::runtime::harness::safety::policy::RiskPolicy;
     use crate::runtime::harness::tools::ToolSet;
 
-    let pad = "x".repeat(80);
-    let store = Arc::new(Loaded::default());
-    store.seed([
-        Message::user(format!("first question {pad}")),
-        Message::assistant(format!("first answer {pad}")),
-        Message::user(format!("second question {pad}")),
-        Message::assistant(format!("second answer {pad}")),
-        Message::user(format!("KEPT-QUESTION {pad}")),
-        Message::assistant(format!("KEPT-ANSWER {pad}")),
-    ]);
-    let summarizer = Scripted::new(vec![
-        Ok(text("The user asked two questions.")),
-        Ok(text("The user asked four questions.")),
-    ]);
-    let transcripts = summarizer.sent();
-    let chat = Scripted::new(vec![
-        Ok(text(&format!("fourth answer {pad}"))),
-        Ok(text("fifth answer")),
-    ]);
-    let prompts = chat.sent();
     let deps = AgentDeps {
         model: Arc::new(chat),
         tools: ToolSet::new(),
@@ -297,7 +283,7 @@ async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
         trace: Arc::new(MemorySink::new()),
         retriever: None,
         router: None,
-        conversations: Some(store.clone()),
+        conversations: Some(store),
         memory: None,
         confirmations: None,
         sandbox: None,
@@ -313,41 +299,119 @@ async fn the_turns_a_compaction_keeps_are_still_there_on_the_next_request() {
     };
     let cfg = AgentConfig {
         budget: Budget {
-            history: 60,
+            history,
             ..Budget::default()
         },
+        history_keep: keep,
         ..AgentConfig::default()
     };
-    let agent = Agent::new(deps, cfg, "sys");
+    Agent::new(deps, cfg, "sys")
+}
+
+fn contents(
+    sent: &std::sync::Mutex<Vec<crate::core::types::model::ModelRequest>>,
+    at: usize,
+) -> Vec<Message> {
+    sent.lock()
+        .map(|r| r.get(at).map(|q| q.messages.clone()).unwrap_or_default())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn a_compaction_leaves_room_so_the_next_request_reads_the_summary_and_compacts_nothing() {
+    let pad = "x".repeat(80);
+    let store = Arc::new(Loaded::default());
+    store.seed([
+        Message::user(format!("first question {pad}")),
+        Message::assistant(format!("first answer {pad}")),
+        Message::user(format!("second question {pad}")),
+        Message::assistant(format!("second answer {pad}")),
+        Message::user(format!("KEPT-QUESTION {pad}")),
+        Message::assistant(format!("KEPT-ANSWER {pad}")),
+    ]);
+    let summarizer = Scripted::new(vec![Ok(text("The user asked two questions."))]);
+    let transcripts = summarizer.sent();
+    let chat = Scripted::new(vec![
+        Ok(text(&format!("fourth answer {pad}"))),
+        Ok(text("fifth answer")),
+    ]);
+    let prompts = chat.sent();
+    let agent = agent_over(store, summarizer, chat, 150, 60);
 
     assert!(agent.run(&ctx(), "turn four").await.is_ok());
     assert!(agent.run(&ctx(), "turn five").await.is_ok());
 
-    let transcripts: Vec<String> = transcripts
+    let compactions = transcripts.lock().map(|r| r.len()).unwrap_or_default();
+    assert_eq!(
+        compactions, 1,
+        "the second request fits and compacts nothing"
+    );
+    let first: String = contents(&prompts, 0)
+        .iter()
+        .map(|m| m.content.clone())
+        .collect();
+    assert!(
+        first.contains("KEPT-ANSWER"),
+        "the kept turns reach the prompt"
+    );
+    assert!(
+        !first.contains("first question"),
+        "the replaced turns do not"
+    );
+    let second = contents(&prompts, 1);
+    assert!(
+        second
+            .iter()
+            .any(|m| m.role == Role::Summary && m.content.contains("two questions")),
+        "the stored summary reaches the next prompt: {second:?}"
+    );
+    assert!(second.iter().any(|m| m.content.contains("KEPT-QUESTION")));
+}
+
+#[tokio::test]
+async fn the_kept_turns_start_on_a_question_never_on_a_tool_result() {
+    let pad = "x".repeat(80);
+    let store = Arc::new(Loaded::default());
+    store.seed([
+        Message::user(format!("first question {pad}")),
+        Message::assistant_tool_calls(
+            "",
+            vec![ToolCall {
+                id: "c1".into(),
+                name: "search_knowledge".into(),
+                arguments: serde_json::json!({"query": "hours"}),
+            }],
+        ),
+        Message::tool_result("c1", "search_knowledge", format!("TOOL-RESULT {pad}")),
+        Message::assistant(format!("first answer {pad}")),
+        Message::user(format!("second question {pad}")),
+        Message::assistant(format!("second answer {pad}")),
+    ]);
+    let summarizer = Scripted::new(vec![Ok(text("Asked about hours."))]);
+    let transcripts = summarizer.sent();
+    let chat = Scripted::new(vec![Ok(text("ok"))]);
+    let prompts = chat.sent();
+    // The keep budget reaches back to the tool result, so the tail is moved up to a question.
+    let agent = agent_over(store, summarizer, chat, 120, 110);
+
+    assert!(agent.run(&ctx(), "next").await.is_ok());
+
+    let replaced: String = transcripts
         .lock()
         .map(|r| {
             r.iter()
-                .map(|q| q.messages.iter().map(|m| m.content.clone()).collect())
+                .flat_map(|q| q.messages.iter().map(|m| m.content.clone()))
                 .collect()
         })
         .unwrap_or_default();
-    assert_eq!(transcripts.len(), 2, "each request compacted once");
     assert!(
-        !transcripts[0].contains("KEPT-QUESTION"),
-        "the first compaction keeps the newest turns"
+        replaced.contains("TOOL-RESULT"),
+        "the tool result is summarized"
     );
+    let prompt = contents(&prompts, 0);
     assert!(
-        transcripts[1].contains("KEPT-QUESTION")
-            && transcripts[1].contains("The user asked two questions."),
-        "the second compaction reads what the first kept and the first summary: {}",
-        transcripts[1]
+        !prompt.iter().any(|m| m.role == Role::Tool),
+        "no orphaned tool result reaches the prompt: {prompt:?}"
     );
-    let first_prompt: String = prompts
-        .lock()
-        .map(|r| r[0].messages.iter().map(|m| m.content.clone()).collect())
-        .unwrap_or_default();
-    assert!(
-        first_prompt.contains("KEPT-ANSWER"),
-        "the kept turns reach the prompt"
-    );
+    assert!(prompt.iter().any(|m| m.content.contains("second question")));
 }

@@ -49,6 +49,8 @@ pub struct Templates<'a> {
     pub date_line: &'a str,
     /// Heading above the message of yours a reply answers.
     pub reply_header: &'a str,
+    /// Line closing a tool result cut to fit the prompt, with {chars}.
+    pub result_cut_line: &'a str,
 }
 
 /// Default line naming the user, with {user} and {roles}.
@@ -93,6 +95,9 @@ pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the u
 pub const REPLY_HEADER: &str = "The user replied to this earlier message of yours. It is what \
                                 they are answering, so read it as the immediate context of what \
                                 they say next.";
+/// Default line closing a tool result cut to fit the prompt, with {chars}.
+pub const RESULT_CUT_LINE: &str = "[{chars} more characters of this result were cut to fit. \
+                                   Search again with a narrower query to read them.]";
 /// Default heading above what the model may do.
 pub const CAPABILITIES_HEADER: &str = "What you can do. Each line is a name, how it runs, and \
                                        what it does.";
@@ -110,6 +115,7 @@ impl Default for Templates<'_> {
             capabilities_header: CAPABILITIES_HEADER,
             date_line: DATE_LINE,
             reply_header: REPLY_HEADER,
+            result_cut_line: RESULT_CUT_LINE,
         }
     }
 }

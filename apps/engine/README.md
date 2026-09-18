@@ -32,7 +32,7 @@ answers 502 `the model is unavailable`.
 ```
 src/core/       config, telemetry, types, traits, tests. Imports nothing else in the crate.
 src/runtime/    harness (the loop, prompt assembly, memory, safety, compaction, tracing),
-                model (the Rig client, the slot limit), tools (search, skills, mcp, sandbox)
+                model (the Rig client, the slot limit), tools (search, mcp, sandbox)
 src/stores/     postgres and redis: conversations, memory, the retrieval index, the job queue
 src/routes/     axum handlers
 src/wiring.rs   builds every adapter from config and composes them; the boot checks live here
@@ -49,8 +49,8 @@ model, passes the response through the guardrail, authorizes the tool calls it a
 against `Policy`, runs the allowed ones, and continues. It stops on an answer, a confirmation,
 `agent.max_steps`, the request deadline, or cancellation.
 
-Tools are `search_knowledge`, `search_live`, `run_sandbox`, `get_skill` when reviewed skills
-exist, and whatever MCP servers are configured. Each declares a `RiskClass`; anything at
+Tools are `search_knowledge`, `search_live`, `run_sandbox`, and whatever MCP servers are
+configured. Each declares a `RiskClass`; anything at
 `policy.confirm_from` or above stops the turn and waits for the caller to approve.
 
 ## Configuration

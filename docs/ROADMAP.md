@@ -14,8 +14,7 @@
 
 ## 5 — Memory v0.5
 
-- [ ] decide how skills are going to be stored and retrieved, and how to handle the fact detector
-- [ ] Skills promoted from a trace, with review before one is offered
+- [ ] decide how to handle the fact detector
 - [ ] Train the fact detector on real turns; the gate is rules until there is labelled data
 - [ ] Personalized discovery and deadlines
 - [ ] Moderator ops: tickets, announcements, polls, escalation

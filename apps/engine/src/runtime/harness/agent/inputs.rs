@@ -9,7 +9,7 @@ use super::{Agent, ms};
 use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::types::agent::AgentError;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::conversation::message::Message;
+use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::conversation::{Stored, Visibility};
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::retrieval::RetrievalQuery;
@@ -19,19 +19,36 @@ use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::Inputs;
 use crate::runtime::harness::safety::redact::{json, truncate};
 
-/// How many oldest turns overflow budget, counted from newest. Newest turn is always kept.
-fn overflowing(turns: &[Stored], budget: usize, chars_per_token: usize) -> usize {
+/// Estimated tokens of every turn.
+fn cost(turns: &[Stored], chars_per_token: usize) -> usize {
+    turns
+        .iter()
+        .map(|s| s.message.estimated_tokens(chars_per_token))
+        .sum()
+}
+
+/// Where the kept turns start: the newest turns within keep tokens, moved up to a user turn.
+///
+/// Starting on a user turn keeps every exchange whole, so no tool result is kept without the call
+/// that asked for it.
+fn tail_start(turns: &[Stored], keep: usize, chars_per_token: usize) -> usize {
     let mut spent = 0;
-    let mut kept = 0;
-    for stored in turns.iter().rev() {
+    let mut start = turns.len();
+    for (at, stored) in turns.iter().enumerate().rev() {
         let cost = stored.message.estimated_tokens(chars_per_token);
-        if spent + cost > budget {
+        if spent + cost > keep {
             break;
         }
         spent += cost;
-        kept += 1;
+        start = at;
     }
-    turns.len().saturating_sub(kept.max(1))
+    while turns
+        .get(start)
+        .is_some_and(|s| s.message.role != Role::User)
+    {
+        start += 1;
+    }
+    start
 }
 
 impl Agent {
@@ -47,14 +64,24 @@ impl Agent {
         Ok(self.compacted(ctx, loaded).await)
     }
 
-    /// Replaces turns over budget with one summary; returns prompt history. Failure keeps turns.
+    /// Replaces older turns with one summary once history is over budget; returns prompt history.
+    ///
+    /// Only history_keep tokens of recent turns are kept, so the turns that follow have room
+    /// before the next compaction. Failure keeps the turns.
     async fn compacted(&self, ctx: &RequestContext, turns: Vec<Stored>) -> Vec<Message> {
         let Some(compactor) = &self.deps.compactor else {
             return turns.into_iter().map(|s| s.message).collect();
         };
         let cpt = self.cfg.budget.chars_per_token;
-        let overflow = overflowing(&turns, self.cfg.budget.history, cpt);
-        let Some(covers) = overflow.checked_sub(1).map(|last| turns[last].position) else {
+        if cost(&turns, cpt) <= self.cfg.budget.history {
+            return turns.into_iter().map(|s| s.message).collect();
+        }
+        let overflow = tail_start(&turns, self.cfg.history_keep, cpt);
+        let Some(covers) = overflow
+            .checked_sub(1)
+            .and_then(|last| turns.get(last))
+            .map(|s| s.position)
+        else {
             return turns.into_iter().map(|s| s.message).collect();
         };
         let replaced: Vec<Message> = turns[..overflow]

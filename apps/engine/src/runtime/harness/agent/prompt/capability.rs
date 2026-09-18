@@ -11,8 +11,6 @@ pub enum Kind {
     Tool,
     /// A tool on a remote MCP server.
     Mcp,
-    /// A saved procedure the model follows.
-    Skill,
     /// A command in an isolated environment.
     Sandbox,
 }
@@ -23,7 +21,6 @@ impl Kind {
         match self {
             Self::Tool => "tool",
             Self::Mcp => "mcp",
-            Self::Skill => "skill",
             Self::Sandbox => "sandbox",
         }
     }
@@ -44,9 +41,6 @@ pub struct Capability {
 
 /// The kind of the tool named name, given the names of the MCP tools.
 pub fn kind_of(name: &str, mcp_names: &[String]) -> Kind {
-    if name == "get_skill" {
-        return Kind::Skill;
-    }
     if name == "run_sandbox" {
         return Kind::Sandbox;
     }

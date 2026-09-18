@@ -1,4 +1,3 @@
-//! Knowledge tools: one live search per source, and skills.
+//! Knowledge tools: one live search per source.
 
 pub mod search;
-pub mod skills;

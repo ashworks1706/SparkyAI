@@ -120,7 +120,7 @@ pub enum TraceEvent {
     },
     /// History that no longer fits is being replaced by one turn.
     Compaction {
-        /// Turns being replaced.
+        /// Stored messages being replaced, a previous summary included.
         turns: usize,
     },
     /// A tool is about to run.
@@ -293,7 +293,7 @@ impl TraceEvent {
                 Some(format!("\u{1f6d1} the {} was not allowed", stage.as_str()))
             }
             Self::Compaction { turns } => Some(format!(
-                "\u{1f5dc}\u{fe0f} summarising {turns} earlier turns"
+                "\u{1f5dc}\u{fe0f} summarising {turns} earlier messages"
             )),
             Self::Retrieval { chunk_ids, .. } => Some(format!(
                 "\u{1f4da} read {} {} from the knowledge base",
@@ -417,7 +417,6 @@ fn clip(text: &str, limit: usize) -> String {
 /// What a tool is shown as while it runs. A search tool names what it searches.
 pub fn running(tool: &str) -> String {
     match tool {
-        "get_skill" => "reading a saved procedure".to_owned(),
         "search_knowledge" => "searching the knowledge base".to_owned(),
         "search_live" => "searching live".to_owned(),
         _ => "running".to_owned(),

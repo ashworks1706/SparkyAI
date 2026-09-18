@@ -33,21 +33,10 @@ fn trigger_name(trigger: Trigger) -> &'static str {
 impl Handler {
     /// Answers a message addressed to the bot. Everything else is ignored.
     pub(super) async fn addressed(&self, ctx: &Context, msg: &Message) {
-        if msg.author.bot {
-            return;
-        }
-        let Some(&me) = self.me.get() else {
+        let Some(me) = self.admits(msg) else {
             return;
         };
         let direct = msg.guild_id.is_none();
-        if direct && !self.direct_messages {
-            return;
-        }
-        if let Some(guild_id) = msg.guild_id
-            && guild_id != self.guild_id
-        {
-            return;
-        }
         let quoted = replied_to(msg, me);
         let here = Destination {
             channel: msg.channel_id,
@@ -58,20 +47,26 @@ impl Handler {
         };
         let Some(trigger) = route::trigger(Arrival {
             at,
-            mentions_bot: msg.mentions_user_id(me),
+            mentions_bot: route::addresses_bot(
+                msg.mentions_user_id(me),
+                &msg.mention_roles,
+                self.role.get().copied(),
+            ),
             replies_to_bot: quoted.is_some(),
         }) else {
+            tracing::debug!(at = ?at, "ignored: not addressed to the bot");
             return;
         };
         let in_thread = at == Arrived::Thread;
         if !direct && !self.serves(msg.channel_id, parent) {
+            tracing::debug!(channel = %msg.channel_id, "ignored: channel not served");
             return;
         }
         if !self.within_cooldown(msg.author.id).await {
             here.say(&ctx.http, self.cooldown_text()).await;
             return;
         }
-        let question = route::strip_mentions(&msg.content, me);
+        let question = route::strip_mentions(&msg.content, me, self.role.get().copied());
         let images = route::images(
             msg.attachments
                 .iter()
@@ -128,6 +123,38 @@ impl Handler {
         self.converse(ctx, &dest, &req, span, label).await;
     }
 
+    /// The bot user when msg is from a person in a place the bot serves, or None to ignore it.
+    fn admits(&self, msg: &Message) -> Option<UserId> {
+        if msg.author.bot {
+            return None;
+        }
+        tracing::debug!(
+            guild = ?msg.guild_id,
+            channel = %msg.channel_id,
+            author = %msg.author.id,
+            mentions = ?msg.mentions.iter().map(|u| u.id).collect::<Vec<_>>(),
+            mention_roles = ?msg.mention_roles,
+            bot_role = ?self.role.get(),
+            chars = msg.content.chars().count(),
+            "message seen"
+        );
+        let Some(&me) = self.me.get() else {
+            tracing::debug!("ignored: gateway not ready");
+            return None;
+        };
+        if msg.guild_id.is_none() && !self.direct_messages {
+            tracing::debug!("ignored: direct messages are off");
+            return None;
+        }
+        if let Some(guild_id) = msg.guild_id
+            && guild_id != self.guild_id
+        {
+            tracing::debug!(guild = %guild_id, served = %self.guild_id, "ignored: another guild");
+            return None;
+        }
+        Some(me)
+    }
+
     /// Role names for the turn. None means the lookup failed and the caller was told so.
     /// A direct message carries no guild roles.
     async fn roles_for(
@@ -180,7 +207,10 @@ impl Handler {
                 return None;
             }
         };
-        let channel = channel?;
+        let Some(channel) = channel else {
+            tracing::debug!(channel = %msg.channel_id, "ignored: not a guild channel");
+            return None;
+        };
         let at = if route::is_thread(channel.kind) {
             Arrived::Thread
         } else {

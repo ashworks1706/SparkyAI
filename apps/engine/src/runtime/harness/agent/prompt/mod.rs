@@ -26,6 +26,8 @@ pub struct PromptText {
     pub capabilities_header: String,
     /// Heading above the message of ours a reply answers.
     pub reply_header: String,
+    /// Line closing a tool result cut to fit the prompt, with {chars}.
+    pub result_cut_line: String,
     /// Line naming the current date, with {date}.
     pub date_line: String,
     /// Line added to a call that is offered no tools.
@@ -52,6 +54,7 @@ impl From<&crate::core::config::Prompt> for PromptText {
             live_only_line: cfg.live_only_line.clone(),
             capabilities_header: cfg.capabilities_header.clone(),
             reply_header: cfg.reply_header.clone(),
+            result_cut_line: cfg.result_cut_line.clone(),
             date_line: cfg.date_line.clone(),
             answer_only_line: cfg.answer_only_line.clone(),
             utc_offset_hours: cfg.utc_offset_hours,
@@ -91,6 +94,7 @@ impl PromptText {
             capabilities_header: &self.capabilities_header,
             date_line: &self.date_line,
             reply_header: &self.reply_header,
+            result_cut_line: &self.result_cut_line,
         }
     }
 }

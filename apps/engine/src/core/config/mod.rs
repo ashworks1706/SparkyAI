@@ -6,6 +6,7 @@ pub mod services;
 
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
+use secrecy::ExposeSecret;
 use serde::Deserialize;
 
 use crate::core::types::agent::AgentConfig;
@@ -101,6 +102,7 @@ impl Default for AgentConfig {
             confirmation_ttl: std::time::Duration::from_secs(agent.confirmation_ttl_secs),
             temperature: agent.temperature,
             history_turns: agent.history_turns,
+            history_keep: Compaction::default().keep_tokens(agent.history_budget_tokens),
             memory_recall_limit: agent.memory_recall_limit,
             recall_in_public: agent.recall_in_public,
             retry_base_ms: agent.retry_base_ms,
@@ -200,13 +202,12 @@ impl Config {
                 self.retrieval.text_search_config
             ));
         }
-        if self.sandbox.enabled && self.sandbox.runtime.trim().is_empty() {
-            return invalid("sandbox.runtime is empty".into());
-        }
+        validate_sandbox(&self.sandbox)?;
         validate_model(&self.model)?;
         if self.compaction.enabled && self.compaction.max_tokens == 0 {
             return invalid("compaction.max_tokens must be at least 1".into());
         }
+        validate_compaction(&self.compaction, self.agent.history_budget_tokens)?;
         if self.tools.search && (self.query.poll_ms == 0 || self.query.claim_secs == 0) {
             return invalid("query.poll_ms and query.claim_secs must be at least 1".into());
         }
@@ -290,6 +291,51 @@ impl Config {
 }
 
 /// Rejects search wording the model would read as an empty string, and a missing fallback source.
+fn validate_compaction(compaction: &Compaction, history: usize) -> Result<(), ConfigError> {
+    if !compaction.enabled {
+        return Ok(());
+    }
+    if !(compaction.keep_share > 0.0 && compaction.keep_share < 1.0) {
+        return Err(ConfigError::Invalid(
+            "compaction.keep_share must be above 0 and below 1".into(),
+        ));
+    }
+    let needed = compaction.keep_tokens(history) + compaction.max_tokens as usize;
+    if needed > history {
+        return Err(ConfigError::Invalid(format!(
+            "a compaction keeps {} tokens of turns and writes a summary of up to {} \
+             (compaction.keep_share and compaction.max_tokens), {needed} in all, over \
+             agent.history_budget_tokens = {history}; the summary would be trimmed from the prompt",
+            compaction.keep_tokens(history),
+            compaction.max_tokens
+        )));
+    }
+    Ok(())
+}
+
+fn validate_sandbox(sandbox: &SandboxSettings) -> Result<(), ConfigError> {
+    if !sandbox.enabled {
+        return Ok(());
+    }
+    if sandbox.runtime.trim().is_empty() {
+        return Err(ConfigError::Invalid("sandbox.runtime is empty".into()));
+    }
+    if sandbox.egress {
+        for (key, value) in [
+            ("sandbox.egress_network", &sandbox.egress_network),
+            ("sandbox.egress_proxy_image", &sandbox.egress_proxy_image),
+            ("sandbox.egress_proxy_name", &sandbox.egress_proxy_name),
+        ] {
+            if value.trim().is_empty() {
+                return Err(ConfigError::Invalid(format!(
+                    "{key} is empty and sandbox.egress is on"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn validate_tools(tools: &Tools) -> Result<(), ConfigError> {
     if !tools.search {
         return Ok(());
@@ -322,11 +368,17 @@ fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
     if !(cfg.tools.search && cache.enabled) {
         return Ok(());
     }
-    if cfg.redis.is_none() {
+    let Some(redis) = &cfg.redis else {
         return invalid(
             "query.cache.enabled needs a redis section; set SPARKY_REDIS__URL or turn it off"
                 .into(),
         );
+    };
+    if let Err(error) = redis::Client::open(redis.url.expose_secret()) {
+        return invalid(format!(
+            "SPARKY_REDIS__URL is not a Redis URL ({error}); it takes the form \
+             redis://host:port, for example redis://localhost:6379"
+        ));
     }
     // A lease that expires mid fetch lets a second request fetch the same query.
     if cache.lease_secs < cfg.query.timeout_secs {

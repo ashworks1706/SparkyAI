@@ -104,7 +104,7 @@ def test_a_run_job_runs_its_registered_source(monkeypatch, recorder):
     monkeypatch.setattr(
         jobs.pipeline,
         "run_source",
-        lambda src: ran.append(src.key) or RunResult(src.key, False, 0, "h"),
+        lambda src, pacer=None: ran.append(src.key) or RunResult(src.key, False, 0, "h"),
     )
     assert jobs.handle(recorder, job(jobs.RUN, source="news"))["source"] == "news"
     assert ran == ["news"]

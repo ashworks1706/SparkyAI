@@ -46,8 +46,8 @@ This document describes the current shape of the system and the rules it keeps. 
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config (services, http, harness by domain), telemetry, types, traits, tests
-    src/runtime/    harness (loop, prompt, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (search, skills, mcp, sandbox)
-    src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs, skills), memory (memories, profile graph)
+    src/runtime/    harness (loop, prompt, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (search, mcp, sandbox)
+    src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs), memory (memories, profile graph)
     src/routes/     chat (JSON and SSE), confirm, conversation, profile, openai (/v1), health, rate limit
     src/wiring.rs   builds every dependency from config and serves
   discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
@@ -64,7 +64,7 @@ apps/
   scraper/        Python. Scheduled ingestion and the worker for live query jobs.
     core/           settings, types, telemetry, tests
     ingest/         fetch, extract, chunk, embed, tree, pipeline
-    sources/        scheduled sources, one module each
+    sources/        scheduled sources: one module per source with an extractor, pages.py for static pages
     query/          live query registry, parameter checks, runner, indexing of live results
     query/sources/  live query sources, one module each
     jobs.py         the job queue: handlers, lanes, scheduling
@@ -135,8 +135,8 @@ flowchart TD
     ROUTES["routes and wiring<br/>compose everything, own main"]
     HARNESS["runtime::harness<br/>agent: run, step, inputs, execute, conclude, task<br/>agent/call: thinking, relay, draft, thought, retry, spans<br/>agent/prompt: assemble, capability<br/>memory: detect, profile<br/>safety: guardrail, policy, redact<br/>compact, tools, trace"]
     MODEL["runtime::model<br/>rig_openai, limit, props"]
-    TOOLS["runtime::tools<br/>knowledge/search, one file per source<br/>knowledge/skills, mcp, sandbox"]
-    STORES["stores<br/>postgres, conversation, confirmation<br/>knowledge: retrieval, query, skills<br/>memory: memories, profile"]
+    TOOLS["runtime::tools<br/>knowledge/search, one file per source<br/>mcp, sandbox"]
+    STORES["stores<br/>postgres, conversation, confirmation<br/>knowledge: retrieval, query<br/>memory: memories, profile"]
     CORE["core<br/>config, telemetry, types, traits, tests"]
 
     ROUTES --> HARNESS
@@ -160,7 +160,7 @@ Folders nest by domain, and the same domain names repeat across `core/types`, `c
 
 `store/` is the only place the scraper opens a connection. `migrations/` is the schema contract with the engine. The scraper writes `sources`, `source_versions`, `chunks`, `query_sources`, and job results. The engine reads the index and writes conversations, confirmations, the profile graph, and `source_query` jobs. `ingest/embed.py` uses the same model and dimension the engine queries with, so changing the embedding model means re-embedding every chunk.
 
-`sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
+`sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. A source with an extractor has its own module. `sources/pages.py` lists static pages with none, indexed from the markdown Firecrawl returns. Scheduled fetches to one host are spaced `scraper.host_gap_secs` apart. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
 
 ## Types
 
@@ -259,7 +259,7 @@ pub trait TraceSink {
 }
 ```
 
-The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `SkillStore`, `ProfileGraph`, `FactDetector`, `Router`, `QueryCache`, `Sandbox`.
+The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `ProfileGraph`, `FactDetector`, `Router`, `QueryCache`, `Sandbox`.
 
 ## Request lifecycle
 
@@ -316,7 +316,7 @@ Each step assembles the prompt in a fixed order:
 5. History, newest first within `agent.history_budget_tokens`, never starting on an orphaned tool result.
 6. The user's input, then the model and tool turns of this request.
 
-Tool schemas are sent beside the messages and are charged to `agent.prompt_budget_tokens` first. Evidence and history are capped by what remains. The system prompt, the input, and this request's tool exchange are never dropped. Token counts are estimates from `agent.chars_per_token`. MCP schemas are compacted and, by default, show only required properties.
+Tool schemas are sent beside the messages and are charged to `agent.prompt_budget_tokens` first. Evidence and history are capped by what remains. The system prompt, the input, and this request's tool exchange are never dropped. When this request's tool results outgrow the room left after the fixed sections and the input, each is cut to a share of it, smallest first, and ends in `prompt.result_cut_line`. Token counts are estimates from `agent.chars_per_token`. MCP schemas are compacted and, by default, show only required properties.
 
 ## Agent loop
 
@@ -378,23 +378,22 @@ The harness runs more than one prompt. Each sub-agent is a `runtime::harness::ag
 
 | Kind | Executed by | Risk |
 |---|---|---|
-| `tool` | a built-in `Tool`: `search_knowledge`, `search_live`, `get_skill`, `run_sandbox` | declared per tool |
+| `tool` | a built-in `Tool`: `search_knowledge`, `search_live`, `run_sandbox` | declared per tool |
 | `mcp` | a remote MCP server | derived from the tool name |
-| `skill` | fetched by `get_skill`, then followed | the risk of each capability it uses |
 
 `tools.disabled` removes tools by name at registration. The engine refuses to boot when the capabilities section exceeds its budget or the tool schemas take more than half of `agent.prompt_budget_tokens`. It also refuses when the prompt budget plus `agent.prompt_estimate_headroom` and `model.max_tokens_without_thinking` do not fit one `llama-server` slot.
 
-`run_sandbox` runs a command in a container with no network, a read-only root, memory, CPU, and process limits, a non-root user, and a workspace of `sandbox.workspace_mb` mounted `noexec` at /tmp. The image is `deploy/docker/sandbox.Dockerfile`: python3, jq and the usual text tools, and nothing that could fetch. A call that names a session reuses a container, so files in the workspace persist between calls; the container is removed once it has been idle for `sandbox.session_idle_secs`, and a caller holding `sandbox.max_sessions` loses their least recently used one. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session.
+`run_sandbox` runs a command in a container with a read-only root, memory, CPU, and process limits, a non-root user, and a workspace of `sandbox.workspace_mb` mounted `noexec` at /tmp. The image is `deploy/docker/sandbox.Dockerfile`: python3 with requests, bs4, lxml and pandas, curl, wget, jq, ripgrep, sqlite3, pdftotext and the usual text tools.
+
+With `sandbox.egress` off the container runs with `--network none`. With it on, it joins `sandbox.egress_network`, which the engine creates `--internal` at boot and refuses to use if it exists and is not internal, and it is handed `HTTP_PROXY` and `HTTPS_PROXY` pointing at `sandbox.egress_proxy_name`. That proxy (`deploy/docker/sandbox-proxy.Dockerfile`, `deploy/sandbox/squid.conf`) is the only container on both that network and the outside: it allows ports 80 and 443 and refuses private, loopback, link-local and reserved destinations, so a command reaches public sites and never the datastores, the host, or cloud metadata. HTTPS passes through as a tunnel, so the proxy sees the host and not the request. What the sandbox reads is never indexed. A call that names a session reuses a container, so files in the workspace persist between calls; the container is removed once it has been idle for `sandbox.session_idle_secs`, and a caller holding `sandbox.max_sessions` loses their least recently used one. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session.
 
 The engine needs a container runtime. Under compose that is the `sandboxd` service, a daemon of its own reached over `DOCKER_HOST`, so driving it is not driving the host runtime; on a developer host it is the local `docker`. The runtime is probed once at boot: `sandbox.required` decides whether an unreachable one fails boot or leaves `run_sandbox` unregistered, so the model is never offered a tool that always fails.
 
 A tool result longer than `agent.tool_result_to_file_chars` is written to the workspace and replaced by its head plus the path, so a long result stops riding in the conversation for every later step of the turn. It is off at `0`; the full result still reaches the trace either way.
 
-A skill is a saved procedure: parameters, ordered steps, and the domain it applies to. `get_skill` fetches one, and the model follows it with the capabilities it already has. Only rows with `enabled` set are offered, and a row starts disabled, so a person reviews each skill before it is offered. With no enabled skill, `get_skill` is not registered.
-
 ## Compaction
 
-Without compaction, history is trimmed to its budget by dropping the oldest turns. With `compaction.enabled`, the Chat agent replaces the turns that would be dropped with one compacted turn and stores it, so the next request starts from it. At least the newest turn is always kept. A failed compaction falls back to trimming.
+Without compaction, history is trimmed to its budget by dropping the oldest turns. With `compaction.enabled`, compaction runs only when the loaded history, a stored summary included, is over `agent.history_budget_tokens`. It keeps the newest turns within `compaction.keep_share` of that budget, moved forward to start on a user turn so no exchange is split, and the Chat agent replaces everything older, the previous summary included, with one compacted turn that is stored, so the next request starts from it. Boot rejects a `keep_share` whose kept turns plus `compaction.max_tokens` exceed the history budget, so the summary and the kept turns always fit together, and the turns that follow have the rest before the next compaction. Assembly places a leading summary before trimming the turns after it. A failed compaction falls back to trimming.
 
 A compacted turn is model output. It is stored with role `summary`, so a replayed conversation can tell it apart from what the user and the assistant said. It is never retrieval evidence, and the turns it replaced stay in `messages`.
 
@@ -431,7 +430,7 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 
 | Class | Examples | Default behavior |
 |---|---|---|
-| `ReadPublic` | `search_knowledge`, `search_live`, `get_skill` | run |
+| `ReadPublic` | `search_knowledge`, `search_live` | run |
 | `ReadAuthenticated` | a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
 | `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
@@ -608,7 +607,7 @@ A claim takes the highest priority first, then the oldest, skipping jobs past th
 
 Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for each registered source that is due by its `fetch_every` and last attempt. A partial unique index allows at most one queued or running `source_run` per source. The same pass requeues background jobs left running longer than `scraper.job_lease_secs` by a stopped process.
 
-`scraper status` shows each source and the queue by kind and status. `scraper run <source>` runs one source directly, outside the queue.
+`scraper status` shows each source and the queue by kind and status. `scraper run <source>` runs one source directly, outside the queue; `--category <name>` runs a category and `--all` every source.
 
 ## Discord surface
 
@@ -649,7 +648,7 @@ A conversation belongs to one tenant, user, channel, and visibility. The bot hol
 
 | Data | Store |
 |---|---|
-| users, conversations, messages, memories, profile graph, confirmations, skills | PostgreSQL |
+| users, conversations, messages, memories, profile graph, confirmations | PostgreSQL |
 | sources, source versions, query source registry, jobs | PostgreSQL |
 | chunk text, `vector(1024)` embedding, generated `tsvector` | PostgreSQL with pgvector, rebuildable from snapshots |
 | raw page snapshots | object storage |
@@ -670,7 +669,7 @@ erDiagram
     chunks ||--o{ chunks : summarizes
 ```
 
-`jobs`, `query_sources`, and `skills` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis holds the live query cache: answers within their lifetime and the leases that keep one fetch per query. It is shared ephemeral state, so several engine replicas coalesce against each other rather than each fetching once.
+`jobs` and `query_sources` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis holds the live query cache: answers within their lifetime and the leases that keep one fetch per query. It is shared ephemeral state, so several engine replicas coalesce against each other rather than each fetching once.
 
 ## Failure behavior
 

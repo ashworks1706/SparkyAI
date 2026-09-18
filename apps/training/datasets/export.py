@@ -81,6 +81,9 @@ def _text_of(items: list[Any], key: str, span_id: str) -> str:
     return "".join(texts)
 
 
+_SUMMARY_LEAD = "Summary of earlier turns: "
+
+
 def _message(raw: Any, span_id: str) -> Message:
     """One message in the engine Message shape, a parts shape, or a text content list."""
     if not isinstance(raw, dict):
@@ -95,6 +98,10 @@ def _message(raw: Any, span_id: str) -> Message:
         data["content"] = _text_of(data["content"], "text", span_id)
     elif data.get("content") is None:
         data.pop("content", None)
+    if data.get("role") == "summary":
+        # The engine sends a summary to the model as a system message with this lead.
+        data["role"] = "system"
+        data["content"] = f"{_SUMMARY_LEAD}{data.get('content', '')}"
     try:
         return Message.model_validate(data)
     except ValueError as e:

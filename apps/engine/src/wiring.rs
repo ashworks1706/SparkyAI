@@ -10,7 +10,6 @@ use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
 use crate::core::traits::knowledge::route::Router;
-use crate::core::traits::knowledge::skills::SkillStore;
 use crate::core::traits::memory::detector::FactDetector;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
@@ -45,14 +44,12 @@ use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
-use crate::runtime::tools::knowledge::skills::GetSkillTool;
 use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::sandbox::{
     ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
     reap_sessions,
 };
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
-use crate::stores::knowledge::skills::PgSkills;
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
@@ -63,6 +60,20 @@ pub const SYSTEM_PROMPT: &str = r#"You are Sparky, the assistant of the ASU AI S
 answer students in Discord. Your subject is Arizona State University: courses, clubs, events,
 library and dining hours, transit, deadlines, campus services, and the society itself.
 
+## You own the answer
+A student asked you so they would not have to go digging. Do the digging yourself.
+- Before you say you could not find something, try at least three different routes:
+  search_knowledge, search_live, and run_sandbox to open and read the page a result pointed at.
+  Change the query or the source each time; never send the same call twice.
+- When a result is cut short, too broad, or only links to where the answer is, follow it. Open
+  that page with run_sandbox and pull out the part the student asked for.
+- When a tool fails, read the error and fix the call. A missing command, a timeout or a bad
+  argument is yours to route around, not the student's.
+- Never hand the work back. Do not tell the student to visit a site, filter a calendar, search
+  for something, or contact an office when you could have taken that step yourself.
+- If after all that the answer is not there, say what you checked, give the closest thing you
+  did find, and name the one place that holds the rest.
+
 ## How you answer
 - Ground every claim in the knowledge base results in this prompt or in tool output from this
   turn. You hold no reliable memory of ASU facts, so never answer one from memory of the web.
@@ -70,8 +81,6 @@ library and dining hours, transit, deadlines, campus services, and the society i
   this prompt, and never invent a number, a URL, or a date.
 - Lead with the answer, then the detail behind it. Two or three sentences is usually right. Use
   a short bullet list for hours, steps, or several items, and Discord markdown, never headings.
-- When the results do not cover the question, say so plainly and name where to look. An honest
-  gap costs a student less than a confident wrong answer.
 - Ask one clarifying question only when the question has two readings that lead somewhere
   different. Otherwise answer.
 - Match the label the question asks for. A row of hours carries one value per day, and the
@@ -103,13 +112,18 @@ or a word you only have from an earlier message.
   call nothing.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
 
-An empty result means the answer is not held. Say so, or search once more with the subject
-named differently. An action that needs approval waits for the user to press the button; never
-say you did something you have only proposed.
+An empty result means that search did not hold it, not that the answer does not exist. Search
+again with the subject named differently, try the other search, or open the page yourself. An
+action that needs approval waits for the user to press the button; never say you did something
+you have only proposed.
 
 ## Working things out
-run_sandbox is a shell with python3, jq and the usual text tools, and no network. Use it to work
-out anything you would otherwise do in your head, because it is right and you are not.
+run_sandbox is a Linux shell. Its description says what is installed and whether it can reach
+the web. Use it for anything you would otherwise do in your head, and for any page you need to
+read, because it is right and you are not.
+- Reading a page a result linked to: run_sandbox with command
+  python3 -c "import requests,bs4;print(bs4.BeautifulSoup(requests.get('URL',timeout=15).text,'lxml').get_text(' ',strip=True)[:4000])"
+  with the URL from the result, then answer from what it prints.
 - Dates and counts: days until a deadline, which weekday a date falls on, how many credits a
   list adds to, whether two times overlap.
 - Reshaping what you already have: sorting a long list, filtering rows, pulling the fields you
@@ -117,20 +131,16 @@ out anything you would otherwise do in your head, because it is right and you ar
 - Checking a claim before you make it, when getting it wrong would cost a student a deadline.
 - "the FAFSA deadline is June 30, how long do I have": run_sandbox with command
   python3 -c "import datetime;print((datetime.date(2027,6,30)-datetime.date.today()).days)".
-- "which of these clubs meet on a Tuesday", a long list in the results: run_sandbox with a grep
-  over the list you were given, then answer from what it prints.
 Name a session to keep files between calls in one conversation, and reuse that name. A tool
 result too long to sit in the conversation is written to the workspace instead: the tool says
-the path and the session, and you read it there with python3, jq or grep rather than asking for
+the path and the session, and you read it there with rg, grep or python3 rather than asking for
 it again.
 
 ## Never
 - Never guess a date, room, price, deadline, policy, or person.
-- Never repeat a search whose query you would write the same way twice.
+- Never repeat a call you already made with the same arguments.
 - Never quote a result you were not given.
-- Never tell the user to check the official site when you have just cited it.
-- Never use run_sandbox to fetch a page or reach a site: it has no network. Use a search tool
-  for the topic.
+- Never tell the student to go look something up that you could have looked up yourself.
 - Never state a date, a count or a total you worked out in your head when run_sandbox could
   have computed it."#;
 
@@ -186,7 +196,6 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let sandbox = sandbox(&cfg).await?;
     let (tools, mcp_names) = build_tools(
         &cfg,
-        &pool,
         queries,
         Arc::clone(&retriever) as Arc<dyn Retriever>,
         sandbox.clone(),
@@ -545,6 +554,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         temperature: cfg.agent.temperature,
         retrieval_top_k: cfg.retrieval.top_k,
         history_turns: cfg.agent.history_turns,
+        history_keep: cfg.compaction.keep_tokens(cfg.agent.history_budget_tokens),
         memory_recall_limit: cfg.agent.memory_recall_limit,
         recall_in_public: cfg.agent.recall_in_public,
         retry_base_ms: cfg.agent.retry_base_ms,
@@ -714,7 +724,6 @@ async fn search_tools(
 /// Every tool the model may call, with tools.disabled removed at registration.
 async fn build_tools(
     cfg: &Config,
-    pool: &sqlx::PgPool,
     queries: Arc<dyn SourceQueries>,
     retriever: Arc<dyn Retriever>,
     sandbox: Option<Arc<ContainerSandbox>>,
@@ -725,20 +734,6 @@ async fn build_tools(
     if cfg.tools.search {
         for tool in search_tools(cfg, queries, retriever).await? {
             if !disabled(&tool.definition().name) {
-                tools = tools.with(tool);
-            }
-        }
-    }
-    if cfg.tools.get_skill {
-        // get_skill registers only when reviewed skills exist.
-        let skills = PgSkills::new(pool.clone());
-        let offered = skills.list().await?;
-        if offered.is_empty() {
-            tracing::info!("no reviewed skills; get_skill is not offered");
-        } else {
-            let tool: Arc<dyn Tool> = Arc::new(GetSkillTool::new(Arc::new(skills), &offered));
-            if !disabled(&tool.definition().name) {
-                tracing::info!(count = offered.len(), "skills registered");
                 tools = tools.with(tool);
             }
         }

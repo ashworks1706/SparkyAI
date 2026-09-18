@@ -177,6 +177,11 @@ images:
     docker build -f deploy/docker/rust.Dockerfile -t sparkyai-rust .
     docker build -f deploy/docker/scraper.Dockerfile -t sparkyai-scraper .
 
+# Build the sandbox and its egress proxy under the tags the engine runs
+sandbox-images:
+    docker build -f deploy/docker/sandbox.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox:main .
+    docker build -f deploy/docker/sandbox-proxy.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main .
+
 # ---------- docs ----------
 
 # Render every mermaid diagram in ARCHITECTURE.md to verify syntax

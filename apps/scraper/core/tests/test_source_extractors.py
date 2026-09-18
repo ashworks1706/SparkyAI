@@ -6,10 +6,12 @@ from scraper.ingest.chunk import chunk_text
 from scraper.sources import SOURCES
 from scraper.sources.clubs import extract_clubs
 from scraper.sources.courses import extract_courses
+from scraper.sources.dining_hours import extract_dining_hours
 from scraper.sources.events import extract_events
 from scraper.sources.jobs import extract_jobs
 from scraper.sources.library_hours import extract_hours
 from scraper.sources.news import extract_news
+from scraper.sources.pages import PAGES
 from scraper.sources.scholarships import extract_scholarships
 from scraper.sources.shuttles import extract_shuttles
 from scraper.sources.sports import extract_sports
@@ -86,6 +88,18 @@ def test_clubs_keep_name_category_and_description_together() -> None:
     assert "Cooking nights on the Tempe campus" in kitchen
     assert "https://" not in text
     assert "](" not in text
+
+
+def test_dining_hours_pair_each_day_with_its_hours() -> None:
+    text = extract_dining_hours(page("dining_hours.md"))
+    verde = line_with(text, "Verde Dining Pavilion")
+    assert "Monday - Thursday 7:00 a.m. - 9:00 p.m." in verde
+    assert "Sunday 9:00 a.m. - 8:00 p.m." in verde
+    starbucks = line_with(text, "Starbucks")
+    assert "Saturday Closed" in starbucks
+    assert "Sunday 12:00 p.m. - 6:00 p.m." in starbucks
+    assert "Saturday & Sunday 10:00 a.m. - 4:00 p.m." in line_with(text, "Café West")
+    assert "&amp;" not in text
 
 
 def test_scholarships_keep_award_deadline_and_eligibility_together() -> None:
@@ -179,7 +193,7 @@ def test_sports_keep_fixture_opponent_date_and_venue_together() -> None:
     assert "| ---" not in text
 
 
-@pytest.mark.parametrize("key", sorted(SOURCES))
+@pytest.mark.parametrize("key", sorted(set(SOURCES) - {page.key for page in PAGES}))
 def test_registered_source_carries_its_extractor(key: str) -> None:
     assert callable(SOURCES[key].extractor)
 

@@ -223,6 +223,16 @@ fn the_live_query_cache_needs_somewhere_to_keep_answers() {
 }
 
 #[test]
+fn a_redis_url_of_the_wrong_shape_is_named_at_boot() {
+    // http://localhost:6379 reaches the right port and is not a Redis URL.
+    let e = err("[redis]\nurl = \"http://localhost:6379\"\n");
+    assert!(
+        e.contains("SPARKY_REDIS__URL") && e.contains("redis://"),
+        "{e}"
+    );
+}
+
+#[test]
 fn the_wait_between_looks_cannot_shrink() {
     let e = err("[query]\npoll_ms = 500\npoll_max_ms = 100\n");
     assert!(e.contains("poll_max_ms") && e.contains("poll_ms"), "{e}");
@@ -477,4 +487,13 @@ fn a_search_tool_left_with_no_wording_is_rejected() {
 fn a_live_search_with_no_fallback_source_is_rejected() {
     let e = err("[tools]\nlive_default_source = \"\"\n");
     assert!(e.contains("live_default_source"), "{e}");
+}
+
+#[test]
+fn sandbox_egress_names_its_network_and_proxy() {
+    let e = err("[sandbox]\nenabled = true\negress = true\negress_network = \" \"\n");
+    assert!(e.contains("sandbox.egress_network"), "{e}");
+    let e = err("[sandbox]\nenabled = true\negress = true\negress_proxy_image = \"\"\n");
+    assert!(e.contains("sandbox.egress_proxy_image"), "{e}");
+    assert!(load("[sandbox]\nenabled = true\negress = true\n").is_ok());
 }

@@ -1,4 +1,5 @@
-//! A command in an isolated container: no network, read-only root, capped resources, non-root user.
+//! A command in an isolated container: read-only root, capped resources, non-root user, and either
+//! no network or an internal network whose only way out is the egress proxy.
 
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -23,6 +24,27 @@ use crate::runtime::tools::structured;
 /// Directory the workspace is mounted at inside the container.
 pub const WORKSPACE: &str = "/tmp";
 
+/// Port the egress proxy listens on.
+pub const PROXY_PORT: u16 = 3128;
+
+/// The way out of the sandbox when commands may reach the public internet.
+#[derive(Debug, Clone)]
+pub struct Egress {
+    /// Internal network the containers join. It has no route out of its own.
+    pub network: String,
+    /// Image of the proxy that joins the network and the outside.
+    pub proxy_image: String,
+    /// Container name of the proxy, its host name on the network.
+    pub proxy_name: String,
+}
+
+impl Egress {
+    /// The proxy address the containers are handed.
+    fn proxy_url(&self) -> String {
+        format!("http://{}:{PROXY_PORT}", self.proxy_name)
+    }
+}
+
 /// How the sandbox is started and what it may consume.
 #[derive(Debug, Clone)]
 pub struct Limits {
@@ -46,6 +68,8 @@ pub struct Limits {
     pub max_sessions: usize,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,
+    /// The way out to the public internet. None runs with no network.
+    pub egress: Option<Egress>,
 }
 
 impl Default for Limits {
@@ -67,6 +91,11 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
             session_idle_secs: cfg.session_idle_secs,
             max_sessions: cfg.max_sessions,
             workspace_mb: cfg.workspace_mb,
+            egress: cfg.egress.then(|| Egress {
+                network: cfg.egress_network.clone(),
+                proxy_image: cfg.egress_proxy_image.clone(),
+                proxy_name: cfg.egress_proxy_name.clone(),
+            }),
         }
     }
 }
@@ -100,7 +129,8 @@ impl ContainerSandbox {
         format!("{}{session}", Self::owner_prefix(ctx))
     }
 
-    /// Whether the runtime answers. Called once at boot so a broken sandbox is not offered.
+    /// Whether the runtime answers, with egress made ready. Called once at boot so a broken
+    /// sandbox is not offered.
     pub async fn probe(&self) -> Result<(), SandboxError> {
         let out = Command::new(&self.limits.runtime)
             .arg("version")
@@ -114,7 +144,7 @@ impl ContainerSandbox {
                 SandboxError::Runtime(format!("{} did not start: {e}", self.limits.runtime))
             })?;
         if out.status.success() {
-            return Ok(());
+            return self.prepare_egress().await;
         }
         Err(SandboxError::Runtime(format!(
             "{} answered: {}",
@@ -245,9 +275,10 @@ impl ContainerSandbox {
     /// The arguments that seal a container.
     pub fn seal(&self) -> Vec<String> {
         let l = &self.limits;
-        [
+        let network = l.egress.as_ref().map_or("none", |e| e.network.as_str());
+        let mut args: Vec<String> = [
             "--network",
-            "none",
+            network,
             "--read-only",
             "--cap-drop",
             "ALL",
@@ -268,7 +299,133 @@ impl ContainerSandbox {
         ]
         .into_iter()
         .map(str::to_owned)
-        .collect()
+        .collect();
+        if let Some(egress) = &l.egress {
+            let url = egress.proxy_url();
+            for var in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
+                args.push("--env".to_owned());
+                args.push(format!("{var}={url}"));
+            }
+        }
+        args
+    }
+
+    /// Makes the egress network and its proxy ready, when egress is on.
+    ///
+    /// The network is created internal if missing, and refused if it exists and is not internal:
+    /// a network with its own route out would bypass the proxy.
+    pub async fn prepare_egress(&self) -> Result<(), SandboxError> {
+        let Some(egress) = &self.limits.egress else {
+            return Ok(());
+        };
+        let internal = self
+            .inspect(&[
+                "network",
+                "inspect",
+                "--format",
+                "{{.Internal}}",
+                &egress.network,
+            ])
+            .await;
+        match internal.as_deref() {
+            Some("true") => {}
+            Some(other) => {
+                return Err(SandboxError::Runtime(format!(
+                    "network {} is not internal (Internal={other}); remove it or name another \
+                     in sandbox.egress_network",
+                    egress.network
+                )));
+            }
+            None => {
+                self.runtime(&["network", "create", "--internal", &egress.network])
+                    .await?;
+            }
+        }
+        if !self.running(&egress.proxy_name).await {
+            self.runtime_ok(&["rm", "--force", &egress.proxy_name])
+                .await;
+            self.runtime(&[
+                "run",
+                "--detach",
+                "--name",
+                &egress.proxy_name,
+                "--restart",
+                "unless-stopped",
+                "--read-only",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--memory",
+                "128m",
+                "--tmpfs",
+                "/tmp",
+                "--tmpfs",
+                "/var/run/squid",
+                "--tmpfs",
+                "/var/log/squid",
+                "--tmpfs",
+                "/var/spool/squid",
+                &egress.proxy_image,
+            ])
+            .await?;
+        }
+        let joined = self
+            .inspect(&[
+                "inspect",
+                "--format",
+                &format!(
+                    "{{{{index .NetworkSettings.Networks {:?}}}}}",
+                    egress.network
+                ),
+                &egress.proxy_name,
+            ])
+            .await;
+        if joined.is_none_or(|j| j == "<nil>" || j.is_empty()) {
+            self.runtime(&["network", "connect", &egress.network, &egress.proxy_name])
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Runs one runtime subcommand, failing with what it printed.
+    async fn runtime(&self, args: &[&str]) -> Result<(), SandboxError> {
+        let out = Command::new(&self.limits.runtime)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .output()
+            .await
+            .map_err(|e| {
+                SandboxError::Runtime(format!("{} did not start: {e}", self.limits.runtime))
+            })?;
+        if out.status.success() {
+            return Ok(());
+        }
+        Err(SandboxError::Runtime(format!(
+            "{} {} failed: {}",
+            self.limits.runtime,
+            args.first().copied().unwrap_or_default(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        )))
+    }
+
+    /// The trimmed output of a runtime subcommand, or None when it failed.
+    async fn inspect(&self, args: &[&str]) -> Option<String> {
+        let out = Command::new(&self.limits.runtime)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .output()
+            .await
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
     }
 
     /// The arguments for a call that keeps no session.

@@ -23,7 +23,6 @@ fn a_remote_tool_is_kinded_by_the_server_it_came_from() {
     // A built-in of the same name is still a built-in when no server offers it.
     assert_eq!(kind_of("remote_lookup", &[]), Kind::Tool);
     assert_eq!(kind_of("search_library_hours", &mcp), Kind::Tool);
-    assert_eq!(kind_of("get_skill", &mcp), Kind::Skill);
     assert_eq!(kind_of("run_sandbox", &mcp), Kind::Sandbox);
 }
 

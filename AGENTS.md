@@ -30,6 +30,7 @@ just search           # self-hosted SearXNG on :8888 behind the web source of se
 just metrics          # prometheus (:9090) + grafana (:3000), llama-server throughput and queue
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just web              # Vite dev server on :5173
+just sandbox-images   # build the run_sandbox image and its egress proxy
 just ps               # what compose has, across every profile
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
@@ -74,7 +75,7 @@ Two layers, lowest first: `sparky.toml`, which is committed, and `SPARKY_<SECTIO
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
-- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages. A live query result answers its caller first; the scraper then indexes the fetched page through the regular ingestion pipeline as a queued job, unless its query source sets `index = False`.
+- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages for it. With `sandbox.egress` on, `run_sandbox` may read public pages for the model through the egress proxy; nothing it reads is indexed. A live query result answers its caller first; the scraper then indexes the fetched page through the regular ingestion pipeline as a queued job, unless its query source sets `index = False`.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Live progress is a `TraceEvent`: give a new variant a line in `TraceEvent::progress` (or `None`) and every watching client shows it. Clients render the `text` the engine sends, never their own copy of the enum.

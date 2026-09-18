@@ -33,8 +33,6 @@ pub struct Tools {
     pub disabled: Vec<String>,
     /// Register search_knowledge and search_live over the sources the scraper has published.
     pub search: bool,
-    /// Register the get_skill tool, when a reviewed skill exists.
-    pub get_skill: bool,
     /// Source search_live fetches when a call names none.
     pub live_default_source: String,
     /// What search_knowledge does, for the model.
@@ -54,7 +52,6 @@ impl Default for Tools {
         Self {
             disabled: Vec::new(),
             search: true,
-            get_skill: true,
             live_default_source: "web".into(),
             knowledge_description: KNOWLEDGE_DESCRIPTION.into(),
             live_description: LIVE_DESCRIPTION.into(),

@@ -94,6 +94,15 @@ def test_parsed_message_lists_are_accepted():
     assert ex is not None and [m.role for m in ex.messages] == ["system", "user"]
 
 
+def test_a_summary_becomes_the_system_message_the_model_was_sent():
+    inp = [*_INPUT, {"role": "summary", "content": "asked about hours"}]
+    ex = span_to_example(_span(_attrs(inp=inp)))
+
+    assert ex is not None
+    assert [m.role for m in ex.messages] == ["system", "user", "system"]
+    assert ex.messages[2].content == "Summary of earlier turns: asked about hours"
+
+
 def test_parts_messages_are_converted():
     inp = [
         {

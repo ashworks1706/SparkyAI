@@ -107,6 +107,8 @@ class Scraper(BaseModel):
     schedule_every_secs: float = 60.0
     # A job running longer than this is treated as abandoned and requeued.
     job_lease_secs: float = 1800.0
+    # Shortest gap between two scheduled fetches to the same host. Zero fetches back to back.
+    host_gap_secs: float = 5.0
     # Queued live_index jobs past which a live result is answered but not indexed.
     index_backlog_limit: int = 500
     # How long a finished job is kept before it is removed. Zero keeps every job forever.

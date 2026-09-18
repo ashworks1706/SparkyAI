@@ -196,12 +196,9 @@ async fn a_reused_answer_takes_no_slot_and_touches_no_database() {
         cache,
         sink,
         CacheRules {
-            ttl: std::collections::HashMap::from([(
-                "courses".to_owned(),
-                Duration::from_secs(300),
-            )]),
+            ttl: std::collections::HashMap::from([("courses".to_owned(), Duration::from_mins(5))]),
             handoff: Duration::from_secs(5),
-            lease: Duration::from_secs(120),
+            lease: Duration::from_mins(2),
             poll: Duration::from_millis(5),
         },
     );
@@ -239,7 +236,7 @@ async fn a_real_redis_caps_slots_and_drops_holders_that_never_left() {
         Duration::from_secs(2),
         key.clone(),
         2,
-        Duration::from_secs(60),
+        Duration::from_mins(1),
     );
 
     // Two slots, three askers.

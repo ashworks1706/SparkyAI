@@ -1,6 +1,6 @@
 //! Where a turn is anchored, the request it produces, and the text derived from a question.
 
-use serenity::all::{ChannelId, ChannelType, GuildId, MessageFlags, UserId};
+use serenity::all::{ChannelId, ChannelType, GuildId, MessageFlags, RoleId, UserId};
 
 use crate::core::types::{Attachment, ChatRequest, Visibility};
 
@@ -191,11 +191,32 @@ pub fn quoted(author: Option<UserId>, content: &str, me: UserId) -> Option<Strin
     (!text.is_empty()).then(|| text.to_owned())
 }
 
-/// The message content with every mention of the bot removed, trimmed.
-pub fn strip_mentions(content: &str, bot: UserId) -> String {
-    content
+/// The role Discord manages for the bot: the one whose tags name it as the bot.
+pub fn bot_role(
+    roles: impl IntoIterator<Item = (RoleId, Option<UserId>)>,
+    bot: UserId,
+) -> Option<RoleId> {
+    roles
+        .into_iter()
+        .find_map(|(id, tagged)| (tagged == Some(bot)).then_some(id))
+}
+
+/// Whether a message addresses the bot, by its user or by its managed role.
+pub fn addresses_bot(
+    mentions_user: bool,
+    mentioned_roles: &[RoleId],
+    role: Option<RoleId>,
+) -> bool {
+    mentions_user || role.is_some_and(|r| mentioned_roles.contains(&r))
+}
+
+/// The message content with every mention of the bot and its managed role removed, trimmed.
+pub fn strip_mentions(content: &str, bot: UserId, role: Option<RoleId>) -> String {
+    let mut out = content
         .replace(&format!("<@{bot}>"), " ")
-        .replace(&format!("<@!{bot}>"), " ")
-        .trim()
-        .to_owned()
+        .replace(&format!("<@!{bot}>"), " ");
+    if let Some(role) = role {
+        out = out.replace(&format!("<@&{role}>"), " ");
+    }
+    out.trim().to_owned()
 }

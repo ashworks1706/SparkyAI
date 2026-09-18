@@ -18,11 +18,11 @@ use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 fn rules() -> CacheRules {
     CacheRules {
         ttl: HashMap::from([
-            ("courses".to_owned(), Duration::from_secs(300)),
+            ("courses".to_owned(), Duration::from_mins(5)),
             ("shuttles".to_owned(), Duration::ZERO),
         ]),
         handoff: HANDOFF,
-        lease: Duration::from_secs(120),
+        lease: Duration::from_mins(2),
         poll: Duration::from_millis(5),
     }
 }

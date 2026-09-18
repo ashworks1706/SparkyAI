@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 
 use secrecy::ExposeSecret;
 use serenity::all::{
-    AutoArchiveDuration, ChannelId, Client, CommandInteraction, Context, CreateInteractionResponse,
-    CreateInteractionResponseMessage, CreateThread, EventHandler, GatewayIntents, GuildId,
-    Interaction, Message, Ready, ResolvedValue, UserId,
+    AutoArchiveDuration, ChannelId, Client, Command, CommandInteraction, Context,
+    CreateInteractionResponse, CreateInteractionResponseMessage, CreateThread, EventHandler,
+    GatewayIntents, GuildId, Interaction, Message, Ready, ResolvedValue, RoleId, UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -51,6 +51,8 @@ struct Handler {
     max_images: usize,
     /// The bot user, set once the gateway is ready.
     me: OnceLock<UserId>,
+    /// The role Discord manages for the bot, set once the gateway is ready.
+    role: OnceLock<RoleId>,
     /// When each user last asked, for the cooldown.
     last_ask: Mutex<HashMap<UserId, Instant>>,
 }
@@ -89,6 +91,7 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         direct_messages: cfg.bot.direct_messages,
         max_images: cfg.bot.max_images,
         me: OnceLock::new(),
+        role: OnceLock::new(),
         last_ask: Mutex::new(HashMap::new()),
     };
     // MESSAGE_CONTENT is privileged: without it Discord withholds the text of a reply whose
@@ -224,6 +227,25 @@ impl EventHandler for Handler {
         match self.guild_id.set_commands(&ctx.http, commands::all()).await {
             Ok(cmds) => tracing::info!(count = cmds.len(), "commands registered"),
             Err(e) => tracing::error!(error = %e, "command registration failed"),
+        }
+        // Every command is registered on the guild; global commands are removed.
+        match Command::set_global_commands(&ctx.http, Vec::new()).await {
+            Ok(_) => tracing::debug!("global commands cleared"),
+            Err(e) => tracing::warn!(error = %e, "clearing global commands failed"),
+        }
+        match self.guild_id.roles(&ctx.http).await {
+            Ok(roles) => {
+                let tagged = roles
+                    .values()
+                    .map(|r| (r.id, r.tags.bot_id))
+                    .collect::<Vec<_>>();
+                if let Some(role) = route::bot_role(tagged, ready.user.id)
+                    && self.role.set(role).is_err()
+                {
+                    tracing::debug!("bot role already known");
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "bot role lookup failed"),
         }
     }
 

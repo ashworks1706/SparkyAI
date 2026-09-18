@@ -400,7 +400,7 @@ fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
 }
 
 #[test]
-fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_trimmed() {
+fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_dropped() {
     use crate::core::types::conversation::message::ToolCall;
 
     let call = Message::assistant_tool_calls(
@@ -566,5 +566,149 @@ fn a_quoted_reply_is_cut_to_its_budget() {
         block.map(|m| m.estimated_tokens(budget.chars_per_token) <= budget.reply),
         Some(true),
         "the quote stays inside its budget"
+    );
+}
+
+#[test]
+fn a_tool_result_longer_than_the_room_left_is_cut_to_fit() {
+    use crate::core::types::conversation::message::ToolCall;
+
+    let call = Message::assistant_tool_calls(
+        "",
+        vec![ToolCall {
+            id: "c1".into(),
+            name: "search_knowledge".into(),
+            arguments: serde_json::json!({"query": "AI Society events"}),
+        }],
+    );
+    let result = Message::tool_result("c1", "search_knowledge", "x".repeat(40_000));
+    let turn = [call, result];
+    let budget = Budget {
+        total: 1_200,
+        ..Budget::default()
+    };
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            input: "latest events",
+            turn: &turn,
+            date: "Friday 11 September 2026",
+            ..Sections::default()
+        },
+        budget,
+    );
+    assert!(
+        out.estimated_tokens <= budget.total,
+        "{} over {}",
+        out.estimated_tokens,
+        budget.total
+    );
+    let last = out
+        .messages
+        .last()
+        .cloned()
+        .unwrap_or_else(|| Message::user(""));
+    assert_eq!(last.role, Role::Tool);
+    assert_eq!(last.tool_call_id.as_deref(), Some("c1"));
+    assert!(last.content.starts_with("xxxx"));
+    assert!(
+        last.content
+            .contains("more characters of this result were cut"),
+        "{}",
+        &last.content[last.content.len().saturating_sub(120)..]
+    );
+}
+
+#[test]
+fn a_short_result_keeps_its_share_and_a_long_one_takes_the_rest() {
+    let short = Message::tool_result("c1", "a", "short answer");
+    let long = Message::tool_result("c2", "b", "y".repeat(40_000));
+    let turn = [short, long];
+    let budget = Budget {
+        total: 1_200,
+        ..Budget::default()
+    };
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            input: "q",
+            turn: &turn,
+            ..Sections::default()
+        },
+        budget,
+    );
+    assert!(out.estimated_tokens <= budget.total);
+    let results: Vec<&str> = out
+        .messages
+        .iter()
+        .filter(|m| m.role == Role::Tool)
+        .map(|m| m.content.as_str())
+        .collect();
+    assert_eq!(results.first().copied(), Some("short answer"));
+    assert!(
+        results
+            .get(1)
+            .is_some_and(|c| c.len() > 2_000 && c.len() < 40_000)
+    );
+}
+
+#[test]
+fn a_turn_that_fits_is_carried_whole() {
+    let result = Message::tool_result("c1", "a", "z".repeat(2_000));
+    let turn = [result];
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            input: "q",
+            turn: &turn,
+            ..Sections::default()
+        },
+        Budget {
+            total: 4_000,
+            ..Budget::default()
+        },
+    );
+    assert!(
+        out.messages
+            .last()
+            .is_some_and(|m| m.content == "z".repeat(2_000))
+    );
+}
+
+#[test]
+fn a_leading_summary_is_kept_before_older_turns_when_history_is_over_budget() {
+    let mut history = vec![Message::summary("SUMMARY of earlier turns")];
+    history.extend((0..20).map(|i| Message::user(format!("turn {i} {}", "y".repeat(100)))));
+    let out = assemble(
+        &ctx(),
+        &Sections {
+            system: "s",
+            history: &history,
+            input: "q",
+            ..Sections::default()
+        },
+        Budget {
+            history: 120,
+            ..Budget::default()
+        },
+    );
+    assert!(
+        out.messages
+            .iter()
+            .any(|m| m.role == Role::Summary && m.content.starts_with("SUMMARY")),
+        "the summary survives trimming"
+    );
+    assert!(
+        out.messages
+            .iter()
+            .any(|m| m.content.starts_with("turn 19"))
+    );
+    assert!(
+        !out.messages
+            .iter()
+            .any(|m| m.content.starts_with("turn 0 "))
     );
 }

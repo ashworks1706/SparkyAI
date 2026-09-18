@@ -14,13 +14,14 @@ from scraper.core import telemetry
 from scraper.core.settings import settings
 from scraper.core.types import ChunkRow, Fetched, PipelineError, RunResult, Source, SourceRow
 from scraper.ingest import chunk, embed, extract, fetch, tree
+from scraper.ingest.pace import HostPacer
 from scraper.store import object as objects
 from scraper.store import postgres
 
 log = structlog.get_logger()
 
 
-def run_source(source: Source, *, force: bool = False) -> RunResult:
+def run_source(source: Source, *, force: bool = False, pacer: HostPacer | None = None) -> RunResult:
     """Ingests one source. Skips everything after the fetch when the page hash is unchanged."""
     with telemetry.tracer().start_as_current_span(
         "scrape.source",
@@ -29,7 +30,7 @@ def run_source(source: Source, *, force: bool = False) -> RunResult:
             "sparky.source": source.key,
         },
     ) as span:
-        result = _run_source(source, force=force)
+        result = _run_source(source, force=force, pacer=pacer)
         span.set_attribute("sparky.output", _outcome(result))
         return result
 
@@ -63,9 +64,11 @@ def check_quality_floor(
         )
 
 
-def _run_source(source: Source, *, force: bool) -> RunResult:
+def _run_source(source: Source, *, force: bool, pacer: HostPacer | None) -> RunResult:
     # The attempt is committed before the fetch. A failed or unchanged run still counts as one.
     row = _register(source)
+    if pacer is not None:
+        pacer.wait(source.url)
     fetched = fetch.fetch(source.url, needs_js=source.needs_js)
     return _index(source, row, fetched, force=force)
 

@@ -568,11 +568,46 @@ fn mentions_of_the_bot_are_stripped_and_others_kept() {
 
     let me = UserId::new(42);
     assert_eq!(
-        strip_mentions("<@42> when does Hayden close?", me),
+        strip_mentions("<@42> when does Hayden close?", me, None),
         "when does Hayden close?"
     );
-    assert_eq!(strip_mentions("hey <@!42> ask <@7>", me), "hey   ask <@7>");
-    assert_eq!(strip_mentions("  <@42> <@!42> ", me), "");
+    assert_eq!(
+        strip_mentions("hey <@!42> ask <@7>", me, None),
+        "hey   ask <@7>"
+    );
+    assert_eq!(strip_mentions("  <@42> <@!42> ", me, None), "");
+}
+
+#[test]
+fn mentions_of_the_bot_role_are_stripped_and_other_roles_kept() {
+    use crate::access::route::strip_mentions;
+    use serenity::all::{RoleId, UserId};
+
+    let me = UserId::new(42);
+    let role = Some(RoleId::new(9));
+    assert_eq!(strip_mentions("<@&9> hi", me, role), "hi");
+    assert_eq!(strip_mentions("<@&8> hi", me, role), "<@&8> hi");
+}
+
+#[test]
+fn the_bot_role_is_the_one_tagged_with_the_bot() {
+    use crate::access::route::{addresses_bot, bot_role};
+    use serenity::all::{RoleId, UserId};
+
+    let me = UserId::new(42);
+    let roles = [
+        (RoleId::new(1), None),
+        (RoleId::new(2), Some(UserId::new(7))),
+        (RoleId::new(3), Some(me)),
+    ];
+    let role = bot_role(roles, me);
+    assert_eq!(role, Some(RoleId::new(3)));
+    assert_eq!(bot_role([(RoleId::new(1), None)], me), None);
+
+    assert!(addresses_bot(false, &[RoleId::new(3)], role));
+    assert!(addresses_bot(true, &[], role));
+    assert!(!addresses_bot(false, &[RoleId::new(2)], role));
+    assert!(!addresses_bot(false, &[RoleId::new(3)], None));
 }
 
 #[test]

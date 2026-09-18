@@ -76,7 +76,7 @@ fn the_wait_between_looks_at_a_queued_job_doubles_up_to_its_cap() {
 
     use crate::stores::knowledge::query::backoff;
 
-    let most = Duration::from_millis(1_000);
+    let most = Duration::from_secs(1);
     let mut wait = Duration::from_millis(100);
     let mut waits = vec![wait];
     for _ in 0..6 {

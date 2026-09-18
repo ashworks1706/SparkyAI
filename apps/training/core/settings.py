@@ -6,7 +6,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -35,8 +35,8 @@ class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
     # Bearer token the engine /chat route requires.
     engine_service_token: SecretStr = SecretStr("")
-    # Spans read per request from the Phoenix spans endpoint.
-    phoenix_page_spans: int = 5000
+    # Spans read per request from the Phoenix spans endpoint, which serves at most 1000.
+    phoenix_page_spans: int = Field(default=1000, ge=1, le=1000)
     state_dir: Path = Path("../../.sparky")
     cases_dir: Path = Path("evals/cases")
     baseline_path: Path = Path("evals/baseline.json")

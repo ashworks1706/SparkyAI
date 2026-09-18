@@ -12,6 +12,7 @@ import structlog
 from scraper.core.settings import settings
 from scraper.core.types import Job, QueryError
 from scraper.ingest import pipeline
+from scraper.ingest.pace import HostPacer
 from scraper.query import index
 from scraper.query.registry import QUERY_SOURCES
 from scraper.query.run import for_caller, run_job, should_index, source_of
@@ -53,7 +54,7 @@ def is_due(row: dict | None, now: datetime) -> bool:
     return now - last >= row["fetch_every"]
 
 
-def handle(conn: psycopg.Connection, job: Job) -> dict:
+def handle(conn: psycopg.Connection, job: Job, pacer: HostPacer | None = None) -> dict:
     """Does one job and returns its result. Raises QueryError for a job the caller can correct."""
     cfg = settings().scraper
     if job.kind == QUERY:
@@ -83,12 +84,12 @@ def handle(conn: psycopg.Connection, job: Job) -> dict:
         key = str(job.input.get("source", ""))
         if key not in SOURCES:
             raise QueryError(f"unknown source {key!r}")
-        run = pipeline.run_source(SOURCES[key])
+        run = pipeline.run_source(SOURCES[key], pacer=pacer)
         return {"source": run.source, "changed": run.changed, "chunks": run.chunks}
     raise QueryError(f"no handler for job kind {job.kind!r}")
 
 
-def poll_once(kinds: Sequence[str]) -> bool:
+def poll_once(kinds: Sequence[str], pacer: HostPacer | None = None) -> bool:
     """Claims and does at most one job of kinds. Returns whether there was one."""
     with postgres.connection() as conn:
         job = postgres.claim_job(conn, kinds)
@@ -96,7 +97,7 @@ def poll_once(kinds: Sequence[str]) -> bool:
         if job is None:
             return False
         try:
-            result = handle(conn, job)
+            result = handle(conn, job, pacer)
         except QueryError as e:
             conn.rollback()
             log.info("job rejected", job=str(job.id), kind=job.kind, error=str(e))
@@ -133,6 +134,7 @@ def enqueue_due(now: datetime) -> int:
 def _lane(name: str, kinds: Sequence[str], stop: threading.Event, listen: bool) -> None:
     """Claims jobs of kinds until stop is set. A listening lane also wakes on notification."""
     cfg = settings()
+    pacer = HostPacer(cfg.scraper.host_gap_secs)
     listener = None
     if listen:
         listener = psycopg.connect(cfg.postgres.url.get_secret_value(), autocommit=True)
@@ -140,7 +142,7 @@ def _lane(name: str, kinds: Sequence[str], stop: threading.Event, listen: bool) 
     try:
         while not stop.is_set():
             try:
-                if poll_once(kinds):
+                if poll_once(kinds, pacer):
                     continue
             except Exception as e:
                 # The next poll retries.

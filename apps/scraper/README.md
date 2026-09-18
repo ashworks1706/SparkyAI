@@ -8,6 +8,7 @@ cd apps/scraper
 uv sync --extra dev
 uv run scraper migrate              # apply migrations/ (schema owner)
 uv run scraper run library_hours    # one source
+uv run scraper run --category housing  # every source in a category
 uv run scraper run --all
 uv run scraper serve                # the job queue: live searches, their indexing, scheduled runs
 uv run scraper status               # sources, then the queue by kind and status
@@ -25,7 +26,8 @@ uv run scraper status               # sources, then the queue by kind and status
 | `query/registry.py` | the live query sources the engine may call, published by `scraper serve` |
 | `query/run.py` | one live query: checks, fetch, the text handed back |
 | `query/index.py` | indexing a live result under the right source |
-| `sources/` | one module per ASU source; a source is a row, not a folder |
+| `sources/` | one module per ASU source with its own extractor; `pages.py` lists static pages indexed as Firecrawl returns them. A source is a row, not a folder |
+| `ingest/pace.py` | spaces fetches to one host `scraper.host_gap_secs` apart |
 | `store/` | psycopg pool, object storage; the only place a connection is opened |
 | `migrations/` | the schema, shared with `apps/engine` |
 

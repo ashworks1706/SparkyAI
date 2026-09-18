@@ -81,6 +81,14 @@ pub struct SandboxSettings {
     pub max_sessions: usize,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,
+    /// Let commands reach the public internet through the egress proxy. Off runs with no network.
+    pub egress: bool,
+    /// Internal network the containers join when egress is on. Created at boot if missing.
+    pub egress_network: String,
+    /// Image of the proxy that is the only way out of egress_network.
+    pub egress_proxy_image: String,
+    /// Container name of that proxy, which is also its host name on egress_network.
+    pub egress_proxy_name: String,
     /// What the tool tells the model it is for.
     pub description: String,
     /// What the tool tells the model the command argument is.
@@ -105,6 +113,10 @@ impl Default for SandboxSettings {
             session_idle_secs: 900,
             max_sessions: 4,
             workspace_mb: 64,
+            egress: false,
+            egress_network: "sparky-sandbox".into(),
+            egress_proxy_image: "ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main".into(),
+            egress_proxy_name: "sparky-sandbox-proxy".into(),
             description: DESCRIPTION.into(),
             command_description: COMMAND_DESCRIPTION.into(),
             session_description: SESSION_DESCRIPTION.into(),
