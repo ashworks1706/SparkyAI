@@ -21,6 +21,10 @@ impl LiveSource for SocialMedia {
         "official ASU video posts"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU on YouTube"
+    }
+
     fn category(&self) -> &'static str {
         "social"
     }

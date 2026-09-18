@@ -20,6 +20,10 @@ impl LiveSource for News {
         "ASU News stories"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU News"
+    }
+
     fn category(&self) -> &'static str {
         "news"
     }

@@ -41,6 +41,7 @@ class Expectation(BaseModel):
     refuse: bool = False
     clarify: bool = False
     mentions: list[str] = Field(default_factory=list)
+    not_mentions: list[str] = Field(default_factory=list)
     remembers: str | None = None
     max_latency_ms: int | None = None
 
@@ -59,6 +60,7 @@ class EvalCase(BaseModel):
 class Citation(BaseModel):
     """One source under an answer. Mirrors the engine wire shape."""
 
+    key: str = ""
     title: str
     url: str | None = None
 

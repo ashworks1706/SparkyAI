@@ -33,6 +33,10 @@ impl LiveSource for LibraryCatalog {
         "books, articles and media"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Library Catalog"
+    }
+
     fn category(&self) -> &'static str {
         "library"
     }

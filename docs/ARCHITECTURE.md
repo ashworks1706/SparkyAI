@@ -182,6 +182,7 @@ pub struct RequestContext {
 pub struct Evidence {
     pub source_id: Uuid,
     pub chunk_id: Uuid,
+    pub key: String,
     pub title: String,
     pub content: String,
     pub url: Option<String>,
@@ -190,7 +191,7 @@ pub struct Evidence {
 }
 ```
 
-Citations are built from the `Evidence` that fit the prompt and from the pages tools read (`Answer.sources`), not parsed out of generated text.
+Citations are built from the `Evidence` that fit the prompt and from the pages tools read (`Answer.sources`), not parsed out of generated text. A `Citation` carries both halves of a source: `title` is what a client shows, the page title the scraper stored or the site name from `LiveSource::label`, and `key` is what it was, so a caller that has to match a source matches on the key.
 
 ## Traits
 
@@ -517,7 +518,7 @@ Scheduled ingestion keeps the index current on an interval. A live query answers
 
 The engine offers two search tools, not one per source: `search_knowledge(query, source?)` reads the stored index and `search_live(query, source?)` queues a fetch. `source` is a filter, never a forced guess: leaving it out searches every source, and each variant carries a few words from `LiveSource::hint` so the model can pick one when it knows. `search_knowledge` offers only the sources the scraper indexes, and maps the key it is given to the `chunks.category` it filters on. `search_live` answers a call that names no source from `tools.live_default_source`, which is `web`.
 
-The query string is the whole request. With one tool per source the tool name carried half the intent; with two tools it does not, so `tools.query_description` is the highest-leverage wording in the prompt and says in a bad-then-good pair what a self-contained keyword query looks like. `search::params_for` turns that one string into the parameters the scraper takes: the query fills the source's text parameter, a choice the query names fills a choice parameter, a `YYYY-MM-DD` in the query fills a date, a required date falls back to today at `prompt.utc_offset_hours`, and `Courses::derived` reads the term out of the query or takes the one running today. A required parameter nothing filled comes back to the model naming what the query has to say. Two schemas cost about 748 estimated tokens where fifteen cost 1578.
+The query string is the whole request. With one tool per source the tool name carried half the intent; with two tools it does not, so `tools.query_description` is the highest-leverage wording in the prompt and says in a bad-then-good pair what a self-contained keyword query looks like. `search::params_for` turns that one string into the parameters the scraper takes: the query fills the source's text parameter, a choice the query names fills a choice parameter, a `YYYY-MM-DD` in the query fills a date, a required date falls back to today at `prompt.utc_offset_hours`, and `Courses::derived` reads the term out of the query or takes the one running today. A required parameter nothing filled comes back to the model naming what the query has to say. `LiveSource::narrow` cuts what a source's site cannot match out of the query before it fills that parameter: `Courses` sends the class search the course code alone, because its keyword box matches subject, catalog number and title and nothing else. Two schemas cost about 790 estimated tokens where one per source would cost over 1700.
 
 `LiveSource::freshness` declares whether a source's answers are stored, the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` names a disagreement at boot the way it does for parameters. The prompt tells the model to use the evidence first, to call `search_knowledge` when the evidence does not answer, and to call `search_live` whenever the question is one only it can answer, because nothing in the prompt ever holds that.
 
@@ -547,7 +548,7 @@ sequenceDiagram
     Note over T,PG: unclaimed after query.claim_secs, the job is cancelled and the tool reports the scraper is not running
 ```
 
-A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into those parameters and checked there, so a bad call is corrected by the model without queueing a job. The two tools themselves live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the label a citation of it carries, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into those parameters and checked there, so a bad call is corrected by the model without queueing a job. The two tools themselves live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
 
 `query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine checks every source in its catalog and logs a warning when a source and the published one disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks the parameters of every query again before it runs it.
 

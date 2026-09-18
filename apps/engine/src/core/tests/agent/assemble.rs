@@ -17,6 +17,7 @@ fn evidence(n: usize) -> Vec<Evidence> {
         .map(|i| Evidence {
             source_id: Uuid::new_v4(),
             chunk_id: Uuid::new_v4(),
+            key: format!("doc_{i}"),
             title: format!("Doc {i}"),
             content: "x".repeat(400),
             url: None,

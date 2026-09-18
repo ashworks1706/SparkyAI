@@ -306,6 +306,8 @@ timeout_ms = 500               # a cache slower than this is treated as one that
 [query.cache.ttl_secs]
 library_hours = 3600
 campus_map = 86400
+course_catalog = 86400         # a catalog entry changes between terms, not within one
+dining = 3600
 social_media = 1800
 sports_news = 900
 news = 900

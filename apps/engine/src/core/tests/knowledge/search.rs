@@ -16,7 +16,9 @@ use crate::core::types::knowledge::query::{QueryParam, QuerySourceInfo};
 use crate::core::types::model::tokens::estimate;
 use crate::core::types::tools::{RiskClass, ToolError};
 use crate::runtime::harness::tools::ToolSet;
-use crate::runtime::tools::knowledge::search::courses::{Courses, term_for, term_in};
+use crate::runtime::tools::knowledge::search::course_catalog::CourseCatalog;
+use crate::runtime::tools::knowledge::search::courses::{Courses, code_in, term_for, term_in};
+use crate::runtime::tools::knowledge::search::dining::Dining;
 use crate::runtime::tools::knowledge::search::library_hours::LibraryHours;
 use crate::runtime::tools::knowledge::search::live::{
     LiveSearch, Wording as LiveWording, local_date,
@@ -141,7 +143,7 @@ fn the_source_filter_is_never_required_of_the_model() {
 fn the_stored_search_offers_only_the_sources_the_scraper_indexes() {
     let live = enum_of(&live_tool(FakeQueries::new(Vec::new())));
     let stored = enum_of(&stored_tool(Arc::new(Stored::empty())));
-    assert_eq!(live.len(), 15);
+    assert_eq!(live.len(), 17);
     assert!(live.contains(&"web".to_owned()));
     for never_stored in ["web", "shuttles", "study_rooms"] {
         assert!(
@@ -149,7 +151,7 @@ fn the_stored_search_offers_only_the_sources_the_scraper_indexes() {
             "{never_stored} is never written to the index, so it cannot be filtered on"
         );
     }
-    assert_eq!(stored.len(), 12);
+    assert_eq!(stored.len(), 14);
     assert!(stored.contains(&"courses".to_owned()));
 }
 
@@ -195,8 +197,8 @@ fn two_search_schemas_cost_a_fraction_of_the_prompt_budget() {
     tools = tools.with(Arc::new(live_tool(FakeQueries::new(Vec::new()))) as Arc<dyn Tool>);
     tools = tools.with(Arc::new(stored_tool(Arc::new(Stored::empty()))) as Arc<dyn Tool>);
     let both = tools.estimated_tokens(4);
-    // One tool per source cost 1578 estimated tokens; half of agent.prompt_budget_tokens is
-    // what wiring::fits_the_prompt refuses to cross.
+    // One tool per source would cost over 1700 estimated tokens; half of
+    // agent.prompt_budget_tokens is what wiring::fits_the_prompt refuses to cross.
     assert!(both < 900, "the two search schemas need {both} tokens");
 }
 
@@ -208,7 +210,7 @@ fn a_source_whose_answer_is_never_stored_is_declared_live() {
         .map(|s| s.key())
         .collect();
     assert_eq!(live, ["study_rooms", "shuttles", "web"]);
-    assert_eq!(source_keys(&catalog(), true).len(), 12);
+    assert_eq!(source_keys(&catalog(), true).len(), 14);
 }
 
 #[test]
@@ -317,8 +319,14 @@ fn a_query_fills_the_parameters_the_scraper_takes() {
     };
 
     let courses = filled(&Courses, "CSE 310 monday open seats");
-    assert_eq!(courses["keywords"], "CSE 310 monday open seats");
-    assert_eq!(courses["days"], "monday");
+    assert_eq!(
+        courses["keywords"], "CSE 310",
+        "the keyword box matches a course code, so the words around it are cut"
+    );
+    assert_eq!(
+        courses["days"], "monday",
+        "a choice is still read from the whole query, not from what the keyword box kept"
+    );
     assert_eq!(
         courses["term"], "Fall 2026",
         "a query naming no term takes the one running today"
@@ -367,6 +375,10 @@ impl LiveSource for Overriding {
 
     fn hint(&self) -> &'static str {
         "a source used only by this test"
+    }
+
+    fn label(&self) -> &'static str {
+        "Overriding"
     }
 
     fn category(&self) -> &'static str {
@@ -424,6 +436,107 @@ fn the_term_of_a_date_follows_the_academic_calendar() {
         "a term carries a four digit year"
     );
     assert_eq!(term_in("CSE 310"), None);
+}
+
+#[test]
+fn a_course_code_is_read_however_the_query_spaces_it() {
+    assert_eq!(code_in("CSE 485 prerequisites"), Some("CSE 485".to_owned()));
+    assert_eq!(
+        code_in("what does cse310 cover"),
+        Some("CSE 310".to_owned())
+    );
+    assert_eq!(
+        code_in("prerequisites for MAT 243"),
+        Some("MAT 243".to_owned())
+    );
+    assert_eq!(code_in("ENG 102L seats"), Some("ENG 102L".to_owned()));
+    assert_eq!(code_in("machine learning courses"), None);
+    assert_eq!(
+        code_in("what 400 level classes are offered"),
+        None,
+        "a word a student writes is not a subject the catalog knows"
+    );
+    assert_eq!(code_in("any 300 seats left"), None);
+    assert_eq!(
+        code_in("classes in fall 2026"),
+        None,
+        "a four digit year is not a catalog number"
+    );
+}
+
+#[test]
+fn the_class_search_is_given_the_course_code_and_not_the_words_around_it() {
+    let today = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap_or_default();
+    let filled = params_for(&Courses, "does CSE 310 have open seats in Fall 2026", today);
+    let Ok(params) = filled else {
+        unreachable!("expected the query to fill, got {filled:?}")
+    };
+    assert_eq!(params["keywords"], json!("CSE 310"));
+    assert_eq!(params["term"], json!("Fall 2026"));
+    assert_eq!(
+        params["open_only"],
+        json!("true"),
+        "a question about seats left asks the catalog for open sections"
+    );
+}
+
+#[test]
+fn a_course_question_with_no_code_keeps_the_words_the_catalog_can_match() {
+    let today = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap_or_default();
+    let filled = params_for(&Courses, "what machine learning classes are offered", today);
+    assert_eq!(
+        filled.map(|p| p["keywords"].clone()),
+        Ok(json!("machine learning"))
+    );
+}
+
+#[test]
+fn the_catalog_answers_prerequisites_and_leaves_the_term_out_unless_asked() {
+    let today = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap_or_default();
+    let Ok(params) = params_for(
+        &CourseCatalog,
+        "what are the prerequisites for CSE 485",
+        today,
+    ) else {
+        unreachable!("expected the query to fill")
+    };
+    assert_eq!(params["keywords"], json!("CSE 485"));
+    assert_eq!(
+        params.get("term"),
+        None,
+        "a catalog entry is read for no term unless the query names one"
+    );
+    let Ok(termed) = params_for(&CourseCatalog, "CSE 485 prerequisites Fall 2026", today) else {
+        unreachable!("expected the query to fill")
+    };
+    assert_eq!(termed["term"], json!("Fall 2026"));
+}
+
+#[test]
+fn dining_hours_are_refused_until_the_query_names_a_campus() {
+    let today = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap_or_default();
+    let refused = match params_for(&Dining, "when does dining close tonight", today) {
+        Err(message) => message,
+        Ok(params) => unreachable!("expected a refusal, got {params:?}"),
+    };
+    assert!(refused.contains("dining needs campus"), "{refused}");
+    assert!(refused.contains("tempe"), "{refused}");
+    let filled = params_for(&Dining, "dining hours on the tempe campus", today);
+    assert_eq!(filled.map(|p| p["campus"].clone()), Ok(json!("tempe")));
+}
+
+#[test]
+fn every_source_the_engine_offers_carries_a_label_that_is_not_its_key() {
+    for source in catalog() {
+        let label = source.label();
+        assert!(!label.is_empty(), "{} has no label", source.key());
+        assert_ne!(
+            label,
+            source.key(),
+            "a citation of {} would read as a registry key",
+            source.key()
+        );
+    }
 }
 
 #[test]
@@ -515,7 +628,7 @@ async fn a_live_call_queues_the_source_it_names_and_cites_the_page() {
     let requests = sent.lock().map(|r| r.clone()).unwrap_or_default();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].source, "courses");
-    assert_eq!(requests[0].params["keywords"], "CSE 310 open seats");
+    assert_eq!(requests[0].params["keywords"], "CSE 310");
 }
 
 #[tokio::test]

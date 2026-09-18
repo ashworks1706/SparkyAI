@@ -27,6 +27,10 @@ impl LiveSource for Shuttles {
         "intercampus shuttle times"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Shuttle Tracker"
+    }
+
     fn category(&self) -> &'static str {
         "transit"
     }

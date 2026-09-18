@@ -27,6 +27,7 @@ fn evidence(title: &str, chars: usize) -> Evidence {
     Evidence {
         source_id: Uuid::new_v4(),
         chunk_id: Uuid::new_v4(),
+        key: title.into(),
         title: title.into(),
         content: "x".repeat(chars),
         url: None,
@@ -126,7 +127,8 @@ async fn a_page_a_tool_read_is_cited() {
     use crate::runtime::harness::tools::ToolSet;
 
     let found = Citation {
-        title: "courses".into(),
+        key: "courses".into(),
+        title: "ASU Class Search".into(),
         url: Some("https://catalog.apps.asu.edu/catalog/classes/classlist".into()),
     };
     let wanted = found.clone();
@@ -210,6 +212,7 @@ fn citations_list_each_source_once_best_first() {
     let chunk = |source: Uuid, title: &str, url: Option<&str>| Evidence {
         source_id: source,
         chunk_id: Uuid::new_v4(),
+        key: title.into(),
         title: title.into(),
         content: String::new(),
         url: url.map(str::to_owned),

@@ -26,6 +26,7 @@ impl Stored {
             hits: vec![Evidence {
                 source_id: uuid::Uuid::nil(),
                 chunk_id: uuid::Uuid::nil(),
+                key: title.to_owned(),
                 title: title.to_owned(),
                 content: content.to_owned(),
                 url: Some(format!("https://example.test/{title}")),

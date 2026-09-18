@@ -18,6 +18,10 @@ impl LiveSource for Clubs {
         "student organizations"
     }
 
+    fn label(&self) -> &'static str {
+        "Sun Devil Central"
+    }
+
     fn category(&self) -> &'static str {
         "clubs"
     }

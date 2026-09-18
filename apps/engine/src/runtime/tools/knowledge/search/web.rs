@@ -27,6 +27,10 @@ impl LiveSource for Web {
         "the open web, when no ASU source fits"
     }
 
+    fn label(&self) -> &'static str {
+        "Web Search"
+    }
+
     fn category(&self) -> &'static str {
         "web"
     }

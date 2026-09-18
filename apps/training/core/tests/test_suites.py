@@ -8,6 +8,7 @@ from training.evals.suites import (
     refusal,
     tool_args,
     tool_selection,
+    voice,
 )
 
 
@@ -62,6 +63,31 @@ def test_grounding_needs_citation_status_and_mentions():
     assert grounding.score(_case(source_key="library_hours", mentions=["7am"]), [good]).passed
     assert not grounding.score(_case(source_key="events"), [good]).passed
     assert not grounding.score(_case(source_key="library_hours"), [_turn(status="stalled")]).passed
+
+
+def test_grounding_matches_the_source_key_not_the_page_title():
+    titled = _turn(
+        text="Open 7am to 9pm",
+        citations=[
+            {
+                "key": "library_hours",
+                "title": "Hours and Locations | ASU Library",
+                "url": "https://lib.asu.edu/hours",
+            }
+        ],
+    )
+    assert grounding.score(_case(source_key="library_hours"), [titled]).passed, (
+        "a citation labelled with the page title still credits its source"
+    )
+    assert not grounding.score(_case(source_key="courses"), [titled]).passed
+
+
+def test_voice_rejects_an_answer_that_names_its_own_machinery():
+    leaked = _turn(text="I can check live using search_live with source courses.")
+    assert not voice.score(_case(), [leaked]).passed
+    assert voice.score(_case(), [_turn(text="Let me check the class catalog.")]).passed
+    fabricated = _turn(text="Their official website is ai.asu.edu.")
+    assert not voice.score(_case(not_mentions=["ai.asu.edu"]), [fabricated]).passed
 
 
 def test_refusal_and_clarification():

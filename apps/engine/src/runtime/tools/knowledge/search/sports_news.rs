@@ -42,6 +42,10 @@ impl LiveSource for SportsNews {
         "Sun Devil Athletics news"
     }
 
+    fn label(&self) -> &'static str {
+        "Sun Devil Athletics News"
+    }
+
     fn category(&self) -> &'static str {
         "sports"
     }

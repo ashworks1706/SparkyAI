@@ -17,6 +17,10 @@ impl LiveSource for Events {
         "the events calendar"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Events"
+    }
+
     fn category(&self) -> &'static str {
         "events"
     }

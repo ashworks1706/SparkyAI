@@ -28,6 +28,10 @@ impl LiveSource for Sports {
         "Sun Devil schedules and results"
     }
 
+    fn label(&self) -> &'static str {
+        "Sun Devil Athletics"
+    }
+
     fn category(&self) -> &'static str {
         "sports"
     }

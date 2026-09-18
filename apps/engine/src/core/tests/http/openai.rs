@@ -55,6 +55,7 @@ fn tools_and_citations_ride_along_in_the_content() {
         evidence: vec![Evidence {
             source_id: uuid::Uuid::new_v4(),
             chunk_id: uuid::Uuid::new_v4(),
+            key: "library_hours".into(),
             title: "Library hours".into(),
             content: String::new(),
             url: Some("https://lib.asu.edu/hours".into()),
@@ -62,7 +63,8 @@ fn tools_and_citations_ride_along_in_the_content() {
             score: 1.0,
         }],
         sources: vec![Citation {
-            title: "courses".into(),
+            key: "courses".into(),
+            title: "ASU Class Search".into(),
             url: Some("https://catalog.apps.asu.edu/catalog/classes/classlist?term=2267".into()),
         }],
         confirmation: None,

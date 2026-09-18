@@ -7,7 +7,9 @@ from scraper.ingest import extract, fetch
 from scraper.query.sources import (
     campus_map,
     clubs,
+    course_catalog,
     courses,
+    dining,
     events,
     jobs,
     library_catalog,
@@ -24,6 +26,7 @@ from scraper.query.sources import (
 
 _MODULES = (
     courses,
+    course_catalog,
     scholarships,
     events,
     clubs,
@@ -36,6 +39,7 @@ _MODULES = (
     shuttles,
     campus_map,
     social_media,
+    dining,
     jobs,
     web,
 )

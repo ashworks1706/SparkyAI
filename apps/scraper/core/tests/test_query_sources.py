@@ -28,6 +28,7 @@ def test_an_unusable_term_is_rejected_with_the_shape_it_wanted(bad):
 def test_every_live_source_is_registered_under_its_own_key():
     assert set(QUERY_SOURCES) == {
         "courses",
+        "course_catalog",
         "scholarships",
         "events",
         "clubs",
@@ -40,9 +41,30 @@ def test_every_live_source_is_registered_under_its_own_key():
         "shuttles",
         "campus_map",
         "social_media",
+        "dining",
         "jobs",
         "web",
     }
+
+
+def test_the_catalog_is_a_different_page_from_the_class_search():
+    """Sections and seats come from classlist; descriptions and prerequisites from courselist."""
+    catalog = url_for(QUERY_SOURCES["course_catalog"], {"keywords": "CSE 485"})
+    assert catalog.startswith("https://catalog.apps.asu.edu/catalog/courses/courselist?")
+    assert "keywords=CSE+485" in catalog
+    assert "term" not in catalog, "a catalog entry is read for no term unless one was given"
+    termed = url_for(QUERY_SOURCES["course_catalog"], {"keywords": "CSE 485", "term": "Fall 2026"})
+    assert "term=2267" in termed
+
+
+def test_dining_hours_come_from_the_pdf_of_the_campus_named():
+    url = url_for(QUERY_SOURCES["dining"], {"campus": "tempe"})
+    assert url.startswith("https://sundevilhospitality.asu.edu/")
+    assert "Tempe" in url
+    with pytest.raises(QueryError, match="campus"):
+        url_for(QUERY_SOURCES["dining"], {})
+    with pytest.raises(QueryError, match="campus"):
+        url_for(QUERY_SOURCES["dining"], {"campus": "polytechnic"})
 
 
 def test_course_search_url_carries_only_the_filters_that_were_given():

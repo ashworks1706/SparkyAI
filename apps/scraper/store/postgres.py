@@ -142,6 +142,14 @@ def upsert_source(
     return SourceRow(id=row["id"], key=row["key"], url=row["url"], category=row["category"])
 
 
+def set_source_title(conn: psycopg.Connection, source_id: uuid.UUID, title: str) -> None:
+    """Records the page title of a source. It is what a citation of the source is labelled with."""
+    title = title.strip()
+    if not title:
+        return
+    conn.execute("update sources set title = %s where id = %s", (title, source_id))
+
+
 def latest_version(conn: psycopg.Connection, source_id: uuid.UUID) -> dict | None:
     """Most recent source_versions row, or None."""
     return conn.execute(

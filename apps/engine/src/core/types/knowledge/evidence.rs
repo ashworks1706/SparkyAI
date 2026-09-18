@@ -11,6 +11,8 @@ pub struct Evidence {
     pub source_id: Uuid,
     /// The chunks row.
     pub chunk_id: Uuid,
+    /// Key of the sources row it came from.
+    pub key: String,
     /// Human-readable source name.
     pub title: String,
     /// Chunk text.
@@ -26,6 +28,8 @@ pub struct Evidence {
 /// One source an answer rests on. A client decides how to show it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Citation {
+    /// Key of the source behind it: a sources row key, or a live source's registry key.
+    pub key: String,
     /// Human-readable source name.
     pub title: String,
     /// Canonical page URL, when the source has one.
@@ -46,6 +50,7 @@ impl Evidence {
     /// The source this chunk credits.
     pub fn citation(&self) -> Citation {
         Citation {
+            key: self.key.clone(),
             title: self.title.clone(),
             url: self.url.clone(),
         }
