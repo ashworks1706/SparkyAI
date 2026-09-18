@@ -9,7 +9,7 @@ use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
 use crate::core::types::tools::{RiskClass, ToolError};
-use crate::runtime::tools::sandbox::{ContainerSandbox, Limits, SandboxTool};
+use crate::runtime::tools::sandbox::{ContainerSandbox, Limits, SandboxTool, Wording};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -44,7 +44,50 @@ fn every_flag_that_seals_the_container_is_passed_once_with_its_value() {
     }
 
     // The image is the last argument, and the command follows it.
-    assert_eq!(args.last().map(String::as_str), Some("alpine:3.20"));
+    assert_eq!(
+        args.last().map(String::as_str),
+        Some(SandboxSettings::default().image.as_str())
+    );
+}
+
+#[test]
+fn the_workspace_is_writable_but_never_executable_and_is_sized_by_configuration() {
+    let sealed = ContainerSandbox::new(Limits {
+        workspace_mb: 128,
+        ..Limits::default()
+    })
+    .seal();
+    let at = sealed.iter().position(|a| a == "--tmpfs");
+    let Some(at) = at else {
+        unreachable!("the workspace is mounted")
+    };
+    assert_eq!(
+        sealed.get(at + 1).map(String::as_str),
+        Some("/tmp:rw,noexec,nosuid,size=128m")
+    );
+}
+
+#[test]
+fn a_long_output_keeps_its_head_and_its_tail() {
+    use crate::core::types::tools::sandbox::workspace_path;
+    use crate::runtime::tools::sandbox::clip;
+
+    // The exit of a long run is at the end; head-only truncation would drop it.
+    let long: String = std::iter::repeat_n('x', 100).collect();
+    let text = format!("start{long}end");
+    let out = clip(&text, 20);
+    assert!(out.starts_with("start"), "{out}");
+    assert!(out.ends_with("end"), "{out}");
+    assert!(out.contains("characters cut"), "{out}");
+    // Short output is untouched, and a zero limit keeps everything.
+    assert_eq!(clip("short", 20), "short");
+    assert_eq!(clip(&text, 0), text);
+
+    // A workspace name cannot climb out of the workspace.
+    assert!(workspace_path("result.txt").is_ok());
+    for bad in ["../etc/passwd", "a/b", ".hidden", "", "a..b"] {
+        assert!(workspace_path(bad).is_err(), "{bad} was accepted");
+    }
 }
 
 #[test]
@@ -110,6 +153,21 @@ impl Sandbox for Canned {
     ) -> Result<SandboxOutput, SandboxError> {
         Ok(self.0.clone())
     }
+
+    async fn put(
+        &self,
+        _ctx: &RequestContext,
+        _session: &str,
+        name: &str,
+        _content: &[u8],
+    ) -> Result<String, SandboxError> {
+        Ok(format!("/tmp/{name}"))
+    }
+}
+
+/// The wording a test tool carries; the strings themselves are settings.
+fn wording() -> Wording {
+    Wording::from(&crate::core::config::SandboxSettings::default())
 }
 
 #[tokio::test]
@@ -122,6 +180,7 @@ async fn a_non_zero_exit_is_reported_and_is_not_a_tool_failure() {
             session: None,
         })),
         RiskClass::PrepareWrite,
+        wording(),
     );
     let Ok(out) = tool
         .call(&ctx(), serde_json::json!({"command": "cat missing"}))
@@ -143,6 +202,7 @@ async fn the_declared_risk_is_what_policy_gates_it_by() {
             session: None,
         })),
         RiskClass::Destructive,
+        wording(),
     );
     assert_eq!(tool.definition().risk, RiskClass::Destructive);
     assert!(tool.definition().sequential, "one container at a time");
@@ -158,6 +218,7 @@ async fn arguments_that_do_not_carry_a_command_are_a_correctable_refusal() {
             session: None,
         })),
         RiskClass::PrepareWrite,
+        wording(),
     );
     let out = tool.call(&ctx(), serde_json::json!({"cmd": "echo"})).await;
     assert!(
@@ -319,4 +380,161 @@ async fn a_real_session_keeps_state_between_calls() {
         unreachable!("the session resumed")
     };
     assert_eq!(second.stdout.trim(), "kept");
+}
+
+#[test]
+fn a_caller_holding_the_most_sessions_loses_the_least_recently_used_one() {
+    let s = ContainerSandbox::new(Limits {
+        max_sessions: 2,
+        ..Limits::default()
+    });
+    let ctx = ctx();
+    let names: Vec<String> = ["first", "second"]
+        .iter()
+        .map(|n| ContainerSandbox::container_name(&ctx, n))
+        .collect();
+    for name in &names {
+        s.note_used(name);
+        // Distinct instants, so the oldest is unambiguous.
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    // Another caller's sessions never count against this one.
+    let other = RequestContext::new("g", "someone-else", Duration::from_secs(5));
+    s.note_used(&ContainerSandbox::container_name(&other, "theirs"));
+
+    let evicted = s.least_recently_used(&ctx);
+    assert_eq!(evicted.as_ref(), names.first());
+
+    // Using the oldest again makes the other one the candidate.
+    s.note_used(&names[0]);
+    assert_eq!(s.least_recently_used(&ctx).as_ref(), names.get(1));
+}
+
+#[test]
+fn a_session_idle_past_its_budget_is_swept_and_a_fresh_one_is_not() {
+    let s = ContainerSandbox::new(Limits {
+        session_idle_secs: 0,
+        ..Limits::default()
+    });
+    let name = ContainerSandbox::container_name(&ctx(), "stale");
+    s.note_used(&name);
+    assert_eq!(s.idle_sessions(), vec![name]);
+
+    let fresh = ContainerSandbox::new(Limits {
+        session_idle_secs: 3_600,
+        ..Limits::default()
+    });
+    fresh.note_used(&ContainerSandbox::container_name(&ctx(), "warm"));
+    assert!(fresh.idle_sessions().is_empty());
+}
+
+/// Live check that the image carries what the tool description promises.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn the_image_carries_python_and_jq() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+
+    for (command, want) in [
+        (r"python3 -c 'print(6*7)'", "42"),
+        (r#"echo '{"a":1}' | jq -r .a"#, "1"),
+        (
+            r"python3 -c 'import datetime;print((datetime.date(2026,1,2)-datetime.date(2026,1,1)).days)'",
+            "1",
+        ),
+    ] {
+        let Ok(out) = s
+            .run(
+                &ctx,
+                &SandboxRequest {
+                    command: command.into(),
+                    session: None,
+                },
+            )
+            .await
+        else {
+            unreachable!("the runtime answered")
+        };
+        assert_eq!(out.exit_code, 0, "{command}: {}", out.stderr);
+        assert_eq!(out.stdout.trim(), want, "{command}");
+    }
+}
+
+/// Live check that a result written to the workspace is there for the next command.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_put_file_is_read_back_by_the_next_command() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let session = "putback";
+
+    let Ok(path) = s
+        .put(&ctx, session, "result.txt", b"alpha\nbeta\ngamma\n")
+        .await
+    else {
+        unreachable!("the workspace took the file")
+    };
+    assert_eq!(path, "/tmp/result.txt");
+
+    let Ok(out) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: format!("grep -c . {path}"),
+                session: Some(session.to_owned()),
+            },
+        )
+        .await
+    else {
+        unreachable!("the runtime answered")
+    };
+    assert_eq!(out.stdout.trim(), "3", "{}", out.stderr);
+
+    // A name that would climb out of the workspace is refused before anything runs.
+    let escaped = s.put(&ctx, session, "../etc/passwd", b"x").await;
+    assert!(
+        matches!(escaped, Err(SandboxError::Refused(_))),
+        "{escaped:?}"
+    );
+}
+
+/// Live check that a session whose container was removed is started again, not failed.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_removed_session_is_started_again() {
+    // A zero idle budget makes the sweep take every session it knows about.
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_mins(1),
+        session_idle_secs: 0,
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let session = Some("revive".to_owned());
+    let request = |command: &str| SandboxRequest {
+        command: command.to_owned(),
+        session: session.clone(),
+    };
+
+    let Ok(first) = s.run(&ctx, &request("echo one > kept; echo ok")).await else {
+        unreachable!("the runtime answered")
+    };
+    assert_eq!(first.exit_code, 0);
+
+    // Reaping the session takes its workspace with it.
+    s.reap_idle().await;
+
+    let Ok(again) = s
+        .run(&ctx, &request("cat kept 2>/dev/null; echo back"))
+        .await
+    else {
+        unreachable!("a reaped session starts a new container rather than failing")
+    };
+    assert_eq!(again.exit_code, 0, "{}", again.stderr);
+    assert_eq!(again.stdout.trim(), "back", "the workspace went with it");
 }

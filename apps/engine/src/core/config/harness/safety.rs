@@ -57,6 +57,8 @@ impl Default for Guardrail {
 pub struct SandboxSettings {
     /// Offer the sandbox to the model. The engine needs access to the container runtime.
     pub enabled: bool,
+    /// Refuse to start when the runtime is unreachable. Off leaves the tool unregistered instead.
+    pub required: bool,
     /// Container runtime binary.
     pub runtime: String,
     /// Image the command runs in.
@@ -75,14 +77,25 @@ pub struct SandboxSettings {
     pub risk: RiskClass,
     /// How long a session container stays up with nothing running in it.
     pub session_idle_secs: u64,
+    /// Sessions one user may hold at once. Starting one past the cap reaps the least recently used.
+    pub max_sessions: usize,
+    /// Size of the writable workspace, in mebibytes.
+    pub workspace_mb: u32,
+    /// What the tool tells the model it is for.
+    pub description: String,
+    /// What the tool tells the model the command argument is.
+    pub command_description: String,
+    /// What the tool tells the model the session argument is.
+    pub session_description: String,
 }
 
 impl Default for SandboxSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            required: true,
             runtime: "docker".into(),
-            image: "alpine:3.20".into(),
+            image: "ghcr.io/ashworks1706/sparkyai-sandbox:main".into(),
             memory: "256m".into(),
             cpus: "1".into(),
             pids: 128,
@@ -90,6 +103,25 @@ impl Default for SandboxSettings {
             max_output_chars: 4_000,
             risk: RiskClass::PrepareWrite,
             session_idle_secs: 900,
+            max_sessions: 4,
+            workspace_mb: 64,
+            description: DESCRIPTION.into(),
+            command_description: COMMAND_DESCRIPTION.into(),
+            session_description: SESSION_DESCRIPTION.into(),
         }
     }
 }
+
+/// What the sandbox tells the model it is for, when sandbox.description is unset.
+pub const DESCRIPTION: &str = "Run a shell command in an isolated environment. Use it to work \
+    something out rather than doing it in your head: arithmetic, dates, sorting, filtering, or \
+    reading a file an earlier tool left in the workspace. python3, jq and the usual text tools \
+    are installed. There is no network, so it cannot fetch anything or reach ASU.";
+
+/// What the sandbox tells the model the command argument is.
+pub const COMMAND_DESCRIPTION: &str = "The shell command to run.";
+
+/// What the sandbox tells the model the session argument is.
+pub const SESSION_DESCRIPTION: &str = "Name a session to keep files in the workspace between \
+    calls. Reuse the same name to resume it. Results an earlier tool wrote to the workspace name \
+    the session they are in.";

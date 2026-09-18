@@ -17,6 +17,7 @@ use crate::core::traits::model::ModelProvider;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::tools::Tool;
+use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::tokens::estimate;
@@ -46,7 +47,10 @@ use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as Live
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
 use crate::runtime::tools::knowledge::skills::GetSkillTool;
 use crate::runtime::tools::mcp::{self, McpLimits};
-use crate::runtime::tools::sandbox::{ContainerSandbox, Limits as SandboxLimits, SandboxTool};
+use crate::runtime::tools::sandbox::{
+    ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
+    reap_sessions,
+};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::knowledge::skills::PgSkills;
 use crate::stores::memory::profile::PgProfileGraph;
@@ -103,13 +107,32 @@ An empty result means the answer is not held. Say so, or search once more with t
 named differently. An action that needs approval waits for the user to press the button; never
 say you did something you have only proposed.
 
+## Working things out
+run_sandbox is a shell with python3, jq and the usual text tools, and no network. Use it to work
+out anything you would otherwise do in your head, because it is right and you are not.
+- Dates and counts: days until a deadline, which weekday a date falls on, how many credits a
+  list adds to, whether two times overlap.
+- Reshaping what you already have: sorting a long list, filtering rows, pulling the fields you
+  need out of a JSON tool result.
+- Checking a claim before you make it, when getting it wrong would cost a student a deadline.
+- "the FAFSA deadline is June 30, how long do I have": run_sandbox with command
+  python3 -c "import datetime;print((datetime.date(2027,6,30)-datetime.date.today()).days)".
+- "which of these clubs meet on a Tuesday", a long list in the results: run_sandbox with a grep
+  over the list you were given, then answer from what it prints.
+Name a session to keep files between calls in one conversation, and reuse that name. A tool
+result too long to sit in the conversation is written to the workspace instead: the tool says
+the path and the session, and you read it there with python3, jq or grep rather than asking for
+it again.
+
 ## Never
 - Never guess a date, room, price, deadline, policy, or person.
 - Never repeat a search whose query you would write the same way twice.
 - Never quote a result you were not given.
 - Never tell the user to check the official site when you have just cited it.
 - Never use run_sandbox to fetch a page or reach a site: it has no network. Use a search tool
-  for the topic."#;
+  for the topic.
+- Never state a date, a count or a total you worked out in your head when run_sandbox could
+  have computed it."#;
 
 /// Serves until shutdown.
 pub async fn serve(cfg: Config) -> anyhow::Result<()> {
@@ -160,11 +183,13 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
 
     let queries = source_queries(&cfg, &pool, Arc::clone(&trace)).await?;
+    let sandbox = sandbox(&cfg).await?;
     let (tools, mcp_names) = build_tools(
         &cfg,
         &pool,
         queries,
         Arc::clone(&retriever) as Arc<dyn Retriever>,
+        sandbox.clone(),
     )
     .await?;
     let capabilities = capability::render(&capability::from_definitions(
@@ -180,9 +205,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         profile: profile_writer(&cfg, &model, profile_graph.clone()),
         profile_graph: profile_graph.clone(),
         compactor: compactor(&cfg, &model),
-        guardrail: cfg.guardrail.enabled.then(|| {
-            Arc::new(RuleGuardrail::new(Rules::from(&cfg.guardrail))) as Arc<dyn Guardrail>
-        }),
+        guardrail: guardrail(&cfg),
         model,
         tools,
         policy: Arc::new(RiskPolicy::from(&cfg.policy)),
@@ -192,6 +215,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         conversations: Some(conversations.clone()),
         memory: Some(memory),
         confirmations: Some(confirmations.clone()),
+        sandbox: sandbox.map(|s| s as Arc<dyn Sandbox>),
     };
     let system_prompt = cfg.system_prompt(SYSTEM_PROMPT)?;
     let agent = Agent::new(deps, agent_cfg, system_prompt)
@@ -415,6 +439,39 @@ fn task_config(cfg: &Config) -> TaskConfig {
     }
 }
 
+/// The response gate, when it is enabled.
+fn guardrail(cfg: &Config) -> Option<Arc<dyn Guardrail>> {
+    cfg.guardrail
+        .enabled
+        .then(|| Arc::new(RuleGuardrail::new(Rules::from(&cfg.guardrail))) as Arc<dyn Guardrail>)
+}
+
+/// The sandbox, when it is enabled and its runtime answers. Starts the session sweeper.
+///
+/// A tool that always fails is worse than no tool: it spends prompt budget on a schema and a
+/// capability line every request. sandbox.required decides whether an unreachable runtime is a
+/// boot failure or a warning.
+async fn sandbox(cfg: &Config) -> anyhow::Result<Option<Arc<ContainerSandbox>>> {
+    if !cfg.sandbox.enabled {
+        return Ok(None);
+    }
+    let sandbox = ContainerSandbox::new(SandboxLimits::from(&cfg.sandbox));
+    if let Err(error) = sandbox.probe().await {
+        if cfg.sandbox.required {
+            anyhow::bail!(
+                "sandbox.enabled is on but the container runtime is unreachable: {error}. \
+                 Give the engine a runtime, or set sandbox.required = false to run without it."
+            );
+        }
+        tracing::warn!(%error, "the container runtime is unreachable; run_sandbox is not offered");
+        return Ok(None);
+    }
+    // The sweep interval is the idle budget: a session lives at most twice it.
+    let every = Duration::from_secs(cfg.sandbox.session_idle_secs.max(1));
+    tokio::spawn(reap_sessions(sandbox.clone(), every));
+    Ok(Some(Arc::new(sandbox)))
+}
+
 /// Fails boot if the biggest prompt plus reply cannot fit one slot; skipped if context unreported.
 async fn fits_the_slot(cfg: &Config) -> anyhow::Result<()> {
     let slot = match props::slot_context(&cfg.model.base_url, &cfg.model.api_key).await {
@@ -493,6 +550,7 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         retry_base_ms: cfg.agent.retry_base_ms,
         retry_cap_ms: cfg.agent.retry_cap_ms,
         max_span_value_chars: cfg.agent.max_span_value_chars,
+        tool_result_to_file_chars: cfg.agent.tool_result_to_file_chars,
         usd_per_m_prompt: cfg.model.usd_per_m_prompt,
         usd_per_m_completion: cfg.model.usd_per_m_completion,
         budget: cfg.agent.budget(),
@@ -653,6 +711,7 @@ async fn build_tools(
     pool: &sqlx::PgPool,
     queries: Arc<dyn SourceQueries>,
     retriever: Arc<dyn Retriever>,
+    sandbox: Option<Arc<ContainerSandbox>>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
@@ -678,9 +737,12 @@ async fn build_tools(
             }
         }
     }
-    if cfg.sandbox.enabled {
-        let sandbox = Arc::new(ContainerSandbox::new(SandboxLimits::from(&cfg.sandbox)));
-        let tool: Arc<dyn Tool> = Arc::new(SandboxTool::new(sandbox, cfg.sandbox.risk));
+    if let Some(sandbox) = sandbox {
+        let tool: Arc<dyn Tool> = Arc::new(SandboxTool::new(
+            sandbox,
+            cfg.sandbox.risk,
+            SandboxWording::from(&cfg.sandbox),
+        ));
         if !disabled(&tool.definition().name) {
             tracing::info!(
                 runtime = %cfg.sandbox.runtime,

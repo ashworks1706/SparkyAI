@@ -97,6 +97,7 @@ impl Default for AgentConfig {
             max_steps: agent.max_steps,
             max_model_retries: agent.max_model_retries,
             tool_timeout: std::time::Duration::from_secs(agent.tool_timeout_secs),
+            tool_result_to_file_chars: agent.tool_result_to_file_chars,
             confirmation_ttl: std::time::Duration::from_secs(agent.confirmation_ttl_secs),
             temperature: agent.temperature,
             history_turns: agent.history_turns,

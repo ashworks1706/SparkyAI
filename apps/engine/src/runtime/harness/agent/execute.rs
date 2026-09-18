@@ -19,6 +19,25 @@ use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::Run;
 use crate::runtime::harness::safety::redact::{redact, redact_text, truncate};
 
+/// The workspace session a conversation's tool results are written to.
+///
+/// One session per conversation, so a file written on an earlier turn is still there.
+fn workspace_session(ctx: &RequestContext) -> String {
+    format!("turn{}", ctx.conversation_id.simple())
+}
+
+/// The head of content, and where the whole of it now is.
+fn handle(content: &str, path: &str, session: &str, head: usize) -> String {
+    let shown: String = content.chars().take(head).collect();
+    let lines = content.lines().count();
+    let bytes = content.len();
+    format!(
+        "{shown}\n\n[{bytes} bytes, {lines} lines. Only the first {head} characters are above. \
+         The whole result is in the sandbox workspace at {path}. Read it with run_sandbox, \
+         session {session}, for example: grep -i SUBJECT {path} or sed -n 1,40p {path}]"
+    )
+}
+
 /// Why authorize_all stopped.
 pub(super) enum HeldError {
     /// The caller must approve before anything runs.
@@ -83,17 +102,60 @@ impl Agent {
         } else {
             join_all(fresh.iter().map(|call| self.run_tool(ctx, step, call))).await
         };
-        for (call, (result, found)) in fresh.iter().zip(results) {
+        for (index, (call, (result, found))) in fresh.iter().zip(results).enumerate() {
             run.tool_sources.extend(found);
             run.tool_runs.push(ToolRun {
                 tool: call.name.clone(),
                 ok: result.is_ok(),
             });
             let content = result.unwrap_or_else(|error| format!("error: {error}"));
+            let content = self.offloaded(ctx, step, index, &call.name, content).await;
             run.new_turns
                 .push(Message::tool_result(&call.id, &call.name, content));
         }
         Ok(StepOutcome::Continue)
+    }
+
+    /// A result too long to carry, written to the workspace and replaced by its head and a path.
+    ///
+    /// A long result otherwise rides in the conversation for every later step of the turn. The
+    /// content is returned unchanged when the handoff is off, no sandbox is configured, or the
+    /// write failed, so the model is never left with less than it has today.
+    async fn offloaded(
+        &self,
+        ctx: &RequestContext,
+        step: u32,
+        index: usize,
+        tool: &str,
+        content: String,
+    ) -> String {
+        let limit = self.cfg.tool_result_to_file_chars;
+        if limit == 0 || content.chars().count() <= limit {
+            return content;
+        }
+        let Some(sandbox) = &self.deps.sandbox else {
+            return content;
+        };
+        let session = workspace_session(ctx);
+        let name = format!("{tool}-{step}-{index}.txt");
+        match sandbox.put(ctx, &session, &name, content.as_bytes()).await {
+            Ok(path) => {
+                self.deps.trace.emit(
+                    ctx,
+                    TraceEvent::ToolResultStored {
+                        step,
+                        tool: tool.to_owned(),
+                        path: path.clone(),
+                        bytes: content.len(),
+                    },
+                );
+                handle(&content, &path, &session, limit)
+            }
+            Err(error) => {
+                tracing::warn!(%error, tool, "could not offload the tool result; it is carried whole");
+                content
+            }
+        }
     }
 
     /// Runs policy over every call first. Denials feed back as tool results; confirmation stops it.

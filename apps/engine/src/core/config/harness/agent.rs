@@ -55,6 +55,8 @@ pub struct Agent {
     pub retry_cap_ms: u64,
     /// Longest value recorded on a span; the JSONL trace keeps the rest.
     pub max_span_value_chars: usize,
+    /// Tool result length past which the result goes to the sandbox workspace. 0 carries it whole.
+    pub tool_result_to_file_chars: usize,
     /// Characters of a tool argument list or a tool result one live progress line carries.
     pub progress_detail_chars: usize,
     /// Characters of reasoning a thinking line carries.
@@ -94,6 +96,7 @@ impl Default for Agent {
             retry_base_ms: 250,
             retry_cap_ms: 8_000,
             max_span_value_chars: 32_000,
+            tool_result_to_file_chars: 0,
             progress_detail_chars: progress::DETAIL_CHARS,
             progress_thought_chars: progress::THOUGHT_CHARS,
             stream: true,

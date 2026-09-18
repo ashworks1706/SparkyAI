@@ -25,6 +25,7 @@ use crate::core::traits::model::ModelProvider;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::safety::policy::Policy;
+use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
@@ -69,6 +70,8 @@ pub struct AgentDeps {
     pub profile: Option<Arc<ProfileWriter>>,
     /// The profile graph read at assembly time, when configured.
     pub profile_graph: Option<Arc<dyn ProfileGraph>>,
+    /// Workspace a tool result too long to carry is written to, when configured.
+    pub sandbox: Option<Arc<dyn Sandbox>>,
 }
 
 /// Records the answer and how the run ended on the span it ran under.

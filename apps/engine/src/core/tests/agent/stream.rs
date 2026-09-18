@@ -226,6 +226,7 @@ async fn a_draft_the_guardrail_refuses_is_withdrawn_and_never_shown_again() {
         conversations: None,
         memory: None,
         confirmations: None,
+        sandbox: None,
         compactor: None,
         guardrail: Some(Arc::new(RuleGuardrail::new(Rules {
             denied_phrases: vec!["ssn".into()],

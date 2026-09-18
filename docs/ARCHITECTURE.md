@@ -106,7 +106,7 @@ flowchart LR
     ENG -->|"embeddings"| EMB["llama-server embed"]
     ENG <-->|"conversations, index reads, jobs"| PG[("PostgreSQL and pgvector")]
     ENG -.->|"optional"| MCP["MCP servers"]
-    ENG -.->|"run_sandbox"| SBX["sandbox containers"]
+    ENG -.->|"run_sandbox"| SBX["sandboxd<br/>sandbox containers"]
 
     SCR <-->|"job claims, index writes"| PG
     SCR -->|"embeddings"| EMB
@@ -384,7 +384,11 @@ The harness runs more than one prompt. Each sub-agent is a `runtime::harness::ag
 
 `tools.disabled` removes tools by name at registration. The engine refuses to boot when the capabilities section exceeds its budget or the tool schemas take more than half of `agent.prompt_budget_tokens`. It also refuses when the prompt budget plus `agent.prompt_estimate_headroom` and `model.max_tokens_without_thinking` do not fit one `llama-server` slot.
 
-`run_sandbox` runs a command in a container with no network, a read-only root, memory, CPU, and process limits, and a non-root user. A call that names a session reuses a container that stays up for `sandbox.session_idle_secs`, so files written under /tmp persist between calls. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session.
+`run_sandbox` runs a command in a container with no network, a read-only root, memory, CPU, and process limits, a non-root user, and a workspace of `sandbox.workspace_mb` mounted `noexec` at /tmp. The image is `deploy/docker/sandbox.Dockerfile`: python3, jq and the usual text tools, and nothing that could fetch. A call that names a session reuses a container, so files in the workspace persist between calls; the container is removed once it has been idle for `sandbox.session_idle_secs`, and a caller holding `sandbox.max_sessions` loses their least recently used one. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session.
+
+The engine needs a container runtime. Under compose that is the `sandboxd` service, a daemon of its own reached over `DOCKER_HOST`, so driving it is not driving the host runtime; on a developer host it is the local `docker`. The runtime is probed once at boot: `sandbox.required` decides whether an unreachable one fails boot or leaves `run_sandbox` unregistered, so the model is never offered a tool that always fails.
+
+A tool result longer than `agent.tool_result_to_file_chars` is written to the workspace and replaced by its head plus the path, so a long result stops riding in the conversation for every later step of the turn. It is off at `0`; the full result still reaches the trace either way.
 
 A skill is a saved procedure: parameters, ordered steps, and the domain it applies to. `get_skill` fetches one, and the model follows it with the capabilities it already has. Only rows with `enabled` set are offered, and a row starts disabled, so a person reviews each skill before it is offered. With no enabled skill, `get_skill` is not registered.
 

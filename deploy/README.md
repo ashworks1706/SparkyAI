@@ -31,9 +31,26 @@ Set `SPARKY_MODEL__BASE_URL` and `SPARKY_EMBEDDING__BASE_URL` accordingly. Detai
 
 `apps/web` builds to static files: `npm run build` → `apps/web/dist`. Deploy to Vercel (root directory `apps/web`) or any static host. Not part of the Docker image.
 
+## The sandbox
+
+`run_sandbox` needs a container runtime. Compose provides one as `sandboxd`, a `docker:27-dind`
+daemon of its own with no host port: the engine reaches it over `DOCKER_HOST=tcp://sandboxd:2375`,
+so a compromise of the engine reaches that daemon and not the host. The engine image carries only
+the client. On a developer host running `just engine`, the local `docker` serves the same purpose
+and nothing else is needed.
+
+Commands run in `ghcr.io/ashworks1706/sparkyai-sandbox` (`deploy/docker/sandbox.Dockerfile`):
+python3, jq and the usual text tools, and nothing that can fetch. Every container is started with
+no network, a read-only root, dropped capabilities, a non-root user, and a `noexec` workspace, so
+`python3 script.py` runs but `./script` does not.
+
+The runtime is probed at boot. `sandbox.required = true` refuses to start without one; set it to
+`false` to run without a sandbox, which leaves `run_sandbox` unregistered so the model is never
+offered a tool that always fails.
+
 ## Images
 
-CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust` and `sparkyai-scraper` tagged `<sha>` and `main` on push to `main` — only the images whose inputs changed (`workflow_dispatch` rebuilds all). CI likewise runs only the units a change touches.
+CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-scraper` and `sparkyai-sandbox` tagged `<sha>` and `main` on push to `main` — only the images whose inputs changed (`workflow_dispatch` rebuilds all). CI likewise runs only the units a change touches.
 
 ## Observability
 
