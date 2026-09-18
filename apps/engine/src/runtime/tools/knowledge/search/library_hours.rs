@@ -14,6 +14,10 @@ impl LiveSource for LibraryHours {
         "library opening hours"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Library Hours"
+    }
+
     fn category(&self) -> &'static str {
         "library"
     }

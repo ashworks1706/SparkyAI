@@ -133,6 +133,7 @@ def _index(source: Source, row: SourceRow, fetched: Fetched, *, force: bool) -> 
                 ratio=cfg.scraper.quality_floor_ratio,
                 min_chars=cfg.scraper.quality_floor_min_chars,
             )
+        postgres.set_source_title(conn, row.id, title)
         # Each embedded text is prefixed with the page title.
         texts = [f"{title}\n{p}" for p in pieces]
         vectors = embed.embed_texts(texts)

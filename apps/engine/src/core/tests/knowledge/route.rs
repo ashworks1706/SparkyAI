@@ -39,6 +39,7 @@ impl Retriever for Counting {
         Ok(vec![Evidence {
             source_id: Uuid::new_v4(),
             chunk_id: Uuid::new_v4(),
+            key: "library_hours".into(),
             title: "hayden hours".into(),
             content: "Hayden closes at midnight.".into(),
             url: None,

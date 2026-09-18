@@ -18,6 +18,10 @@ impl LiveSource for CampusMap {
         "where a building or place is"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Campus Map"
+    }
+
     fn category(&self) -> &'static str {
         "campus"
     }

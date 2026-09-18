@@ -21,6 +21,7 @@ SUITES = [
     "tool_selection",
     "tool_args",
     "grounding",
+    "voice",
     "memory",
     "permissions",
     "clarification",

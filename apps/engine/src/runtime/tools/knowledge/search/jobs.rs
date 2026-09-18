@@ -14,6 +14,10 @@ impl LiveSource for Jobs {
         "student employment listings"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Student Employment"
+    }
+
     fn category(&self) -> &'static str {
         "jobs"
     }

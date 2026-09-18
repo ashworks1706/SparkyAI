@@ -75,6 +75,8 @@ impl PgRetriever {
 #[derive(Clone)]
 struct Candidate {
     chunk_id: Uuid,
+    /// Registry key of the source.
+    key: String,
     /// The summary this row was folded into, when it has one.
     parent_id: Option<Uuid>,
     source_id: Uuid,
@@ -93,6 +95,7 @@ struct Candidate {
 fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Error> {
     Ok(Candidate {
         chunk_id: row.try_get("chunk_id")?,
+        key: row.try_get("key")?,
         parent_id: row.try_get("parent_id")?,
         source_id: row.try_get("source_id")?,
         title: row.try_get("title")?,
@@ -105,8 +108,9 @@ fn row_to_candidate(row: &sqlx::postgres::PgRow) -> Result<Candidate, sqlx::Erro
     })
 }
 
-/// The candidate columns of a chunk.
-const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key as title, s.url, c.content, \
+/// The candidate columns of a chunk. A source without a stored page title falls back to its key.
+const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key, \
+                       coalesce(nullif(s.title, ''), s.key) as title, s.url, c.content, \
                        c.fetched_at, c.parent_id, c.version_id, c.ordinal, c.level";
 
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
@@ -401,6 +405,7 @@ impl PgRetriever {
             evidence.push(Evidence {
                 source_id: c.source_id,
                 chunk_id: c.chunk_id,
+                key: c.key,
                 title: c.title,
                 content,
                 url: c.url,
@@ -461,6 +466,7 @@ impl Retriever for PgRetriever {
                 .map(|(c, score)| Evidence {
                     source_id: c.source_id,
                     chunk_id: c.chunk_id,
+                    key: c.key,
                     title: c.title,
                     content: c.content,
                     url: c.url,

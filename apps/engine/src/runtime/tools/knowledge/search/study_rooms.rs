@@ -23,6 +23,10 @@ impl LiveSource for StudyRooms {
         "bookable library study rooms"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Library Study Rooms"
+    }
+
     fn category(&self) -> &'static str {
         "library"
     }

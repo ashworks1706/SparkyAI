@@ -55,6 +55,10 @@ impl LiveSource for Scholarships {
         "scholarships and who may apply"
     }
 
+    fn label(&self) -> &'static str {
+        "ASU Scholarship Search"
+    }
+
     fn category(&self) -> &'static str {
         "scholarships"
     }

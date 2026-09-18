@@ -2,7 +2,9 @@
 
 pub mod campus_map;
 pub mod clubs;
+pub mod course_catalog;
 pub mod courses;
+pub mod dining;
 pub mod events;
 pub mod jobs;
 pub mod library_catalog;
@@ -57,6 +59,7 @@ impl Freshness {
 pub fn catalog() -> Vec<Box<dyn LiveSource>> {
     vec![
         Box::new(courses::Courses),
+        Box::new(course_catalog::CourseCatalog),
         Box::new(scholarships::Scholarships),
         Box::new(events::Events),
         Box::new(clubs::Clubs),
@@ -69,6 +72,7 @@ pub fn catalog() -> Vec<Box<dyn LiveSource>> {
         Box::new(shuttles::Shuttles),
         Box::new(campus_map::CampusMap),
         Box::new(social_media::SocialMedia),
+        Box::new(dining::Dining),
         Box::new(jobs::Jobs),
         Box::new(web::Web),
     ]
@@ -191,6 +195,9 @@ pub trait LiveSource: Send + Sync {
     /// A few words naming what it answers, listed beside its key in the source filter.
     fn hint(&self) -> &'static str;
 
+    /// Name of the site behind it, as a citation of a live result is labelled.
+    fn label(&self) -> &'static str;
+
     /// The chunks category the scraper writes its pages under.
     fn category(&self) -> &'static str;
 
@@ -200,6 +207,11 @@ pub trait LiveSource: Send + Sync {
     /// The text parameter the query fills. None takes the first text parameter.
     fn query_param(&self) -> Option<&'static str> {
         None
+    }
+
+    /// The query as the text parameter takes it, with the words its site cannot match cut.
+    fn narrow(&self, query: &str) -> String {
+        query.trim().to_owned()
     }
 
     /// Values for parameters the query cannot carry, applied to what it left empty.
@@ -365,7 +377,7 @@ pub fn params_for(
     let mut out = Map::new();
     for param in params {
         let value = match param.accepts {
-            Accepts::Text if Some(param.name) == fills => query.trim().to_owned(),
+            Accepts::Text if Some(param.name) == fills => source.narrow(query),
             Accepts::OneOf(choices) => named(query, choices)
                 .first()
                 .map(|choice| (*choice).to_owned())

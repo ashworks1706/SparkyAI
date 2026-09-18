@@ -128,11 +128,14 @@ impl Tool for LiveSearch {
         Ok(ToolOutput {
             content: format!(
                 "Live result from {} ({}{when}):\n\n{}",
-                outcome.source, outcome.url, outcome.text
+                source.label(),
+                outcome.url,
+                outcome.text
             ),
             data: structured(&outcome),
             sources: vec![Citation {
-                title: outcome.source.clone(),
+                key: source.key().to_owned(),
+                title: source.label().to_owned(),
                 url: Some(outcome.url.clone()),
             }],
         })
