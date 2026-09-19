@@ -30,9 +30,13 @@ impl ToolSet {
         self.tools.get(name)
     }
 
-    /// Definitions in name order, for the model.
+    /// Definitions in name order, for the model. A tool switched off is left out.
     pub fn definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(|t| t.definition()).collect()
+        self.tools
+            .values()
+            .filter(|t| t.available())
+            .map(|t| t.definition())
+            .collect()
     }
 
     /// Estimated tokens the tool schemas add to every model request.

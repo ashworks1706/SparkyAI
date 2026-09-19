@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
     let mut app = App::new(cfg, root.clone(), &tx)?;
 
     tokio::spawn(units::health::poll(targets, tx.clone()));
+    tokio::spawn(units::sandbox::poll(app.sandbox.clone(), tx.clone()));
     tokio::spawn(services_task(root, tx.clone()));
     tokio::spawn(ticker(tx.clone()));
     tokio::spawn(keys(tx));

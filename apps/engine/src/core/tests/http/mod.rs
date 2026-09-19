@@ -1,7 +1,8 @@
-//! The HTTP surface: the OpenAI-compatible API and rate limiting.
+//! The HTTP surface: the OpenAI-compatible API, rate limiting, and the sandbox routes.
 
 mod openai;
 mod rate_limit;
+mod sandbox;
 
 #[test]
 fn a_secret_matches_only_when_every_byte_does() {

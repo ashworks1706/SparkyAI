@@ -3,7 +3,7 @@
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::HeaderValue;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -13,6 +13,7 @@ pub mod health;
 pub mod openai;
 pub mod profile;
 pub mod rate_limit;
+pub mod sandbox;
 
 /// Limits applied to the whole HTTP surface. Built from the http section; no Default.
 #[derive(Debug, Clone, Copy)]
@@ -58,6 +59,7 @@ pub fn router(
     chat_state: chat::ChatState,
     health_state: health::HealthState,
     profile_state: profile::ProfileState,
+    sandbox_state: sandbox::SandboxState,
     limits: Limits,
     cors_origins: &[String],
 ) -> Router {
@@ -76,10 +78,16 @@ pub fn router(
         .route("/profile/forget", post(profile::forget))
         .route("/profile/list", post(profile::list))
         .with_state(profile_state);
+    let sandbox = Router::new()
+        .route("/sandbox", get(sandbox::report))
+        .route("/sandbox/enabled", post(sandbox::switch))
+        .route("/sandbox/{name}", delete(sandbox::kill))
+        .with_state(sandbox_state);
     let mut router = Router::new()
         .merge(health)
         .merge(chat)
         .merge(profile)
+        .merge(sandbox)
         .route("/v1/models", get(openai::models))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
         .layer(TraceLayer::new_for_http());

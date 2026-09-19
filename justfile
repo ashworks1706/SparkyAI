@@ -115,15 +115,26 @@ web:
 up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
-down:
+down: sandbox-down
     docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix down
+
+# Remove the sandbox containers and egress proxy the engine starts outside compose
+sandbox-down:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    # DOCKER_HOST decides which runtime holds them: the local one, or sandboxd under compose.
+    [ -f .env ] && set -a && . ./.env && set +a
+    held=$(docker ps -aq --filter "label=sparky.sandbox" 2>/dev/null)
+    if [ -n "$held" ]; then docker rm --force $held >/dev/null; echo "removed $(echo "$held" | wc -l) sandbox containers"; fi
+    docker rm --force "${SPARKY_SANDBOX__EGRESS_PROXY_NAME:-sparky-sandbox-proxy}" >/dev/null 2>&1 || true
+    docker network rm "${SPARKY_SANDBOX__EGRESS_NETWORK:-sparky-sandbox}" >/dev/null 2>&1 || true
 
 # Start production with GHCR images; no host ports for datastores
 prod-up *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml pull
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d {{ARGS}}
 
-prod-down:
+prod-down: sandbox-down
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml down
 
 prod-logs *ARGS:

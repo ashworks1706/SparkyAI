@@ -26,6 +26,55 @@ pub struct SandboxOutput {
     pub session: Option<String>,
 }
 
+/// One live session container, as an operator sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxSession {
+    /// Container name, which is what kills it.
+    pub name: String,
+    /// Name the caller gave the session.
+    pub session: String,
+    /// Seconds since it was started.
+    pub age_secs: u64,
+    /// Seconds since a command last ran in it.
+    pub idle_secs: u64,
+    /// Commands run in it.
+    pub runs: u64,
+}
+
+/// One command the sandbox ran, kept so an operator can watch what the agent is doing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxCommand {
+    /// Identifies it across reports, so a reader can follow one command from start to end.
+    pub id: u64,
+    /// When it started.
+    pub at: chrono::DateTime<chrono::Utc>,
+    /// Container it ran in, absent for a one-shot container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<String>,
+    /// Session it ran in, absent for a one-shot container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    /// The command, as the model wrote it.
+    pub command: String,
+    /// Exit status. Absent while it runs, and absent after one that timed out or was cancelled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    /// How long it took. Absent while it is still running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+
+/// What the sandbox is doing right now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxReport {
+    /// Whether the agent is offered the tool at all.
+    pub enabled: bool,
+    /// Live session containers, newest use first.
+    pub sessions: Vec<SandboxSession>,
+    /// Commands the sandbox ran, newest first.
+    pub commands: Vec<SandboxCommand>,
+}
+
 /// Why a sandboxed command did not run.
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {

@@ -4,7 +4,7 @@ pub mod control;
 mod keys;
 pub mod ui;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -12,11 +12,13 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::config::Config;
 use crate::core::types::{
-    Event, Focus, Health, Kind, LogLine, Mode, ServiceState, Status, Stream, Unit,
+    Event, Focus, Health, Kind, LogLine, Mode, SANDBOX_SWITCH, SandboxCommand, SandboxReport,
+    SandboxUnit, ServiceState, Status, Stream, Unit,
 };
 use crate::units;
 use crate::units::logs::{LogBuffer, LogWriter};
 use crate::units::runner::Runner;
+use crate::units::sandbox;
 
 /// A catalog entry plus what the console knows about it right now.
 pub struct UnitState {
@@ -42,6 +44,12 @@ pub struct UnitState {
 pub struct App {
     cfg: Config,
     runner: Runner,
+    /// Sends events back from the tasks the console starts.
+    pub(super) tx: UnboundedSender<Event>,
+    /// Where the engine sandbox routes are.
+    pub(super) sandbox: sandbox::Endpoint,
+    /// Command id to whether its end was shown, so each one is written at most twice.
+    shown_commands: HashMap<u64, bool>,
     log_writer: LogWriter,
     /// Units in sidebar order.
     pub units: Vec<UnitState>,
@@ -81,6 +89,7 @@ impl App {
         };
         let log_writer = LogWriter::new(log_dir)?;
         let runner = Runner::new(root, tx.clone());
+        let sandbox = sandbox::Endpoint::from_config(&cfg);
         let units = units::catalog()
             .into_iter()
             .map(|u| UnitState::new(u, cfg.cli.log_lines))
@@ -88,6 +97,9 @@ impl App {
         Ok(Self {
             cfg,
             runner,
+            tx: tx.clone(),
+            sandbox,
+            shown_commands: HashMap::new(),
             log_writer,
             units,
             selected: 0,
@@ -140,6 +152,9 @@ impl App {
             Event::Services(Ok(states)) => self.services(&states),
             Event::Services(Err(e)) => self.notice = Some(e),
             Event::Health(h) => self.health = h,
+            Event::Sandbox(report) => self.sandbox_report(report),
+            Event::SandboxActed(Ok(note)) => self.notice = Some(note),
+            Event::SandboxActed(Err(why)) => self.notice = Some(why),
             Event::InputLost(why) => {
                 self.notice = Some(format!("terminal input ended ({why}); quitting"));
                 self.should_quit = true;
@@ -169,6 +184,8 @@ impl App {
                     }
                     None
                 }
+                // The engine owns these; a report says what they are doing.
+                Kind::Sandbox(_) => None,
                 Kind::Process | Kind::Task => {
                     let stopped = std::mem::take(&mut u.stopping);
                     u.status = match code {
@@ -203,6 +220,78 @@ impl App {
                 None => u.status = Status::Stopped,
             }
         }
+    }
+
+    /// Brings the sandbox rows in line with what the engine reports, and shows new commands.
+    fn sandbox_report(&mut self, report: Result<SandboxReport, String>) {
+        let report = match report {
+            Ok(report) => report,
+            Err(why) => {
+                // The engine being down is the usual reason; the status bar already says so.
+                self.drop_sandbox_rows(&[]);
+                self.upsert_unit(units::sandbox_switch(), Status::Failed(why));
+                return;
+            }
+        };
+        self.upsert_unit(units::sandbox_switch(), Status::from_on(report.enabled));
+        for session in &report.sessions {
+            self.upsert_unit(units::sandbox_session(session), Status::Running);
+        }
+        let live: Vec<String> = report.sessions.iter().map(|s| s.name.clone()).collect();
+        self.drop_sandbox_rows(&live);
+        self.show_commands(&report.commands);
+    }
+
+    /// Writes the commands newer than the newest already shown into the switch log, oldest first.
+    fn show_commands(&mut self, commands: &[SandboxCommand]) {
+        for command in sandbox::unwritten(commands, &self.shown_commands) {
+            self.shown_commands.insert(command.id, command.ended());
+            let line = LogLine::now(Stream::Out, command.line());
+            self.log(SANDBOX_SWITCH, line.clone());
+            let Some(container) = &command.container else {
+                continue;
+            };
+            if let Some(u) = self.units.iter_mut().find(|u| match &u.unit.kind {
+                Kind::Sandbox(SandboxUnit::Session { container: held }) => held == container,
+                _ => false,
+            }) {
+                u.logs.push(line);
+            }
+        }
+        // A command that has scrolled out of the engine log is forgotten here too.
+        let live: HashSet<u64> = commands.iter().map(|c| c.id).collect();
+        self.shown_commands.retain(|id, _| live.contains(id));
+    }
+
+    /// Adds a unit, or refreshes the one already listed under its id.
+    fn upsert_unit(&mut self, unit: Unit, status: Status) {
+        if let Some(i) = self.index_of(&unit.id) {
+            self.units[i].unit = unit;
+            self.units[i].status = status;
+            return;
+        }
+        let mut state = UnitState::new(unit, self.cfg.cli.log_lines);
+        state.status = status;
+        self.units.push(state);
+    }
+
+    /// Takes back the rows of session containers the engine no longer reports.
+    fn drop_sandbox_rows(&mut self, live: &[String]) {
+        let was = self.selected;
+        let selected = self.units.get(was).map(|u| u.unit.id.clone());
+        self.units.retain(|u| match &u.unit.kind {
+            Kind::Sandbox(SandboxUnit::Session { container }) => live.contains(container),
+            _ => true,
+        });
+        let Some(last) = self.units.len().checked_sub(1) else {
+            self.selected = 0;
+            return;
+        };
+        // The cursor follows its row, and stays where it was when that row is the one that went.
+        self.selected = selected
+            .and_then(|id| self.index_of(&id))
+            .unwrap_or(was)
+            .min(last);
     }
 
     fn index_of(&self, id: &str) -> Option<usize> {

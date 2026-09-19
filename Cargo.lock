@@ -362,6 +362,7 @@ dependencies = [
  "futures",
  "ratatui",
  "reqwest 0.13.4",
+ "secrecy 0.10.3",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

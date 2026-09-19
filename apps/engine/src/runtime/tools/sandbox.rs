@@ -1,13 +1,15 @@
 //! A command in an isolated container: read-only root, capped resources, non-root user, and either
 //! no network or an internal network whose only way out is the egress proxy.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use chrono::Utc;
 use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -16,9 +18,11 @@ use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::sandbox::{
-    SandboxError, SandboxOutput, SandboxRequest, session_name, workspace_path,
+    SandboxCommand, SandboxError, SandboxOutput, SandboxRequest, SandboxSession, session_name,
+    workspace_path,
 };
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::runtime::harness::safety::redact::redact_text;
 use crate::runtime::tools::structured;
 
 /// Name of the tool that runs a command in the isolated environment.
@@ -70,6 +74,8 @@ pub struct Limits {
     pub max_sessions: usize,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,
+    /// Commands kept for the operator view.
+    pub recent_commands: usize,
     /// The way out to the public internet. None runs with no network.
     pub egress: Option<Egress>,
 }
@@ -93,6 +99,7 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
             session_idle_secs: cfg.session_idle_secs,
             max_sessions: cfg.max_sessions,
             workspace_mb: cfg.workspace_mb,
+            recent_commands: cfg.recent_commands,
             egress: cfg.egress.then(|| Egress {
                 network: cfg.egress_network.clone(),
                 proxy_image: cfg.egress_proxy_image.clone(),
@@ -102,12 +109,93 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
     }
 }
 
-/// Runs commands in a container. Clones share the session registry.
+/// The guard of a lock, taken back after a panic. What it holds is bookkeeping, not an
+/// invariant another thread could have half written.
+fn held<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    lock.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Label every container the engine starts carries, so an operator can find them all.
+pub const LABEL: &str = "sparky.sandbox";
+
+/// What the engine knows about one live session container.
+#[derive(Debug, Clone)]
+struct Live {
+    /// Name the caller gave it.
+    session: String,
+    /// When it was started here.
+    started: Instant,
+    /// When a command last ran in it.
+    used: Instant,
+    /// Commands run in it.
+    runs: u64,
+}
+
+impl Live {
+    fn new(session: &str) -> Self {
+        let now = Instant::now();
+        Self {
+            session: session.to_owned(),
+            started: now,
+            used: now,
+            runs: 0,
+        }
+    }
+}
+
+/// Holds one command in the running list for as long as the call that started it lives.
+///
+/// The loop drops a tool call that is cancelled, so the command it was running has to come off
+/// the list on the way out rather than at the end of a body that never runs.
+struct Running {
+    sandbox: ContainerSandbox,
+    ticket: u64,
+    started: Instant,
+}
+
+impl Running {
+    /// Moves the finished command into the log and ends the guard.
+    fn ended(self, exit_code: Option<i32>, duration_ms: u64) {
+        let Some(mut command) = self.sandbox.take_running(self.ticket) else {
+            return;
+        };
+        command.exit_code = exit_code;
+        command.duration_ms = Some(duration_ms);
+        self.sandbox.keep(command);
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        // A cancelled call ends here. It is recorded as ended with no exit status.
+        if let Some(mut command) = self.sandbox.take_running(self.ticket) {
+            command.duration_ms = Some(
+                self.started
+                    .elapsed()
+                    .as_millis()
+                    .try_into()
+                    .unwrap_or(u64::MAX),
+            );
+            self.sandbox.keep(command);
+        }
+    }
+}
+
+/// Runs commands in a container. Clones share the session registry and the command log.
 #[derive(Debug, Clone, Default)]
 pub struct ContainerSandbox {
     limits: Limits,
-    /// Container name to when it was last used, for the idle sweep and the per-caller cap.
-    sessions: Arc<Mutex<HashMap<String, Instant>>>,
+    /// Container name to what is known about it, for the idle sweep and the per-caller cap.
+    sessions: Arc<Mutex<HashMap<String, Live>>>,
+    /// The commands that ran, newest last, capped at limits.recent_commands.
+    recent: Arc<Mutex<VecDeque<SandboxCommand>>>,
+    /// Commands running right now, by the ticket they took.
+    running: Arc<Mutex<Vec<(u64, SandboxCommand)>>>,
+    /// Hands out a ticket per command, so one can be found again when it ends.
+    ticket: Arc<AtomicU64>,
+    /// Whether the tool is offered. An operator turns it off without restarting the engine.
+    enabled: Arc<AtomicBool>,
 }
 
 impl ContainerSandbox {
@@ -116,7 +204,39 @@ impl ContainerSandbox {
         Self {
             limits,
             sessions: Arc::default(),
+            recent: Arc::default(),
+            running: Arc::default(),
+            ticket: Arc::default(),
+            enabled: Arc::new(AtomicBool::new(true)),
         }
+    }
+
+    /// Records a command as started. The guard takes it out again however the call ends.
+    fn command_started(&self, mut command: SandboxCommand) -> Running {
+        let ticket = self.ticket.fetch_add(1, Ordering::Relaxed);
+        command.id = ticket;
+        held(&self.running).push((ticket, command));
+        Running {
+            sandbox: self.clone(),
+            ticket,
+            started: Instant::now(),
+        }
+    }
+
+    /// Takes the command of ticket out of the running list, if it is still there.
+    fn take_running(&self, ticket: u64) -> Option<SandboxCommand> {
+        let mut running = held(&self.running);
+        let at = running.iter().position(|(t, _)| *t == ticket)?;
+        Some(running.remove(at).1)
+    }
+
+    /// Puts an ended command in the log, dropping the oldest once the log is full.
+    fn keep(&self, command: SandboxCommand) {
+        let mut recent = held(&self.recent);
+        while recent.len() >= self.limits.recent_commands {
+            recent.pop_front();
+        }
+        recent.push_back(command);
     }
 
     /// The prefix every session container of one caller shares.
@@ -186,42 +306,42 @@ impl ContainerSandbox {
     /// Removes a container and forgets it.
     async fn remove(&self, name: &str) {
         self.runtime_ok(&["rm", "--force", name]).await;
-        if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.remove(name);
-        }
+        held(&self.sessions).remove(name);
     }
 
-    /// Records a session as used now.
-    pub(crate) fn note_used(&self, name: &str) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.insert(name.to_owned(), Instant::now());
+    /// Records a session as used now, starting its entry when this is the first time.
+    pub(crate) fn note_used(&self, name: &str, session: &str, ran: bool) {
+        let mut sessions = held(&self.sessions);
+        let live = sessions
+            .entry(name.to_owned())
+            .or_insert_with(|| Live::new(session));
+        live.used = Instant::now();
+        if ran {
+            live.runs += 1;
         }
     }
 
     /// The caller's least recently used session, when they already hold the most they may.
     pub(crate) fn least_recently_used(&self, ctx: &RequestContext) -> Option<String> {
         let prefix = Self::owner_prefix(ctx);
-        let sessions = self.sessions.lock().ok()?;
-        let mut held: Vec<(&String, &Instant)> = sessions
+        let sessions = held(&self.sessions);
+        let mut candidates: Vec<(&String, &Live)> = sessions
             .iter()
             .filter(|(name, _)| name.starts_with(&prefix))
             .collect();
-        if held.len() < self.limits.max_sessions.max(1) {
+        if candidates.len() < self.limits.max_sessions {
             return None;
         }
-        held.sort_by_key(|(_, used)| **used);
-        held.first().map(|(name, _)| (*name).clone())
+        candidates.sort_by_key(|(_, live)| live.used);
+        candidates.first().map(|(name, _)| (*name).clone())
     }
 
     /// The sessions idle past their budget.
     pub(crate) fn idle_sessions(&self) -> Vec<String> {
         let budget = Duration::from_secs(self.limits.session_idle_secs);
-        let Ok(sessions) = self.sessions.lock() else {
-            return Vec::new();
-        };
-        sessions
+        held(&self.sessions)
             .iter()
-            .filter(|(_, used)| used.elapsed() >= budget)
+            .filter(|(_, live)| live.used.elapsed() >= budget)
             .map(|(name, _)| name.clone())
             .collect()
     }
@@ -235,9 +355,14 @@ impl ContainerSandbox {
     }
 
     /// Starts a session container, or resumes the one already running under this name.
-    async fn start_session(&self, ctx: &RequestContext, name: &str) -> Result<(), SandboxError> {
+    async fn start_session(
+        &self,
+        ctx: &RequestContext,
+        name: &str,
+        session: &str,
+    ) -> Result<(), SandboxError> {
         if self.running(name).await {
-            self.note_used(name);
+            self.note_used(name, session, false);
             return Ok(());
         }
         // A container under this name exists but has stopped; its workspace is already gone.
@@ -265,7 +390,7 @@ impl ContainerSandbox {
         let why = String::from_utf8_lossy(&out.stderr);
         // Another request started the same session between the check and here.
         if out.status.success() || why.contains("already in use") {
-            self.note_used(name);
+            self.note_used(name, session, false);
             return Ok(());
         }
         Err(SandboxError::Runtime(format!(
@@ -279,6 +404,8 @@ impl ContainerSandbox {
         let l = &self.limits;
         let network = l.egress.as_ref().map_or("none", |e| e.network.as_str());
         let mut args: Vec<String> = [
+            "--label",
+            LABEL,
             "--network",
             network,
             "--read-only",
@@ -349,6 +476,8 @@ impl ContainerSandbox {
             self.runtime(&[
                 "run",
                 "--detach",
+                "--label",
+                LABEL,
                 "--name",
                 &egress.proxy_name,
                 "--restart",
@@ -470,23 +599,20 @@ impl Sandbox for ContainerSandbox {
         if request.command.trim().is_empty() {
             return Err(SandboxError::Refused("the command is empty".into()));
         }
-        let session = request
-            .session
-            .as_deref()
-            .map(session_name)
-            .transpose()?
-            .map(|name| Self::container_name(ctx, &name));
+        let named = request.session.as_deref().map(session_name).transpose()?;
+        let session = named.as_deref().map(|name| Self::container_name(ctx, name));
         let mut command = Command::new(&self.limits.runtime);
-        match &session {
-            Some(name) => {
-                self.start_session(ctx, name).await?;
+        match (&session, &named) {
+            (Some(container), Some(name)) => {
+                self.start_session(ctx, container, name).await?;
+                self.note_used(container, name, true);
                 command
                     .arg("exec")
                     .arg("--workdir")
                     .arg(WORKSPACE)
-                    .arg(name);
+                    .arg(container);
             }
-            None => {
+            _ => {
                 command.args(self.args());
             }
         }
@@ -500,12 +626,34 @@ impl Sandbox for ContainerSandbox {
             .kill_on_drop(true);
 
         let budget = self.limits.timeout.min(ctx.remaining());
-        let output = tokio::time::timeout(budget, command.output())
-            .await
-            .map_err(|_| SandboxError::Timeout)?
-            .map_err(|e| {
-                SandboxError::Runtime(format!("{} did not start: {e}", self.limits.runtime))
-            })?;
+        let started = Instant::now();
+        let running = self.command_started(SandboxCommand {
+            // command_started stamps the ticket over this.
+            id: 0,
+            at: Utc::now(),
+            container: session.clone(),
+            session: named.clone(),
+            command: redact_text(&request.command),
+            exit_code: None,
+            duration_ms: None,
+        });
+        let ran = tokio::time::timeout(budget, command.output()).await;
+        let took = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let output = match ran {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                running.ended(None, took);
+                return Err(SandboxError::Runtime(format!(
+                    "{} did not start: {e}",
+                    self.limits.runtime
+                )));
+            }
+            Err(_) => {
+                running.ended(None, took);
+                return Err(SandboxError::Timeout);
+            }
+        };
+        running.ended(Some(output.status.code().unwrap_or(-1)), took);
 
         let max = self.limits.max_output_chars;
         Ok(SandboxOutput {
@@ -515,6 +663,47 @@ impl Sandbox for ContainerSandbox {
             stderr: clip(&String::from_utf8_lossy(&output.stderr), max),
             session: request.session.clone(),
         })
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    fn set_enabled(&self, on: bool) {
+        self.enabled.store(on, Ordering::Relaxed);
+    }
+
+    fn sessions(&self) -> Vec<SandboxSession> {
+        let mut out: Vec<SandboxSession> = held(&self.sessions)
+            .iter()
+            .map(|(name, live)| SandboxSession {
+                name: name.clone(),
+                session: live.session.clone(),
+                age_secs: live.started.elapsed().as_secs(),
+                idle_secs: live.used.elapsed().as_secs(),
+                runs: live.runs,
+            })
+            .collect();
+        out.sort_by_key(|s| s.idle_secs);
+        out
+    }
+
+    fn commands(&self) -> Vec<SandboxCommand> {
+        let mut out: Vec<SandboxCommand> =
+            held(&self.running).iter().map(|(_, c)| c.clone()).collect();
+        out.extend(held(&self.recent).iter().rev().cloned());
+        out.sort_by(|a, b| b.id.cmp(&a.id));
+        out
+    }
+
+    async fn kill(&self, name: &str) -> Result<(), SandboxError> {
+        if !held(&self.sessions).contains_key(name) {
+            return Err(SandboxError::Refused(format!(
+                "no session container named {name}"
+            )));
+        }
+        self.remove(name).await;
+        Ok(())
     }
 
     async fn put(
@@ -527,7 +716,7 @@ impl Sandbox for ContainerSandbox {
         let session = session_name(session)?;
         let file = workspace_path(name)?;
         let container = Self::container_name(ctx, &session);
-        self.start_session(ctx, &container).await?;
+        self.start_session(ctx, &container, &session).await?;
         let path = format!("{WORKSPACE}/{file}");
 
         let mut child = Command::new(&self.limits.runtime)
@@ -616,6 +805,10 @@ impl SandboxTool {
 
 #[async_trait]
 impl Tool for SandboxTool {
+    fn available(&self) -> bool {
+        self.sandbox.enabled()
+    }
+
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: SANDBOX.to_owned(),

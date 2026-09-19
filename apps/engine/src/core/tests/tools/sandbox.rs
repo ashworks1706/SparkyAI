@@ -154,6 +154,24 @@ impl Sandbox for Canned {
         Ok(self.0.clone())
     }
 
+    fn enabled(&self) -> bool {
+        true
+    }
+
+    fn set_enabled(&self, _on: bool) {}
+
+    fn sessions(&self) -> Vec<crate::core::types::tools::sandbox::SandboxSession> {
+        Vec::new()
+    }
+
+    fn commands(&self) -> Vec<crate::core::types::tools::sandbox::SandboxCommand> {
+        Vec::new()
+    }
+
+    async fn kill(&self, _name: &str) -> Result<(), SandboxError> {
+        Ok(())
+    }
+
     async fn put(
         &self,
         _ctx: &RequestContext,
@@ -394,19 +412,23 @@ fn a_caller_holding_the_most_sessions_loses_the_least_recently_used_one() {
         .map(|n| ContainerSandbox::container_name(&ctx, n))
         .collect();
     for name in &names {
-        s.note_used(name);
+        s.note_used(name, "held", true);
         // Distinct instants, so the oldest is unambiguous.
         std::thread::sleep(Duration::from_millis(2));
     }
     // Another caller's sessions never count against this one.
     let other = RequestContext::new("g", "someone-else", Duration::from_secs(5));
-    s.note_used(&ContainerSandbox::container_name(&other, "theirs"));
+    s.note_used(
+        &ContainerSandbox::container_name(&other, "theirs"),
+        "theirs",
+        true,
+    );
 
     let evicted = s.least_recently_used(&ctx);
     assert_eq!(evicted.as_ref(), names.first());
 
     // Using the oldest again makes the other one the candidate.
-    s.note_used(&names[0]);
+    s.note_used(&names[0], "first", true);
     assert_eq!(s.least_recently_used(&ctx).as_ref(), names.get(1));
 }
 
@@ -417,14 +439,18 @@ fn a_session_idle_past_its_budget_is_swept_and_a_fresh_one_is_not() {
         ..Limits::default()
     });
     let name = ContainerSandbox::container_name(&ctx(), "stale");
-    s.note_used(&name);
+    s.note_used(&name, "idle", true);
     assert_eq!(s.idle_sessions(), vec![name]);
 
     let fresh = ContainerSandbox::new(Limits {
         session_idle_secs: 3_600,
         ..Limits::default()
     });
-    fresh.note_used(&ContainerSandbox::container_name(&ctx(), "warm"));
+    fresh.note_used(
+        &ContainerSandbox::container_name(&ctx(), "warm"),
+        "warm",
+        true,
+    );
     assert!(fresh.idle_sessions().is_empty());
 }
 
@@ -537,6 +563,97 @@ async fn a_removed_session_is_started_again() {
     };
     assert_eq!(again.exit_code, 0, "{}", again.stderr);
     assert_eq!(again.stdout.trim(), "back", "the workspace went with it");
+}
+
+#[tokio::test]
+async fn a_call_that_ends_any_way_at_all_leaves_nothing_reported_as_running() {
+    use crate::core::traits::tools::sandbox::Sandbox as _;
+
+    let sandbox = ContainerSandbox::new(Limits {
+        runtime: "definitely-not-a-runtime".into(),
+        ..Limits::default()
+    });
+    let request = SandboxRequest {
+        command: "echo hello".into(),
+        session: None,
+    };
+
+    let out = sandbox.run(&ctx(), &request).await;
+    assert!(out.is_err(), "there is no runtime, so it cannot have run");
+    assert!(
+        sandbox.commands().iter().all(|c| c.duration_ms.is_some()),
+        "a call that failed is not still reported as running: {:?}",
+        sandbox.commands()
+    );
+
+    // The loop drops a cancelled tool call, so the guard is what takes the command off the list.
+    let held = ctx();
+    drop(sandbox.run(&held, &request));
+    assert!(
+        sandbox.commands().iter().all(|c| c.duration_ms.is_some()),
+        "a dropped call leaves nothing behind: {:?}",
+        sandbox.commands()
+    );
+}
+
+#[test]
+fn every_container_the_engine_starts_is_labelled_so_it_can_be_found_again() {
+    use crate::runtime::tools::sandbox::LABEL;
+
+    let sandbox = ContainerSandbox::new(Limits::default());
+    for args in [sandbox.seal(), sandbox.args()] {
+        let at = args.iter().position(|a| a == "--label");
+        assert_eq!(
+            at.and_then(|i| args.get(i + 1)).map(String::as_str),
+            Some(LABEL),
+            "an unlabelled container survives just down: {args:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_switch_takes_the_tool_off_the_list_and_leaves_the_containers_alone() {
+    use std::sync::Arc;
+
+    use crate::core::types::tools::RiskClass;
+    use crate::runtime::harness::tools::ToolSet;
+    use crate::runtime::tools::sandbox::{SANDBOX, SandboxTool, Wording};
+
+    let sandbox = Arc::new(ContainerSandbox::new(Limits::default()));
+    let tool = Arc::new(SandboxTool::new(
+        sandbox.clone(),
+        RiskClass::PrepareWrite,
+        Wording {
+            description: "runs a command".into(),
+            command: "the command".into(),
+            session: "the session".into(),
+        },
+    ));
+    let tools = ToolSet::new().with(tool);
+    let named = |tools: &ToolSet| tools.definitions().iter().any(|d| d.name == SANDBOX);
+
+    assert!(named(&tools), "the tool is offered while the switch is on");
+    sandbox.set_enabled(false);
+    assert!(!named(&tools), "a tool switched off is not listed");
+    assert!(
+        tools.get(SANDBOX).is_some(),
+        "the tool is still there, so a call that is already in flight still resolves"
+    );
+    sandbox.set_enabled(true);
+    assert!(named(&tools));
+}
+
+#[tokio::test]
+async fn killing_a_container_the_engine_does_not_hold_is_refused_rather_than_run() {
+    use crate::core::traits::tools::sandbox::Sandbox as _;
+
+    let sandbox = ContainerSandbox::new(Limits::default());
+    let refused = sandbox.kill("sparky-sb-0000000000000000-nothing").await;
+    assert!(
+        matches!(refused, Err(SandboxError::Refused(_))),
+        "a name the engine never started is not handed to the runtime: {refused:?}"
+    );
+    assert!(sandbox.sessions().is_empty());
 }
 
 #[test]

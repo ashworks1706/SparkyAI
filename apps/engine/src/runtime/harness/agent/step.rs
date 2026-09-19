@@ -124,7 +124,7 @@ impl Agent {
                 route: inputs.route,
                 history: &inputs.history,
                 turn,
-                capabilities: &self.capabilities,
+                capabilities: &self.capabilities(),
                 input: run.input,
                 date: &self.prompt.today(),
                 now: Some(chrono::Utc::now()),
