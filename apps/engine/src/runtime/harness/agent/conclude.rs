@@ -10,6 +10,19 @@ use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::{Run, cited};
 
+/// Whether a turn of this request belongs in the stored conversation.
+///
+/// A tool call and its result answer the question being asked now. Carrying them into later turns
+/// replays a page the student never asked about again and spends the history budget on it, so the
+/// stored conversation is what was said: the question and the answer.
+pub(super) fn said(message: &Message) -> bool {
+    match message.role {
+        Role::User => true,
+        Role::Assistant => message.tool_calls.is_empty() && !message.content.trim().is_empty(),
+        Role::System | Role::Tool | Role::Summary => false,
+    }
+}
+
 impl Agent {
     /// Keeps the turns, records the outcome, builds the answer. Every loop exit goes through here.
     pub(super) async fn conclude(
@@ -20,7 +33,8 @@ impl Agent {
         evidence: Vec<Evidence>,
         confirmation: Option<ConfirmationRequest>,
     ) -> Result<Answer, AgentError> {
-        self.persist(run.ctx, &run.new_turns).await?;
+        let said: Vec<Message> = run.new_turns.iter().filter(|m| said(m)).cloned().collect();
+        self.persist(run.ctx, &said).await?;
         self.record_profile(run);
         let evidence = cited(evidence, run);
         let text = if text.trim().is_empty() {

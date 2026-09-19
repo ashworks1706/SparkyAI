@@ -53,11 +53,6 @@ fn task_static(args: &[&str], hint: &str) -> Unit {
     task(&args, hint)
 }
 
-/// One ingestion run. Every source in apps/scraper/sources is offered by key.
-fn source_run(key: &str) -> Unit {
-    task_static(&["scraper", "run", key], "fetch, chunk, embed this source")
-}
-
 /// A recipe in the deploy section. The follows flag marks the ones that stream until stopped.
 fn deploy(args: &[&str], hint: &str, follows: bool) -> Unit {
     let mut unit = task_static(args, hint);
@@ -178,6 +173,8 @@ fn processes() -> Vec<Unit> {
     ]
 }
 
+/// The recipes worth a line of their own. Anything else in the justfile is reachable from the
+/// command line, :scraper run events, and appears here while it runs.
 fn tasks() -> Vec<Unit> {
     vec![
         task_static(&["doctor"], "required tools, .env, hooks"),
@@ -189,29 +186,16 @@ fn tasks() -> Vec<Unit> {
         ),
         task_static(&["check"], "fmt, lint, test every unit"),
         task_static(
-            &["data", "export"],
-            "Phoenix llm spans to .sparky/training/data",
-        ),
-        task_static(&["data", "verify"], "verify and deduplicate training data"),
-        task_static(&["data", "stats"], "dataset summary"),
-        task_static(&["eval", "run"], "golden cases against the engine"),
-        task_static(&["eval", "baseline"], "promote the last report"),
-        task_static(&["eval", "compare"], "fail on regression"),
-        task_static(&["train", "sft", "--dry-run"], "validate config and data"),
-        task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
-        task_static(
             &["scraper", "run", "--all"],
             "every source and static page, paced per host",
         ),
-        source_run("library_hours"),
-        source_run("events"),
-        source_run("clubs"),
-        source_run("courses"),
-        source_run("scholarships"),
-        source_run("news"),
-        source_run("shuttles"),
-        source_run("jobs"),
-        source_run("sports"),
+        task_static(
+            &["data", "export"],
+            "Phoenix llm spans to .sparky/training/data",
+        ),
+        task_static(&["eval", "run"], "golden cases against the engine"),
+        task_static(&["eval", "compare"], "fail on regression"),
+        task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
     ]
 }
 

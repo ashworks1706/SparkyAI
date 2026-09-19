@@ -301,9 +301,9 @@ sequenceDiagram
 
 1. `discord` receives a message addressed to it and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, `continue_channel`, and the message of its own a reply answers. A question is never a slash command; the remaining commands only read and clear memory.
 2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility, and otherwise a new conversation starts.
-3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question, unless the router skipped it.
-4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs.
-5. Every exit appends the new turns, hands the user's text to the profile writer, and builds the answer with its citations, tool runs, memories (empty for a public answer), usage, and cost.
+3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; memories and the profile graph, unless the request is public and `agent.recall_in_public` is off; and evidence from retrieval for the question, unless the router skipped it. None of the three is the turn: a memory or retrieval read that fails is logged and the turn runs without it, retrieval taking `Skipped::Unavailable` so the prompt says so and the search tools carry the answer.
+4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs. A turn about to answer after a tool failed, with `run_sandbox` registered and untried, is handed back once with `prompt.sandbox_retry_line` instead: a failed tool is not an answer, and the student hears that nothing was found only once the last route has been taken.
+5. Every exit appends what was said, hands the user's text to the profile writer, and builds the answer with its citations, tool runs, memories (empty for a public answer), usage, and cost. A tool call and its result answer the question being asked now, so they run the loop and are not stored: carrying a fetched page into later turns spends the history budget on it and offers the model a stale copy of a page it can fetch again.
 6. An answer with status `AwaitingConfirmation` carries a token. `POST /confirm` with that token runs the held action and resumes the loop from its result.
 
 ## Prompt assembly
@@ -419,7 +419,7 @@ Recall filters by `tenant_id` and `user_id` before ranking. Users list and delet
 | Kind | Content | Status |
 |---|---|---|
 | Working | the current request | not persisted |
-| Conversation | turns and tool results | `messages` |
+| Conversation | what was said, the question and the answer | `messages` |
 | Episodic, semantic, profile, task | durable facts about a user | `memories`, read by recall |
 | Profile graph | entities and relations | `profile_nodes`, `profile_edges` |
 

@@ -22,8 +22,9 @@ pub const SOURCE_DESCRIPTION: &str = "Narrows the search to one source. Leave it
      unless you already know which source holds the answer.";
 
 /// Default answer of search_knowledge when the index holds nothing for the query.
-pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that query. Either search again with the subject \
-     named differently, or call search_live, or say you do not have it.";
+pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that query. Search again \
+     with the subject named differently, or call search_live, or open the page yourself with \
+     run_sandbox. Say you do not have it only once all three have been tried this turn.";
 
 /// Which tools are registered and how the two search tools are worded.
 #[derive(Debug, Deserialize)]

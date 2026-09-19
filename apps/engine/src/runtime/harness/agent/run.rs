@@ -41,6 +41,8 @@ pub(super) struct Run<'a> {
     pub(super) tool_sources: Vec<Citation>,
     /// Set after a step of nothing but repeats. The next model call gets no tools.
     pub(super) force_answer: bool,
+    /// Set once the run has been sent back to try the sandbox. It is offered once a turn.
+    pub(super) sent_to_sandbox: bool,
     /// Leading new_turns entries that assembly appends itself, which the prompt must not repeat.
     pub(super) appended_by_assembly: usize,
 }
@@ -66,6 +68,7 @@ impl<'a> Run<'a> {
             memories_in_prompt: Vec::new(),
             tool_sources: Vec::new(),
             force_answer: false,
+            sent_to_sandbox: false,
             appended_by_assembly,
         }
     }

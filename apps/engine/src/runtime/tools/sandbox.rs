@@ -21,6 +21,8 @@ use crate::core::types::tools::sandbox::{
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::structured;
 
+/// Name of the tool that runs a command in the isolated environment.
+pub const SANDBOX: &str = "run_sandbox";
 /// Directory the workspace is mounted at inside the container.
 pub const WORKSPACE: &str = "/tmp";
 
@@ -616,7 +618,7 @@ impl SandboxTool {
 impl Tool for SandboxTool {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
-            name: "run_sandbox".into(),
+            name: SANDBOX.to_owned(),
             description: self.wording.description.clone(),
             parameters: json!({
                 "type": "object",

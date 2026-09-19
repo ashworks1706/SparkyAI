@@ -203,6 +203,8 @@ pub struct Prompt {
     pub no_retrieval_line: String,
     /// Line written when the router skipped retrieval because the answer has to be current.
     pub live_only_line: String,
+    /// Line written when the knowledge base could not be read.
+    pub no_index_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
     /// Heading above the message of ours a reply answers.
@@ -213,6 +215,8 @@ pub struct Prompt {
     pub date_line: String,
     /// Line added to a call that is offered no tools.
     pub answer_only_line: String,
+    /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
+    pub sandbox_retry_line: String,
     /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
@@ -229,11 +233,13 @@ impl Default for Prompt {
             no_evidence_line: assemble::NO_EVIDENCE_LINE.into(),
             no_retrieval_line: assemble::NO_RETRIEVAL_LINE.into(),
             live_only_line: assemble::LIVE_ONLY_LINE.into(),
+            no_index_line: assemble::NO_INDEX_LINE.into(),
             capabilities_header: assemble::CAPABILITIES_HEADER.into(),
             reply_header: assemble::REPLY_HEADER.into(),
             result_cut_line: assemble::RESULT_CUT_LINE.into(),
             date_line: assemble::DATE_LINE.into(),
             answer_only_line: assemble::ANSWER_ONLY_LINE.into(),
+            sandbox_retry_line: assemble::SANDBOX_RETRY_LINE.into(),
             utc_offset_hours: -7,
         }
     }
