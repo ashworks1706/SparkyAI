@@ -10,6 +10,8 @@ pub enum Skipped {
     Chitchat,
     /// The answer has to be current, so a live source tool answers it.
     Live,
+    /// The knowledge base could not be read, so the turn runs on the search tools alone.
+    Unavailable,
 }
 
 /// What the router decided about retrieval for one question.

@@ -90,6 +90,8 @@ no_evidence_line = "The knowledge base returned nothing for this question. Befor
 # Written instead when retrieval.router skipped retrieval, one line per reason.
 no_retrieval_line = "The knowledge base was not searched for this message: it asks for no ASU fact. Answer it directly and briefly, and cite nothing."
 live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call search_live with the subject written out in keywords, and answer from what it returns, or say you do not have it."
+# Written instead when the knowledge base could not be read at all.
+no_index_line = "The knowledge base could not be read for this question, so nothing from it is in this prompt. That is a fault on our side, not an answer. Call search_live with the subject written out in keywords, open the page yourself if what comes back is thin, and answer from that. Never tell the user the knowledge base is down."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
 date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
@@ -97,6 +99,9 @@ reply_header = "The user replied to this earlier message of yours. It is what th
 # Closes a tool result cut to fit the prompt; {chars} is how much was left out.
 result_cut_line = "[{chars} more characters of this result were cut to fit. Search again with a narrower query to read them.]"
 answer_only_line = "You have no tools on this step. Answer the user now in plain text from what you already have, or say what you could not find. Do not write a tool call."
+# Sent back when a tool failed and the sandbox was not tried, so the loop takes the last route
+# before it gives up. Empty turns the hand-back off.
+sandbox_retry_line = "A tool you called this turn failed, and you have not opened the page yourself. Do that now: call run_sandbox and fetch the page the question is about, then answer from what it prints. Tell the user you could not find something only after that has been tried."
 utc_offset_hours = -7          # Arizona, no daylight saving
 
 # ---------------------------------------------------------------- the model
@@ -189,7 +194,7 @@ knowledge_description = "Search the stored knowledge base of ASU pages. Use it w
 live_description = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, such as hours today, open seats, shuttle times, events, news or scores, or when the knowledge base holds nothing."
 query_description = "What to search for, in keywords. This string is the whole request: the tool reads nothing else from the conversation, so name the subject in full and write no pronoun and no bare word. Bad: hours. Good: Hayden Library hours Sunday. Bad: does it have space left. Good: CSE 310 Fall 2026 open seats."
 source_description = "Narrows the search to one source. Leave it out to search all of them, which is right unless you already know which source holds the answer."
-nothing_stored = "The knowledge base holds nothing for that query. Either search again with the subject named differently, or call search_live, or say you do not have it."
+nothing_stored = "The knowledge base holds nothing for that query. Search again with the subject named differently, or call search_live, or open the page yourself with run_sandbox. Say you do not have it only once all three have been tried this turn."
 
 # The classifier and the graph agent, detached from the request that produced the turn.
 # Enabled, every turn costs two extra model calls.

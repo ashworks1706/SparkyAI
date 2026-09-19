@@ -22,6 +22,8 @@ pub struct PromptText {
     pub no_retrieval_line: String,
     /// Line written when the router skipped retrieval because the answer has to be current.
     pub live_only_line: String,
+    /// Line written when the knowledge base could not be read.
+    pub no_index_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
     /// Heading above the message of ours a reply answers.
@@ -32,6 +34,8 @@ pub struct PromptText {
     pub date_line: String,
     /// Line added to a call that is offered no tools.
     pub answer_only_line: String,
+    /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
+    pub sandbox_retry_line: String,
     /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
@@ -52,11 +56,13 @@ impl From<&crate::core::config::Prompt> for PromptText {
             no_evidence_line: cfg.no_evidence_line.clone(),
             no_retrieval_line: cfg.no_retrieval_line.clone(),
             live_only_line: cfg.live_only_line.clone(),
+            no_index_line: cfg.no_index_line.clone(),
             capabilities_header: cfg.capabilities_header.clone(),
             reply_header: cfg.reply_header.clone(),
             result_cut_line: cfg.result_cut_line.clone(),
             date_line: cfg.date_line.clone(),
             answer_only_line: cfg.answer_only_line.clone(),
+            sandbox_retry_line: cfg.sandbox_retry_line.clone(),
             utc_offset_hours: cfg.utc_offset_hours,
         }
     }
@@ -91,6 +97,7 @@ impl PromptText {
             no_evidence_line: &self.no_evidence_line,
             no_retrieval_line: &self.no_retrieval_line,
             live_only_line: &self.live_only_line,
+            no_index_line: &self.no_index_line,
             capabilities_header: &self.capabilities_header,
             date_line: &self.date_line,
             reply_header: &self.reply_header,

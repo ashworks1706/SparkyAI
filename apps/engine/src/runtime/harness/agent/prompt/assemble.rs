@@ -112,6 +112,7 @@ fn no_evidence_line(s: &Sections<'_>) -> Option<String> {
         None => s.templates.no_evidence_line,
         Some(Skipped::Chitchat) => s.templates.no_retrieval_line,
         Some(Skipped::Live) => s.templates.live_only_line,
+        Some(Skipped::Unavailable) => s.templates.no_index_line,
     };
     Some(line.trim().to_owned()).filter(|l| !l.is_empty())
 }

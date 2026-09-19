@@ -13,7 +13,7 @@ use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::conversation::{Stored, Visibility};
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::retrieval::RetrievalQuery;
-use crate::core::types::knowledge::route::Route;
+use crate::core::types::knowledge::route::{Route, Skipped};
 use crate::core::types::memory::{Memory, MemoryQuery};
 use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::Inputs;
@@ -125,16 +125,19 @@ impl Agent {
             Vec::new()
         } else {
             let recalled = match &deps.memory {
-                Some(store) => store
-                    .recall(
-                        ctx,
-                        &MemoryQuery {
-                            kinds: Vec::new(),
-                            limit: self.cfg.memory_recall_limit,
-                        },
-                    )
-                    .await
-                    .map_err(|error| AgentError::Store(error.to_string()))?,
+                Some(store) => {
+                    let query = MemoryQuery {
+                        kinds: Vec::new(),
+                        limit: self.cfg.memory_recall_limit,
+                    };
+                    match store.recall(ctx, &query).await {
+                        Ok(memories) => memories,
+                        Err(error) => {
+                            tracing::error!(error = %error, "memory recall failed; none is recalled");
+                            Vec::new()
+                        }
+                    }
+                }
                 None => Vec::new(),
             };
             self.with_profile(ctx, recalled).await
@@ -145,18 +148,26 @@ impl Agent {
                 count: memory.len(),
             },
         );
-        let route = match &self.deps.router {
+        let mut route = match &self.deps.router {
             Some(router) => router.route(input),
             None => Route::Retrieve,
+        };
+        let evidence = match (&deps.retriever, route.skipped()) {
+            (Some(retriever), None) => match self.retrieve(ctx, input, retriever.as_ref()).await {
+                Ok(found) => found,
+                Err(error) => {
+                    // The index is one source of an answer, not the turn. The search tools stay.
+                    tracing::error!(error = %error, "retrieval failed; the turn runs without it");
+                    route = Route::Skip(Skipped::Unavailable);
+                    Vec::new()
+                }
+            },
+            _ => Vec::new(),
         };
         if let Some(reason) = route.skipped() {
             deps.trace
                 .emit(ctx, TraceEvent::RetrievalSkipped { reason });
         }
-        let evidence = match (&deps.retriever, route.skipped()) {
-            (Some(retriever), None) => self.retrieve(ctx, input, retriever.as_ref()).await?,
-            _ => Vec::new(),
-        };
         Ok(Inputs {
             history,
             memory,

@@ -63,7 +63,7 @@ under **tasks**.
 | models | chat, embed | same, `--profile model` |
 | tools | firecrawl, playwright-mcp | same, `--profile crawl` / `browser` |
 | apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group so `cargo run` and its binary both go |
-| tasks | doctor, setup, migrate, scraper run, check, data *, eval *, train sft | `just <recipe>`, exit code shown as ✓ / ✗ |
+| tasks | doctor, setup, migrate, scraper status, check, scraper run --all, data export, eval run, eval compare, train sft | `just <recipe>`, exit code shown as ✓ / ✗. Only these have a line of their own; every other recipe runs from the command line and appears here while it runs |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes the RunPod host uses; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
 Container state comes from `docker compose ps`. The status bar probes the engine, chat model, and Phoenix at `SPARKY_CLI__PHOENIX_URL`.

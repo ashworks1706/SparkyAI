@@ -38,6 +38,7 @@ use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::{Inputs, Run};
 use crate::runtime::harness::memory::profile::ProfileWriter;
 use crate::runtime::harness::tools::ToolSet;
+use crate::runtime::tools::sandbox::SANDBOX;
 
 pub use crate::runtime::harness::agent::prompt::PromptText;
 use crate::runtime::harness::safety::redact::truncate;
@@ -281,10 +282,45 @@ impl Agent {
                     return Err(error.into());
                 }
             };
+            if self.send_to_sandbox(run, &status, confirmation.as_ref()) {
+                continue;
+            }
             return self
                 .conclude(run, status, text, inputs.evidence.clone(), confirmation)
                 .await;
         }
+    }
+
+    /// Whether to spend one more step on the sandbox rather than answer.
+    ///
+    /// A tool that failed is not an answer. The loop hands the run back once, naming the sandbox,
+    /// so a student is told nothing could be found only after the last route was taken.
+    fn send_to_sandbox(
+        &self,
+        run: &mut Run<'_>,
+        status: &RunStatus,
+        confirmation: Option<&ConfirmationRequest>,
+    ) -> bool {
+        let line = self.prompt.sandbox_retry_line.trim();
+        if line.is_empty()
+            || run.sent_to_sandbox
+            || *status != RunStatus::Answered
+            || confirmation.is_some()
+        {
+            return false;
+        }
+        let failed = run.tool_runs.iter().any(|t| !t.ok);
+        let used = run.tool_runs.iter().any(|t| t.tool == SANDBOX);
+        if !failed || used || self.deps.tools.get(SANDBOX).is_none() {
+            return false;
+        }
+        run.sent_to_sandbox = true;
+        run.new_turns.push(Message::system(line));
+        tracing::info!(
+            steps = run.steps,
+            "a tool failed and the sandbox was not tried; the run goes back for one more step"
+        );
+        true
     }
 
     /// The status the loop stops with before the next step, if any.

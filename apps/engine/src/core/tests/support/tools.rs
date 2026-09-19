@@ -29,6 +29,26 @@ impl Tool for Echo {
     }
 }
 
+/// A tool answering to whatever name it is built with.
+pub struct Named(pub &'static str);
+
+#[async_trait]
+impl Tool for Named {
+    fn definition(&self) -> ToolDefinition {
+        ToolDefinition {
+            name: self.0.into(),
+            description: "does whatever it is named for".into(),
+            parameters: json!({"type": "object"}),
+            risk: RiskClass::ReadPublic,
+            sequential: false,
+            timeout_secs: None,
+        }
+    }
+    async fn call(&self, _ctx: &RequestContext, _args: Value) -> Result<ToolOutput, ToolError> {
+        Ok(output("what the page says"))
+    }
+}
+
 /// Sleeps past any reasonable tool timeout.
 pub struct Slow;
 

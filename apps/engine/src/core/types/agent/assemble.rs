@@ -43,6 +43,8 @@ pub struct Templates<'a> {
     pub no_retrieval_line: &'a str,
     /// Line written when the router skipped retrieval because the answer has to be current.
     pub live_only_line: &'a str,
+    /// Line written when the knowledge base could not be read.
+    pub no_index_line: &'a str,
     /// Heading above what the model may do.
     pub capabilities_header: &'a str,
     /// Line naming the current date, with {date}.
@@ -87,6 +89,18 @@ pub const LIVE_ONLY_LINE: &str = "The knowledge base was not searched for this q
                                   date. Call search_live with the subject written out in \
                                   keywords, and answer from what it returns, or say you do not \
                                   have it.";
+/// Default line written when the knowledge base could not be read.
+pub const NO_INDEX_LINE: &str = "The knowledge base could not be read for this question, so \
+                                 nothing from it is in this prompt. That is a fault on our side, \
+                                 not an answer. Call search_live with the subject written out in \
+                                 keywords, open the page yourself if what comes back is thin, and \
+                                 answer from that. Never tell the user the knowledge base is down.";
+/// Default line sent back when a tool failed and the sandbox was not tried.
+pub const SANDBOX_RETRY_LINE: &str = "A tool you called this turn failed, and you have not \
+                                      opened the page yourself. Do that now: call run_sandbox \
+                                      and fetch the page the question is about, then answer from \
+                                      what it prints. Tell the user you could not find something \
+                                      only after that has been tried.";
 /// Default line added to a call that is offered no tools.
 pub const ANSWER_ONLY_LINE: &str = "You have no tools on this step. Answer the user now in plain \
                                     text from what you already have, or say what you could not \
@@ -112,6 +126,7 @@ impl Default for Templates<'_> {
             no_evidence_line: NO_EVIDENCE_LINE,
             no_retrieval_line: NO_RETRIEVAL_LINE,
             live_only_line: LIVE_ONLY_LINE,
+            no_index_line: NO_INDEX_LINE,
             capabilities_header: CAPABILITIES_HEADER,
             date_line: DATE_LINE,
             reply_header: REPLY_HEADER,

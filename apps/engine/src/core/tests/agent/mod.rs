@@ -12,7 +12,9 @@ use std::time::Duration;
 
 use serde_json::json;
 
-use crate::core::tests::support::{Boom, Echo, Ordered, Scripted, Slow, agent, calls, ctx, text};
+use crate::core::tests::support::{
+    Boom, Echo, Named, Ordered, Scripted, Slow, agent, calls, ctx, text,
+};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
 use crate::core::types::safety::policy::Decision;
@@ -453,6 +455,106 @@ async fn a_run_that_hits_the_step_limit_still_answers_and_keeps_its_turns() {
         !store.appended().is_empty(),
         "the turns are kept even though the loop gave up"
     );
+}
+
+#[tokio::test]
+async fn a_failed_tool_sends_the_run_to_the_sandbox_before_it_gives_up() {
+    let tools = ToolSet::new()
+        .with(Arc::new(Boom))
+        .with(Arc::new(Named("run_sandbox")));
+    let (agent, _) = agent(
+        Scripted::new(vec![
+            Ok(calls(vec![("c1", "boom", json!({}))])),
+            Ok(text("I could not find that. Try the ASU website.")),
+            Ok(calls(vec![("c2", "run_sandbox", json!({}))])),
+            Ok(text("Hayden closes at midnight.")),
+        ]),
+        tools,
+        AgentConfig::default(),
+    );
+
+    let out = agent.run(&ctx(), "when does hayden close").await.ok();
+
+    let runs = out
+        .as_ref()
+        .map(|a| a.tool_runs.clone())
+        .unwrap_or_default();
+    assert!(
+        runs.iter().any(|r| r.tool == "run_sandbox"),
+        "the last route is taken before the user is told nothing was found, got {runs:?}"
+    );
+    assert_eq!(
+        out.map(|a| a.text),
+        Some("Hayden closes at midnight.".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn the_run_is_sent_to_the_sandbox_once_and_not_when_there_is_none() {
+    let answer = "I could not find that.";
+    let script = || {
+        Scripted::new(vec![
+            Ok(calls(vec![("c1", "boom", json!({}))])),
+            Ok(text(answer)),
+            Ok(text(answer)),
+            Ok(text(answer)),
+        ])
+    };
+
+    let (no_sandbox, _) = agent(
+        script(),
+        ToolSet::new().with(Arc::new(Boom)),
+        AgentConfig::default(),
+    );
+    let out = no_sandbox.run(&ctx(), "go").await.ok();
+    assert_eq!(
+        out.map(|a| a.steps),
+        Some(2),
+        "with no sandbox registered the answer stands"
+    );
+
+    let (with_sandbox, _) = agent(
+        script(),
+        ToolSet::new()
+            .with(Arc::new(Boom))
+            .with(Arc::new(Named("run_sandbox"))),
+        AgentConfig::default(),
+    );
+    let out = with_sandbox.run(&ctx(), "go").await.ok();
+    assert_eq!(
+        out.map(|a| a.steps),
+        Some(3),
+        "the hand-back is offered once, not every time the model repeats itself"
+    );
+}
+
+#[tokio::test]
+async fn what_is_kept_is_what_was_said_not_what_the_tools_returned() {
+    use crate::core::tests::support::{Recording, agent_with_store};
+    use crate::core::types::conversation::message::Role;
+
+    let store = Arc::new(Recording::default());
+    let agent = agent_with_store(
+        Scripted::new(vec![
+            Ok(calls(vec![("c1", "echo", json!({"page": "a long page"}))])),
+            Ok(text("Hayden closes at midnight.")),
+        ]),
+        ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic))),
+        AgentConfig::default(),
+        store.clone(),
+    );
+
+    let _ = agent.run(&ctx(), "when does hayden close").await;
+
+    let kept = store.appended();
+    let roles: Vec<Role> = kept.iter().map(|m| m.role).collect();
+    assert_eq!(
+        roles,
+        vec![Role::User, Role::Assistant],
+        "a tool call and its result answer this turn, so they are not carried into the next"
+    );
+    assert!(kept.iter().all(|m| m.tool_calls.is_empty()));
+    assert_eq!(kept[1].content, "Hayden closes at midnight.");
 }
 
 #[tokio::test]

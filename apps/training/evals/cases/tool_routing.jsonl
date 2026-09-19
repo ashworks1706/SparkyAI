@@ -8,3 +8,6 @@
 {"id":"no-handing-the-work-back","suites":["voice"],"question":"What events is the American Indian Studies program running this week?","expect":{"not_mentions":["search_live","visit the asu events website","search for"]}}
 {"id":"catalog-cited-by-title","suites":["grounding","voice"],"question":"How many credit hours is CSE 110?","expect":{"source_key":"course_catalog","not_mentions":["course_catalog"]}}
 {"id":"dining-cited-by-title","suites":["grounding"],"question":"List the dining halls open on the Downtown campus.","expect":{"source_key":"dining"}}
+{"id":"sandbox-after-empty-search","suites":["tool_selection","voice"],"question":"What is the phone number of the ASU Polytechnic campus health centre?","expect":{"tool":"run_sandbox","not_mentions":["check the asu website","visit the","you can search"]}}
+{"id":"sandbox-after-thin-result","suites":["tool_selection"],"question":"Which scholarships is a computer science junior at ASU eligible for?","expect":{"tool":"run_sandbox"}}
+{"id":"no-handback-on-empty","suites":["voice"],"question":"Who is the faculty advisor of the ASU robotics club?","expect":{"not_mentions":["contact the","reach out to","you may want to"]}}

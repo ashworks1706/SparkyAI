@@ -3,6 +3,7 @@
 use std::fmt::Write as _;
 
 use crate::core::types::tools::{RiskClass, ToolDefinition};
+use crate::runtime::tools::sandbox::SANDBOX;
 
 /// How a capability is carried out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +42,7 @@ pub struct Capability {
 
 /// The kind of the tool named name, given the names of the MCP tools.
 pub fn kind_of(name: &str, mcp_names: &[String]) -> Kind {
-    if name == "run_sandbox" {
+    if name == SANDBOX {
         return Kind::Sandbox;
     }
     if mcp_names.iter().any(|m| m == name) {

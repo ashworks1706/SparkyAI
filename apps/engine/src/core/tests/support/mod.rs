@@ -28,7 +28,7 @@ pub use self::knowledge::{FakeCache, FakeQueries, Stored};
 pub use self::memory::{Known, Recalling};
 pub use self::model::{Scripted, calls, only_thought, text};
 pub use self::safety::Held;
-pub use self::tools::{Boom, Echo, Ordered, Slow};
+pub use self::tools::{Boom, Echo, Named, Ordered, Slow};
 pub use self::trace::MemorySink;
 
 /// An agent over a scripted model, with an in-memory trace to inspect.
