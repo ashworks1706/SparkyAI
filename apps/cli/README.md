@@ -63,6 +63,7 @@ under **tasks**.
 | models | chat, embed | same, `--profile model` |
 | tools | firecrawl, playwright-mcp | same, `--profile crawl` / `browser` |
 | apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group so `cargo run` and its binary both go |
+| sandboxes | the switch, then one row per live container | read from the engine at `GET /sandbox`; enter on the switch stops the agent being offered `run_sandbox`, enter on a container removes it. The switch's log pane is every command the agent ran, with the running one shown before it finishes |
 | tasks | doctor, setup, migrate, scraper status, check, scraper run --all, data export, eval run, eval compare, train sft | `just <recipe>`, exit code shown as ✓ / ✗. Only these have a line of their own; every other recipe runs from the command line and appears here while it runs |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes the RunPod host uses; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
@@ -70,6 +71,6 @@ Container state comes from `docker compose ps`. The status bar probes the engine
 
 ## Settings
 
-`SPARKY_ENGINE__BASE_URL`, `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `src/core/config.rs`.
+`SPARKY_ENGINE__BASE_URL`, `SPARKY_ENGINE__SERVICE_TOKEN` (the sandbox routes want it, and it is the token the engine already reads from `.env`), `SPARKY_MODEL__BASE_URL`, `SPARKY_CLI__PHOENIX_URL`, `SPARKY_CLI__LOG_LINES`, `SPARKY_CLI__LOG_DIR`, and `SPARKY_CLI__HEALTH_INTERVAL_SECS`. Defaults are in `src/core/config.rs`.
 
 The console keeps a bounded in-memory view and appends full unit output to `.sparky/logs/`.

@@ -221,6 +221,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         sandbox.clone(),
     )
     .await?;
+    // Measured at boot with every tool offered, which is the largest the section ever gets.
     let capabilities = capability::render(&capability::from_definitions(
         &tools.definitions(),
         &mcp_names,
@@ -244,14 +245,35 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         conversations: Some(conversations.clone()),
         memory: Some(memory),
         confirmations: Some(confirmations.clone()),
-        sandbox: sandbox.map(|s| s as Arc<dyn Sandbox>),
+        sandbox: sandbox.clone().map(|s| s as Arc<dyn Sandbox>),
     };
     let system_prompt = cfg.system_prompt(SYSTEM_PROMPT)?;
     let agent = Agent::new(deps, agent_cfg, system_prompt)
         .with_prompt_text(PromptText::from(&cfg.prompt))
-        .with_capabilities(capabilities);
+        .with_mcp_names(mcp_names);
 
     let state = chat_state(&cfg, agent, conversations, confirmations);
+    let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
+    let router = http_router(&cfg, state, profile, pool, sandbox);
+
+    let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
+    tracing::info!(addr = %cfg.app.http_addr, "listening");
+    until_shutdown(
+        listener,
+        router,
+        Duration::from_secs(cfg.http.shutdown_grace_secs),
+    )
+    .await
+}
+
+/// The whole HTTP surface, with the state each group of routes reads.
+fn http_router(
+    cfg: &Config,
+    state: ChatState,
+    profile: ProfileState,
+    pool: sqlx::postgres::PgPool,
+    sandbox: Option<Arc<ContainerSandbox>>,
+) -> axum::Router {
     let health = HealthState {
         pool,
         model_base_url: cfg.model.base_url.clone(),
@@ -260,17 +282,14 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         max_body_bytes: cfg.http.max_body_bytes,
         concurrency: cfg.http.concurrency_limit,
     };
-
-    let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
-    tracing::info!(addr = %cfg.app.http_addr, "listening");
-    let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
-    let router = crate::routes::router(state, health, profile, limits, &cfg.http.cors_origins);
-    until_shutdown(
-        listener,
-        router,
-        Duration::from_secs(cfg.http.shutdown_grace_secs),
+    crate::routes::router(
+        state,
+        health,
+        profile,
+        sandbox_state(cfg, sandbox),
+        limits,
+        &cfg.http.cors_origins,
     )
-    .await
 }
 
 /// Serves until the shutdown signal, then gives in-flight requests grace to finish.
@@ -473,6 +492,17 @@ fn guardrail(cfg: &Config) -> Option<Arc<dyn Guardrail>> {
     cfg.guardrail
         .enabled
         .then(|| Arc::new(RuleGuardrail::new(Rules::from(&cfg.guardrail))) as Arc<dyn Guardrail>)
+}
+
+/// What the sandbox routes read and drive.
+fn sandbox_state(
+    cfg: &Config,
+    sandbox: Option<Arc<ContainerSandbox>>,
+) -> crate::routes::sandbox::SandboxState {
+    crate::routes::sandbox::SandboxState {
+        sandbox: sandbox.map(|s| s as Arc<dyn Sandbox>),
+        service_token: cfg.engine.service_token.clone(),
+    }
 }
 
 /// The sandbox, when it is enabled and its runtime answers. Starts the session sweeper.

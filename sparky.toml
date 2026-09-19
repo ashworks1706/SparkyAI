@@ -238,6 +238,7 @@ risk = "prepare_write"
 session_idle_secs = 900        # how long a named session stays up with nothing running
 max_sessions = 4               # sessions one user holds at once; a new one reaps the oldest
 workspace_mb = 64
+recent_commands = 200          # commands kept for the console view of what Sparky ran
 egress = true
 egress_network = "sparky-sandbox"
 egress_proxy_image = "ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main"

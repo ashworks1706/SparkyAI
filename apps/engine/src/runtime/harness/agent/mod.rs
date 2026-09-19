@@ -41,6 +41,7 @@ use crate::runtime::harness::tools::ToolSet;
 use crate::runtime::tools::sandbox::SANDBOX;
 
 pub use crate::runtime::harness::agent::prompt::PromptText;
+use crate::runtime::harness::agent::prompt::capability;
 use crate::runtime::harness::safety::redact::truncate;
 
 /// The dependencies the loop drives. Every one is a trait with a test double.
@@ -107,8 +108,8 @@ pub struct Agent {
     system_prompt: Arc<str>,
     /// Wording written around the prompt sections.
     prompt: Arc<PromptText>,
-    /// The capabilities section, rendered once at boot.
-    capabilities: Arc<str>,
+    /// Names of the MCP tools, so a capability line says how each one runs.
+    mcp_names: Arc<[String]>,
 }
 
 /// What a step decided.
@@ -127,14 +128,22 @@ impl Agent {
             cfg,
             system_prompt: system_prompt.into(),
             prompt: Arc::new(PromptText::default()),
-            capabilities: Arc::from(""),
+            mcp_names: Arc::from([]),
         }
     }
 
-    /// Replaces the capabilities section the prompt carries.
-    pub fn with_capabilities(mut self, capabilities: impl Into<Arc<str>>) -> Self {
-        self.capabilities = capabilities.into();
+    /// Names the MCP tools, which the capabilities section labels differently.
+    pub fn with_mcp_names(mut self, names: impl Into<Arc<[String]>>) -> Self {
+        self.mcp_names = names.into();
         self
+    }
+
+    /// The capabilities section for this step. A tool switched off is not in it.
+    fn capabilities(&self) -> String {
+        capability::render(&capability::from_definitions(
+            &self.deps.tools.definitions(),
+            &self.mcp_names,
+        ))
     }
 
     /// Replaces the wording written around the prompt sections.
@@ -311,7 +320,8 @@ impl Agent {
         }
         let failed = run.tool_runs.iter().any(|t| !t.ok);
         let used = run.tool_runs.iter().any(|t| t.tool == SANDBOX);
-        if !failed || used || self.deps.tools.get(SANDBOX).is_none() {
+        let offered = self.deps.tools.get(SANDBOX).is_some_and(|t| t.available());
+        if !failed || used || !offered {
             return false;
         }
         run.sent_to_sandbox = true;

@@ -3,9 +3,10 @@
 use std::time::{Duration, Instant};
 
 use super::{App, UnitState};
-use crate::core::types::{Command, Focus, Kind, Status, Unit};
+use crate::core::types::{Command, Event, Focus, Kind, SandboxUnit, Status, Unit};
 use crate::units;
 use crate::units::health;
+use crate::units::sandbox;
 
 impl App {
     pub(super) fn toggle_selected(&mut self) {
@@ -35,6 +36,10 @@ impl App {
         }
         let unit = self.units[i].unit.clone();
         self.selected = i;
+        if let Kind::Sandbox(which) = &unit.kind {
+            self.ask_engine(which, true);
+            return;
+        }
         if let Some(addr) = self.taken_port(&unit) {
             self.notice = Some(format!(
                 "{id} is already served on {addr} by something this console did not start"
@@ -46,7 +51,8 @@ impl App {
                 let u = &mut self.units[i];
                 u.status = match unit.kind {
                     Kind::Service { .. } => Status::Starting,
-                    Kind::Process | Kind::Task => Status::Running,
+                    // A sandbox row returns above; the next report says what it is.
+                    Kind::Sandbox(_) | Kind::Process | Kind::Task => Status::Running,
                 };
                 u.started_at = Some(Instant::now());
                 u.follow = true;
@@ -58,6 +64,42 @@ impl App {
             }
         }
     }
+    /// Asks the engine to switch the sandbox or kill one container, off its own task.
+    ///
+    /// A container cannot be started from here: the agent makes one when it next runs a command.
+    fn ask_engine(&mut self, which: &SandboxUnit, on: bool) {
+        let endpoint = self.sandbox.clone();
+        let tx = self.tx.clone();
+        match which {
+            SandboxUnit::Switch => {
+                self.notice = Some(
+                    if on {
+                        "offering the sandbox"
+                    } else {
+                        "taking the sandbox away"
+                    }
+                    .to_owned(),
+                );
+                tokio::spawn(async move {
+                    let _ = tx.send(Event::SandboxActed(sandbox::switch(endpoint, on).await));
+                });
+            }
+            SandboxUnit::Session { .. } if on => {
+                self.notice =
+                    Some("the agent starts a container itself when it next runs a command".into());
+            }
+            SandboxUnit::Session { container } => {
+                let container = container.clone();
+                self.notice = Some(format!("killing {container}"));
+                tokio::spawn(async move {
+                    let _ = tx.send(Event::SandboxActed(
+                        sandbox::kill(endpoint, container).await,
+                    ));
+                });
+            }
+        }
+    }
+
     /// Address a process unit would bind, if free. None for compose services.
     fn taken_port(&self, unit: &Unit) -> Option<String> {
         if !matches!(unit.kind, Kind::Process) || self.runner.owns(&unit.id) {
@@ -74,6 +116,11 @@ impl App {
             return;
         };
         let unit = self.units[i].unit.clone();
+        if let Kind::Sandbox(which) = &unit.kind {
+            self.selected = i;
+            self.ask_engine(which, false);
+            return;
+        }
         if !self.units[i].status.is_active() && !self.runner.owns(id) {
             self.notice = Some(format!("{id} is not running"));
             return;

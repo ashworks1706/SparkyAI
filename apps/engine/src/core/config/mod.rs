@@ -320,6 +320,16 @@ fn validate_sandbox(sandbox: &SandboxSettings) -> Result<(), ConfigError> {
     if sandbox.runtime.trim().is_empty() {
         return Err(ConfigError::Invalid("sandbox.runtime is empty".into()));
     }
+    if sandbox.recent_commands == 0 {
+        return Err(ConfigError::Invalid(
+            "sandbox.recent_commands is 0, which keeps no record of what the agent ran".into(),
+        ));
+    }
+    if sandbox.max_sessions == 0 {
+        return Err(ConfigError::Invalid(
+            "sandbox.max_sessions is 0, which lets no caller hold a session".into(),
+        ));
+    }
     if sandbox.egress {
         for (key, value) in [
             ("sandbox.egress_network", &sandbox.egress_network),

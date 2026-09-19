@@ -4,8 +4,11 @@ pub mod health;
 pub mod logs;
 pub mod output;
 pub mod runner;
+pub mod sandbox;
 
-use crate::core::types::{Group, Kind, Unit};
+use crate::core::types::{
+    Group, Kind, SANDBOX_SWITCH, SandboxSession, SandboxUnit, Unit, session_id,
+};
 
 fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Unit {
     Unit {
@@ -51,6 +54,42 @@ pub fn task(args: &[String], hint: &str) -> Unit {
 fn task_static(args: &[&str], hint: &str) -> Unit {
     let args: Vec<String> = args.iter().map(|s| (*s).into()).collect();
     task(&args, hint)
+}
+
+/// The row that says whether the agent is offered the sandbox, and holds the command log.
+pub fn sandbox_switch() -> Unit {
+    Unit {
+        id: SANDBOX_SWITCH.into(),
+        group: Group::Sandboxes,
+        kind: Kind::Sandbox(SandboxUnit::Switch),
+        args: Vec::new(),
+        hint: "what the agent runs; enter stops it being offered".into(),
+        url: None,
+    }
+}
+
+/// The row of one live session container.
+pub fn sandbox_session(session: &SandboxSession) -> Unit {
+    Unit {
+        id: session_id(&session.name),
+        group: Group::Sandboxes,
+        kind: Kind::Sandbox(SandboxUnit::Session {
+            container: session.name.clone(),
+        }),
+        args: Vec::new(),
+        hint: format!(
+            "{}: {} {}, idle {}s",
+            session.session,
+            session.runs,
+            if session.runs == 1 {
+                "command"
+            } else {
+                "commands"
+            },
+            session.idle_secs
+        ),
+        url: None,
+    }
 }
 
 /// A recipe in the deploy section. The follows flag marks the ones that stream until stopped.

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
+use secrecy::SecretString;
 use serde::Deserialize;
 
 /// Console settings.
@@ -24,12 +25,15 @@ pub struct Config {
 pub struct Engine {
     /// Base URL of the engine.
     pub base_url: String,
+    /// Bearer token the engine wants. The console reads the same .env the engine does.
+    pub service_token: SecretString,
 }
 
 impl Default for Engine {
     fn default() -> Self {
         Self {
             base_url: "http://localhost:8080".into(),
+            service_token: SecretString::from(""),
         }
     }
 }

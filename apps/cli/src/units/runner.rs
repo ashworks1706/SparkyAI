@@ -56,6 +56,8 @@ impl Runner {
                 cmd.arg("just").args(&unit.args);
                 self.spawn_streaming(&unit.id, cmd, true)
             }
+            // The engine starts and stops its own containers; the console asks it to.
+            Kind::Sandbox(_) => Ok(()),
         }
     }
 
@@ -81,6 +83,7 @@ impl Runner {
                 }
                 Ok(())
             }
+            Kind::Sandbox(_) => Ok(()),
         }
     }
 
