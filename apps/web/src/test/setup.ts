@@ -8,11 +8,21 @@ class IntersectionObserverStub implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = "0px";
   readonly thresholds = [0];
+  readonly scrollMargin = "0px";
+
+  constructor(private readonly callback: IntersectionObserverCallback) {}
 
   disconnect = vi.fn();
-  observe = vi.fn();
   takeRecords = vi.fn(() => []);
   unobserve = vi.fn();
+
+  // Reports the element as on screen, so anything that reveals on scroll reveals under test.
+  observe = vi.fn((target: Element) => {
+    this.callback(
+      [{ isIntersecting: true, target } as IntersectionObserverEntry],
+      this as IntersectionObserver,
+    );
+  });
 }
 
 vi.stubGlobal("IntersectionObserver", IntersectionObserverStub);
