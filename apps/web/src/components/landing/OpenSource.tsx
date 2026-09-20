@@ -1,4 +1,5 @@
-import { ArrowUpRight, Github, Scale, ServerCog, Users } from "lucide-react";
+import { ArrowUpRight, Scale, ServerCog, Users } from "lucide-react";
+import GithubMark from "@/components/brand/GithubMark";
 import { GlassPanel, Section, SectionLabel } from "./Glass";
 import { ARCHITECTURE, REPO } from "./content";
 
@@ -75,7 +76,7 @@ const OpenSource = () => (
             rel="noreferrer"
             className="inline-flex h-11 items-center gap-2 rounded-full bg-stone-900 px-6 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-stone-800"
           >
-            <Github className="h-4 w-4" aria-hidden />
+            <GithubMark className="h-4 w-4" />
             View on GitHub
           </a>
           <a

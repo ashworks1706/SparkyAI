@@ -1,5 +1,6 @@
-
-import { Github, Linkedin, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import GithubMark from "@/components/brand/GithubMark";
+import LinkedinMark from "@/components/brand/LinkedinMark";
 
 const Contact = () => {
   return (
@@ -12,16 +13,17 @@ const Contact = () => {
             </div>
             <h2 className="heading-lg mb-6">Project Links</h2>
             <p className="text-gray-600 text-lg mb-8 max-w-lg">
-              Have questions or want to learn more about SparkyAI? Reach out to us directly or check out our resources.
+              Have questions or want to learn more about SparkyAI? Reach out to
+              us directly or check out our resources.
             </p>
-            
+
             <div className="space-y-6 mb-8">
               <div className="flex items-center space-x-3">
                 <div className="bg-sparky-maroon/10 p-2 rounded-full">
-                  <Github className="h-5 w-5 text-sparky-maroon" />
+                  <GithubMark className="h-5 w-5 text-sparky-maroon" />
                 </div>
-                <a 
-                  href="https://github.com/somwrks/SparkyAI" 
+                <a
+                  href="https://github.com/somwrks/SparkyAI"
                   className="text-gray-700 hover:text-sparky-maroon flex items-center space-x-1"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -30,13 +32,13 @@ const Contact = () => {
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
-              
+
               <div className="flex items-center space-x-3">
                 <div className="bg-sparky-maroon/10 p-2 rounded-full">
-                  <Linkedin className="h-5 w-5 text-sparky-maroon" />
+                  <LinkedinMark className="h-5 w-5 text-sparky-maroon" />
                 </div>
-                <a 
-                  href="https://linkedin.com/in/ashworks" 
+                <a
+                  href="https://linkedin.com/in/ashworks"
                   className="text-gray-700 hover:text-sparky-maroon flex items-center space-x-1"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -46,14 +48,15 @@ const Contact = () => {
                 </a>
               </div>
             </div>
-            
+
             <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
               <h3 className="text-lg font-medium mb-2">About the Author</h3>
               <p className="text-gray-600 mb-4">
-                SparkyAI was developed by Ash, dedicated to creating intelligent solutions for campus environments.
+                SparkyAI was developed by Ash, dedicated to creating intelligent
+                solutions for campus environments.
               </p>
-              <a 
-                href="https://ashworks.dev" 
+              <a
+                href="https://ashworks.dev"
                 className="text-sparky-maroon hover:text-sparky-maroon/80 font-medium flex items-center space-x-1"
                 target="_blank"
                 rel="noopener noreferrer"

@@ -1,4 +1,4 @@
-import { Github } from "lucide-react";
+import GithubMark from "@/components/brand/GithubMark";
 import { Link } from "react-router-dom";
 import { BrandMark } from "@/components/brand/BrandLogo";
 import { REPO } from "./content";
@@ -25,7 +25,7 @@ const SiteFooter = () => (
           rel="noreferrer"
           className="inline-flex items-center gap-1.5 transition-colors hover:text-sparky-maroon"
         >
-          <Github className="h-3.5 w-3.5" aria-hidden />
+          <GithubMark className="h-3.5 w-3.5" />
           GitHub
         </a>
       </div>

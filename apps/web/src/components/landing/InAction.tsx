@@ -35,21 +35,23 @@ const TURN: Step[] = [
   },
 ];
 
+/**
+ * Whether the turn can be revealed a step at a time: it needs an observer to know the block is on
+ * screen, and a reader who asked for less motion is not shown a reveal at all.
+ */
+const canStagger = () =>
+  typeof IntersectionObserver !== "undefined" &&
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 /** Replays the turn once the block is on screen, a step at a time. */
 const useReplay = (count: number) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(0);
+  // Anyone who gets no reveal starts with the whole turn, rather than with an empty box.
+  const [shown, setShown] = useState(() => (canStagger() ? 0 : count));
 
   useEffect(() => {
     const node = ref.current;
-    if (!node) return;
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (reduced || typeof IntersectionObserver === "undefined") {
-      setShown(count);
-      return;
-    }
+    if (!node || !canStagger()) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry?.isIntersecting) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Github } from "lucide-react";
+import GithubMark from "@/components/brand/GithubMark";
 import { Link } from "react-router-dom";
 import { BrandMark } from "@/components/brand/BrandLogo";
 import { REPO, ROADMAP } from "./content";
@@ -74,7 +74,7 @@ const Nav = () => {
             aria-label="GitHub repository"
             className="grid h-9 w-9 place-items-center rounded-full border border-white/70 bg-white/60 text-stone-700 shadow-glass transition-colors hover:text-sparky-maroon"
           >
-            <Github className="h-4 w-4" aria-hidden />
+            <GithubMark className="h-4 w-4" />
           </a>
         </div>
       </nav>

@@ -1,11 +1,8 @@
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { useRef } from "react";
-import type { ReactNode } from "react";
-import { TextureLoader } from "three";
-import type { Group, Mesh } from "three";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
 
-const MAROON = "#8C1D40";
-const GOLD = "#FFC627";
+const MAROON = 0x8c1d40;
+const GOLD = 0xffc627;
 
 /** Proportions of the logo file, so the plane never squashes the dragon. */
 const DRAGON = {
@@ -15,156 +12,192 @@ const DRAGON = {
   tall: 3.4,
 };
 
-/**
- * Bobs and turns whatever it holds. Each one runs off the shared clock with its own offset, so
- * the group never moves in lockstep.
- */
-const Float = ({
-  children,
-  speed = 1,
-  offset = 0,
-  amount = 0.18,
-}: {
-  children: ReactNode;
-  speed?: number;
-  offset?: number;
-  amount?: number;
-}) => {
-  const group = useRef<Group>(null);
-  useFrame((state) => {
-    if (!group.current) return;
-    const t = state.clock.elapsedTime * speed + offset;
-    group.current.position.y = Math.sin(t) * amount;
-    group.current.rotation.x = Math.sin(t * 0.5) * 0.2;
-    group.current.rotation.z = Math.cos(t * 0.4) * 0.2;
+/** One shape orbiting the dragon, and the clock offsets that keep it out of lockstep. */
+type Satellite = {
+  mesh: THREE.Mesh;
+  speed: number;
+  offset: number;
+  amount: number;
+  base: THREE.Vector3;
+};
+
+const glass = (color: number, transmission: number, opacity: number) =>
+  new THREE.MeshPhysicalMaterial({
+    color,
+    roughness: 0.1,
+    metalness: 0.28,
+    transmission,
+    thickness: 0.55,
+    transparent: true,
+    opacity,
   });
-  return <group ref={group}>{children}</group>;
+
+/** The shapes that float around the dragon. Low segment counts: these read as glass, not geometry. */
+const satellites = (): Satellite[] => {
+  const specs: [
+    THREE.BufferGeometry,
+    THREE.Material,
+    [number, number, number],
+    number,
+    number,
+    number,
+  ][] = [
+    [
+      new THREE.IcosahedronGeometry(0.42, 0),
+      glass(GOLD, 0.55, 0.92),
+      [2.05, 0.9, -1.2],
+      0.7,
+      0,
+      0.18,
+    ],
+    [
+      new THREE.IcosahedronGeometry(0.28, 0),
+      glass(MAROON, 0.4, 0.9),
+      [-1.95, -0.9, -1],
+      0.52,
+      2.1,
+      0.22,
+    ],
+    [
+      new THREE.TorusGeometry(0.36, 0.1, 16, 48),
+      new THREE.MeshPhysicalMaterial({
+        color: GOLD,
+        roughness: 0.2,
+        metalness: 0.5,
+        clearcoat: 0.8,
+      }),
+      [1.6, -1.3, 0.9],
+      0.85,
+      4.2,
+      0.14,
+    ],
+    [
+      new THREE.OctahedronGeometry(0.3, 0),
+      glass(0xffffff, 0.8, 0.75),
+      [-1.7, 1.25, 0.8],
+      0.6,
+      1.1,
+      0.2,
+    ],
+  ];
+  return specs.map(([geometry, material, at, speed, offset, amount]) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(...at);
+    return { mesh, speed, offset, amount, base: mesh.position.clone() };
+  });
 };
 
 /**
- * Sparky at the centre, on a plane carrying the logo.
+ * Sparky at the centre with glass shapes around him, the whole cluster leaning toward the pointer.
  *
- * It swings through a few degrees rather than turning: a plane seen edge on is a line, so a full
- * rotation would lose the dragon twice a cycle. The material is unlit, because the artwork
- * already carries its own shading.
+ * Written against three directly rather than a React renderer: the scene is built once and never
+ * reacts to a prop, so a reconciler would only add a dependency that has to track React releases.
  */
-const Dragon = () => {
-  const mesh = useRef<Mesh>(null);
-  const texture = useLoader(TextureLoader, DRAGON.src);
-  const width = (DRAGON.width / DRAGON.height) * DRAGON.tall;
+const Scene3D = () => {
+  const holder = useRef<HTMLDivElement>(null);
 
-  useFrame((state) => {
-    if (!mesh.current) return;
-    const t = state.clock.elapsedTime;
-    mesh.current.rotation.y = Math.sin(t * 0.35) * 0.3;
-    mesh.current.rotation.z = Math.sin(t * 0.25) * 0.05;
-    mesh.current.position.y = Math.sin(t * 0.5) * 0.14;
-  });
+  useEffect(() => {
+    const mount = holder.current;
+    if (!mount) return;
 
-  return (
-    <mesh ref={mesh}>
-      <planeGeometry args={[width, DRAGON.tall]} />
-      <meshBasicMaterial map={texture} transparent toneMapped={false} />
-    </mesh>
-  );
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+    camera.position.z = 6;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    renderer.domElement.style.pointerEvents = "none";
+    mount.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2.1);
+    key.position.set(4, 5, 5);
+    const warm = new THREE.DirectionalLight(GOLD, 1.1);
+    warm.position.set(-5, -2, 2);
+    const rim = new THREE.PointLight(MAROON, 12, 9);
+    rim.position.set(0, 0, 3);
+    scene.add(key, warm, rim);
+
+    const cluster = new THREE.Group();
+    scene.add(cluster);
+
+    const orbiting = satellites();
+    for (const item of orbiting) cluster.add(item.mesh);
+
+    // The plane swings through a few degrees rather than turning: seen edge on it would vanish.
+    const texture = new THREE.TextureLoader().load(DRAGON.src);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const dragon = new THREE.Mesh(
+      new THREE.PlaneGeometry(
+        (DRAGON.width / DRAGON.height) * DRAGON.tall,
+        DRAGON.tall,
+      ),
+      new THREE.MeshBasicMaterial({ map: texture, transparent: true }),
+    );
+    cluster.add(dragon);
+
+    const pointer = new THREE.Vector2();
+    const onPointer = (event: PointerEvent) => {
+      const box = mount.getBoundingClientRect();
+      pointer.set(
+        ((event.clientX - box.left) / box.width) * 2 - 1,
+        -(((event.clientY - box.top) / box.height) * 2 - 1),
+      );
+    };
+    window.addEventListener("pointermove", onPointer, { passive: true });
+
+    const resize = () => {
+      const { clientWidth: w, clientHeight: h } = mount;
+      if (w === 0 || h === 0) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(mount);
+
+    const clock = new THREE.Clock();
+    let frame = 0;
+    const tick = () => {
+      frame = requestAnimationFrame(tick);
+      const t = clock.getElapsedTime();
+
+      cluster.rotation.y += (pointer.x * 0.22 - cluster.rotation.y) * 0.04;
+      cluster.rotation.x += (-pointer.y * 0.16 - cluster.rotation.x) * 0.04;
+
+      dragon.rotation.y = Math.sin(t * 0.35) * 0.3;
+      dragon.rotation.z = Math.sin(t * 0.25) * 0.05;
+      dragon.position.y = Math.sin(t * 0.5) * 0.14;
+
+      for (const item of orbiting) {
+        const at = t * item.speed + item.offset;
+        item.mesh.position.y = item.base.y + Math.sin(at) * item.amount;
+        item.mesh.rotation.x = Math.sin(at * 0.5) * 0.4;
+        item.mesh.rotation.z = Math.cos(at * 0.4) * 0.4;
+      }
+      renderer.render(scene, camera);
+    };
+    tick();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("pointermove", onPointer);
+      renderer.domElement.remove();
+      renderer.dispose();
+      texture.dispose();
+      scene.traverse((node) => {
+        if (!(node instanceof THREE.Mesh)) return;
+        node.geometry.dispose();
+        const material = node.material as THREE.Material | THREE.Material[];
+        if (Array.isArray(material)) material.forEach((m) => m.dispose());
+        else material.dispose();
+      });
+    };
+  }, []);
+
+  return <div ref={holder} className="h-full w-full" data-testid="scene-3d" />;
 };
-
-/** The shapes around it. Low segment counts: these read as glass, not as geometry. */
-const Satellites = () => (
-  <>
-    <Float speed={0.7} offset={0}>
-      <mesh position={[2.05, 0.9, -1.2]}>
-        <icosahedronGeometry args={[0.42, 0]} />
-        <meshPhysicalMaterial
-          color={GOLD}
-          roughness={0.08}
-          metalness={0.2}
-          transmission={0.55}
-          thickness={0.6}
-          transparent
-          opacity={0.92}
-        />
-      </mesh>
-    </Float>
-    <Float speed={0.52} offset={2.1} amount={0.22}>
-      <mesh position={[-1.95, -0.9, -1]}>
-        <icosahedronGeometry args={[0.28, 0]} />
-        <meshPhysicalMaterial
-          color={MAROON}
-          roughness={0.1}
-          metalness={0.3}
-          transmission={0.4}
-          thickness={0.5}
-          transparent
-          opacity={0.9}
-        />
-      </mesh>
-    </Float>
-    <Float speed={0.85} offset={4.2} amount={0.14}>
-      <mesh position={[1.6, -1.3, 0.9]} rotation={[0.4, 0.2, 0]}>
-        <torusGeometry args={[0.36, 0.1, 16, 48]} />
-        <meshPhysicalMaterial
-          color={GOLD}
-          roughness={0.2}
-          metalness={0.5}
-          clearcoat={0.8}
-        />
-      </mesh>
-    </Float>
-    <Float speed={0.6} offset={1.1} amount={0.2}>
-      <mesh position={[-1.7, 1.25, 0.8]}>
-        <octahedronGeometry args={[0.3, 0]} />
-        <meshPhysicalMaterial
-          color="#ffffff"
-          roughness={0.05}
-          metalness={0.1}
-          transmission={0.8}
-          thickness={0.4}
-          transparent
-          opacity={0.75}
-        />
-      </mesh>
-    </Float>
-  </>
-);
-
-/** Tilts the whole cluster toward the pointer. One group, so it costs one transform a frame. */
-const Parallax = ({ children }: { children: ReactNode }) => {
-  const group = useRef<Group>(null);
-  useFrame((state) => {
-    if (!group.current) return;
-    const { x, y } = state.pointer;
-    group.current.rotation.y += (x * 0.22 - group.current.rotation.y) * 0.04;
-    group.current.rotation.x += (-y * 0.16 - group.current.rotation.x) * 0.04;
-  });
-  return <group ref={group}>{children}</group>;
-};
-
-/**
- * The hero object. Rendered at a capped pixel ratio and with no shadow map: on a light page the
- * lighting carries the form, and shadows would cost more than they show.
- */
-const Scene3D = () => (
-  <Canvas
-    camera={{ position: [0, 0, 6], fov: 42 }}
-    dpr={[1, 1.75]}
-    gl={{ antialias: true, alpha: true }}
-    style={{ pointerEvents: "none" }}
-  >
-    <ambientLight intensity={1.1} />
-    <directionalLight position={[4, 5, 5]} intensity={2.1} color="#ffffff" />
-    <directionalLight position={[-5, -2, 2]} intensity={1.1} color={GOLD} />
-    <pointLight
-      position={[0, 0, 3]}
-      intensity={12}
-      color={MAROON}
-      distance={9}
-    />
-    <Parallax>
-      <Dragon />
-      <Satellites />
-    </Parallax>
-  </Canvas>
-);
 
 export default Scene3D;

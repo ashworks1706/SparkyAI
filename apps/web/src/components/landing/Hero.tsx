@@ -1,4 +1,5 @@
-import { ArrowRight, Github } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import GithubMark from "@/components/brand/GithubMark";
 import HeroVisual from "./HeroVisual";
 import { REPO } from "./content";
 
@@ -39,7 +40,7 @@ const Hero = () => (
             rel="noreferrer"
             className="inline-flex h-12 items-center gap-2 rounded-full border border-white/70 bg-white/60 px-7 text-sm font-semibold text-stone-800 shadow-glass backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-white/80"
           >
-            <Github className="h-4 w-4" aria-hidden />
+            <GithubMark className="h-4 w-4" />
             Read the source
           </a>
         </div>
