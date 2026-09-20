@@ -19,13 +19,13 @@ const ReadmeSection = () => (
   <section
     id="readme"
     aria-label="Project readme"
-    className="border-t border-stone-200 bg-white px-7 py-16 text-[#1c1917] sm:px-10 sm:py-20 md:px-16 lg:px-24"
+    className="relative px-5 py-20 sm:px-8 sm:py-28 lg:px-10"
   >
     <div className="mx-auto max-w-3xl">
-      <p className="mb-8 text-[0.65rem] font-medium uppercase tracking-[0.24em] text-stone-500 sm:text-xs">
-        README
+      <p className="mb-6 text-xs font-semibold uppercase tracking-[0.22em] text-sparky-maroon">
+        Readme
       </p>
-      <div className="prose prose-stone max-w-none prose-headings:font-editorial prose-headings:font-medium prose-headings:tracking-[-0.03em] prose-h1:text-3xl sm:prose-h1:text-4xl prose-h2:mt-12 prose-h2:text-2xl prose-a:text-[#6f1635] prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-stone-100 prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:bg-stone-950 prose-img:rounded-lg prose-img:border prose-img:border-stone-200">
+      <div className="prose prose-stone max-w-none rounded-3xl border border-white/70 bg-white/55 px-6 py-8 shadow-glass backdrop-blur-xl prose-headings:font-semibold prose-headings:tracking-[-0.03em] prose-h1:text-3xl sm:prose-h1:text-4xl prose-h2:mt-12 prose-h2:text-2xl prose-a:text-sparky-maroon prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-stone-900/[0.06] prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none prose-pre:bg-stone-950 prose-img:rounded-lg prose-img:border prose-img:border-stone-200 sm:px-10 sm:py-12">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}

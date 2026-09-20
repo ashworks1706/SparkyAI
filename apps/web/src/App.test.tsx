@@ -7,38 +7,47 @@ describe("website routes", () => {
     window.history.pushState(null, "", "/");
   });
 
-  it("renders the new landing statement, logo, and essential navigation", () => {
+  it("leads with what Sparky is and what it costs a student to try", () => {
     render(<App />);
 
-    expect(
-      within(screen.getByRole("main")).getByRole("heading", { name: "SparkyAI" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "University Copilot" }),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("main")).getByRole("img", {
-        name: /sparkyai dragon logo/i,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: /primary/i })).toBeInTheDocument();
+    const main = within(screen.getByRole("main"));
+    expect(main.getByRole("heading", { level: 1 })).toHaveTextContent(/your university\s*copilot/i);
+    expect(main.getAllByRole("link", { name: /add sparky to your server/i })[0]).toHaveAttribute(
+      "href",
+      expect.stringContaining("github.com/ashworks1706/SparkyAI"),
+    );
+  });
+
+  it("shows the product before it asks for anything", () => {
+    render(<App />);
+
+    for (const label of [/sparky in action/i, /what students ask/i, /how it works/i, /open source/i]) {
+      expect(screen.getByRole("region", { name: label })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("region", { name: /project readme/i })).toBeInTheDocument();
+  });
+
+  it("names a source under the answer it shows", async () => {
+    render(<App />);
+
+    const action = within(screen.getByRole("region", { name: /sparky in action/i }));
+    const cite = await action.findByRole(
+      "link",
+      { name: /asu course catalog/i },
+      { timeout: 6000 },
+    );
+    expect(cite).toHaveAttribute("href", expect.stringContaining("catalog.apps.asu.edu"));
+  });
+
+  it("keeps the navigation to the repository and the legacy site", () => {
+    render(<App />);
+
     const nav = within(screen.getByRole("navigation", { name: /primary/i }));
-    expect(nav.getByRole("link", { name: /legacy/i })).toHaveAttribute(
-      "href",
-      "/old",
-    );
-    expect(nav.getByRole("link", { name: /readme/i })).toHaveAttribute(
-      "href",
-      "#readme",
-    );
+    expect(nav.getByRole("link", { name: /legacy/i })).toHaveAttribute("href", "/old");
     expect(nav.getByRole("link", { name: /github/i })).toHaveAttribute(
       "href",
       "https://github.com/ashworks1706/SparkyAI",
     );
-    expect(screen.getByRole("region", { name: /project readme/i })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: /your intelligent university copilot/i }),
-    ).not.toBeInTheDocument();
   });
 
   it("serves the legacy website at old without signup controls", () => {
