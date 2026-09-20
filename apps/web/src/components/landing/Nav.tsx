@@ -2,13 +2,7 @@ import { useEffect, useState } from "react";
 import GithubMark from "@/components/brand/GithubMark";
 import { Link } from "react-router-dom";
 import { BrandMark } from "@/components/brand/BrandLogo";
-import { REPO, ROADMAP } from "./content";
-
-const LINKS = [
-  { label: "In action", href: "#in-action" },
-  { label: "Use cases", href: "#use-cases" },
-  { label: "How it works", href: "#how-it-works" },
-];
+import { REPO } from "./content";
 
 const Nav = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -39,26 +33,6 @@ const Nav = () => {
             SparkyAI
           </span>
         </Link>
-
-        <div className="hidden items-center gap-7 text-sm text-stone-600 md:flex">
-          {LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="transition-colors hover:text-sparky-maroon"
-            >
-              {link.label}
-            </a>
-          ))}
-          <a
-            href={ROADMAP}
-            target="_blank"
-            rel="noreferrer"
-            className="transition-colors hover:text-sparky-maroon"
-          >
-            Roadmap
-          </a>
-        </div>
 
         <div className="flex items-center gap-3">
           <Link

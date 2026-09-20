@@ -94,7 +94,7 @@ const OpenSource = () => (
       <GlassPanel className="overflow-hidden">
         <div className="flex items-center gap-2 border-b border-white/60 bg-white/40 px-5 py-3.5">
           <span className="h-2.5 w-2.5 rounded-full bg-sparky-maroon/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-sparky-gold/80" />
+          <span className="h-2.5 w-2.5 rounded-full bg-stone-300" />
           <span className="h-2.5 w-2.5 rounded-full bg-stone-300" />
           <span className="ml-2 font-mono text-[0.7rem] text-stone-400">
             the stack
@@ -111,9 +111,9 @@ const OpenSource = () => (
           ))}
         </dl>
         <div className="border-t border-stone-200/60 bg-stone-900 px-5 py-4 font-mono text-xs text-stone-300 sm:px-6">
-          <span className="select-none text-sparky-gold">$ </span>
+          <span className="select-none text-stone-500">$ </span>
           just up
-          <span className="ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 bg-sparky-gold/80 motion-safe:animate-caret" />
+          <span className="ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 bg-stone-300 motion-safe:animate-caret" />
         </div>
       </GlassPanel>
     </div>

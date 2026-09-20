@@ -36,30 +36,14 @@ const useWantsScene = () => {
   return wants;
 };
 
-/** What stands in for the scene: the same dragon and shapes, flat, with no canvas behind them. */
+/** What stands in for the scene: the same dragon, with no canvas behind it. */
 const Still = () => (
   <div className="absolute inset-0 grid place-items-center">
-    <div className="relative h-64 w-64 sm:h-80 sm:w-80">
-      <div
-        aria-hidden
-        className="absolute inset-4 rounded-full bg-gradient-to-br from-sparky-maroon/25 via-sparky-gold/20 to-transparent blur-2xl"
-      />
-      <img
-        src="/brand/sparkyai-logo.png"
-        alt="Sparky, the SparkyAI dragon"
-        className="absolute inset-0 h-full w-full object-contain motion-safe:animate-float"
-      />
-      <div
-        aria-hidden
-        className="absolute right-0 top-6 h-12 w-12 rounded-2xl border border-white/80 bg-sparky-gold/80 shadow-glass motion-safe:animate-float"
-        style={{ animationDelay: "-1.5s" }}
-      />
-      <div
-        aria-hidden
-        className="absolute bottom-6 left-0 h-9 w-9 rounded-full border border-white/80 bg-white/70 shadow-glass motion-safe:animate-float"
-        style={{ animationDelay: "-3.5s" }}
-      />
-    </div>
+    <img
+      src="/brand/sparkyai-logo.png"
+      alt="Sparky, the SparkyAI dragon"
+      className="h-full w-full object-contain motion-safe:animate-float"
+    />
   </div>
 );
 

@@ -136,7 +136,7 @@ const InAction = () => {
           <div className="rounded-[1.35rem] bg-white/70 p-5 sm:p-6" ref={ref}>
             <div className="flex items-center gap-2 border-b border-stone-200/70 pb-4">
               <span className="h-2.5 w-2.5 rounded-full bg-sparky-maroon/70" />
-              <span className="h-2.5 w-2.5 rounded-full bg-sparky-gold/80" />
+              <span className="h-2.5 w-2.5 rounded-full bg-stone-300" />
               <span className="h-2.5 w-2.5 rounded-full bg-stone-300" />
               <span className="ml-2 font-mono text-[0.7rem] text-stone-400">
                 #ask-sparky

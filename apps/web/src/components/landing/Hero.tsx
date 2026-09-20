@@ -12,7 +12,7 @@ const Hero = () => (
       <div className="text-center lg:text-left">
         <h1 className="mt-7 text-balance text-[clamp(2.6rem,5.6vw,4.5rem)] font-semibold leading-[0.95] tracking-[-0.045em] text-stone-900">
           Your university
-          <span className="block bg-gradient-to-r from-sparky-maroon via-[#b3325c] to-sparky-gold bg-clip-text text-transparent">
+          <span className="block bg-gradient-to-r from-sparky-maroon via-[#a3234a] to-[#c4406a] bg-clip-text text-transparent">
             copilot
           </span>
         </h1>

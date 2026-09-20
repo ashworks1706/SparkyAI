@@ -12,7 +12,7 @@ const Ambient = () => (
     <div className="absolute inset-0 bg-grid-faint bg-grid-16 [mask-image:radial-gradient(ellipse_at_center,black,transparent_78%)]" />
     <div className="absolute -left-[14%] -top-[16%] h-[36rem] w-[36rem] rounded-full bg-sparky-maroon/[0.16] blur-[110px] motion-safe:animate-drift-slow" />
     <div
-      className="absolute -right-[12%] top-[6%] h-[30rem] w-[30rem] rounded-full bg-sparky-gold/25 blur-[120px] motion-safe:animate-drift-slow"
+      className="absolute -right-[12%] top-[6%] h-[30rem] w-[30rem] rounded-full bg-sparky-maroon/[0.09] blur-[120px] motion-safe:animate-drift-slow"
       style={{ animationDelay: "-7s" }}
     />
     <div
