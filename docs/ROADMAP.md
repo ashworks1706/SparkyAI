@@ -32,9 +32,9 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [ ] A mechanism for per-user authenticated sessions. The browser MCP server is gone; this needs a design before any work
+- [ ] A mechanism for per-user authenticated sessions. 
 - [ ] Human confirmation for any authenticated or consequential submission
-- [ ] MyASU: the first per-user authenticated integration, read-only before anything else
+- [ ] Add Canvas, MyASU integration. 
 
 ## 9 — v1.0
 
