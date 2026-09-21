@@ -1,6 +1,6 @@
 //! Student organizations on Sun Devil Central.
 
-use super::{LiveSource, Param};
+use super::{Freshness, LiveSource, Param};
 
 /// The Sun Devil Central group directory.
 pub struct Clubs;
@@ -28,5 +28,10 @@ impl LiveSource for Clubs {
 
     fn params(&self) -> &'static [Param] {
         PARAMS
+    }
+
+    fn freshness(&self) -> Freshness {
+        // Login-gated and read through the admin session, so its answers are never indexed.
+        Freshness::Live
     }
 }

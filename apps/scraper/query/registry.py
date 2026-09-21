@@ -85,6 +85,6 @@ def run(source: QuerySource, params: dict[str, str]) -> tuple[str, str]:
         check(source, params)
         return source.answer(params)
     url = url_for(source, params)
-    fetched = fetch.fetch(url, needs_js=source.needs_js)
+    fetched = fetch.fetch(url, needs_js=source.needs_js, auth=source.auth)
     text = source.extractor(fetched) if source.extractor else extract.page_text(fetched)
     return url, text

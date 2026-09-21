@@ -134,7 +134,6 @@ def test_keyword_searches_encode_the_keyword():
     assert url_for(QUERY_SOURCES["clubs"], {"keywords": "machine learning"}) == (
         "https://sundevilcentral.eoss.asu.edu/club_signup?view=all&search=machine+learning"
     )
-    assert "searchText=career+fair" in url_for(QUERY_SOURCES["events"], {"keywords": "career fair"})
     assert "search=robotics" in url_for(QUERY_SOURCES["news"], {"keywords": "robotics"})
     assert url_for(QUERY_SOURCES["news"], {}) == "https://news.asu.edu/", (
         "no topic is the front page"

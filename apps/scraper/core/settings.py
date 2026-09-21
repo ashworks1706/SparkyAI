@@ -67,6 +67,23 @@ class Firecrawl(BaseModel):
     only_main_content: bool = True
 
 
+class Auth(BaseModel):
+    """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU.
+
+    An operator captures the session once with scraper login and completes any MFA themselves.
+    Only the browser storage state (cookies and local storage) is saved, never a password.
+    """
+
+    # Where the captured storage state is read from and written to.
+    storage_state_path: str = ".sparky/auth/admin_state.json"
+    # Where scraper login sends the operator to sign in.
+    login_url: str = "https://sundevilcentral.eoss.asu.edu/"
+    # Hosts that mean the browser is not signed in; a fetch redirected to one is an expired session.
+    login_hosts: str = "weblogin.asu.edu,cas.asu.edu,login.microsoftonline.com,idp.asu.edu"
+    # Longest a headless authenticated fetch waits for a page to settle.
+    nav_timeout_secs: float = 60.0
+
+
 class Search(BaseModel):
     """SearXNG, the metasearch engine behind the web search query source."""
 
@@ -153,6 +170,7 @@ class Settings(BaseSettings):
     embedding: Embedding = Embedding()
     summary: Summary = Summary()
     firecrawl: Firecrawl = Firecrawl()
+    auth: Auth = Auth()
     search: Search = Search()
     telemetry: Telemetry = Telemetry()
     scraper: Scraper = Scraper()

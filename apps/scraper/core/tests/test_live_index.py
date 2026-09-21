@@ -49,6 +49,8 @@ def test_minute_to_minute_answers_are_not_indexed():
         "shuttles",
         "study_rooms",
         "web",
+        "clubs",
+        "events",
     }
     assert should_index(QUERY_SOURCES["news"], enabled=True)
     assert not should_index(QUERY_SOURCES["shuttles"], enabled=True)
