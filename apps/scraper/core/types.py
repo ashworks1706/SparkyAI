@@ -44,10 +44,14 @@ class QuerySource:
     answer: Callable[[dict[str, str]], tuple[str, str]] | None = None
     category: str = "live"
     index: bool = True
+    # Fetched through the admin authenticated driver. Authenticated content is never indexed.
+    auth: bool = False
 
     def __post_init__(self) -> None:
         if (self.to_url is None) == (self.answer is None):
             raise ValueError(f"query source {self.key} sets exactly one of to_url and answer")
+        if self.auth and self.index:
+            raise ValueError(f"authenticated source {self.key} must set index=False")
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,10 @@ class QueryResult:
 
 class QueryError(RuntimeError):
     """The query could not be answered; the reason goes back to the model."""
+
+
+class AuthError(QueryError):
+    """The admin authenticated session is missing or expired; an operator must run scraper login."""
 
 
 @dataclass(frozen=True)

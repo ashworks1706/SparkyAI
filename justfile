@@ -82,7 +82,7 @@ check-scraper:
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
-# Scraper: serve (live searches, indexing, scheduled runs) or run a source like library_hours
+# Scraper: serve, run a source like library_hours, or login to capture the admin session
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
 

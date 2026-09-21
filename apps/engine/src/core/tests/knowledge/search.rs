@@ -145,13 +145,13 @@ fn the_stored_search_offers_only_the_sources_the_scraper_indexes() {
     let stored = enum_of(&stored_tool(Arc::new(Stored::empty())));
     assert_eq!(live.len(), 17);
     assert!(live.contains(&"web".to_owned()));
-    for never_stored in ["web", "shuttles", "study_rooms"] {
+    for never_stored in ["web", "shuttles", "study_rooms", "clubs", "events"] {
         assert!(
             !stored.contains(&never_stored.to_owned()),
             "{never_stored} is never written to the index, so it cannot be filtered on"
         );
     }
-    assert_eq!(stored.len(), 14);
+    assert_eq!(stored.len(), 12);
     assert!(stored.contains(&"courses".to_owned()));
 }
 
@@ -209,8 +209,8 @@ fn a_source_whose_answer_is_never_stored_is_declared_live() {
         .filter(|s| s.freshness() == Freshness::Live)
         .map(|s| s.key())
         .collect();
-    assert_eq!(live, ["study_rooms", "shuttles", "web"]);
-    assert_eq!(source_keys(&catalog(), true).len(), 14);
+    assert_eq!(live, ["events", "clubs", "study_rooms", "shuttles", "web"]);
+    assert_eq!(source_keys(&catalog(), true).len(), 12);
 }
 
 #[test]

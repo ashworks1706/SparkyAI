@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from scraper.core.types import Source
 from scraper.sources import (
-    clubs,
     courses,
     dining_hours,
     events,
@@ -17,10 +16,11 @@ from scraper.sources import (
     sports,
 )
 
+# Clubs is login-gated on Sun Devil Central, so it is served live through the admin session and
+# never scheduled here; a scheduled fetch would run unauthenticated and index nothing usable.
 _MODULES = (
     library_hours,
     events,
-    clubs,
     courses,
     scholarships,
     news,

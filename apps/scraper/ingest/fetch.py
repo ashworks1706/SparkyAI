@@ -124,8 +124,16 @@ def fetch_firecrawl(url: str) -> Fetched:
     return parse_firecrawl(url, payload)
 
 
-def fetch(url: str, *, needs_js: bool = False) -> Fetched:
-    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path."""
+def fetch(url: str, *, needs_js: bool = False, auth: bool = False) -> Fetched:
+    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path.
+
+    An authenticated fetch goes through the admin browser session regardless of the configured
+    fetcher, since Firecrawl and the plain HTTP client do not carry the session cookies.
+    """
+    if auth:
+        from scraper.ingest.auth import fetch_authenticated
+
+        return fetch_authenticated(url)
     if settings().scraper.fetcher == "firecrawl":
         return fetch_firecrawl(url)
     return fetch_rendered(url) if needs_js else fetch_http(url)

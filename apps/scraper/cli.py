@@ -10,7 +10,7 @@ import typer
 from scraper import jobs
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.ingest import pipeline
+from scraper.ingest import auth, pipeline
 from scraper.ingest.pace import HostPacer
 from scraper.sources import SOURCES
 from scraper.store import postgres
@@ -114,6 +114,26 @@ def status() -> None:
 
 def _stamp(at: datetime | None) -> str:
     return at.strftime("%Y-%m-%d %H:%M UTC") if at else "-"
+
+
+@app.command()
+def login() -> None:
+    """Capture the admin browser session for login-gated sources (clubs, Sun Devil Central events).
+
+    Opens a real browser; you sign in and complete any MFA yourself. Only cookies are saved, never
+    a password. Run it again whenever the session expires.
+    """
+    try:
+        path = auth.capture_login()
+    except Exception as e:  # a missing display or browser surfaces here
+        typer.echo(f"login failed: {e}", err=True)
+        typer.echo(
+            "Run this on a machine with a display. If the browser is missing, run "
+            "`uv run playwright install chromium` in apps/scraper.",
+            err=True,
+        )
+        raise typer.Exit(1) from e
+    typer.echo(f"saved admin session to {path}")
 
 
 @app.command()

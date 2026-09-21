@@ -434,6 +434,15 @@ timeout_ms = 60000
 wait_for_ms = 5000             # wait after load for ASU pages to fill in content
 only_main_content = true
 
+# Admin authenticated browser session for login-gated sources (clubs, Sun Devil Central events).
+# An operator captures it once with `just scraper login`; only cookies are saved, never a password.
+# This is admin scoped and shared across guilds; it is not the per-user MyASU session.
+[auth]
+storage_state_path = ".sparky/auth/admin_state.json"   # per-machine; the deployed path lives in .env
+login_url = "https://sundevilcentral.eoss.asu.edu/"
+login_hosts = "weblogin.asu.edu,cas.asu.edu,login.microsoftonline.com,idp.asu.edu"
+nav_timeout_secs = 60.0
+
 # endpoint and keys are per-machine and live in .env.
 [object_store]
 bucket = "sparky"

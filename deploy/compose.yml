@@ -54,6 +54,10 @@ services:
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
       SPARKY_SEARCH__BASE_URL: http://searxng:8080
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
+      # The admin session captured by `just scraper login`, mounted read-only from the host.
+      SPARKY_AUTH__STORAGE_STATE_PATH: /data/auth/admin_state.json
+    volumes:
+      - ${SPARKY_AUTH_STATE_DIR:-./.sparky/auth}:/data/auth:ro
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped

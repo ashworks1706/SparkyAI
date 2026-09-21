@@ -38,7 +38,7 @@ This document describes the current shape of the system and the rules it keeps. 
 - The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `runtime/model`.
 - Model output is never written back as retrieval evidence.
 - An action at or above `policy.confirm_from` is held for the caller's approval immediately before it runs.
-- Credentials, cookies, and authenticated page content never enter the retrieval index, memory, or traces.
+- Credentials, cookies, and authenticated page content never enter the retrieval index, memory, or traces. The admin authenticated driver reaches login-gated sources live only; its sources set `index = False`, so their content is never scheduled or indexed.
 
 ## Layout
 
@@ -161,6 +161,8 @@ Folders nest by domain, and the same domain names repeat across `core/types`, `c
 `store/` is the only place the scraper opens a connection. `migrations/` is the schema contract with the engine. The scraper writes `sources`, `source_versions`, `chunks`, `query_sources`, and job results. The engine reads the index and writes conversations, confirmations, the profile graph, and `source_query` jobs. `ingest/embed.py` uses the same model and dimension the engine queries with, so changing the embedding model means re-embedding every chunk.
 
 `sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. A source with an extractor has its own module. `sources/pages.py` lists static pages with none, indexed from the markdown Firecrawl returns. Scheduled fetches to one host are spaced `scraper.host_gap_secs` apart. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
+
+`ingest/auth.py` is the admin authenticated driver, separate from the unauthenticated fetchers in `ingest/fetch.py`. An operator runs `just scraper login` once, signs in and completes any MFA in a real browser, and the browser storage state is saved to `auth.storage_state_path`. A live query source with `auth = True` fetches through a headless browser loaded with that state, bypassing Firecrawl and httpx because neither carries the session cookies; a fetch that lands on a sign-in host raises so the operator knows to log in again. The session is admin scoped and shared across guilds, not the per-user MyASU session of Phase 8. Authenticated sources set `index = False` and are refused otherwise, so authenticated content is never scheduled or written to the index; `clubs` and the Sun Devil Central half of `events` are served this way and `clubs` is not a scheduled source. In `deploy/compose.yml` the captured session is mounted read-only into the scraper from `SPARKY_AUTH_STATE_DIR` (default `./.sparky/auth`).
 
 ## Types
 
@@ -558,7 +560,7 @@ Any scraper failure (unknown source, missing parameter, unreadable page, an exce
 
 The `web` source uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
 
-Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login) and anything behind a student login, such as Workday jobs.
+Login-gated ASU sources are covered live through the admin authenticated driver: `clubs` and the Sun Devil Central half of `events` fetch through the operator-captured session and are never indexed. When that session is missing or expired, `clubs` reports it and `events` falls back to its public calendar. Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login), and anything behind an individual student's login, such as Workday jobs or personal MyASU data, which waits on the per-user sessions of Phase 8.
 
 ### Caching live results
 
@@ -740,7 +742,7 @@ Phoenix holds spans and events. Prometheus holds time series. A slow request sho
 
 ## Authenticated tasks (Phase 8)
 
-Not built. The browser MCP server that Phase 8 assumed is gone, and nothing drives a page. Whatever replaces it needs a new design that meets these rules: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user.
+Not built. The browser MCP server that Phase 8 assumed is gone, and nothing drives a page. Whatever replaces it needs a new design that meets these rules: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user. This is per-user: each user's own session for their own data. It is distinct from the scraper's admin authenticated driver (see Inside scraper), which is one operator-captured session over shared, non-personal ASU content and follows the same no-password, no-index rules.
 
 ## Configuration
 
@@ -748,7 +750,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval` (with `retrieval.router`), `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval` (with `retrieval.router`), `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `auth`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct. Adapters build themselves from those structs and declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. A `prompt.system_file` that cannot be read also stops the boot. Nothing is clamped at runtime.
 

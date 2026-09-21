@@ -36,9 +36,10 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [ ] A mechanism for authenticated sessions. The browser MCP server is gone; this needs a design before any work
+- [x] Admin authenticated driver: one operator-captured session (`just scraper login`) for shared login-gated ASU content (clubs, Sun Devil Central events); live only, never indexed. Distinct from the per-user work below
+- [ ] A mechanism for per-user authenticated sessions. The browser MCP server is gone; this needs a design before any work
 - [ ] Human confirmation for any authenticated or consequential submission
-- [ ] MyASU: the first authenticated integration, read-only before anything else
+- [ ] MyASU: the first per-user authenticated integration, read-only before anything else
 
 ## 9 — v1.0
 
