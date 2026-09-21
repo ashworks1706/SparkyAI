@@ -45,9 +45,8 @@ def keywords(raw: str) -> str:
 def extract_clubs(fetched: Fetched) -> str:
     """One entry per group: name, campus and categories, link, website, contact, mission.
 
-    Sun Devil Central matches the search inside words, so AI also finds Chair. Groups that carry the
-    search as a whole word are kept, those naming it first; when none do, every group is kept.
-    A page with no group entries, such as one whose markup changed, falls back to its text.
+    Groups that carry the search as a whole word are kept, those naming it first; when none do,
+    every group is kept. A page with no group entries falls back to its text.
     """
     soup = BeautifulSoup(fetched.body, "lxml")
     entries = [e for e in (_club(item) for item in soup.select("li.list-group-item")) if e]
@@ -113,7 +112,7 @@ def _about(node: Tag | None, label: str) -> str:
 def extract_events(fetched: Fetched) -> str:
     """One line per event: name, when, where, attendance, tags, and its page.
 
-    A page with no event entries, such as one whose markup changed, falls back to its text.
+    A page with no event entries falls back to its text.
     """
     soup = BeautifulSoup(fetched.body, "lxml")
     out: list[str] = []

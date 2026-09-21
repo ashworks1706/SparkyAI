@@ -43,9 +43,7 @@ pub struct Arrival {
 
 /// Why the bot answers this message, or None when the message is not for it.
 ///
-/// A thread is the conversation: inside one, only a reply to something the bot said continues it,
-/// so people talk in the thread without the bot answering every line. Outside a thread, addressing
-/// the bot opens one. A direct message needs neither.
+/// In a thread only a reply to the bot counts; outside one, addressing the bot opens a thread.
 pub fn trigger(arrival: Arrival) -> Option<Trigger> {
     match arrival.at {
         Arrived::Direct => Some(Trigger::Direct),
@@ -166,10 +164,7 @@ pub fn thread_name(question: &str) -> String {
     truncate(&line, THREAD_NAME_MAX)
 }
 
-/// The images of a message, the ones a model is sent, at most most of them.
-///
-/// Discord reports a content type per attachment; anything that is not an image it names is
-/// dropped rather than guessed at, so a spreadsheet never reaches the model as a picture.
+/// The attachments with an image content type, at most most of them.
 pub fn images<'a>(
     attachments: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
     most: usize,
@@ -182,9 +177,6 @@ pub fn images<'a>(
 }
 
 /// The files of a message that are not images, no larger than max_bytes, at most most of them.
-///
-/// Each item is a link, file name, reported content type and size. An image goes to the model
-/// as an image instead, so it is never sent twice.
 pub fn files<'a>(
     attachments: impl IntoIterator<Item = (&'a str, &'a str, Option<&'a str>, u64)>,
     most: usize,
@@ -214,8 +206,6 @@ pub fn files<'a>(
 }
 
 /// The text of the message a reply answers, when the bot wrote it and it holds text.
-///
-/// A reply to a person, or to another bot, is not a turn: the thread belongs to everyone in it.
 pub fn quoted(author: Option<UserId>, content: &str, me: UserId) -> Option<String> {
     if author != Some(me) {
         return None;

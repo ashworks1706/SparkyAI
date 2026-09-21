@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# The only way out of the sandbox network: an HTTP proxy that allows ports 80 and 443 to public
-# addresses and refuses private, loopback, link-local and reserved ones.
+# Egress proxy for the sandbox network: ports 80 and 443 to public addresses only.
 FROM debian:bookworm-slim
 
 RUN apt-get update \

@@ -212,8 +212,7 @@ fn processes() -> Vec<Unit> {
     ]
 }
 
-/// The recipes worth a line of their own. Anything else in the justfile is reachable from the
-/// command line, :scraper run events, and appears here while it runs.
+/// The recipes listed in the sidebar; any other recipe runs from the command line.
 fn tasks() -> Vec<Unit> {
     vec![
         task_static(&["doctor"], "required tools, .env, hooks"),

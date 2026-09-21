@@ -8,7 +8,7 @@ alter table conversations
         check (visibility in ('public', 'private'));
 alter table conversations add column ended_at timestamptz;
 
--- Conversations from the OpenAI-compatible surface are one-to-one, so they are private.
+-- Conversations from the OpenAI-compatible surface are private.
 update conversations set visibility = 'private' where channel_id = 'openai';
 
 -- The newest open conversation of one user in one channel is what a continuing turn looks up.

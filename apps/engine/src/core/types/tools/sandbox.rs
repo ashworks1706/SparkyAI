@@ -109,8 +109,6 @@ pub fn session_name(raw: &str) -> Result<String, SandboxError> {
 }
 
 /// A workspace file name; refused if empty, too long, or not alnum, hyphen, underscore, dot.
-///
-/// A name carrying a separator or a parent reference could leave the workspace directory.
 pub fn workspace_path(raw: &str) -> Result<String, SandboxError> {
     let name = raw.trim();
     if name.is_empty() || name.len() > 64 {

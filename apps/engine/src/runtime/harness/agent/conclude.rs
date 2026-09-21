@@ -9,11 +9,8 @@ use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::Run;
 
-/// Whether a turn of this request belongs in the stored conversation.
-///
-/// A tool call and its result answer the question being asked now. Carrying them into later turns
-/// replays a page the student never asked about again and spends the history budget on it, so the
-/// stored conversation is what was said: the question and the answer.
+/// Whether a turn of this request belongs in the stored conversation: the question and the
+/// answer, never a tool call or its result.
 pub(super) fn said(message: &Message) -> bool {
     match message.role {
         Role::User => true,

@@ -124,8 +124,7 @@ impl SourceQueries for PgSourceQueries {
             .map_err(store)?;
 
         let queued = std::time::Instant::now();
-        // A long fetch is looked at fewer times: the wait doubles up to poll_max, so one query
-        // costs a handful of round trips rather than one every poll for its whole duration.
+        // The wait doubles up to poll_max.
         let mut wait = self.poll;
         loop {
             if ctx.cancel.is_cancelled() {

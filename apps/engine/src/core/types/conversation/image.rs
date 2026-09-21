@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 /// One image attached to a user's message.
-///
-/// The link is what reaches the model, not the bytes: the edge holds them and every
-/// OpenAI-compatible server fetches a URL. A server with no route to the host sees no image.
+/// The model is sent the link, not the bytes; a server with no route to the host sees no image.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
     /// Direct link to the image.
@@ -19,7 +17,6 @@ pub struct Attachment {
 
 impl Attachment {
     /// The attachments of a request that name a media type a model is sent, at most most of them.
-    /// The edge filters too; this is the HTTP surface not trusting its caller.
     pub fn accepted(images: Vec<Self>, most: usize) -> Vec<Self> {
         images
             .into_iter()

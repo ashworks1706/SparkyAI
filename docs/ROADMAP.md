@@ -4,9 +4,9 @@
 
 - [ ] Crawl past the landing page on scheduled runs: courses, clubs, jobs and scholarships each index one navigation page. Pages a live search fetches are already indexed
 - [ ] Chunk on document structure instead of fixed character windows
-- [ ] search function args should be handled by llm, allow more variations to the search, make agent write more in search function args for better cosine results, 
-- [ ] have better filered and document block storage in vector db index
-- [ ] decide if search_x agent is needed, or if the Sparky can handle search_x function args itself
+- [x] The model writes its own search queries, several phrasings per step, and searches until it has the answer
+- [ ] have better filtered and document block storage in vector db index
+- [x] No separate search agent: Sparky calls search_knowledge and search_live itself, with no pre-retrieval
 - [ ] Measure whether the tree earns its model calls, once the eval suite exists
 - [ ] Deduplicate across sources, not only against a source's own previous version
 - [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what

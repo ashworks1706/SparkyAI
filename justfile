@@ -1,4 +1,4 @@
-# SparkyAI monorepo tasks; run just alone to list. Units: Rust, Python, TypeScript, Compose (infra).
+# SparkyAI tasks; just alone lists them.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -20,7 +20,7 @@ hooks:
     git config core.hooksPath .githooks
     @echo "hooks installed: .githooks/pre-commit"
 
-# Everything a fresh clone needs: tools, .env, hooks, deps, datastores, schema
+# Set up a fresh clone: .env, hooks, deps, datastores, schema
 bootstrap: env hooks setup infra migrate
     @echo "ready. Next a model, because the engine answers nothing without one:"
     @echo "  GPU:    just model       llama-server on CUDA"
@@ -55,7 +55,7 @@ clean:
 
 # ---------- rust: engine + discord ----------
 
-# Fmt --check, clippy, tests, dependency direction
+# Rust fmt check, clippy, tests, dependency direction
 check-rust:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
@@ -70,23 +70,25 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# Developer console: start/stop units, tail logs, run tasks. Requires the admin session
+# Developer console; requires the admin session
 cli: scraper-session
     cargo run -p cli --release
 
 # ---------- python: scraper + training ----------
 
+# Lint and test the scraper
 check-scraper:
     cd apps/scraper && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
+# Lint and test training
 check-training:
     cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
-# Scraper: serve, run a source like library_hours, or login to capture the admin session
+# Run a scraper command, such as serve, run library_hours, or login
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
 
-# Require the admin session; at a terminal, sign in through MyASU and Duo if it is gone
+# Require the admin session; sign in through MyASU and Duo if it is missing
 scraper-session:
     cd apps/scraper && uv run scraper login --if-needed
 
@@ -94,18 +96,21 @@ scraper-session:
 migrate:
     cd apps/scraper && uv run scraper migrate
 
-# Train SFT or other training commands
+# Run a training command
 train *ARGS:
     cd apps/training && uv run train {{ARGS}}
 
+# Run evals
 eval *ARGS:
     cd apps/training && uv run eval {{ARGS}}
 
+# Run a dataset command
 data *ARGS:
     cd apps/training && uv run data {{ARGS}}
 
 # ---------- web ----------
 
+# Lint, typecheck, test, and build the web app
 check-web:
     cd apps/web && npm run lint && npm run typecheck && npm test && npm run build
 
@@ -115,10 +120,11 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, scraper, postgres, redis, minio. Requires the admin session
+# Start the dev stack; requires the admin session
 up *ARGS: scraper-session
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
+# Stop the dev stack across every profile
 down: sandbox-down
     docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix down
 
@@ -126,49 +132,51 @@ down: sandbox-down
 sandbox-down:
     #!/usr/bin/env bash
     set -uo pipefail
-    # DOCKER_HOST decides which runtime holds them: the local one, or sandboxd under compose.
+    # DOCKER_HOST from .env selects the runtime that holds them.
     [ -f .env ] && set -a && . ./.env && set +a
     held=$(docker ps -aq --filter "label=sparky.sandbox" 2>/dev/null)
     if [ -n "$held" ]; then docker rm --force $held >/dev/null; echo "removed $(echo "$held" | wc -l) sandbox containers"; fi
     docker rm --force "${SPARKY_SANDBOX__EGRESS_PROXY_NAME:-sparky-sandbox-proxy}" >/dev/null 2>&1 || true
     docker network rm "${SPARKY_SANDBOX__EGRESS_NETWORK:-sparky-sandbox}" >/dev/null 2>&1 || true
 
-# Start production with GHCR images; no host ports for datastores
+# Start production from GHCR images
 prod-up *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml pull
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d {{ARGS}}
 
+# Stop production
 prod-down: sandbox-down
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml down
 
+# Follow production logs
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Datastores (postgres, redis, minio) for host-side engine. Traces: just phoenix
+# Start postgres, redis, and minio for a host-side engine
 infra *ARGS:
     docker compose -f deploy/compose.yml up -d --wait {{ARGS}} postgres redis minio
 
-# Phoenix trace UI on http://localhost:6006 (loopback); set SPARKY_TELEMETRY__PHOENIX_URL to export
+# Phoenix trace UI on localhost:6006
 phoenix *ARGS:
     docker compose -f deploy/compose.yml --profile phoenix up -d {{ARGS}} phoenix
 
-# llama-server on the processor, for a machine with no NVIDIA GPU. Slow but complete.
+# llama-server chat and embed on the CPU
 model-cpu *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.cpu.yml --profile model up -d {{ARGS}} chat embed
 
-# llama-server for chat (:8000) and embeddings (:8001); GGUFs download on first run
+# llama-server chat on :8000 and embed on :8001
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
 
-# Self-hosted metasearch for the search_live_web tool on http://localhost:8888 (loopback)
+# SearXNG for the web source of search_live on localhost:8888
 search *ARGS:
     docker compose -f deploy/compose.yml --profile search up -d {{ARGS}} searxng
 
-# Self-hosted Firecrawl for scraper API on :3002
+# Self-hosted Firecrawl for the scraper on :3002
 crawl *ARGS:
     docker compose -f deploy/compose.yml --profile crawl up -d {{ARGS}} firecrawl
 
-# Browse database at http://localhost:8081 (pgweb, loopback)
+# pgweb database browser on localhost:8081
 db *ARGS:
     docker compose -f deploy/compose.yml --profile db up -d {{ARGS}} pgweb
 
@@ -180,26 +188,27 @@ metrics *ARGS:
 gpu-metrics *ARGS:
     docker compose -f deploy/compose.yml --profile gpu-metrics up -d {{ARGS}} gpu-exporter
 
-# What's running, across every profile
+# Compose containers across every profile
 ps:
     docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix ps -a
 
+# Follow dev stack logs across every profile
 logs *ARGS:
     docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix logs -f {{ARGS}}
 
-# Build both images locally
+# Build the rust and scraper images locally
 images:
     docker build -f deploy/docker/rust.Dockerfile -t sparkyai-rust .
     docker build -f deploy/docker/scraper.Dockerfile -t sparkyai-scraper .
 
-# Build the sandbox and its egress proxy under the tags the engine runs
+# Build the sandbox and egress proxy images under the tags the engine runs
 sandbox-images:
     docker build -f deploy/docker/sandbox.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox:main .
     docker build -f deploy/docker/sandbox-proxy.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main .
 
 # ---------- docs ----------
 
-# Render every mermaid diagram in ARCHITECTURE.md to verify syntax
+# Render the ARCHITECTURE.md mermaid diagrams to verify syntax
 diagrams:
     #!/usr/bin/env bash
     set -euo pipefail

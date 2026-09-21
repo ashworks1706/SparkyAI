@@ -26,8 +26,7 @@ def _toml_files() -> tuple[Path, ...]:
 
 class Postgres(BaseModel):
     url: SecretStr = SecretStr("postgres://sparky:sparky@localhost:5432/sparky")
-    # Pooled connections the scraper holds at most. Every lane of scraper serve takes one per job,
-    # so this covers scraper.live_workers plus the background lane and the scheduler.
+    # Pooled connections the scraper holds at most; covers every serve lane plus the scheduler.
     scraper_pool_max: int = 8
 
 
@@ -73,8 +72,7 @@ class Firecrawl(BaseModel):
 class Auth(BaseModel):
     """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU.
 
-    An operator runs scraper login, types a username and password at the console, and approves
-    Duo. Only the browser storage state (cookies and local storage) is saved, never a password.
+    Only the browser storage state is saved, never a password.
     """
 
     # Where the captured storage state is read from and written to.
@@ -128,7 +126,7 @@ class Telemetry(BaseModel):
 
 
 class Scraper(BaseModel):
-    # Public ASU content is shared across every guild; the engine reads this tenant for all.
+    # Tenant public ASU content is stored under; the engine reads it for every guild.
     tenant_id: str = "public"
     # firecrawl renders JS to markdown; http is httpx + bs4, with Playwright for JS sources.
     fetcher: Literal["firecrawl", "http"] = "firecrawl"
@@ -162,9 +160,7 @@ class Scraper(BaseModel):
     job_retention_hours: float = 72.0
     # Finished jobs removed per scheduling cycle.
     job_prune_batch: int = 5000
-    # Indexed narrow so a match points at the passage that answers, not at a whole section.
-    # retrieval.window reads the neighbours back with the hit, so overlap would only repeat
-    # text inside the passage the model is handed.
+    # Characters per leaf chunk; retrieval.window reads the neighbours back with a hit.
     chunk_chars: int = 300
     chunk_overlap_chars: int = 0
     parser_version: str = "bs4-text-v1"

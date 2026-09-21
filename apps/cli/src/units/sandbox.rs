@@ -93,9 +93,7 @@ async fn report(http: &reqwest::Client, endpoint: &Endpoint) -> Result<SandboxRe
 
 /// The commands still to write, oldest first, given the end state already written for each.
 ///
-/// The engine reports a command while it runs and again once it has ended, so one command is
-/// written twice: once as it starts, once with how it went. A report that carries neither state
-/// again writes nothing.
+/// A command is written once as it starts and once as it ends; a repeated state writes nothing.
 pub fn unwritten(commands: &[SandboxCommand], shown: &HashMap<u64, bool>) -> Vec<SandboxCommand> {
     commands
         .iter()

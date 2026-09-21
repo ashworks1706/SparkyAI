@@ -19,9 +19,7 @@ use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::Run;
 use crate::runtime::harness::safety::redact::{redact, redact_text, truncate};
 
-/// The workspace session a conversation's tool results are written to.
-///
-/// One session per conversation, so a file written on an earlier turn is still there.
+/// The workspace session a conversation's tool results are written to, one per conversation.
 pub(super) fn workspace_session(ctx: &RequestContext) -> String {
     format!("turn{}", ctx.conversation_id.simple())
 }
@@ -118,10 +116,7 @@ impl Agent {
     }
 
     /// A result too long to carry, written to the workspace and replaced by its head and a path.
-    ///
-    /// A long result otherwise rides in the conversation for every later step of the turn. The
-    /// content is returned unchanged when the handoff is off, no sandbox is configured, or the
-    /// write failed, so the model is never left with less than it has today.
+    /// Unchanged when the handoff is off, no sandbox is configured, or the write fails.
     async fn offloaded(
         &self,
         ctx: &RequestContext,

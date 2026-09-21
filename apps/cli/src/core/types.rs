@@ -63,7 +63,7 @@ pub enum Kind {
     Process,
     /// A just recipe that runs to completion.
     Task,
-    /// Something the engine owns, driven over its HTTP surface rather than started here.
+    /// Something the engine owns, driven over its HTTP surface.
     Sandbox(SandboxUnit),
 }
 
@@ -277,7 +277,7 @@ pub struct SandboxSession {
 /// One command the sandbox ran or is running.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 pub struct SandboxCommand {
-    /// Identifies it across reports, so one command is shown once as it starts and once as it ends.
+    /// Identifies it across reports.
     pub id: u64,
     /// When it started.
     pub at: DateTime<chrono::Utc>,
@@ -398,7 +398,7 @@ pub enum Event {
     Sandbox(Result<SandboxReport, String>),
     /// An action taken on the engine sandbox finished.
     SandboxActed(Result<String, String>),
-    /// The terminal stopped delivering input. The console cannot be driven any more.
+    /// The terminal stopped delivering input.
     InputLost(String),
 }
 

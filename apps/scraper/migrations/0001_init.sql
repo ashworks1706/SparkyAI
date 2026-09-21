@@ -1,4 +1,4 @@
--- Source of truth. Vector indexes (pgvector) are rebuildable from the text here + object storage.
+-- Source of truth. Vector indexes (pgvector) are rebuildable from the text here and object storage.
 
 create extension if not exists vector;
 

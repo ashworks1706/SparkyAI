@@ -42,8 +42,7 @@ pub struct CacheRules {
 }
 
 impl CacheRules {
-    /// How long an answer of source is reused. handoff is the floor, so this is never zero:
-    /// an answer has to outlive the fetch for the requests that waited on it to read it.
+    /// How long an answer of source is reused, never less than handoff.
     fn lifetime(&self, source: &str) -> Duration {
         self.handoff
             .max(self.ttl.get(source).copied().unwrap_or_default())

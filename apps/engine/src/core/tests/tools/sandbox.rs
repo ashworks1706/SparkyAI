@@ -72,7 +72,7 @@ fn a_long_output_keeps_its_head_and_its_tail() {
     use crate::core::types::tools::sandbox::workspace_path;
     use crate::runtime::tools::sandbox::clip;
 
-    // The exit of a long run is at the end; head-only truncation would drop it.
+    // The exit at the end of a long run is kept.
     let long: String = std::iter::repeat_n('x', 100).collect();
     let text = format!("start{long}end");
     let out = clip(&text, 20);
@@ -594,7 +594,7 @@ async fn a_call_that_ends_any_way_at_all_leaves_nothing_reported_as_running() {
         sandbox.commands()
     );
 
-    // The loop drops a cancelled tool call, so the guard is what takes the command off the list.
+    // Dropping a cancelled tool call takes its command off the list.
     let held = ctx();
     drop(sandbox.run(&held, &request));
     assert!(

@@ -1,48 +1,40 @@
 # apps/scraper
 
-Ingestion and live search. Fetches public ASU pages, chunks and embeds them, and writes the
-retrieval index the engine reads. The engine reaches it only through the `jobs` table.
+Ingestion and live search. Fetches ASU pages, chunks and embeds them, writes the retrieval index the engine reads, and answers the engine's live queries. The engine reaches it only through the `jobs` table. Owns the schema in `migrations/`.
 
 ```bash
-cd apps/scraper
-uv sync --extra dev
-uv run scraper migrate              # apply migrations/ (schema owner)
-uv run scraper run library_hours    # one source
-uv run scraper run --category housing  # every source in a category
-uv run scraper run --all
-uv run scraper serve                # the job queue: live searches, their indexing, scheduled runs
-uv run scraper status               # sources, then the queue by kind and status
+just scraper serve                  # the job queue: live searches, their indexing, scheduled runs
+just scraper run library_hours      # one source
+just scraper run --category housing # every source in a category
+just scraper run --all
+just scraper status                 # sources, then the queue by kind and status
+just scraper login                  # capture the admin ASU session (MyASU and Duo)
+just migrate                        # apply migrations/
 ```
+
+`serve` and `run` require the admin session and sign in first when run at a terminal.
 
 | Module | Holds |
 |---|---|
-| `ingest/fetch.py` | Firecrawl (`just crawl`) by default: JS rendered, main content as markdown. `SPARKY_SCRAPER__FETCHER=http` uses httpx + Playwright instead |
-| `ingest/extract.py` | HTML → text, for the `http` fetcher |
-| `ingest/chunk.py` | text → chunks |
+| `ingest/fetch.py` | Firecrawl (`just crawl`) by default, main content as markdown. `SPARKY_SCRAPER__FETCHER=http` uses httpx, with headless Chromium for sources marked `needs_js` |
+| `ingest/drivers/` | browser drivers: `public.py` (no session), `asu_sso.py` (MyASU sign-on), `admin.py` (the admin authenticated driver) |
+| `ingest/extract.py` | HTML to text, for the `http` fetcher |
+| `ingest/chunk.py` | text to chunks |
 | `ingest/embed.py` | llama-server embed endpoint |
-| `ingest/tree.py` | the hierarchical index: cluster a level, summarize each cluster on the chat endpoint, embed the summary, recurse |
-| `ingest/pipeline.py` | fetch → hash → snapshot → extract → chunk → embed → index → tree |
+| `ingest/tree.py` | the hierarchical index: cluster, summarize on the chat endpoint, embed, recurse |
+| `ingest/pipeline.py` | fetch, hash, snapshot, extract, chunk, embed, index, tree |
+| `ingest/pace.py` | spaces fetches to one host `scraper.host_gap_secs` apart |
 | `jobs.py` | `scraper serve`: the live and background lanes over the `jobs` queue, and the timer that queues due sources |
 | `query/registry.py` | the live query sources the engine may call, published by `scraper serve` |
 | `query/run.py` | one live query: checks, fetch, the text handed back |
 | `query/index.py` | indexing a live result under the right source |
-| `sources/` | one module per ASU source with its own extractor; `pages.py` lists static pages indexed as Firecrawl returns them. A source is a row, not a folder |
-| `ingest/pace.py` | spaces fetches to one host `scraper.host_gap_secs` apart |
-| `store/` | psycopg pool, object storage; the only place a connection is opened |
+| `query/sources/` | live query sources, one module each |
+| `sources/` | scheduled sources, one module per source with its own extractor; `pages.py` lists static pages |
+| `store/` | psycopg pool and object storage; the only place a connection opens |
 | `migrations/` | the schema, shared with `apps/engine` |
 
-With the `http` fetcher, sources marked `needs_js` render in headless Chromium; install it once
-with `uv run playwright install chromium`. Firecrawl renders everything itself.
+With the `http` fetcher, install Chromium once with `uv run playwright install chromium`.
 
-Pipeline per source: fetch → content hash (skip if unchanged) → raw snapshot to object storage
-→ extract → chunk → embed → write `chunks` and `source_versions`.
+The engine queries `chunks` with the same embedding model and dimension used here; changing the model means re-embedding every chunk. `SPARKY_SCRAPER__TREE_ENABLED=true` adds summary levels above the leaves, at a chat call and an embedding call per cluster per source.
 
-The engine queries `chunks` with the same embedding model and dimension used here. Changing the
-model means re-embedding every chunk.
-
-`SPARKY_SCRAPER__TREE_ENABLED=true` adds the levels above the leaves. A run clusters its own
-chunks, summarizes each cluster with one call to `[summary]` (the chat model), embeds the
-summary, and repeats to `tree_max_level` or until a level splits into fewer than two clusters.
-Summaries land in `chunks` beside the leaves with `level > 0` and `parent_id` set on what they
-cover, so one retrieval searches every level at once. It costs a chat call and an embedding call
-per cluster per source.
+Details: Inside scraper, Knowledge, Live source queries, and Job queue in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).

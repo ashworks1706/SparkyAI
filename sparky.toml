@@ -1,12 +1,5 @@
-# SparkyAI settings. Committed, reviewed, and read by every app.
-#
-# Two layers, lowest first: this file, then SPARKY_<SECTION>__<KEY> environment variables,
-# which win. Secrets, per-machine URLs and the values docker compose overrides live in .env.
-# Anything tunable lives here.
-#
-# Read by apps/engine, apps/discord and apps/cli (Rust, figment) and by apps/scraper and
-# apps/training (Python, tomllib through pydantic-settings). Point elsewhere with
-# SPARKY_CONFIG_FILE.
+# SparkyAI settings, read by every app. SPARKY_<SECTION>__<KEY> environment variables win.
+# Secrets and per-machine URLs live in .env. SPARKY_CONFIG_FILE points to another file.
 
 [app]
 log_level = "info,discord=debug"
@@ -20,30 +13,26 @@ tool_timeout_secs = 20
 confirmation_ttl_secs = 600
 model_slots = 2                # match llama-server --parallel
 model_queue_wait_secs = 30
-max_turns = 16                 # turns running at once; each holds its history, files and tool results in memory
+max_turns = 16                 # turns running at once
 turn_queue_wait_secs = 20      # longest a turn waits for a slot before it is refused as busy
 temperature = 0.6
 history_turns = 20
 memory_recall_limit = 10
-# Recall memory and the profile graph where others can read the answer.
+# Recall memory and the profile graph in channels others can read.
 recall_in_public = false
 
-# Prompt budgets in estimated tokens. A section budget above the total is rejected at boot.
-# chars_per_token converts characters to estimated tokens; lower it for a tokenizer that splits
-# URLs and course codes finely. Tool schemas count against prompt_budget_tokens, and the engine
-# refuses to boot when they take over half of it. The prompt and model.max_tokens share one
-# llama-server slot: ctx-size 16384 over --parallel 2 is 8192 a slot.
+# Prompt budgets in estimated tokens. A section budget over the total is rejected at boot.
+# Tool schemas count against prompt_budget_tokens and must fit in half of it.
 prompt_budget_tokens = 5500
 history_budget_tokens = 1000
 memory_budget_tokens = 300
 capabilities_budget_tokens = 600
-# Cap on the message of Sparky's that a reply quotes back into the prompt.
+# Budget of the earlier Sparky message a reply quotes into the prompt.
 reply_budget_tokens = 200
-# Images of one message the engine passes to the model. The edge caps what it sends in
-# bot.max_images; this caps what the HTTP surface accepts from any caller holding the token.
+# Images of one message passed to the model.
 max_images = 4
-# Other files of one message (PDF, Word, Excel, CSV, text) copied into the sandbox workspace,
-# the largest accepted, and the only hosts they are downloaded from.
+# Other files of one message copied into the sandbox workspace, their largest size,
+# and the hosts they are downloaded from.
 max_files = 4
 max_file_bytes = 2000000
 file_hosts = ["cdn.discordapp.com", "media.discordapp.net"]
@@ -51,46 +40,38 @@ upload_preview_chars = 800       # characters of the start of an attached file's
 upload_match_chars = 2400        # characters of its passages that match the question
 upload_ocr_pages = 3             # pages of a scanned PDF read by OCR
 chars_per_token = 4
-# Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
-# model.max_tokens_without_thinking, must fit one slot of the chat server.
+# Fraction added to prompt_budget_tokens for the chat template. The sum with
+# model.max_tokens_without_thinking must fit one chat slot.
 prompt_estimate_headroom = 0.3
 
 retry_base_ms = 250
 retry_cap_ms = 8000
 max_span_value_chars = 32000
-# A tool result longer than this is written to the sandbox workspace and replaced by its head
-# and the path, so it stops riding in the conversation for every later step of the turn. It needs
-# the sandbox. 0 carries every result whole, which is what the loop has always done.
+# A tool result longer than this goes to the sandbox workspace, replaced by its head and path.
+# 0 keeps every result whole.
 tool_result_to_file_chars = 6000
-# Characters of the arguments and of the result that one live progress line carries to
-# whoever is watching the turn, and of the reasoning the thinking line carries.
+# Characters of arguments and result on a live progress line, and of reasoning on the thinking line.
 progress_detail_chars = 160
 progress_thought_chars = 600
-# Stream model calls: the thinking line follows the reasoning, and the answer is shown as a
-# draft a block at a time. A block ends at a sentence or a line; stream_block_chars is the
-# longest run held back waiting for one. Live pieces reach the watcher only; the recorded trace
-# keeps the finished call.
+# Stream model calls to the watcher. stream_block_chars is the longest run held back
+# before a draft block is sent.
 stream = true
 stream_block_chars = 160
 
-# Whether a model call reasons before it answers. The reasoning is shown as the live thinking
-# line and never reaches the answer. Tasks such as compaction never think.
+# Whether a model call reasons before it answers. Reasoning shows on the thinking line, never in the answer.
 [agent.thinking]
 mode = "auto"                  # on, off, or auto
-# auto takes the first rule that applies: a call offered no tools does not think; a step with
-# tool results thinks when after_tools is set; a question holding a cue or longer than
-# max_quick_chars thinks; a step before any tool has run thinks when plan_searches is set, since
-# nothing is retrieved before the first call and that step picks the searches; else it does not.
+# auto, first match: no tools offered, off; after tool results, after_tools; a cue or over
+# max_quick_chars, on; before any tool has run, plan_searches; else off.
 after_tools = true
 max_quick_chars = 80
 plan_searches = true
 cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
-# A call that thought and left no answer and no tool call is made again without thinking.
+# Repeat without thinking a call that thought and returned no answer and no tool call.
 retry_without = true
 
 # ---------------------------------------------------------------- what the model is told
-# Changing any of this changes the prompt hash. system_file beats system, which beats the
-# built-in default.
+# Changes here change the prompt hash. system_file overrides system, which overrides the built-in default.
 [prompt]
 # system_file = "prompts/sparky.md"
 role_line = "The user is `{user}`. Roles: {roles}."
@@ -103,14 +84,12 @@ reply_header = "The user replied to this earlier message of yours. It is what th
 # Closes a tool result cut to fit the prompt; {chars} is how much was left out.
 result_cut_line = "[{chars} more characters of this result were cut to fit. Search again with a narrower query to read them.]"
 answer_only_line = "You have no tools on this step. Answer the user now in plain text from what you already have, or say what you could not find. Do not write a tool call."
-# Sent back when a tool failed and the sandbox was not tried, so the loop takes the last route
-# before it gives up. Empty turns the hand-back off.
+# Sent after a tool failed and run_sandbox was not tried. Empty turns it off.
 sandbox_retry_line = "A tool you called this turn failed, and you have not opened the page yourself. Do that now: call run_sandbox and fetch the page the question is about, then answer from what it prints. Tell the user you could not find something only after that has been tried."
-# One line per file the user attached. The engine turns the file into text in the sandbox first;
-# {preview} is the start of that text, {matches} the passages holding the most words of the
-# question, and {text_path} where the rest is.
+# One line per attached file. {preview} is the start of its text, {matches} the best
+# matching passages, and {text_path} the full text.
 upload_line = "The user attached {name} ({kind}, {size}). Its text, {chars} characters, is at {text_path} in the sandbox workspace, session {session}; the file itself is at {path}. It begins:\n{preview}\n\nThe passages of it that hold the most words of the question:\n{matches}\n\nAnswer a question about this file from these passages, never from search results or memory. When they do not hold the answer, read more with run_sandbox in session {session}: rg -i -n -C 3 SUBJECT {text_path}, or sed -n START,ENDp {text_path} around a line number above."
-# When no text came out of the file, such as an image or an archive.
+# An attached file with no extractable text.
 upload_raw_line = "The user attached {name} ({kind}, {size}). It is at {path} in the sandbox workspace, session {session}, and no text could be pulled from it automatically. Open it with run_sandbox in that session before you answer: file {path} says what it is, and python3 with pypdf, docx, openpyxl or pandas, or pdftoppm and tesseract for a scan, reads it."
 upload_failed_line = "The user attached {name} ({kind}), but it could not be opened: {reason}. Say so if the question depends on it."
 utc_offset_hours = -7          # Arizona, no daylight saving
@@ -119,17 +98,15 @@ utc_offset_hours = -7          # Arizona, no daylight saving
 # base_url and api_key are per-machine and live in .env.
 [model]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
-# Token budget of a call that thinks, reasoning and answer together. One slot holds the prompt
-# and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot, and a full prompt of
-# agent.prompt_budget_tokens leaves about this much. See agent.thinking.
+# Token budget of a call that thinks, reasoning and answer together. With the prompt it
+# must fit one chat slot.
 max_tokens = 2560
 # Token budget of a call that does not think.
 max_tokens_without_thinking = 1024
 usd_per_m_prompt = 0.0
 usd_per_m_completion = 0.0
 
-# Only what is set is sent; server defaults apply to the rest. Values follow the Qwen3
-# recommended settings plus a presence penalty. agent.temperature pairs with them.
+# Sampling sent to the server; unset keys use server defaults.
 [model.sampling]
 top_p = 0.9
 top_k = 20
@@ -145,8 +122,7 @@ dim = 1024
 batch_size = 32                # apps/scraper only
 timeout_secs = 120.0           # apps/scraper only, one embedding request
 
-# The model that writes a tree node summary. base_url and api_key are per-machine and live
-# in .env.
+# The model that writes tree node summaries. base_url and api_key live in .env.
 [summary]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
 max_tokens = 512
@@ -155,7 +131,7 @@ timeout_secs = 120
 thinking = false               # true spends the whole budget on reasoning and returns empty content
 
 # ---------------------------------------------------------------- retrieval
-# Two legs fused with reciprocal rank fusion. Turning both off is rejected at boot.
+# Dense and lexical legs fused by reciprocal rank fusion. Both off is rejected at boot.
 [retrieval]
 top_k = 6                      # chunks search_knowledge returns per call
 candidates = 20                # pulled from each leg before fusion
@@ -165,9 +141,7 @@ dense = true
 lexical = true
 min_score = 0.0
 max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
-# Rows either side of a hit read back with it, joined into one passage. Chunks are indexed
-# narrow so a match is precise; the window is what gives the model enough around it to read.
-# Overlapping windows merge, so nearby hits cost one passage, not two. 0 hands back the hit alone.
+# Rows either side of a hit joined into one passage; overlapping windows merge. 0 returns the hit alone.
 window = 2
 
 # ---------------------------------------------------------------- what may run
@@ -178,18 +152,13 @@ write_roles = ["MANAGE_GUILD"]
 allow_authenticated_reads = false
 confirm_from = "external_write"
 
-# Two search tools over the same set of ASU sources: search_knowledge reads the stored index,
-# search_live queues a fetch for the scraper. Both take a query and an optional source filter.
-#
-# The wording below is what the model reads immediately before it writes a query, so it is the
-# highest-leverage text in the prompt. With one tool per source the tool name carried half the
-# intent; with two tools the query string has to carry all of it, which is what query_description
-# is for. Keep it concrete and short: a 4B model follows a bad-then-good pair and ignores an
-# adjective. The per-source hints appended to source_description come from the catalog.
+# search_knowledge reads the stored index; search_live queues a fetch for the scraper.
+# The descriptions are the tool text the model reads. The catalog appends per-source hints
+# to source_description.
 [tools]
 disabled = []
 search = true
-# The source search_live fetches when a call names none. Must be a source the engine offers.
+# Source search_live fetches when a call names none. Must be a source the engine offers.
 live_default_source = "web"
 knowledge_description = "Search the stored knowledge base of ASU pages: programs, policies, admissions, advising, buildings, services and offices, anything that changes rarely. Nothing is looked up before you are called, so search it for any such question. Send several searches with different wording in one step."
 live_description = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, such as hours today, open seats, shuttle times, events, news or scores, or when the knowledge base holds nothing."
@@ -197,34 +166,25 @@ query_description = "What to search for, in keywords. This string is the whole r
 source_description = "Narrows the search to one source. Leave it out unless the question is plainly about that one source: a wrong source returns nothing even when the answer is stored."
 nothing_stored = "The knowledge base holds nothing for that query. If you named a source, search again without it. Otherwise search again with the subject named differently, or call search_live, or open the page yourself with run_sandbox. Say you do not have it only once all of that has been tried this turn."
 
-# The classifier and the graph agent, detached from the request that produced the turn.
-# Enabled, every turn costs two extra model calls.
+# The classifier and graph agent, run after the turn. Enabled, each turn costs two extra model calls.
 [profile]
 enabled = true
 max_tokens = 512
 timeout_secs = 60
-# Withdraw a recorded fact when a new one makes it false. Costs a model call when a new fact
-# collides with one recorded for the same subject and relation.
+# Withdraw a recorded fact a new fact for the same subject and relation contradicts. Costs a model call.
 reconcile = true
 min_confidence = 0.5           # extracted facts below this, or with an empty label, are dropped
 list_limit = 50               # nodes and relations POST /profile/list returns, each
 request_timeout_secs = 30      # budget for one /profile/list or /profile/forget call
 
-# The rule-based gate on extraction, run on every turn. Empty lists use the built-in ones. A
-# turn passes when a first-person marker sits next to a cue and it is not a question.
+# Rule-based gate on extraction. Empty lists use the built-in ones.
 [profile.detector]
 subjects = []
 cues = []
 min_words = 4
 
-# A command in an isolated environment. The engine needs access to the container runtime: under
-# compose that is the sandboxd service, and on the host it is the local docker. Read-only root,
-# dropped capabilities, non-root user, workspace wiped with the session. With egress off it has
-# no network. With it on, the container joins egress_network, which the engine creates internal,
-# and reaches only the egress proxy: public HTTP and HTTPS, never a private or loopback address.
-# required decides what an unreachable runtime means: false leaves run_sandbox unregistered and
-# the engine runs without it, true refuses to boot. It is false here so a fresh clone runs with
-# no container runtime; deploy/compose.prod.yml sets it true, where a missing sandbox is a fault.
+# run_sandbox: a command in an isolated container. With egress on it reaches only the egress proxy.
+# required = true refuses to boot without a container runtime; false runs without run_sandbox.
 [sandbox]
 enabled = true
 required = false
@@ -251,34 +211,25 @@ description = "Run a shell command in an isolated Linux environment. Reach for i
 command_description = "The shell command to run."
 session_description = "Name a session to keep files in the workspace between calls. Reuse the same name to resume it. Results an earlier tool wrote to the workspace name the session they are in."
 
-# The gate every model response passes, on the capability branch and the answer branch.
+# The gate every model response passes.
 [guardrail]
 enabled = true
 denied_phrases = []
 max_answer_chars = 8000
 replacement = "I cannot answer that. Ask a moderator if you need help."
 
-# The chat agent. Replaces the turns that no longer fit with one turn that does. Off leaves
-# history trimmed by dropping the oldest turns.
+# Replaces history past its budget with one summary turn. Off drops the oldest turns.
 [compaction]
 enabled = true
 max_tokens = 512
-# Share of agent.history_budget_tokens kept as recent turns when history is compacted. Compaction
-# runs only once history is over its budget, and keep_share times it plus max_tokens must fit it.
+# Share of agent.history_budget_tokens kept as recent turns. keep_share times it plus max_tokens must fit it.
 keep_share = 0.4
 temperature = 0.0
 timeout_secs = 30
 # instructions = "You compact a conversation..."
 
-# Live source queries. They need just scraper serve running.
-#
-# The engine waits on the scraper by polling the jobs row. poll_ms is the first wait and it doubles
-# up to poll_max_ms, so a 30 second fetch costs a handful of round trips rather than one every
-# 100ms for its whole duration. max_in_flight caps how many fetches reach the database at once,
-# across every replica, held in the same Redis as the cache below. Over the cap a search tool is
-# refused with something the model can act on, which beats queueing onto the connection pool until
-# it times out. The cap sits under the cache, so a reused answer and a request that waited on
-# another cost the database nothing and take no slot.
+# Live source queries; they need just scraper serve. The engine polls the jobs row every
+# poll_ms, doubling to poll_max_ms. max_in_flight caps fetches across every replica.
 [query]
 timeout_secs = 90
 poll_ms = 100
@@ -286,48 +237,33 @@ poll_max_ms = 1000
 max_in_flight = 16             # 0 removes the cap; keep it under postgres.max_connections
 claim_secs = 15                # a query the scraper does not claim in this long reports that it is not running
 
-# Tool output caching for live queries, in Redis, shared by every engine replica. url is
-# per-machine and lives in .env as SPARKY_REDIS__URL; without it this must be off.
-#
-# Two things happen here. An answer within its lifetime is returned without touching the scraper.
-# And whatever the lifetime, only one request fetches a given query at a time: the rest wait on its
-# lease and read the answer it writes, so a hundred students asking at once is one fetch, not a
-# hundred. A cached answer carries how old it is into the tool output, so the model never calls a
-# reused result current.
-#
-# handoff_secs is the floor under every source: an answer has to outlive its own fetch for the
-# requests that waited on it to read it. So a source at ttl 0 is reused for that long and no
-# longer, which is what every source that is never indexed defaults to. Coalescing itself costs no
-# freshness: a request that waited gets an answer fetched after it asked. Reuse does, so keep the
-# floor small.
-#
-# Caching is safe here because a source query only ever reads: the search tools are all
-# ReadPublic and anything that writes goes through Policy, never through this path.
+# Live query cache and per-query fetch leases in Redis. Requires SPARKY_REDIS__URL in .env.
+# handoff_secs is the minimum lifetime of every cached answer.
 [query.cache]
 enabled = true
-default_ttl_secs = 900         # an answer of a source the scraper indexes, citable anyway
-live_ttl_secs = 0              # an answer of a source that is never indexed: the floor below only
-handoff_secs = 5               # floor under every lifetime, so the requests that waited read it
-lease_secs = 120               # must cover query.timeout_secs, or two requests fetch the same query
+default_ttl_secs = 900         # an answer of a source the scraper indexes
+live_ttl_secs = 0              # an answer of a source that is never indexed
+handoff_secs = 5               # floor under every lifetime
+lease_secs = 120               # must cover query.timeout_secs
 poll_ms = 100                  # how often a waiting request looks for the answer
-timeout_ms = 500               # a cache slower than this is treated as one that is not there
-# Left out of a query when it is keyed, so "AI clubs ASU" and "ai clubs" share one entry.
+timeout_ms = 500               # a cache slower than this is treated as absent
+# Words dropped from a query when it is keyed.
 ignore_words = ["asu", "arizona", "state", "university", "the", "a", "an", "at", "in", "of", "for", "on", "to", "and", "near", "me"]
-keep_words = ["web"]           # sources keyed on every word, where ASU changes the search
+keep_words = ["web"]           # sources keyed on every word
 
-# Per source, by registry key. Anything not named here takes the default for its kind above.
+# Per-source lifetime by registry key. Others take the default for their kind.
 [query.cache.ttl_secs]
 library_hours = 3600
 campus_map = 86400
-course_catalog = 86400         # a catalog entry changes between terms, not within one
+course_catalog = 86400
 dining = 3600
 social_media = 1800
 sports_news = 900
 news = 900
-courses = 300                  # open seat counts move during registration
-clubs = 21600                  # the group directory changes over days, not hours
-events = 1800                  # new events are posted through the day
-web = 600                      # an open web search for the same words
+courses = 300
+clubs = 21600
+events = 1800
+web = 600
 
 # ---------------------------------------------------------------- MCP
 # Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
@@ -351,18 +287,15 @@ dir = ".sparky/traces"
 max_file_bytes = 2000000       # later events of one request are dropped past this; 0 removes the limit
 retention_hours = 336          # pruned hourly; 0 keeps them forever
 
-# Spans go to Phoenix over OTLP/HTTP at phoenix_url plus /v1/traces. phoenix_url is
-# per-machine and phoenix_api_key is a secret; both live in .env. An empty phoenix_url turns
-# export off. Set SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006 with just phoenix running
-# to read a conversation as a trace tree. project_name is the Phoenix project every app writes
-# to and the training export reads back.
+# Spans export to Phoenix at phoenix_url plus /v1/traces. phoenix_url and phoenix_api_key
+# live in .env; an empty phoenix_url turns export off. project_name is the Phoenix project.
 [telemetry]
 project_name = "sparky"
 sample_ratio = 1.0
 export_timeout_secs = 10
 provider_name = "llama.cpp"
 
-# Discord product events, exported to Phoenix as one span each through telemetry.
+# Discord product events, one span each.
 [analytics]
 enabled = true
 
@@ -382,13 +315,11 @@ edit_every_ms = 1500
 cooldown_secs = 0
 write_capability = "MANAGE_GUILD"
 thread_auto_archive_minutes = 1440   # 60, 1440, 4320, or 10080; threads the bot opens for answers
-# A direct message is private, so the profile graph and personal memory apply to it and not to
-# an answer in a server. See agent.recall_in_public.
+# Direct messages get the profile graph and personal memory.
 direct_messages = true
-# Images of one message sent to the model. The model has to be one that reads images; see
-# deploy/inference/README.md. 0 sends none.
+# Images of one message sent to the model; needs a vision model. 0 sends none.
 max_images = 4
-# Other files of one message sent to the engine, which opens them in the sandbox, and the largest.
+# Other files of one message sent to the engine, and their largest size.
 max_files = 4
 max_file_bytes = 2000000
 
@@ -405,10 +336,7 @@ tenant_id = "public"           # public ASU content, readable by every guild
 fetcher = "firecrawl"          # firecrawl renders JS and returns markdown; http is plain httpx
 user_agent = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
 request_timeout_secs = 30.0
-# Indexed narrow so a match points at the passage that answers, not at a whole section.
-# retrieval.window reads the neighbours back with the hit at query time, so overlap here
-# would only repeat text inside the passage the model is handed. Changing either value
-# changes chunker_version, so the next run of a source reindexes it.
+# Chunk size and overlap. Changing either changes chunker_version and reindexes a source on its next run.
 chunk_chars = 300
 chunk_overlap_chars = 0
 index_live_results = true          # index a live result after answering, for sources that allow it
@@ -420,12 +348,9 @@ max_page_bytes = 10000000          # largest page a plain HTTP fetch reads
 keep_versions = 5                  # versions kept per source with their snapshots; 0 keeps all
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
 job_lease_secs = 1800.0            # a background job running longer is queued again
-host_gap_secs = 5.0                # shortest gap between scheduled fetches to one host; ASU rate limits bursts
-query_max_chars = 30000            # longest live result sent to the engine; past agent.tool_result_to_file_chars it goes to the sandbox workspace
-# Back pressure on the one table every process writes to. Past index_backlog_limit queued
-# live_index jobs a live result is answered but not indexed: answering is what a student is
-# waiting on, and the source is refetched on its schedule anyway. Finished jobs are removed after
-# job_retention_hours so the queue stays small enough to claim from quickly.
+host_gap_secs = 5.0                # shortest gap between scheduled fetches to one host
+query_max_chars = 30000            # longest live result sent to the engine
+# Past this many queued live_index jobs a live result is answered but not indexed.
 index_backlog_limit = 500
 job_retention_hours = 72.0         # 0 keeps every finished job forever
 job_prune_batch = 5000             # finished jobs removed per scheduling cycle
@@ -433,14 +358,13 @@ parser_version = "bs4-text-v1"
 # A fetch yielding less than this fraction of the last good run is refused.
 quality_floor_ratio = 0.5
 quality_floor_min_chars = 500     # the floor applies only when the last good run had this many chars
-# A RAPTOR style tree over the chunks of one source. Costs a model call per cluster per level.
-# Retrieval searches every level at once.
+# RAPTOR style summary tree per source. Costs a model call per cluster per level.
 tree_enabled = false
 tree_max_level = 3
 tree_cluster_size = 5
 tree_min_chunks = 12
 
-# SearXNG behind the web source of search_live (just search). base_url is per-machine and lives in .env.
+# SearXNG behind the web source of search_live. base_url lives in .env.
 [search]
 engines = "google,brave,bing"
 language = "en-US"
@@ -450,12 +374,10 @@ snippet_chars = 300
 
 [firecrawl]
 timeout_ms = 60000
-wait_for_ms = 5000             # wait after load for ASU pages to fill in content
+wait_for_ms = 5000             # wait after page load
 only_main_content = true
 
-# Admin authenticated browser session for login-gated sources (clubs, Sun Devil Central events).
-# `just scraper login` opens MyASU, asks for the username and password at the console, and waits
-# for Duo. Only cookies are saved, never a password. Admin scoped; not the per-user MyASU session.
+# Admin browser session for login-gated sources, captured by just scraper login. Only cookies are saved.
 [auth]
 storage_state_path = "../../.sparky/auth/admin_state.json"   # relative to apps/scraper
 login_url = "https://my.asu.edu/"
@@ -487,8 +409,7 @@ health_interval_secs = 5
 port_check_ms = 150
 
 # ---------------------------------------------------------------- training and evals
-# engine_url and engine_service_token are per-machine and live in .env. The export reads
-# telemetry.phoenix_url and telemetry.project_name.
+# engine_url and engine_service_token live in .env.
 [training]
 state_dir = "../../.sparky"
 cases_dir = "evals/cases"

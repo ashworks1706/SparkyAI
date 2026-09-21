@@ -180,7 +180,7 @@ async fn a_cap_that_cannot_be_read_caps_nothing_rather_than_refusing_everything(
 
 #[tokio::test]
 async fn a_reused_answer_takes_no_slot_and_touches_no_database() {
-    // The cap sits under the cache, which is what makes a hit free.
+    // The cap sits under the cache, so a hit takes no slot.
     let cap = Arc::new(Counted::new(8));
     let inner = FakeQueries::new(vec![published("courses")]).answering("courses", "open");
     let sent = inner.sent();

@@ -41,7 +41,7 @@ fn a_hit_at_the_start_of_a_page_does_not_reach_before_it() {
 #[test]
 fn two_hits_a_row_apart_are_one_passage() {
     let page = Uuid::new_v4();
-    // 0..4 and 2..6 overlap, so the model is handed 0..6 once rather than the middle twice.
+    // 0..4 and 2..6 overlap and merge into 0..6.
     assert_eq!(
         spans(&[(page, 2), (page, 4)], 2),
         vec![Span {
@@ -206,7 +206,7 @@ fn a_summary_keeps_its_own_text() {
     let page = Uuid::new_v4();
     let built = spans(&[(page, 9)], 2);
     // Summaries are ordinalled after the leaves, so a span off the end of a page reaches one.
-    // The summary covers its chunks already; widening it would repeat them.
+    // The summary is not widened.
     let rows = [(1, page, 10), (0, page, 9)];
     assert_eq!(takes(&rows, &built), vec![Take::Own, Take::Span(0)]);
 }

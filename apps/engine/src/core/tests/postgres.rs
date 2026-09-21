@@ -88,7 +88,7 @@ fn the_wait_between_looks_at_a_queued_job_doubles_up_to_its_cap() {
         [100, 200, 400, 800, 1000, 1000, 1000]
     );
 
-    // A 30 second fetch is looked at far fewer times than a fixed 100ms poll would look.
+    // Backoff polls a 30 second fetch far fewer times than a fixed 100ms interval.
     let mut elapsed = Duration::ZERO;
     let mut looks = 0;
     let mut wait = Duration::from_millis(100);

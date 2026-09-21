@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 jobs:
-  # An image is rebuilt only when its inputs changed. workflow_dispatch rebuilds all.
+  # Rebuilds an image when its inputs changed; workflow_dispatch rebuilds all.
   changes:
     runs-on: ubuntu-latest
     outputs:

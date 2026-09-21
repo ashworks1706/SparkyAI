@@ -4,7 +4,7 @@ services:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
     environment:
-      # A production engine without its sandbox is a fault, not a degraded mode.
+      # The engine refuses to boot without its sandbox.
       SPARKY_SANDBOX__REQUIRED: "true"
   discord:
     build: !reset null
@@ -18,6 +18,6 @@ services:
     ports: !reset []
   minio:
     ports: !reset []
-  # Phoenix holds full prompts and replies and has no authentication. Reach it over a tunnel.
+  # Phoenix has no authentication and is reached over a tunnel.
   phoenix:
     ports: !reset []

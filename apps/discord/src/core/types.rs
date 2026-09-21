@@ -13,7 +13,7 @@ pub enum Visibility {
     Private,
 }
 
-/// Media types a model is sent. Anything else is dropped rather than guessed at.
+/// Media types a model is sent. Anything else is dropped.
 pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 /// One image attached to a message. Mirrors engine::core::types::conversation::image::Attachment.

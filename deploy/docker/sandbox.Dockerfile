@@ -1,13 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# The image run_sandbox runs commands in. With sandbox.egress off the container is started with
-# --network none. With it on, the container sits on an internal network whose only way out is the
-# egress proxy, which refuses private, loopback and link-local destinations.
+# The image run_sandbox runs commands in.
 FROM debian:bookworm-slim
 
-# python3 with the libraries a one-off script reaches for: parsing HTML and XML, tables, dates,
-# HTTP, and the documents a student uploads (PDF, Word, Excel, CSV, images). tesseract reads a
-# scanned PDF once pdftoppm has turned its pages into images. curl and wget go through the proxy.
-# The rest is what a shell one-liner reaches for.
+# python3 with HTML, table, HTTP and document libraries, OCR, and common shell tools.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         python3 \

@@ -71,7 +71,6 @@ def test_an_answer_from_a_source_that_is_not_indexed_queues_nothing(monkeypatch,
 
 
 def test_a_deep_index_backlog_answers_the_caller_and_drops_the_indexing(monkeypatch, recorder):
-    # A student is waiting on the answer; the source is refetched on its schedule anyway.
     answered(monkeypatch, "news", "stories")
     recorder.backlog_full = True
     result = jobs.handle(recorder, job(jobs.QUERY, source="news", params={}))
@@ -166,8 +165,7 @@ def test_pruning_finished_jobs_is_batched_and_leaves_running_ones_alone():
 
 
 def test_a_migration_that_cannot_run_in_a_transaction_is_split_into_its_statements():
-    # Several statements in one execute put Postgres in an implicit transaction, which
-    # create index concurrently refuses, so such a file is sent one statement at a time.
+    # A concurrent migration is sent one statement at a time.
     sql = """
     -- concurrent: a comment; with a semicolon in it
     set lock_timeout = '5s';

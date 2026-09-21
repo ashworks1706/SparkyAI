@@ -10,8 +10,7 @@ def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
     problems: list[str] = []
     if last.status != "answered":
         problems.append(f"status {last.status}")
-    # A citation is labelled with the page title, so the source it came from is its key.
-    # An engine that predates the key field carries an empty one; fall back to the title.
+    # A citation is matched by its source key, or by its title when the key is empty.
     if case.expect.source_key and not any(
         (c.key or c.title).startswith(case.expect.source_key) for c in last.citations
     ):

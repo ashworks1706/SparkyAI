@@ -118,8 +118,7 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
     }
 }
 
-/// The guard of a lock, taken back after a panic. What it holds is bookkeeping, not an
-/// invariant another thread could have half written.
+/// The guard of a lock, taken back after a panic.
 fn held<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     lock.lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -159,10 +158,7 @@ impl Live {
     }
 }
 
-/// Holds one command in the running list for as long as the call that started it lives.
-///
-/// The loop drops a tool call that is cancelled, so the command it was running has to come off
-/// the list on the way out rather than at the end of a body that never runs.
+/// Holds one command in the running list until the call that started it is dropped.
 struct Running {
     sandbox: ContainerSandbox,
     ticket: u64,
@@ -275,8 +271,7 @@ impl ContainerSandbox {
         format!("{}{session}", Self::owner_prefix(ctx))
     }
 
-    /// Whether the runtime answers, with egress made ready. Called once at boot so a broken
-    /// sandbox is not offered.
+    /// Whether the runtime answers, with egress made ready. Called once at boot.
     pub async fn probe(&self) -> Result<(), SandboxError> {
         let out = Command::new(&self.limits.runtime)
             .arg("version")
@@ -510,9 +505,7 @@ impl ContainerSandbox {
     }
 
     /// Makes the egress network and its proxy ready, when egress is on.
-    ///
-    /// The network is created internal if missing, and refused if it exists and is not internal:
-    /// a network with its own route out would bypass the proxy.
+    /// Creates the network internal if missing; refuses an existing one that is not internal.
     pub async fn prepare_egress(&self) -> Result<(), SandboxError> {
         let Some(egress) = &self.limits.egress else {
             return Ok(());
@@ -639,8 +632,6 @@ impl ContainerSandbox {
 }
 
 /// Keeps the head and the tail of text, marking what was dropped between them.
-///
-/// A long run says most in its first lines and its last; keeping only the head loses the exit.
 pub(crate) fn clip(text: &str, max: usize) -> String {
     if max == 0 || text.chars().count() <= max {
         return text.to_owned();
@@ -746,8 +737,7 @@ impl Sandbox for ContainerSandbox {
             }
         }
         let budget = self.limits.timeout.min(ctx.remaining());
-        // The runtime client is what a timeout kills here; the container is not. timeout inside
-        // it kills the command itself, so nothing outlives its budget in a session.
+        // timeout inside the container kills the command; a client timeout leaves the container.
         command
             .arg("timeout")
             .arg("-s")

@@ -1,9 +1,4 @@
-"""Scores whether the answer stays in the student's language instead of naming its own machinery.
-
-A student cannot call a tool and does not know what one is called. An answer that names
-search_live, a source key or a parameter has handed the work back in the one way the loop
-cannot recover from.
-"""
+"""Scores whether the answer avoids naming tools, source keys, or parameters."""
 
 from __future__ import annotations
 

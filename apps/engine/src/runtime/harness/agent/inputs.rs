@@ -18,9 +18,7 @@ fn cost(turns: &[Stored], chars_per_token: usize) -> usize {
 }
 
 /// Where the kept turns start: the newest turns within keep tokens, moved up to a user turn.
-///
-/// Starting on a user turn keeps every exchange whole, so no tool result is kept without the call
-/// that asked for it.
+/// No tool result is kept without the call that asked for it.
 fn tail_start(turns: &[Stored], keep: usize, chars_per_token: usize) -> usize {
     let mut spent = 0;
     let mut start = turns.len();
@@ -55,9 +53,7 @@ impl Agent {
     }
 
     /// Replaces older turns with one summary once history is over budget; returns prompt history.
-    ///
-    /// Only history_keep tokens of recent turns are kept, so the turns that follow have room
-    /// before the next compaction. Failure keeps the turns.
+    /// Keeps history_keep tokens of recent turns. Failure keeps the turns.
     async fn compacted(&self, ctx: &RequestContext, turns: Vec<Stored>) -> Vec<Message> {
         let Some(compactor) = &self.deps.compactor else {
             return turns.into_iter().map(|s| s.message).collect();

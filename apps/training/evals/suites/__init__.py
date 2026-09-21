@@ -1,1 +1,1 @@
-"""One module per suite. Each exposes score(case, turns) -> Score."""
+"""One module per suite. Each exposes score(case, turns), returning a Score."""

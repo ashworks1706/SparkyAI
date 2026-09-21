@@ -114,7 +114,6 @@ const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key, \
                        c.fetched_at, c.parent_id, c.version_id, c.ordinal, c.level";
 
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
-///
 /// Each leg binds the category at its own position. An empty category matches every row.
 fn from(at: usize) -> String {
     format!(
@@ -149,9 +148,6 @@ impl Span {
 }
 
 /// The spans hits read back with, overlapping ones merged.
-///
-/// Two hits a sentence apart would otherwise hand the model the same neighbours twice. Merging
-/// them is what makes a narrow index cheaper than a wide one rather than more expensive.
 pub(crate) fn spans(hits: &[(Uuid, i32)], window: i32) -> Vec<Span> {
     let mut wanted: Vec<Span> = hits
         .iter()
@@ -197,10 +193,7 @@ pub(crate) enum Take {
 }
 
 /// What each ranked row contributes, highest ranked first.
-///
-/// A summary keeps its own text: it already covers its chunks, so widening one would hand back
-/// the same passage twice. A chunk takes the span holding it, and a span is handed back once
-/// however many of its rows were hit.
+/// A summary keeps its own text; a chunk takes the span holding it, each span handed back once.
 pub(crate) fn takes(rows: &[(i32, Uuid, i32)], spans: &[Span]) -> Vec<Take> {
     let mut seen: HashSet<usize> = HashSet::new();
     rows.iter()
@@ -332,9 +325,7 @@ impl PgRetriever {
 
 impl PgRetriever {
     /// The text of each span, its rows joined in order, aligned with the spans given.
-    ///
-    /// Only level 0 rows are read: a summary already covers its chunks, so widening one would
-    /// hand back the same passage twice.
+    /// Only level 0 rows are read.
     async fn windows(
         &self,
         ctx: &RequestContext,

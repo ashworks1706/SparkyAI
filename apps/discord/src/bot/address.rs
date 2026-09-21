@@ -14,9 +14,6 @@ use crate::core::types::{Attachment, FileAttachment};
 use crate::render::reply;
 
 /// The text of the bot message msg replies to, or None when it replies to nothing of the bot's.
-///
-/// Discord resolves the referenced message on the gateway event, so this needs no fetch. A reply
-/// to a person, or to a bot that is not this one, is not a turn.
 fn replied_to(msg: &Message, me: UserId) -> Option<String> {
     let referenced = msg.referenced_message.as_deref()?;
     route::quoted(Some(referenced.author.id), &referenced.content, me)

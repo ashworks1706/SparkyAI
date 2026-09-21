@@ -61,8 +61,7 @@ def handle(conn: psycopg.Connection, job: Job, pacer: HostPacer | None = None) -
     if job.kind == QUERY:
         result = run_job(job)
         if should_index(QUERY_SOURCES[result.source], cfg.index_live_results):
-            # Indexing is dropped rather than queued when the backlog is already this deep: a
-            # live query must stay answerable, and the source is refetched on its schedule anyway.
+            # A live result is not queued for indexing past index_backlog_limit.
             if postgres.backlog_at_least(conn, INDEX, cfg.index_backlog_limit):
                 log.warning("index backlog full; live result not queued", source=result.source)
             else:

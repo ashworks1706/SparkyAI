@@ -118,7 +118,7 @@ fn a_turn_with_no_images_stays_one_text_block() {
 fn the_http_surface_drops_an_image_type_it_was_not_promised() {
     use crate::core::types::conversation::image::Attachment;
 
-    // The edge filters; a caller of the HTTP API is not trusted to have done so.
+    // The HTTP surface filters media types itself.
     let claimed = vec![
         Attachment {
             url: "https://cdn/one.png".into(),

@@ -242,12 +242,11 @@ async fn a_source_that_is_never_reused_is_still_fetched_only_once_at_a_time() {
         9
     );
 
-    // Inside the handoff floor the answer is still there; a shuttle time 50ms old is the one
-    // the waiting requests already got.
+    // Inside the handoff floor the answer is still there.
     let _ = layer.run(&ctx(), &request("shuttles", &[])).await;
     assert_eq!(sent.lock().map(|s| s.len()).unwrap_or_default(), 1);
 
-    // Past it the next ask fetches again, because a shuttle time is not reused beyond that.
+    // Past it the next ask fetches again.
     tokio::time::sleep(HANDOFF + Duration::from_millis(20)).await;
     let _ = layer.run(&ctx(), &request("shuttles", &[])).await;
     assert_eq!(sent.lock().map(|s| s.len()).unwrap_or_default(), 2);
@@ -283,7 +282,7 @@ async fn a_failure_that_says_nothing_about_the_query_leaves_no_lease_behind() {
     let sink = Arc::new(MemorySink::new());
     let layer = CachedQueries::new(Arc::new(inner), cache.clone(), sink, rules());
     let _ = layer.run(&ctx(), &request("courses", &[])).await;
-    // The refusal is cached, which is the point of the previous test; the lease itself is gone.
+    // The refusal is cached and the lease is gone.
     assert!(
         !cache.is_empty(),
         "a refusal is kept so waiting requests read it"

@@ -1,5 +1,4 @@
-//! Slash commands for memory and conversation state. A question is asked by addressing the
-//! bot, never by a command.
+//! Slash commands for memory and conversation state.
 
 use serenity::all::{CommandOptionType, CreateCommand, CreateCommandOption};
 

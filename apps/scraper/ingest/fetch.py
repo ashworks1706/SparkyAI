@@ -107,8 +107,7 @@ def fetch_firecrawl(url: str) -> Fetched:
 def fetch(url: str, *, needs_js: bool = False, auth: bool = False) -> Fetched:
     """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path.
 
-    An authenticated fetch goes through the admin driver regardless of the configured fetcher,
-    since Firecrawl and the plain HTTP client do not carry the session cookies.
+    An authenticated fetch always goes through the admin driver.
     """
     if auth:
         return admin.fetch_authenticated(url)

@@ -1,11 +1,11 @@
-# SearXNG for scraper web search; unset values keep upstream defaults. Scraper-only access.
+# SearXNG for the scraper web search; unset values keep upstream defaults.
 use_default_settings: true
 
 general:
   instance_name: sparky-search
 
 server:
-  # Overwritten by SEARXNG_SECRET from the environment.
+  # Overridden by SEARXNG_SECRET.
   secret_key: "local-only-change-me"
   limiter: false
   image_proxy: false

@@ -539,10 +539,7 @@ fn sandbox_state(
 }
 
 /// The sandbox, when it is enabled and its runtime answers. Starts the session sweeper.
-///
-/// A tool that always fails is worse than no tool: it spends prompt budget on a schema and a
-/// capability line every request. sandbox.required decides whether an unreachable runtime is a
-/// boot failure or a warning.
+/// sandbox.required decides whether an unreachable runtime fails the boot or only warns.
 async fn sandbox(cfg: &Config) -> anyhow::Result<Option<Arc<ContainerSandbox>>> {
     if !cfg.sandbox.enabled {
         return Ok(None);
@@ -684,8 +681,7 @@ async fn source_queries(
         .map_err(|e| anyhow::anyhow!("redis: {e}"))?;
     let call_budget = Duration::from_millis(cfg.query.cache.timeout_ms);
 
-    // The cap goes on first so the cache sits above it: a reused answer and a request that
-    // waited on another cost the database nothing and take no slot.
+    // The cap wraps first and the cache sits above it, so a cache hit takes no slot.
     if capping {
         let admission: Arc<dyn Admission> = Arc::new(RedisAdmission::new(
             conn.clone(),
@@ -772,7 +768,7 @@ async fn search_tools(
             );
         }
     }
-    // One line, not one per source: before the first scraper run that is every source.
+    // One line for every unpublished source.
     if !unpublished.is_empty() {
         tracing::warn!(
             count = unpublished.len(),

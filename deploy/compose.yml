@@ -1,5 +1,4 @@
-# Every service has a memory ceiling, overridable per machine with SPARKY_MEM_<SERVICE> in .env.
-# The sandboxd ceiling bounds every run_sandbox container together.
+# Memory ceilings are overridable with SPARKY_MEM_<SERVICE> in .env. sandboxd bounds all run_sandbox containers.
 services:
   engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
@@ -13,7 +12,7 @@ services:
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
-      # run_sandbox drives the sandboxd daemon, never the host runtime.
+      # run_sandbox uses the sandboxd daemon.
       DOCKER_HOST: tcp://sandboxd:2375
     ports: ["8080:8080"]
     depends_on:
@@ -22,9 +21,7 @@ services:
       sandboxd: { condition: service_started }
     restart: unless-stopped
 
-  # The container runtime run_sandbox uses: a daemon of its own, so driving it is not driving
-  # the host runtime. No host port, so it is reachable only from inside the compose network. It
-  # needs egress to pull the sandbox image; the containers it starts get --network none.
+  # Container runtime for run_sandbox, reachable only inside the compose network.
   sandboxd:
     image: docker:27-dind
     mem_limit: ${SPARKY_MEM_SANDBOXD:-5g}
@@ -60,7 +57,7 @@ services:
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
       SPARKY_SEARCH__BASE_URL: http://searxng:8080
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
-      # The admin session captured by `just scraper login`. Writable so a refreshed session is kept.
+      # Admin session captured by just scraper login; writable for refreshes.
       SPARKY_AUTH__STORAGE_STATE_PATH: /data/auth/admin_state.json
     volumes:
       - ${SPARKY_AUTH_STATE_DIR:-../.sparky/auth}:/data/auth
@@ -80,12 +77,12 @@ services:
       - 0.0.0.0
       - --port
       - "8000"
-      # Context size is total across slots: each parallel slot gets ctx-size / N.
+      # Total across slots; each slot gets ctx-size divided by parallel.
       - --ctx-size
       - ${SPARKY_CHAT_CTX:-16384}
       - --parallel
       - ${SPARKY_CHAT_PARALLEL:-2}
-      # 8-bit KV cache with flash attention; fits beside embed on 6 GB.
+      # 8-bit KV cache with flash attention.
       - --cache-type-k
       - ${SPARKY_CHAT_KV_TYPE:-q8_0}
       - --cache-type-v
@@ -151,7 +148,7 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
     restart: unless-stopped
 
-  # Self-hosted metasearch for the scraper's web search. Started by just search.
+  # SearXNG for the scraper web search. Started by just search.
   searxng:
     image: docker.io/searxng/searxng:2026.9.12-d4f00d15d
     mem_limit: ${SPARKY_MEM_SEARXNG:-512m}
@@ -168,7 +165,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Self-hosted Firecrawl for scraper fetch and extract. No API key (USE_DB_AUTHENTICATION off).
+  # Self-hosted Firecrawl for the scraper, without API keys. Started by just crawl.
   firecrawl:
     image: ghcr.io/firecrawl/firecrawl:latest
     mem_limit: ${SPARKY_MEM_FIRECRAWL:-2g}
@@ -184,7 +181,7 @@ services:
       NUQ_RABBITMQ_URL: amqp://firecrawl-rabbitmq:5672
       POSTGRES_HOST: firecrawl-postgres
       POSTGRES_PORT: 5432
-      # nuq-postgres initializes schema in the default postgres database.
+      # nuq-postgres creates its schema in the default postgres database.
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
       POSTGRES_DB: postgres
@@ -238,7 +235,7 @@ services:
       interval: 5s
       retries: 10
 
-  # Browse retrieval index and conversation tables on http://localhost:8081. Started by just db.
+  # Database browser on localhost:8081. Started by just db.
   pgweb:
     image: sosedoff/pgweb:latest
     mem_limit: ${SPARKY_MEM_PGWEB:-128m}
@@ -274,7 +271,7 @@ services:
     volumes: [miniodata:/data]
     ports: ["9000:9000", "9001:9001"]
 
-  # Trace UI on http://localhost:6006 (loopback only). Started by just phoenix. No authentication.
+  # Trace UI on localhost:6006, without authentication. Started by just phoenix.
   phoenix:
     image: arizephoenix/phoenix:version-20.11.0
     mem_limit: ${SPARKY_MEM_PHOENIX:-2g}
@@ -285,7 +282,7 @@ services:
     ports: ["127.0.0.1:6006:6006"]
     restart: unless-stopped
 
-  # Metrics store from llama-server; query at http://localhost:9090.
+  # llama-server metrics on localhost:9090.
   prometheus:
     image: prom/prometheus:v3.1.0
     mem_limit: ${SPARKY_MEM_PROMETHEUS:-1g}
@@ -300,7 +297,7 @@ services:
     ports: ["127.0.0.1:9090:9090"]
     restart: unless-stopped
 
-  # Dashboards over Prometheus on http://localhost:3000. Inference dashboard is provisioned.
+  # Dashboards over Prometheus on localhost:3000.
   grafana:
     image: grafana/grafana:11.5.1
     mem_limit: ${SPARKY_MEM_GRAFANA:-256m}
@@ -318,7 +315,7 @@ services:
     depends_on: [prometheus]
     restart: unless-stopped
 
-  # GPU utilization and VRAM from nvidia-smi. Separate profile; needs a GPU.
+  # GPU utilization and VRAM from nvidia-smi; needs a GPU.
   gpu-exporter:
     image: utkuozdemir/nvidia_gpu_exporter:1.3.2
     mem_limit: ${SPARKY_MEM_GPU_EXPORTER:-128m}

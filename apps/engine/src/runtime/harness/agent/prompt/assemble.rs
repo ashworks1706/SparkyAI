@@ -92,9 +92,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
 }
 
 /// Prior turns within budget, keeping the newest, and what they cost.
-///
-/// A leading summary stands for every turn before the rest, so it is placed before they are.
-/// History never starts on an orphaned tool result.
+/// A leading summary stays first. History never starts on an orphaned tool result.
 fn history_within(history: &[Message], budget: usize, cpt: usize) -> (Vec<Message>, usize) {
     let (summary, rest) = match history.split_first() {
         Some((first, rest)) if first.role == Role::Summary => (Some(first), rest),
@@ -121,9 +119,7 @@ fn history_within(history: &[Message], budget: usize, cpt: usize) -> (Vec<Messag
 }
 
 /// The turns of this request within room tokens. Tool results over their share are cut.
-///
-/// Results are visited smallest first, and each takes at most an even share of what is left, so
-/// a short result stays whole and a long one takes the room the short ones did not use.
+/// Results are visited smallest first; each takes at most an even share of what is left.
 fn fit_turn(turn: &[Message], room: usize, cpt: usize, cut_line: &str) -> Vec<Message> {
     let mut out = turn.to_vec();
     let cost: usize = out.iter().map(|m| m.estimated_tokens(cpt)).sum();

@@ -1,14 +1,6 @@
 """The admin authenticated driver: one operator's ASU session for login-gated shared sources.
 
-scraper login opens the MyASU sign-in page in a browser, asks the operator for a username and
-password through a callback, submits them, and waits for the operator to approve Duo. It then signs
-in to each configured service through ASU single sign-on and saves the browser storage state
-(cookies and local storage) to disk. The password is used for that one form and never stored.
-
-Login-gated sources then fetch through a headless browser loaded with that state. A service that
-dropped its own session is re-entered through single sign-on while the ASU session lasts, and the
-refreshed state is saved. This session is admin scoped and shared by the scraper across every
-guild; it is not the per-user MyASU session. Authenticated content is never written to the index.
+Only the browser storage state is saved, never the password. Authenticated content is never indexed.
 """
 
 from __future__ import annotations
@@ -147,9 +139,8 @@ def _enter_service(page: Page, cfg: Auth) -> None:
 def fetch_authenticated(url: str) -> Fetched:
     """Loads url in a headless browser carrying the admin session and returns the rendered DOM.
 
-    Raises AuthError when the session is missing or expired, so the operator knows to run scraper
-    login again, and FetchError when the page cannot be reached after auth.fetch_attempts tries.
-    Never falls back to an unauthenticated fetch.
+    Raises AuthError when the session is missing or expired, and FetchError when the page cannot
+    be reached after auth.fetch_attempts tries. Never falls back to an unauthenticated fetch.
     """
     cfg = settings().auth
     path = state_path()

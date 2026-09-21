@@ -145,9 +145,7 @@ fn size(bytes: usize) -> String {
 
 impl Agent {
     /// Copies every attached file into the workspace and returns the prompt lines naming them.
-    ///
-    /// A file that cannot be read or written gets a line saying so, so the model never answers
-    /// as if it had read it. Empty when nothing is attached.
+    /// A file that cannot be read or written gets a line saying so. Empty when nothing is attached.
     pub(super) async fn uploads(&self, ctx: &RequestContext, input: &str) -> Vec<String> {
         let mut lines = Vec::new();
         let session = workspace_session(ctx);
@@ -206,7 +204,6 @@ impl Agent {
     }
 
     /// Downloads one file, writes it to the workspace, and converts it to text there.
-    ///
     /// Returns its path, its size, and what the conversion found. A conversion that fails leaves
     /// the file in place with no text, for the model to read itself.
     async fn upload(

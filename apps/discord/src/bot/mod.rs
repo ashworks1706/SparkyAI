@@ -100,9 +100,7 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         role: OnceLock::new(),
         last_ask: Mutex::new(HashMap::new()),
     };
-    // MESSAGE_CONTENT is privileged: without it Discord withholds the text of a reply whose
-    // ping the author turned off, and a reply is how a thread continues. Enable it on the
-    // application at discord.com/developers.
+    // MESSAGE_CONTENT is privileged and must be enabled on the application at discord.com/developers.
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(cfg.discord.token.expose_secret(), intents)
         .event_handler(handler)

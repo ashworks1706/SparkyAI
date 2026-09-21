@@ -2,7 +2,7 @@
 
 SparkyAI is a Discord copilot for the AI Society at ASU. It answers questions from public ASU sources, keeps conversation history and a profile of each user, and gates moderator actions behind policy and confirmation.
 
-This document describes the current shape of the system and the rules it keeps. Order of work is in [ROADMAP.md](ROADMAP.md). Decisions are recorded in the commits that settle them.
+This document describes the current shape of the system and its rules. Order of work is in [ROADMAP.md](ROADMAP.md). Decisions are recorded in the commits that settle them.
 
 ## Stack
 
@@ -38,7 +38,7 @@ This document describes the current shape of the system and the rules it keeps. 
 - The harness owns the loop, policy, context assembly, memory, and tracing. Provider JSON never leaves `runtime/model`.
 - Model output is never written back as retrieval evidence.
 - An action at or above `policy.confirm_from` is held for the caller's approval immediately before it runs.
-- Credentials, cookies, and authenticated page content never enter the retrieval index, memory, or traces. The admin authenticated driver reaches login-gated sources live only; its sources set `index = False`, so their content is never scheduled or indexed.
+- Credentials, cookies, and authenticated page content never enter the retrieval index, memory, or traces. Sources behind the admin authenticated driver set `index = False` and are never scheduled or indexed.
 
 ## Layout
 
@@ -63,7 +63,7 @@ apps/
     src/units/      unit catalog, process runner, log buffers, health probes
   scraper/        Python. Scheduled ingestion and the worker for live query jobs.
     core/           settings, types, telemetry, tests
-    ingest/         fetch, extract, chunk, embed, tree, pipeline
+    ingest/         fetch, extract, chunk, embed, tree, pipeline, pace, drivers
     sources/        scheduled sources: one module per source with an extractor, pages.py for static pages
     query/          live query registry, parameter checks, runner, indexing of live results
     query/sources/  live query sources, one module each
@@ -79,9 +79,7 @@ docs/             ROADMAP.md, this file
 
 Each Python app directory is its own importable package (`apps/scraper` is `scraper`) with no `src/` layer. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage is added there.
 
-Every app has a `core/` holding config, telemetry, data types, interfaces, and tests. Domain modules import from it. It imports nothing from them.
-
-Language is never a folder. ASU domain (library, events) is never a folder either. It is a module in a source registry and a row in `sources` or `query_sources`.
+Every app has a `core/` holding config, telemetry, data types, interfaces, and tests. Domain modules import from it; it imports nothing from them. Language is never a folder, and neither is ASU domain (library, events): that is a module in a source registry and a row in `sources` or `query_sources`.
 
 ## System context
 
@@ -124,9 +122,9 @@ flowchart LR
 
 Processes talk only at these edges. The engine and the scraper meet only in PostgreSQL: the engine queues a job and reads its row, the scraper claims it and writes the result. Only the scraper reaches the web. MCP servers are optional and none is configured by default.
 
-The engine serves `/chat` and `/chat/stream` for the bot and `/v1/chat/completions` for OpenAI-compatible clients. All three run the same loop. Every route except health and `/v1/models` requires the bearer token in `SPARKY_ENGINE__SERVICE_TOKEN`, and every route that carries a user applies the per-user `http.rate_limit_per_min`. The sandbox routes below carry no user, so they are limited by nothing but the token; anything holding that token, `apps/discord` included, can read and stop the sandbox. `GET /sandbox` reports what the sandbox is running, `DELETE /sandbox/{name}` removes one session container, and `POST /sandbox/enabled` stops the agent being offered `run_sandbox` at all. Those three are how `apps/cli` shows and drives the containers, which compose does not know about because the engine starts them itself.
+The engine serves `/chat` and `/chat/stream` for the bot and `/v1/chat/completions` for OpenAI-compatible clients; all three run the same loop. Every route except health and `/v1/models` requires the bearer token in `SPARKY_ENGINE__SERVICE_TOKEN`, and every route that carries a user applies the per-user `http.rate_limit_per_min`. The sandbox routes carry no user and are gated by the token alone, so any holder of it, `apps/discord` included, can read and stop the sandbox: `GET /sandbox` reports what is running, `DELETE /sandbox/{name}` removes one session container, and `POST /sandbox/enabled` stops the agent being offered `run_sandbox`. `apps/cli` shows and drives the containers through them, since the engine starts the containers outside compose.
 
-The console starts and stops the other units and tails their output. It does not start a process whose port something else already serves, and says so instead.
+The console starts and stops the other units and tails their output. It does not start a process whose port is already served, and says so instead.
 
 ## Inside engine
 
@@ -160,9 +158,17 @@ Folders nest by domain, and the same domain names repeat across `core/types`, `c
 
 `store/` is the only place the scraper opens a connection. `migrations/` is the schema contract with the engine. The scraper writes `sources`, `source_versions`, `chunks`, `query_sources`, and job results. The engine reads the index and writes conversations, confirmations, the profile graph, and `source_query` jobs. `ingest/embed.py` uses the same model and dimension the engine queries with, so changing the embedding model means re-embedding every chunk.
 
-`sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. A source with an extractor has its own module. `sources/pages.py` lists static pages with none, indexed from the markdown Firecrawl returns. Scheduled fetches to one host are spaced `scraper.host_gap_secs` apart. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
+`sources/` holds scheduled sources: a URL, a category, an interval, and an optional extractor. A source with an extractor has its own module; `sources/pages.py` lists static pages without one, indexed from the markdown Firecrawl returns. Scheduled fetches to one host are spaced `scraper.host_gap_secs` apart. `query/sources/` holds live query sources: parameters with their choices, and either a URL builder with an extractor or an `answer` function that reads several endpoints.
 
-`ingest/drivers/` holds the browser drivers, kept apart from the Firecrawl and httpx fetchers in `ingest/fetch.py`. `public.py` is headless Chromium with no session, for JS pages anyone can read. Both browser drivers skip the resource types in `scraper.browser_skip` (images, media, fonts), which no extractor reads. `asu_sso.py` is the ASU single sign-on flow on a page: it fills the MyASU CAS form, relays the Duo verification code, answers the trusted-device prompt, and stores nothing. `admin.py` is the admin authenticated driver. `just scraper login` opens `auth.login_url` (MyASU), asks the operator for an ASU username and password at the console, submits them once, and waits up to `auth.duo_timeout_secs` for Duo. It then follows `auth.service_sso_text` on `auth.service_login_url` into Sun Devil Central and saves the browser storage state to `auth.storage_state_path`, readable by the owner only. The password is never written, logged, or traced. A live query source with `auth = True` fetches through a headless browser loaded with that state, bypassing Firecrawl and httpx because neither carries the session cookies. A fetch that lands on a service sign-in page (`auth.login_paths`) re-enters single sign-on on the saved ASU session and saves the refreshed state; one that lands on the CAS form raises `AuthError`. Browser network errors are retried `auth.fetch_attempts` times. The session is required: `scraper serve` and `scraper run` exit without one, signing in first when run at a terminal, and `just up` and `just cli` run `just scraper-session` before starting. The session is admin scoped and shared across guilds; the per-user MyASU session of Phase 8 is separate and may reuse `asu_sso.py`. Authenticated sources set `index = False` and are refused otherwise, so authenticated content is never scheduled or written to the index. `clubs` and the Sun Devil Central half of `events` are served this way, read from the page DOM by `query/sundevil_central.py`, and `clubs` is not a scheduled source. In `deploy/compose.yml` the session directory is mounted into the scraper from `SPARKY_AUTH_STATE_DIR` (default `../.sparky/auth`).
+`ingest/drivers/` holds the browser drivers, apart from the Firecrawl and httpx fetchers in `ingest/fetch.py`. Both browser drivers skip the resource types in `scraper.browser_skip` (images, media, fonts).
+
+- `public.py`: headless Chromium with no session, for JS pages anyone can read.
+- `asu_sso.py`: the ASU single sign-on flow on a page. It fills the MyASU CAS form, relays the Duo verification code, answers the trusted-device prompt, and stores nothing.
+- `admin.py`: the admin authenticated driver. `just scraper login` opens `auth.login_url` (MyASU), asks the operator for an ASU username and password at the console, submits them once, and waits up to `auth.duo_timeout_secs` for Duo. It then follows `auth.service_sso_text` on `auth.service_login_url` into Sun Devil Central and saves the browser storage state to `auth.storage_state_path`, readable by the owner only. The password is never written, logged, or traced.
+
+A live query source with `auth = True` fetches through a headless browser loaded with that state, bypassing Firecrawl and httpx, which carry no session cookies. A fetch that lands on a service sign-in page (`auth.login_paths`) re-enters single sign-on on the saved ASU session and saves the refreshed state; one that lands on the CAS form raises `AuthError`. Browser network errors are retried `auth.fetch_attempts` times. Authenticated sources must set `index = False`. `clubs` and the Sun Devil Central half of `events` are served this way, read from the page DOM by `query/sundevil_central.py`; `clubs` is not a scheduled source.
+
+The session is required: `scraper serve` and `scraper run` exit without one, signing in first when run at a terminal, and `just up` and `just cli` run `just scraper-session` before starting. It is admin scoped and shared across guilds. The per-user MyASU session of Phase 8 is separate and may reuse `asu_sso.py`. In `deploy/compose.yml` the session directory is mounted into the scraper from `SPARKY_AUTH_STATE_DIR` (default `../.sparky/auth`).
 
 ## Types
 
@@ -193,7 +199,7 @@ pub struct Evidence {
 }
 ```
 
-Citations are built from the `Evidence` that fit the prompt and from the pages tools read (`Answer.sources`), not parsed out of generated text. A `Citation` carries both halves of a source: `title` is what a client shows, the page title the scraper stored or the site name from `LiveSource::label`, and `key` is what it was, so a caller that has to match a source matches on the key.
+Citations are built from the pages the tools returned (`Answer.sources`), never parsed out of generated text. A `Citation` has a `title` a client shows (the stored page title, or the site name from `LiveSource::label`) and a `key` naming the source, which is what a caller matches on.
 
 ## Traits
 
@@ -283,13 +289,15 @@ sequenceDiagram
         E->>M: chat agent compacts the oldest turns
     end
     E->>PG: recall memory and profile graph, private turns only
-    E->>M: embed the question
-    E->>PG: dense and lexical search
     loop one step per model call
         E->>M: streamed completion with tool schemas
         M-->>E: reasoning, text, tool calls
         E-->>B: SSE progress, thinking line, answer draft
-        opt search tool call
+        opt search_knowledge call
+            E->>M: embed the query
+            E->>PG: dense and lexical search
+        end
+        opt search_live call
             E->>PG: queue source_query job
             S->>PG: claim, fetch, write result
             PG-->>E: result text
@@ -301,11 +309,11 @@ sequenceDiagram
     E->>E: spawn profile writer, detached
 ```
 
-1. `discord` receives a message addressed to it and posts it to the engine with the Discord identity, role names, the channel it answers in, the visibility of that answer, `continue_channel`, and the message of its own a reply answers. A question is never a slash command; the remaining commands only read and clear memory.
-2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility, and otherwise a new conversation starts.
-3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget; and memories and the profile graph, unless the request is public and `agent.recall_in_public` is off. A memory read that fails is logged and the turn runs without it. Nothing is retrieved before the first model call: the model searches the knowledge base with `search_knowledge` and live sources with `search_live` as the question needs, several searches in one step when it words the subject more than one way.
-4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame while the step runs. A turn about to answer after a tool failed, with `run_sandbox` registered and untried, is handed back once with `prompt.sandbox_retry_line` instead: a failed tool is not an answer, and the student hears that nothing was found only once the last route has been taken.
-5. Every exit appends what was said, hands the user's text to the profile writer, and builds the answer with its citations, tool runs, memories (empty for a public answer), usage, and cost. A tool call and its result answer the question being asked now, so they run the loop and are not stored: carrying a fetched page into later turns spends the history budget on it and offers the model a stale copy of a page it can fetch again.
+1. `discord` posts an addressed message to the engine with the Discord identity, role names, the answering channel, its visibility, `continue_channel`, and the bot message a reply answers. A question is never a slash command; the remaining commands only read and clear memory.
+2. The engine checks the bearer token and the per-user rate limit, then builds a `RequestContext`. A given `conversation_id` must belong to the caller. Without one, `continue_channel` continues the caller's newest open conversation in that channel at that visibility; otherwise a new conversation starts.
+3. The loop loads inputs once: the last `agent.history_turns` turns, compacted if they overflow the history budget, and memories and the profile graph unless the request is public and `agent.recall_in_public` is off. A failed memory read is logged and the turn runs without it. Nothing is retrieved before the first model call: the model calls `search_knowledge` and `search_live` as the question needs, several in one step when it words the subject more than one way.
+4. The loop runs steps until it stops. On `/chat/stream` each progress event goes out as an SSE frame. A turn about to answer after a tool failed, with `run_sandbox` registered and untried, is handed back once with `prompt.sandbox_retry_line`.
+5. Every exit appends what was said, hands the user's text to the profile writer, and builds the answer with citations, tool runs, memories (empty for a public answer), usage, and cost. Tool calls and results are not stored in history.
 6. An answer with status `AwaitingConfirmation` carries a token. `POST /confirm` with that token runs the held action and resumes the loop from its result.
 
 ## Prompt assembly
@@ -318,7 +326,7 @@ Each step assembles the prompt in a fixed order:
 4. History, newest first within `agent.history_budget_tokens`, never starting on an orphaned tool result.
 5. The user's input, then the model and tool turns of this request.
 
-Tool schemas are sent beside the messages and are charged to `agent.prompt_budget_tokens` first. History is capped by what remains. The system prompt, the input, and this request's tool exchange are never dropped. When this request's tool results outgrow the room left after the fixed sections and the input, each is cut to a share of it, smallest first, and ends in `prompt.result_cut_line`. Token counts are estimates from `agent.chars_per_token`. MCP schemas are compacted and, by default, show only required properties.
+Tool schemas are sent beside the messages and are charged to `agent.prompt_budget_tokens` first; history is capped by what remains. The system prompt, the input, and this request's tool exchange are never dropped. When this request's tool results outgrow the room left after the fixed sections and the input, each is cut to a share of it, smallest first, ending in `prompt.result_cut_line`. Token counts are estimates from `agent.chars_per_token`. MCP schemas are compacted and by default show only required properties.
 
 ## Agent loop
 
@@ -349,27 +357,25 @@ flowchart TD
     FORCE --> TOP
 ```
 
-The loop owns every stopping condition. It checks cancellation, the deadline, and `agent.max_steps` before each step.
+The loop owns every stopping condition and checks cancellation, the deadline, and `agent.max_steps` before each step.
 
-Thinking is decided per model call by `agent.thinking`. `on` and `off` apply to every call. In `auto` the first matching rule wins: a call with no tools does not think; a step after tool results thinks when `after_tools` is set; a question with a cue word or longer than `max_quick_chars` thinks; a step before any tool has run thinks when `plan_searches` is set, since it picks the searches; anything else does not. A call that thinks gets `model.max_tokens`, and one that does not gets `model.max_tokens_without_thinking`. A call that thought and returned neither an answer nor a tool call is made once more without thinking when `retry_without` is set. The `llm` span records `sparky.thinking` and `sparky.thinking_reason`. Prompted sub-agents never think.
+**Thinking** is decided per model call by `agent.thinking`. `on` and `off` apply to every call. In `auto` the first matching rule wins: a call with no tools does not think; a step after tool results thinks when `after_tools` is set; a question with a cue word or longer than `max_quick_chars` thinks; a step before any tool has run thinks when `plan_searches` is set; anything else does not. A thinking call gets `model.max_tokens`, others `model.max_tokens_without_thinking`. A call that thought and returned neither an answer nor a tool call is repeated once without thinking when `retry_without` is set. The `llm` span records `sparky.thinking` and `sparky.thinking_reason`. Prompted sub-agents never think.
 
-With `agent.stream` on, the model call streams. Reasoning updates the thinking line as it grows. When answer text begins, the thinking line becomes the full thought, clipped to `agent.progress_thought_chars`. Answer text is released as a draft at the end of a sentence or line, or at a word break past `agent.stream_block_chars`, and every block passes the guardrail before it is sent. A draft is withdrawn when the call ends in tool calls, fails, or a block is refused. A step that answers without showing a thought takes its thinking line back.
+**Streaming.** With `agent.stream` on, reasoning updates the thinking line as it grows. When answer text begins, the thinking line becomes the full thought, clipped to `agent.progress_thought_chars`. Answer text is released as a draft at the end of a sentence or line, or at a word break past `agent.stream_block_chars`, and every block passes the guardrail before it is sent. A draft is withdrawn when the call ends in tool calls, fails, or a block is refused. A step that answers without showing a thought takes its thinking line back.
 
-Every response passes the guardrail: the answer stage for a final answer, the capability stage for a response with tool calls and text. `Policy` decides whether a typed action may run by its risk class. The guardrail decides whether a response may proceed at all.
+**Guardrail and policy.** Every response passes the guardrail: the answer stage for a final answer, the capability stage for a response with tool calls and text. `Policy` decides whether a typed action may run by its risk class.
 
-Tool calls are authorized before any runs. A denial or an unknown tool name becomes a tool result the model reads. The first call that needs confirmation is stored in `confirmations` and ends the run. Allowed calls that repeat an earlier call with identical arguments are not run again, and the model is told so. When every call in a step is a repeat, the next step offers no tools and adds `prompt.answer_only_line`. If that step repeats again, or answers with nothing, the run ends as `Stalled`.
+**Tool calls** are authorized before any runs. A denial or an unknown tool name becomes a tool result the model reads. The first call that needs confirmation is stored in `confirmations` and ends the run. Allowed calls that repeat an earlier call with identical arguments are not run again, and the model is told so. When every call in a step is a repeat, the next step offers no tools and adds `prompt.answer_only_line`; if that step repeats again or answers with nothing, the run ends as `Stalled`. Allowed calls run in parallel, each under its own timeout (the tool's declared timeout or `agent.tool_timeout_secs`, capped by the request deadline), or in order if any call is to a tool marked sequential. A tool error, including `InvalidArguments`, is fed back as the tool result.
 
-Allowed calls run in parallel, each under its own timeout (the tool's declared timeout or `agent.tool_timeout_secs`, capped by the request deadline). If any call is to a tool marked sequential, the step runs its calls in order. A tool error, including `InvalidArguments`, is fed back as the tool result so the model can correct the call on its next step.
-
-A retryable model error (transport, 5xx, 429) is retried with backoff up to `agent.max_model_retries`. A model timeout ends the run as `Deadline`, cancellation as `Cancelled`, and any other error keeps the turns and returns the error.
+**Model errors.** A retryable error (transport, 5xx, 429) is retried with backoff up to `agent.max_model_retries`. A model timeout ends the run as `Deadline`, cancellation as `Cancelled`, and any other error keeps the turns and returns the error.
 
 ## Prompted sub-agents
 
-The harness runs more than one prompt. Each sub-agent is a `runtime::harness::agent::task::Task`: its own instructions, one model call, no tools, no thinking, and a typed result. The loop does not use `Task`, because it has tools and stopping conditions.
+Each sub-agent is a `runtime::harness::agent::task::Task`: its own instructions, one model call, no tools, no thinking, and a typed result. The loop is not a `Task`.
 
 | Agent | When | Reads | Writes |
 |---|---|---|---|
-| Sparky (the loop) | every request | evidence, memory, history, capabilities | the turn |
+| Sparky (the loop) | every request | tool results, memory, history, capabilities | the turn |
 | Chat | loaded history overflows its budget | the turns being replaced | one compacted turn |
 | Graph | after a turn, when the detector passes it | the user's text | profile facts |
 | Reconcile | a new fact collides with recorded ones | the new fact and the candidates | which recorded facts to withdraw |
@@ -383,17 +389,19 @@ The harness runs more than one prompt. Each sub-agent is a `runtime::harness::ag
 | `tool` | a built-in `Tool`: `search_knowledge`, `search_live`, `run_sandbox` | declared per tool |
 | `mcp` | a remote MCP server | derived from the tool name |
 
-`tools.disabled` removes tools by name at registration. The engine refuses to boot when the capabilities section exceeds its budget or the tool schemas take more than half of `agent.prompt_budget_tokens`. It also refuses when the prompt budget plus `agent.prompt_estimate_headroom` and `model.max_tokens_without_thinking` do not fit one `llama-server` slot.
+`tools.disabled` removes tools by name at registration. The engine refuses to boot when the capabilities section exceeds its budget, when the tool schemas take more than half of `agent.prompt_budget_tokens`, or when the prompt budget plus `agent.prompt_estimate_headroom` and `model.max_tokens_without_thinking` do not fit one `llama-server` slot.
 
-`run_sandbox` runs a command in a container with a read-only root, memory, CPU, and process limits, a non-root user, and a workspace of `sandbox.workspace_mb` mounted `noexec` at /tmp. The image is `deploy/docker/sandbox.Dockerfile`: python3 with requests, bs4, lxml, pandas, numpy, pypdf, python-docx, openpyxl, xlrd, Pillow, chardet, yaml and markdown; pdftotext, pdftoppm and tesseract; curl, wget, jq, ripgrep, sqlite3 and the usual text tools. The live test `the_image_carries_python_jq_and_the_document_readers` checks every one of them.
+**The sandbox image.** `run_sandbox` runs a command in a container with a read-only root, memory, CPU, and process limits, a non-root user, and a workspace of `sandbox.workspace_mb` mounted `noexec` at /tmp. The image is `deploy/docker/sandbox.Dockerfile`: python3 with requests, bs4, lxml, pandas, numpy, pypdf, python-docx, openpyxl, xlrd, Pillow, chardet, yaml and markdown; pdftotext, pdftoppm and tesseract; curl, wget, jq, ripgrep, sqlite3 and the usual text tools. The live test `the_image_carries_python_jq_and_the_document_readers` checks every one.
 
-Every container the engine starts, session or one-shot, carries the `sparky.sandbox` label, and so does the egress proxy. That label is what `just sandbox-down` removes them by, and `just down` runs it first, because compose never knew about them. The recipe reads `.env` so `DOCKER_HOST` points it at the same runtime the engine drives, which under compose is `sandboxd` and not the local daemon. The engine keeps the commands it ran, `sandbox.recent_commands` of them, with the one running now among them until it ends, so an operator watching the console sees what the agent is doing rather than what it did. A command carries an id, is redacted the way a traced tool argument is, and comes back once while it runs and once with how it went; a call the loop cancelled is recorded as ended with no exit status rather than left reading as running. `POST /sandbox/enabled` takes the tool out of `ToolSet::definitions`, so the schema and the capabilities section both stop naming it and the sandbox hand-back stops firing for it.
+**Network.** With `sandbox.egress` off the container runs with `--network none`. With it on, the container joins `sandbox.egress_network`, which the engine creates `--internal` at boot (and refuses to use if it exists and is not internal), with `HTTP_PROXY` and `HTTPS_PROXY` pointing at `sandbox.egress_proxy_name`. That proxy (`deploy/docker/sandbox-proxy.Dockerfile`, `deploy/sandbox/squid.conf`) is the only container on both that network and the outside. It allows ports 80 and 443 and refuses private, loopback, link-local and reserved destinations, so a command reaches public sites and never the datastores, the host, or cloud metadata. HTTPS passes through as a tunnel. What the sandbox reads is never indexed.
 
-With `sandbox.egress` off the container runs with `--network none`. With it on, it joins `sandbox.egress_network`, which the engine creates `--internal` at boot and refuses to use if it exists and is not internal, and it is handed `HTTP_PROXY` and `HTTPS_PROXY` pointing at `sandbox.egress_proxy_name`. That proxy (`deploy/docker/sandbox-proxy.Dockerfile`, `deploy/sandbox/squid.conf`) is the only container on both that network and the outside: it allows ports 80 and 443 and refuses private, loopback, link-local and reserved destinations, so a command reaches public sites and never the datastores, the host, or cloud metadata. HTTPS passes through as a tunnel, so the proxy sees the host and not the request. What the sandbox reads is never indexed. A call that names a session reuses a container, so files in the workspace persist between calls; the container is removed once it has been idle for `sandbox.session_idle_secs`, and a caller holding `sandbox.max_sessions` loses their least recently used one. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session. `sandbox.max_sessions_total` caps session containers across every caller, reaping the least recently used of all, and `sandbox.max_running` caps commands running at once; a command past it waits for a slot within its budget. Every command runs under `timeout -s KILL` inside the container, so a timed-out command dies even though only the runtime client is killed on the engine side. stdout and stderr are read as they arrive and only a head and tail of each is held, so a command that prints without end costs bounded engine memory. Containers carry `sparky.sandbox.instance` (`sandbox.instance`); at boot and on every idle sweep the engine removes session containers of its instance it is not tracking, which is what a previous process of it left behind.
+**Sessions.** A call that names a session reuses its container, so workspace files persist between calls. Session containers are named from a hash of the tenant and user, so one caller cannot reach another's session. A container idle for `sandbox.session_idle_secs` is removed; a caller holding `sandbox.max_sessions` loses their least recently used one; `sandbox.max_sessions_total` caps session containers across callers, reaping the least recently used of all. `sandbox.max_running` caps commands running at once; a command past it waits for a slot within its budget. Every command runs under `timeout -s KILL` inside the container. stdout and stderr are read as they arrive and only a head and tail of each is held.
 
-The engine needs a container runtime. Under compose that is the `sandboxd` service, a daemon of its own reached over `DOCKER_HOST`, so driving it is not driving the host runtime; on a developer host it is the local `docker`. The runtime is probed once at boot: `sandbox.required` decides whether an unreachable one fails boot or leaves `run_sandbox` unregistered, so the model is never offered a tool that always fails.
+**Lifecycle.** Every container the engine starts, and the egress proxy, carries the `sparky.sandbox` label. `just sandbox-down` removes them by that label, and `just down` runs it first. The recipe reads `.env` so `DOCKER_HOST` points at the runtime the engine drives (`sandboxd` under compose). Containers also carry `sparky.sandbox.instance` (`sandbox.instance`); at boot and on every idle sweep the engine removes session containers of its instance it is not tracking. The engine keeps the last `sandbox.recent_commands` commands, the running one included. Each carries an id, is redacted like a traced tool argument, and is reported once while it runs and once when it ends; a call the loop cancelled is recorded as ended with no exit status. `POST /sandbox/enabled` takes the tool out of `ToolSet::definitions`, so the schema, the capabilities section, and the sandbox hand-back all stop naming it.
 
-A tool result longer than `agent.tool_result_to_file_chars` is written to the workspace and replaced by its head plus the path, so a long result stops riding in the conversation for every later step of the turn. It is off at `0`; the full result still reaches the trace either way. The scraper sends live results up to `scraper.query_max_chars`, well past this threshold, so a long listing reaches the workspace whole rather than cut at the scraper.
+**Runtime.** Under compose the runtime is the `sandboxd` service, a daemon of its own reached over `DOCKER_HOST`; on a developer host it is the local `docker`. It is probed once at boot: `sandbox.required` decides whether an unreachable one fails boot or leaves `run_sandbox` unregistered.
+
+A tool result longer than `agent.tool_result_to_file_chars` is written to the workspace and replaced by its head plus the path; `0` turns this off. The full result still reaches the trace. The scraper sends live results up to `scraper.query_max_chars`, well past this threshold, so a long listing reaches the workspace whole.
 
 ### Resource limits
 
@@ -410,21 +418,23 @@ Everything that could grow with load has a ceiling in `sparky.toml`:
 | Redis | `--maxmemory 256mb --maxmemory-policy volatile-lru` |
 | Containers | a `mem_limit` on every compose service, overridable with `SPARKY_MEM_<SERVICE>` |
 
-What is kept on disk is pruned: jobs after `scraper.job_retention_hours`; page versions past `scraper.keep_versions` per source, with their MinIO snapshots, never the version the index points at; JSONL traces after `trace.retention_hours`, checked hourly, each capped at `trace.max_file_bytes`; CLI unit logs rotated at `cli.log_file_max_mb` to one `.1` file, lines cut at `cli.log_line_chars`. Conversations, messages, memories and the profile graph are kept until a user asks to forget; they live in Postgres, not in process memory.
+What is kept on disk is pruned: jobs after `scraper.job_retention_hours`; page versions past `scraper.keep_versions` per source, with their MinIO snapshots, never the version the index points at; JSONL traces after `trace.retention_hours`, checked hourly, each capped at `trace.max_file_bytes`; CLI unit logs rotated at `cli.log_file_max_mb` to one `.1` file, lines cut at `cli.log_line_chars`. Conversations, messages, memories and the profile graph live in Postgres until a user asks to forget.
 
 ### Attached files
 
-`discord` forwards every attachment that is not an image, up to `bot.max_files` of at most `bot.max_file_bytes`, as `files` on the chat request. The engine takes up to `agent.max_files` of at most `agent.max_file_bytes` into `RequestContext.files`. Before the first model call, `uploads.rs` downloads each through `FileSource` (`HttpFiles`: HTTPS only, hosts in `agent.file_hosts`, no redirects, the byte cap enforced while streaming), writes it into the conversation's sandbox session as `upload-<name>`, and runs one command there that turns it into text at `<path>.txt`: pdftotext for a PDF, tesseract over its first `agent.upload_ocr_pages` pages when it has no text layer, python-docx, openpyxl and pandas for Word, Excel and CSV. The same command ranks the passages of that text by how many words of the question each holds. The prompt gets one `prompt.upload_line` per file, just before the question: its name, size, paths, session, the first `agent.upload_preview_chars` of its text, and the best passages up to `agent.upload_match_chars`. A file no text came out of gets `prompt.upload_raw_line`, and one that could not be downloaded or written gets `prompt.upload_failed_line`, so the model never answers as if it had read it. Each emits `TraceEvent::FileAttached`. The file stays in the session for later turns until the session idles out.
+`discord` forwards every non-image attachment, up to `bot.max_files` of at most `bot.max_file_bytes`, as `files` on the chat request. The engine takes up to `agent.max_files` of at most `agent.max_file_bytes` into `RequestContext.files`.
+
+Before the first model call, `uploads.rs` downloads each through `FileSource` (`HttpFiles`: HTTPS only, hosts in `agent.file_hosts`, no redirects, the byte cap enforced while streaming) and writes it into the conversation's sandbox session as `upload-<name>`. One command there turns it into text at `<path>.txt`: pdftotext for a PDF, tesseract over its first `agent.upload_ocr_pages` pages when it has no text layer, python-docx, openpyxl and pandas for Word, Excel and CSV. The same command ranks the passages by how many words of the question each holds.
+
+The prompt gets one `prompt.upload_line` per file, just before the question: name, size, paths, session, the first `agent.upload_preview_chars` of its text, and the best passages up to `agent.upload_match_chars`. A file with no text gets `prompt.upload_raw_line`; one that could not be downloaded or written gets `prompt.upload_failed_line`. Each emits `TraceEvent::FileAttached`. The file stays in the session until the session idles out.
 
 ## Compaction
 
-Without compaction, history is trimmed to its budget by dropping the oldest turns. With `compaction.enabled`, compaction runs only when the loaded history, a stored summary included, is over `agent.history_budget_tokens`. It keeps the newest turns within `compaction.keep_share` of that budget, moved forward to start on a user turn so no exchange is split, and the Chat agent replaces everything older, the previous summary included, with one compacted turn that is stored, so the next request starts from it. Boot rejects a `keep_share` whose kept turns plus `compaction.max_tokens` exceed the history budget, so the summary and the kept turns always fit together, and the turns that follow have the rest before the next compaction. Assembly places a leading summary before trimming the turns after it. A failed compaction falls back to trimming.
+Without compaction, history is trimmed to its budget by dropping the oldest turns. With `compaction.enabled`, compaction runs when the loaded history, a stored summary included, is over `agent.history_budget_tokens`. It keeps the newest turns within `compaction.keep_share` of that budget, moved forward to start on a user turn, and the Chat agent replaces everything older, the previous summary included, with one stored compacted turn. Boot rejects a `keep_share` whose kept turns plus `compaction.max_tokens` exceed the history budget. Assembly places a leading summary before trimming the turns after it. A failed compaction falls back to trimming.
 
-A compacted turn is model output. It is stored with role `summary`, so a replayed conversation can tell it apart from what the user and the assistant said. It is never retrieval evidence, and the turns it replaced stay in `messages`.
+A compacted turn is stored with role `summary`. It is never retrieval evidence, and the turns it replaced stay in `messages`. A summary row records `covers_seq`, the `seq` of the last message it replaces; loading history reads the newest summary and then up to `agent.history_turns` messages with a greater `seq`. The kept turns are stored before the summary, so they load again. A summary without `covers_seq` covers every message before its own `seq`.
 
-A summary row records `covers_seq`, the `seq` of the last message it replaces. Loading history reads the newest summary and then up to `agent.history_turns` messages whose `seq` is greater than its `covers_seq`. The turns a compaction kept are stored before the summary, so they load again on the next request. A summary without `covers_seq` covers every message before its own `seq`.
-
-The system prompt is not a stored message. It is rebuilt on every request and always comes first, so compaction never replaces it.
+The system prompt is not a stored message; it is rebuilt on every request and always comes first.
 
 ## Profile graph
 
@@ -432,9 +442,9 @@ Flat memory rows record what a user said. The profile graph records entities, th
 
 Extraction never runs in the request path. When a run ends, the loop spawns the profile writer with the user's text and returns. The writer has its own context and a deadline of `profile.timeout_secs`.
 
-The gate is rules, not a model call, because it runs on every turn. `RuleDetector` passes a sentence with a first-person marker next to a stative cue and rejects questions and turns shorter than `profile.detector.min_words`. Only a turn that passes reaches the Graph agent. Facts below `profile.min_confidence` or with an empty label are dropped. A trained classifier can replace the rules through the `FactDetector` trait.
+The gate is rules, not a model call. `RuleDetector` passes a sentence with a first-person marker next to a stative cue and rejects questions and turns shorter than `profile.detector.min_words`. Only a turn that passes reaches the Graph agent. Facts below `profile.min_confidence` or with an empty label are dropped. A trained classifier can replace the rules through the `FactDetector` trait.
 
-With `profile.reconcile` on, a new fact is checked against facts already recorded for the same subject and relation. The Reconcile agent names the recorded facts the new one makes false, and those are withdrawn. Two facts that can both be true are both kept. An answer that cannot be parsed, or a failed call, withdraws nothing.
+With `profile.reconcile` on, a new fact is checked against recorded facts for the same subject and relation. The Reconcile agent names the recorded facts the new one makes false, and those are withdrawn. Facts that can both be true are both kept. An unparseable answer or a failed call withdraws nothing.
 
 Recall filters by `tenant_id` and `user_id` before ranking. Users list and delete what the graph holds with `/memory` and `/forget` (`POST /profile/list`, `POST /profile/forget`). Relations cascade from the node they run through.
 
@@ -447,7 +457,7 @@ Recall filters by `tenant_id` and `user_id` before ranking. Users list and delet
 | Episodic, semantic, profile, task | durable facts about a user | `memories`, read by recall |
 | Profile graph | entities and relations | `profile_nodes`, `profile_edges` |
 
-The engine recalls `memories` rows, unexpired and ordered newest and most confident first, and appends profile graph nodes and relations. It does not write `memories` rows yet. The schema carries `sensitivity`, `confidence`, `source_msg`, and `expires_at` for when it does.
+The engine recalls `memories` rows, unexpired, newest and most confident first, and appends profile graph nodes and relations. It does not write `memories` rows yet; the schema carries `sensitivity`, `confidence`, `source_msg`, and `expires_at` for when it does.
 
 A public request recalls no memory and no profile graph unless `agent.recall_in_public` is set. Only an answer no one else can read is private. A public answer never lists the memories its prompt carried.
 
@@ -462,13 +472,13 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 | `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm |
 | `Forbidden` | another user's session, bypassing policy | deny |
 
-The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above. `policy.confirm_from` names the lowest class held for approval, so a deployment can hold drafts too while a new tool is being trusted. `Forbidden` is denied regardless of settings. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
+The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above. `policy.confirm_from` names the lowest class held for approval. `Forbidden` is denied regardless of settings. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
 
 A confirmation is bound to a hash of the exact arguments, belongs to the caller who was asked, is single use, and expires after `agent.confirmation_ttl_secs`. Its summary names the tool, the arguments, and whether the action can be undone. The policy decision is recorded in the trace.
 
 ## Knowledge
 
-The retrieval index is `chunks`, written by the scraper and read by the engine. Two kinds of job write it: a scheduled run of a registered source, and the indexing of a page a live query fetched. Both go through the same pipeline in `ingest/pipeline.py`.
+The retrieval index is `chunks`, written by the scraper and read by the engine. Two kinds of job write it, both through `ingest/pipeline.py`: a scheduled run of a registered source, and the indexing of a page a live query fetched.
 
 ```mermaid
 flowchart TD
@@ -490,9 +500,9 @@ flowchart TD
     SUM --> DONE
 ```
 
-Each version records content hash, snapshot key, parser, chunker and embedding versions, text length, chunk count, and the previous version. The quality floor refuses a run whose text is under `scraper.quality_floor_ratio` of the last version, once that version had at least `scraper.quality_floor_min_chars`. An extractor break that returns only navigation is caught this way. `scraper run <source> --force` accepts such a run.
+Each version records content hash, snapshot key, parser, chunker and embedding versions, text length, chunk count, and the previous version. The quality floor refuses a run whose text is under `scraper.quality_floor_ratio` of the last version, once that version had at least `scraper.quality_floor_min_chars`; this catches an extractor that returns only navigation. `scraper run <source> --force` accepts such a run.
 
-Retrieval runs in the engine when the model calls `search_knowledge`, over the same rows. A call that names a source filters by that source's category; when that finds nothing, the same query runs again across every category.
+Retrieval runs in the engine when the model calls `search_knowledge`. A call that names a source filters by that source's category; when that finds nothing, the query runs again across every category. When nothing matches at all, the tool returns `tools.nothing_stored`.
 
 ```mermaid
 flowchart TD
@@ -510,33 +520,29 @@ flowchart TD
     WIN --> EV["Evidence"]
 ```
 
-Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. The dense leg drops a row farther than `retrieval.max_distance` from the question, so a question the index does not cover gets no evidence. Fusion combines ranks, not the legs' incompatible raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
+Each leg pulls `retrieval.candidates` rows from the caller's tenant and the `public` tenant. The dense leg drops a row farther than `retrieval.max_distance` from the question. Fusion combines ranks, not raw scores. Either leg can be turned off, but not both. A reranker is deferred until evals justify it.
 
 ### Sentence windows
 
-What is matched and what is read are different sizes. Chunks are cut at `scraper.chunk_chars`, narrow enough that a match points at the passage that answers rather than at a whole section, and `scraper.chunk_overlap_chars` is 0 because the window supplies the continuity overlap used to.
+Chunks are cut narrow at `scraper.chunk_chars`, with `scraper.chunk_overlap_chars` at 0. After the top `retrieval.top_k` rows are chosen, each is read back with the `retrieval.window` rows either side of it, joined in ordinal order into one passage. Windows that overlap or touch merge into one passage; two hits far apart on one page stay two. Summaries are not widened. `retrieval.window = 0` hands each hit back alone.
 
-After the top `retrieval.top_k` rows are chosen, each one is read back with the `retrieval.window` rows either side of it, joined in ordinal order into one passage. Windows that overlap or touch merge, so two hits a row apart cost one passage rather than two copies of the middle. A span is handed back once however many of its rows were hit, and two hits far apart on one page stay two passages. Summaries are not widened: a summary already covers its chunks. `retrieval.window = 0` hands each hit back alone.
-
-Chunk ordinals are contiguous within a version, and tree summaries are ordinalled after the leaves, so widening is a range read on `(version_id, ordinal)` and reads only `level = 0` rows. Changing `scraper.chunk_chars` or `scraper.chunk_overlap_chars` changes `chunker_version`, which reindexes a source on its next run. Citations are unaffected: a `Citation` is the source title and URL, not an offset.
+Chunk ordinals are contiguous within a version and tree summaries are ordinalled after the leaves, so widening is a range read on `(version_id, ordinal)` over `level = 0` rows. Changing `scraper.chunk_chars` or `scraper.chunk_overlap_chars` changes `chunker_version`, which reindexes a source on its next run. A `Citation` is the source title and URL, not an offset.
 
 ### Hierarchical index
 
-With `scraper.tree_enabled`, ingestion clusters the chunks of one source, writes a model summary of each cluster as a new row, embeds it, and repeats up to `scraper.tree_max_level`. A summary row lives in `chunks` beside the leaves, with a `level` above 0, and each leaf points at its summary through `parent_id`. The summaries use the `[summary]` model on the chat server.
+With `scraper.tree_enabled`, ingestion clusters the chunks of one source, writes a model summary of each cluster as a new row, embeds it, and repeats up to `scraper.tree_max_level`. A summary row lives in `chunks` beside the leaves with a `level` above 0, and each leaf points at its summary through `parent_id`. Summaries use the `[summary]` model on the chat server.
 
-Retrieval searches every level at once, so a query lands on whatever granularity answers it (the RAPTOR collapsed-tree approach). After fusion, a row whose summary already ranked higher is dropped. A chunk that outranks its own summary keeps both.
-
-The tree is off by default. It costs a model call per cluster per level.
+Retrieval searches every level at once (the RAPTOR collapsed-tree approach). After fusion, a row whose summary ranked higher is dropped; a chunk that outranks its own summary keeps both. The tree is off by default and costs a model call per cluster per level.
 
 ## Live source queries
 
-Scheduled ingestion keeps the index current on an interval. A live query answers from a source now, with parameters the model picks: a term, subject and level of the class catalog, a scholarship search filtered by the student's situation, study room slots on a date, the next shuttle at each stop, a building on the campus map, a web search, or a refetch of this week's library hours.
+A live query answers from a source now, with parameters the model picks: a term, subject and level of the class catalog, a scholarship search, study room slots on a date, the next shuttle at each stop, a building on the campus map, a web search, or this week's library hours.
 
-The engine offers two search tools, not one per source: `search_knowledge(query, source?)` reads the stored index and `search_live(query, source?)` queues a fetch. `source` is a filter, never a forced guess: leaving it out searches every source, and each variant carries a few words from `LiveSource::hint` so the model can pick one when it knows. `search_knowledge` offers only the sources the scraper indexes, and maps the key it is given to the `chunks.category` it filters on. `search_live` answers a call that names no source from `tools.live_default_source`, which is `web`.
+The engine offers two search tools: `search_knowledge(query, source?)` reads the stored index and `search_live(query, source?)` queues a fetch. `source` is an optional filter; each variant carries a few words from `LiveSource::hint`. `search_knowledge` offers only the sources the scraper indexes and maps the key to the `chunks.category` it filters on. `search_live` with no source uses `tools.live_default_source`, which is `web`.
 
-The query string is the whole request. With one tool per source the tool name carried half the intent; with two tools it does not, so `tools.query_description` is the highest-leverage wording in the prompt and says in a bad-then-good pair what a self-contained keyword query looks like. `search::params_for` turns that one string into the parameters the scraper takes: the query fills the source's text parameter, a choice the query names fills a choice parameter, a `YYYY-MM-DD` in the query fills a date, a required date falls back to today at `prompt.utc_offset_hours`, and `Courses::derived` reads the term out of the query or takes the one running today. A required parameter nothing filled comes back to the model naming what the query has to say. `LiveSource::narrow` cuts what a source's site cannot match out of the query before it fills that parameter: `Courses` sends the class search the course code alone, because its keyword box matches subject, catalog number and title and nothing else. Two schemas cost about 790 estimated tokens where one per source would cost over 1700.
+The query string is the whole request, and `tools.query_description` shows in a bad-then-good pair what a self-contained keyword query looks like. `search::params_for` turns the string into the scraper's parameters: the query fills the source's text parameter, a choice the query names fills a choice parameter, a `YYYY-MM-DD` fills a date, a required date falls back to today at `prompt.utc_offset_hours`, and `Courses::derived` reads the term out of the query or takes the one running today. A required parameter nothing filled comes back to the model naming what the query has to say. `LiveSource::narrow` cuts what a source's site cannot match out of the query first: `Courses` sends the class search the course code alone.
 
-`LiveSource::freshness` declares whether a source's answers are stored, the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` names a disagreement at boot the way it does for parameters. The prompt tells the model to use the evidence first, to call `search_knowledge` when the evidence does not answer, and to call `search_live` whenever the question is one only it can answer, because nothing in the prompt ever holds that.
+`LiveSource::freshness` declares whether a source's answers are stored; the scraper publishes the same fact as `query_sources.indexed`, and `search::conforms` reports a disagreement at boot.
 
 ```mermaid
 sequenceDiagram
@@ -564,51 +570,45 @@ sequenceDiagram
     Note over T,PG: unclaimed after query.claim_secs, the job is cancelled and the tool reports that the source did not answer in time
 ```
 
-A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the label a citation of it carries, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into those parameters and checked there, so a bad call is corrected by the model without queueing a job. The two tools themselves live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns those parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints itself (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the citation label, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into parameters and checked there, so a bad call is corrected without queueing a job. The two tools live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns the parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
 
-`query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine checks every source in its catalog and logs a warning when a source and the published one disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks the parameters of every query again before it runs it.
+`query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine logs a warning when a catalog source and the published one disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks every query's parameters again before running it.
 
-Any scraper failure (unknown source, missing parameter, unreadable page, an exception) marks the job failed. The tool returns the reason as `InvalidArguments`, which the loop feeds to the model. A caller that is cancelled or runs out of time cancels its job. The text handed back is held to `scraper.query_max_chars`, and the page is cited in `Answer.sources`.
+Any scraper failure (unknown source, missing parameter, unreadable page, an exception) marks the job failed, and the tool returns the reason as `InvalidArguments`. A caller that is cancelled or runs out of time cancels its job. The text handed back is held to `scraper.query_max_chars`, and the page is cited in `Answer.sources`.
 
-The `web` source uses the same path against the open web. The scraper queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
+The `web` source queries a self-hosted SearXNG (`just search`, `[search]` in `sparky.toml`) over Google, Brave, and Bing, and returns titles, links, dates, and snippets, cited as the Google search for the query. DuckDuckGo is excluded because it answers self-hosted searches with a CAPTCHA.
 
-Login-gated ASU sources are covered live through the admin authenticated driver: `clubs` and the Sun Devil Central half of `events` fetch through the operator-captured session and are never indexed. When that session is missing or expired, `clubs` reports it and `events` falls back to its public calendar. Not covered: X and Instagram posts (the public X timeline endpoint serves old posts and Instagram requires a login), and anything behind an individual student's login, such as Workday jobs or personal MyASU data, which waits on the per-user sessions of Phase 8.
+`clubs` and the Sun Devil Central half of `events` fetch through the admin session and are never indexed. When that session is missing or expired, `clubs` reports it and `events` falls back to its public calendar. Not covered: X and Instagram posts, and anything behind an individual student's login (Workday jobs, personal MyASU data), which waits on the per-user sessions of Phase 8.
 
 ### Caching live results
 
-`query.cache` puts a Redis cache in front of every live query, as `CachedQueries` wrapping `SourceQueries`. It does two separate things.
+`query.cache` puts a Redis cache in front of every live query, as `CachedQueries` wrapping `SourceQueries`.
 
-**Reuse.** An answer within its lifetime is returned without a `jobs` row, without waking the scraper, and without a fetch. The key is a UUIDv5 over the tenant, the source key, and the parameters sorted by name, so the same question from different students is the same key, and the order the model happened to write the arguments in does not matter. A text parameter is keyed lowercase, without punctuation and without the words in `query.cache.ignore_words`, so wordings that differ only by those share one entry; a source in `query.cache.keep_words`, such as the open web search, keeps every word. A reused answer carries the time it was fetched, and `LiveSearch` renders that age into the tool output, so the model can never present a stored answer as current.
+**Reuse.** An answer within its lifetime is returned without a `jobs` row, a scraper wake-up, or a fetch. The key is a UUIDv5 over the tenant, the source key, and the parameters sorted by name. A text parameter is keyed lowercase, without punctuation and without the words in `query.cache.ignore_words`; a source in `query.cache.keep_words`, such as the web search, keeps every word. A reused answer carries its fetch time, and `LiveSearch` renders that age into the tool output.
 
-**One fetch per query.** Whatever the lifetime, the first request to ask for a query takes a lease (`SET NX`) and fetches; every request that arrives while it runs waits on that lease and reads the answer it writes. A hundred students asking about CSE 310 at once is one fetch of the ASU catalog, not a hundred. Coalescing costs no freshness at all, because a request that waited gets an answer fetched after it asked. Reuse does cost freshness, which is why every source the scraper never indexes defaults to a lifetime of zero unless `query.cache.ttl_secs` names it, as it does `clubs` and `events`. Redis runs with a memory cap and `volatile-lru`, so at the cap the least recently used entries are evicted first.
+**One fetch per query.** The first request for a query takes a lease (`SET NX`) and fetches; every request arriving while it runs waits on that lease and reads the answer it writes. Sources the scraper never indexes default to a lifetime of zero unless `query.cache.ttl_secs` names them, as it does `clubs` and `events`. Redis runs with a memory cap and `volatile-lru`.
 
-`query.cache.handoff_secs` is the floor under every lifetime: an answer has to outlive its own fetch for the requests that waited on it to read it, so a source at zero is reused for that long and no longer. `lease_secs` must cover `query.timeout_secs` or a lease can expire mid-fetch and let a second request fetch the same query; `Config::validate` rejects that at boot, along with a cache enabled without a `redis` section.
+`query.cache.handoff_secs` is the floor under every lifetime, so a source at zero is reused for that long and no longer. `lease_secs` must cover `query.timeout_secs`; `Config::validate` rejects that at boot, along with a cache enabled without a `redis` section.
 
-A refusal is cached for the handoff window too, so a source rejecting an argument is not hammered. Every other failure releases the lease, because a timeout or an absent scraper says nothing about the query and the next request should start over.
-
-The cache is never load-bearing. Any Redis error is logged and the request fetches as if the cache were not there, recorded on the trace as `CacheOutcome::Unavailable`. Caching is safe on this path by construction: a source query only ever reads, the search tools are all `ReadPublic`, and anything that writes goes through `Policy`, never through `SourceQueries`.
+A refusal is cached for the handoff window too. Every other failure releases the lease. Any Redis error is logged and the request fetches as if the cache were absent, recorded on the trace as `CacheOutcome::Unavailable`. A source query only reads, the search tools are all `ReadPublic`, and anything that writes goes through `Policy`, never `SourceQueries`.
 
 ### Keeping the database standing under a spike
 
-Every live query costs the one table every process writes to. Four things bound that cost, and only one of them is Redis.
+**The wait backs off.** The engine polls the `jobs` row starting at `query.poll_ms`, doubling up to `query.poll_max_ms`.
 
-**The wait backs off.** The engine waits on the scraper by polling the `jobs` row. `query.poll_ms` is the first wait and it doubles up to `query.poll_max_ms`, so a 30 second fetch costs under 40 round trips rather than one every 100ms for its whole duration. This is the largest single reduction and it needs nothing shared.
+**The number of fetches is capped.** `query.max_in_flight` caps live queries reaching the database at once, across every replica, as a Redis sorted set scored by when each slot was taken. Over the cap a search tool is refused with `QueryError::Busy`, which reaches the model as a tool error naming the source. Keep the cap under `postgres.max_connections`. A slot older than the lease falls out of the set. `AdmittedQueries` sits under `CachedQueries`, so a cache hit or a request waiting on another's lease takes no slot.
 
-**The number of fetches is capped.** `query.max_in_flight` caps how many live queries reach the database at once, across every replica, as a sorted set in Redis scored by when each slot was taken. Over the cap a search tool is refused with `QueryError::Busy`, which reaches the model as a tool error naming the source. Refusing beats queueing onto the connection pool until `postgres.acquire_timeout_secs` expires: the model can answer without that source, and the student gets an answer rather than a timeout. Keep the cap under `postgres.max_connections`. A slot whose holder never gives it back falls out of the set once it is older than the lease, so a killed replica does not leak capacity.
+**Background indexing sheds load.** Past `scraper.index_backlog_limit` queued `live_index` jobs, a live result is answered but not indexed, and the drop is logged. The check reads no further than the limit.
 
-`AdmittedQueries` sits **under** `CachedQueries`, which is what makes a reused answer free: a cache hit and a request that waited on another request's lease take no slot and touch no database. Only an actual fetch is counted.
+**Finished jobs are removed.** Each scheduling cycle deletes at most `scraper.job_prune_batch` terminal jobs older than `scraper.job_retention_hours`. Queued and running jobs are never pruned.
 
-**Background indexing sheds load.** Past `scraper.index_backlog_limit` queued `live_index` jobs, a live result is answered but not indexed, and the drop is logged. Answering is what a student is waiting on, and the source is refetched on its schedule anyway. The check reads no further than the limit, so measuring the backlog is never itself the expensive part.
-
-**Finished jobs are removed.** `scraper.job_retention_hours` bounds the table: each scheduling cycle deletes at most `scraper.job_prune_batch` terminal jobs older than the retention, so claiming stays fast and one cycle never takes an unbounded number of row locks. Queued and running jobs are never pruned, however old.
-
-Two partial indexes serve this, added in `0013_job_queue_pressure.sql`: `(kind, priority desc, created_at) where status = 'queued'` for claiming and for the backlog check, and `(updated_at) where status in ('done','failed','cancelled')` for pruning. The first carries `kind`, which the old queued index did not, so it replaces it. Both are built `CONCURRENTLY`, which Postgres refuses inside a transaction, so the migration runner sends a file marked `-- concurrent:` one statement at a time outside one.
+Two partial indexes serve this, added in `0013_job_queue_pressure.sql`: `(kind, priority desc, created_at) where status = 'queued'` for claiming and the backlog check, replacing the old queued index, and `(updated_at) where status in ('done','failed','cancelled')` for pruning. Both are built `CONCURRENTLY`, so the migration runner sends a file marked `-- concurrent:` one statement at a time outside a transaction.
 
 ### Indexing live results
 
-A live result answers its caller first and then becomes evidence. The job that stores the answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler runs only registered sources and never refetches such a page.
+The job that stores a live answer also queues a `live_index` job with the full fetched text, in the same commit. The background lane runs it through `pipeline.index_page`: hash, snapshot, extract, chunk, quality floor, embed, write, tree. A page whose URL is a scheduled source refreshes that source. Any other page gets its own `sources` row keyed by the query source and a digest of the URL, so the same search refreshes the same rows. The scheduler never refetches such a page.
 
-A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. Those are the sources `search_knowledge` never offers as a filter, because nothing of theirs is ever in the index. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job and never reaches the caller.
+A query source sets `index = False` when its answer goes stale within minutes or is not ASU content: `shuttles`, `study_rooms`, and `web`. `search_knowledge` never offers those as a filter. `scraper.index_live_results` turns indexing off entirely. A failure to index fails only the `live_index` job.
 
 ## Job queue
 
@@ -620,11 +620,11 @@ The scraper does all its work from the `jobs` table in one process, `scraper ser
 | `live_index` | the scraper, with the answer to a `source_query` | -10 | background |
 | `source_run` | the scraper, when a registered source falls due | -20 | background |
 
-A claim takes the highest priority first, then the oldest, skipping jobs past their deadline, with `for update skip locked`, so several lanes and processes can claim at once. `scraper.live_workers` live lanes claim only `source_query`, each one query at a time, and wake on the engine's `pg_notify`, so the searches the model sends in one step run side by side. The background lane claims the other kinds, so a long scrape never delays a live query. Both lanes also poll every `scraper.serve_poll_secs`.
+A claim takes the highest priority first, then the oldest, skipping jobs past their deadline, with `for update skip locked`. `scraper.live_workers` live lanes claim only `source_query`, one query at a time each, and wake on the engine's `pg_notify`. The background lane claims the other kinds. Both lanes also poll every `scraper.serve_poll_secs`.
 
-Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for each registered source that is due by its `fetch_every` and last attempt. A partial unique index allows at most one queued or running `source_run` per source. The same pass requeues background jobs left running longer than `scraper.job_lease_secs` by a stopped process.
+Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for each registered source due by its `fetch_every` and last attempt. A partial unique index allows at most one queued or running `source_run` per source. The same pass requeues background jobs left running longer than `scraper.job_lease_secs`.
 
-`scraper status` shows each source and the queue by kind and status. `scraper run <source>` runs one source directly, outside the queue; `--category <name>` runs a category and `--all` every source.
+`scraper status` shows each source and the queue by kind and status. `scraper run <source>` runs one source outside the queue; `--category <name>` runs a category and `--all` every source.
 
 ## Discord surface
 
@@ -633,31 +633,19 @@ Every `scraper.schedule_every_secs`, the main thread queues a `source_run` for e
 | mention in a text channel | a thread opened from the message, or inline if the thread cannot be made | public |
 | reply to a Sparky message in a thread | that thread | public |
 | any other message in a thread | nowhere; the bot stays quiet | |
-| mention or reply in a text channel | a thread opened from the message | public |
 | direct message | the direct message channel | private |
 
-A thread is the conversation. Inside one, only a reply to something Sparky said continues it, so
-people talk in the thread without Sparky answering every line, and the message replied to rides the
-request as `reply_to` and is quoted into the prompt under `prompt.reply_header`, capped by
-`agent.reply_budget_tokens`. A reply to a person, or to another bot, is not a turn.
+A thread is the conversation. Inside one, only a reply to something Sparky said continues it. The message replied to rides the request as `reply_to` and is quoted into the prompt under `prompt.reply_header`, capped by `agent.reply_budget_tokens`. A reply to a person or another bot is not a turn.
 
-A direct message is private, which is what `agent.recall_in_public` keys on: personal memory and the
-profile graph reach a direct message and never an answer in a server. `bot.direct_messages` turns
-the direct channel off.
+A direct message is private, which is what `agent.recall_in_public` keys on. `bot.direct_messages` turns the direct channel off.
 
-Up to `bot.max_images` image attachments ride the request and are attached to the user turn as
-image blocks. The engine filters them again in `Attachment::accepted`, because the HTTP surface
-takes any caller holding the bearer token. Only the link travels, so the model server fetches it,
-and history stores none of them: the link the edge issues expires. Whether the model reads them is
-a property of the model, not the harness; see `deploy/inference/README.md`.
+Up to `bot.max_images` image attachments ride the request as image blocks on the user turn. The engine filters them again in `Attachment::accepted`. Only the link travels, the model server fetches it, and history stores none of them. Whether the model reads images depends on the model; see `deploy/inference/README.md`.
 
-Reading a reply whose author turned its ping off needs the privileged Message Content intent, which
-is enabled on the application at discord.com/developers. Without it Discord withholds the text and
-the reply goes unanswered.
+Reading a reply whose author turned its ping off needs the privileged Message Content intent, enabled on the application at discord.com/developers. Without it the reply goes unanswered.
 
-A turn is one message, edited in place. It opens with a spinner header and gains one line per progress event. The engine writes the text of each line; the bot renders it and never keeps its own copy of the event enum. A line that carries a `slot` writes over the earlier line in that slot, so a tool result replaces its own start line. A `clear` event removes a line. A `draft` event sets or withdraws the answer shown under the steps. Edits are paced to one per `bot.edit_every_ms`, and a change inside the gap waits for the next edit.
+A turn is one message, edited in place. It opens with a spinner header and gains one line per progress event. The engine writes each line's text; the bot never keeps its own copy of the event enum. A line with a `slot` overwrites the earlier line in that slot. A `clear` event removes a line. A `draft` event sets or withdraws the answer shown under the steps. Edits are paced to one per `bot.edit_every_ms`.
 
-The finished card shows the steps (the oldest fold into a count when space runs out), the answer, the memories the prompt carried (`ChatResponse.memories`), and sources without a URL. Sources with a URL are link buttons. Only an answer that still does not fit spills into further messages. An approval adds buttons to the card, and the resumed answer replaces the prompt on the same card.
+The finished card shows the steps (the oldest fold into a count when space runs out), the answer, the memories the prompt carried (`ChatResponse.memories`), and sources without a URL. Sources with a URL are link buttons. An answer that does not fit spills into further messages. An approval adds buttons to the card, and the resumed answer replaces the prompt on the same card.
 
 A conversation belongs to one tenant, user, channel, and visibility. The bot holds no conversation state. `/reset` ends the caller's open conversations in the channel through `POST /conversation/reset`.
 
@@ -669,6 +657,7 @@ A conversation belongs to one tenant, user, channel, and visibility. The bot hol
 | sources, source versions, query source registry, jobs | PostgreSQL |
 | chunk text, `vector(1024)` embedding, generated `tsvector` | PostgreSQL with pgvector, rebuildable from snapshots |
 | raw page snapshots | object storage |
+| live query cache and leases | Redis, shared across engine replicas |
 | local traces, console logs, training data | `.sparky/`, ignored |
 
 ```mermaid
@@ -686,7 +675,7 @@ erDiagram
     chunks ||--o{ chunks : summarizes
 ```
 
-`jobs` and `query_sources` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval. Redis holds the live query cache: answers within their lifetime and the leases that keep one fetch per query. It is shared ephemeral state, so several engine replicas coalesce against each other rather than each fetching once.
+`jobs` and `query_sources` stand alone. HNSW, GIN, and tenant, category, and fetch-time indexes serve retrieval.
 
 ## Failure behavior
 
@@ -700,8 +689,8 @@ erDiagram
 | scraper busy or not running | unclaimed job cancelled after `query.claim_secs`, the tool tells the model to search again |
 | model repeats an identical tool call | repeat refused, next step offers no tools, `Stalled` if it repeats again |
 | thinking spends the whole completion | the call is made again without thinking |
-| prompt would exceed the budget | evidence and history are trimmed, the boot checks keep tool schemas under half |
-| retrieval returns nothing | the prompt tells the model to search or say it does not know |
+| prompt would exceed the budget | history is trimmed and tool results are cut; boot checks keep tool schemas under half |
+| `search_knowledge` finds nothing | `tools.nothing_stored` sends the model to another search |
 | guardrail blocks a response | run ends as `Blocked` with `guardrail.replacement` |
 | confirmation denied, expired, or answered by someone else | nothing runs |
 | PostgreSQL unavailable | the engine does not boot, and a request that needs a store gets 503 |
@@ -709,13 +698,12 @@ erDiagram
 
 ## Tracing
 
-Every request produces one trace covering model calls, retrieval, memory recall, tool calls, policy decisions, guardrail blocks, and the outcome. The live pieces of a streaming call (reasoning so far, answer drafts, a withdrawn draft) go only to the watcher. The recorded trace keeps the finished call.
+Every request produces one trace covering model calls, tool calls, memory recall, policy decisions, guardrail blocks, and the outcome. The live pieces of a streaming call (reasoning so far, answer drafts, a withdrawn draft) go only to the watcher; the recorded trace keeps the finished call.
 
 ```mermaid
 flowchart TD
     A["discord.ask<br/>bot"] --> B["http.chat<br/>engine, parented by traceparent"]
     B --> C["agent.run<br/>invoke_agent"]
-    C --> D["retrieve<br/>chunks returned"]
     C --> E["llm<br/>full prompt and reply, thinking"]
     C --> F["tool<br/>redacted arguments and result"]
     F --> G["scrape.query<br/>scraper, separate trace"]
@@ -725,9 +713,9 @@ flowchart TD
 Traces go to two places:
 
 - JSONL at `.sparky/traces/<request_id>.jsonl`: the complete local record of trace events.
-- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. `apps/training` reads `llm` spans back through `GET /v1/projects/<project>/spans` to build datasets.
+- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. `apps/training` reads `llm` spans back through `GET /v1/projects/<project>/spans`.
 
-An empty `phoenix_url` turns export off. `telemetry.phoenix_api_key` is sent as a bearer token when it is set, and the local Phoenix needs none. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot records each product event as one span under the interaction (`[analytics]`).
+An empty `phoenix_url` turns export off. `telemetry.phoenix_api_key` is sent as a bearer token when set. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot records each product event as one span under the interaction (`[analytics]`).
 
 Secrets, credentials, cookies, and sensitive form values are redacted from tool arguments and results before they reach any trace. The developer console mirrors followed stdout into `.sparky/logs/<unit>.log`. Deployments keep stdout with the platform log driver.
 
@@ -750,27 +738,27 @@ flowchart LR
     EN -->|"OTLP spans"| PX["phoenix :6006<br/>prompt, reply, tokens, latency"]
 ```
 
-Phoenix holds spans and events. Prometheus holds time series. A slow request shows as the `llm` span's latency in Phoenix and as `llamacpp:requests_deferred` in Grafana for the same minute. Dashboard panels and their metric names are in `deploy/README.md`.
+Phoenix holds spans and events; Prometheus holds time series. Dashboard panels and their metric names are in `deploy/README.md`.
 
 ## Authenticated tasks (Phase 8)
 
-Not built. The browser MCP server that Phase 8 assumed is gone, and nothing drives a page. Whatever replaces it needs a new design that meets these rules: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user. This is per-user: each user's own session for their own data. It is distinct from the scraper's admin authenticated driver (see Inside scraper), which is one operator-captured session over shared, non-personal ASU content and follows the same no-index rule; its operator types the password at the console and it is never stored.
+Not built; nothing drives a page on a user's behalf. A design must meet these rules: the user completes login and MFA themselves, SparkyAI never asks for or stores a password, authenticated page content is never indexed or memorized, and any consequential submission is confirmed by the user. This is per-user, each user's own session for their own data, and distinct from the scraper's admin authenticated driver (see Inside scraper).
 
 ## Configuration
 
-Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environment variables, which win. `sparky.toml` is committed and holds every tunable value, so a change to retrieval fusion or a prompt budget is reviewed like code. `.env` is not committed and holds only secrets, per-machine URLs, and what docker compose and the justfile read. Both images copy `sparky.toml` in, and compose overrides the service URLs through the environment.
+Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environment variables, which win. `sparky.toml` is committed and holds every tunable value. `.env` is not committed and holds only secrets, per-machine URLs, and what docker compose and the justfile read. Both images copy `sparky.toml` in, and compose overrides the service URLs through the environment.
 
-Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, which is how an eval profile differs from the default. A missing file is not an error.
+Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, such as an eval profile. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `auth`, `search`, `firecrawl`, `object_store`, `cli`, `training`. The engine's `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `object_store`, `cli`, `training`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
-A default belongs to exactly one settings struct. Adapters build themselves from those structs and declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. A `prompt.system_file` that cannot be read also stops the boot. Nothing is clamped at runtime.
+A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 
 `prompt` holds the wording the harness writes around every section. `system_file` takes precedence over `system`, which takes precedence over the built-in prompt.
 
 ## Deployment
 
-Two images: `sparkyai-rust` (engine and discord, selected by entrypoint) and `sparkyai-scraper` (runs `serve`). CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose. `llama-server` runs as the compose services `chat` and `embed` under the `model` profile, configured in `deploy/inference`. Split further only on a measured need: independent scaling, failure isolation, hardware, or a security boundary. Details are in `deploy/README.md`.
+Two service images: `sparkyai-rust` (engine and discord, selected by entrypoint) and `sparkyai-scraper` (runs `serve`). `sparkyai-sandbox` and `sparkyai-sandbox-proxy` are the images the engine starts for `run_sandbox`. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose. `llama-server` runs as the compose services `chat` and `embed` under the `model` profile, configured in `deploy/inference`. Details are in `deploy/README.md`.
 
 ## Open decisions
 

@@ -1,8 +1,4 @@
-"""The ASU single sign-on flow on a browser page: the MyASU CAS form, then Duo.
-
-Holds no state and stores nothing. The caller supplies the credentials for one attempt and a
-callback that relays progress, such as a Duo verification code, to whoever is signing in.
-"""
+"""The ASU single sign-on flow on a browser page: the MyASU CAS form, then Duo. Stores nothing."""
 
 from __future__ import annotations
 

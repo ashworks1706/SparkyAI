@@ -40,9 +40,7 @@ fn every_section_budget_fits_inside_the_prompt_budget() {
 fn the_committed_sparky_toml_loads_and_validates() {
     use figment::providers::{Format, Toml};
 
-    // sparky.toml is what every deployment reads, and validate rejects a bad combination at boot.
-    // The tests around this one build their own TOML, so without this the committed file is the
-    // one configuration nothing checks.
+    // The committed sparky.toml loads and validates.
     let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
     let cfg: Result<Config, String> = figment::Figment::new()
         .merge(Toml::string(SECRETS))
@@ -60,7 +58,6 @@ fn the_committed_sparky_toml_loads_and_validates() {
 }
 
 /// The SPARKY_SECTION__KEY lines of .env.example as the TOML layer they stand for.
-///
 /// A line without the section separator is read by compose or the justfile, not by config.
 fn env_example_as_toml() -> String {
     use std::collections::BTreeMap;
@@ -113,9 +110,7 @@ fn env_example_as_toml() -> String {
 fn a_fresh_clone_boots_on_sparky_toml_plus_the_env_example() {
     use figment::providers::{Format, Toml};
 
-    // What `just bootstrap` leaves behind: the committed settings, and .env copied from the
-    // example with nothing filled in. A setting the example forgets fails here rather than on
-    // a newcomer's first `just engine`.
+    // The committed settings plus .env.example with nothing filled in load and validate.
     let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
     let cfg: Result<Config, String> = figment::Figment::new()
         .merge(Toml::file(file))
@@ -199,7 +194,7 @@ fn a_bare_config_is_valid_and_takes_every_default() {
 
 #[test]
 fn the_live_query_cache_needs_somewhere_to_keep_answers() {
-    // The cache is on by default, so a deployment without redis is told rather than left uncached.
+    // The cache is on by default.
     let without = load("[query.cache]\nenabled = true\n");
     assert!(without.is_ok(), "the base config names a redis section");
 

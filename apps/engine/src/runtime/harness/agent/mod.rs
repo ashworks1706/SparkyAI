@@ -288,9 +288,7 @@ impl Agent {
     }
 
     /// Whether to spend one more step on the sandbox rather than answer.
-    ///
-    /// A tool that failed is not an answer. The loop hands the run back once, naming the sandbox,
-    /// so a student is told nothing could be found only after the last route was taken.
+    /// A run whose tool failed is handed back once, naming the sandbox.
     fn send_to_sandbox(
         &self,
         run: &mut Run<'_>,

@@ -16,8 +16,7 @@ from scraper.sources import (
     sports,
 )
 
-# Clubs is login-gated on Sun Devil Central, so it is served live through the admin session and
-# never scheduled here; a scheduled fetch would run unauthenticated and index nothing usable.
+# Clubs is login-gated, served live through the admin session, and never scheduled.
 _MODULES = (
     library_hours,
     events,

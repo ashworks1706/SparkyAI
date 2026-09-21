@@ -31,7 +31,7 @@ def _clean(node: Tag | None) -> str:
 def public_cards(fetched: Fetched) -> str:
     """One line per event card on the public calendar: name, date, time, place, and its page.
 
-    A page without cards, such as Firecrawl markdown, goes through the line-based extractor.
+    A page without cards goes through the line-based extractor.
     """
     if fetched.text is not None:
         return extract_events(fetched)

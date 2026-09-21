@@ -65,8 +65,6 @@ impl App {
         }
     }
     /// Asks the engine to switch the sandbox or kill one container, off its own task.
-    ///
-    /// A container cannot be started from here: the agent makes one when it next runs a command.
     fn ask_engine(&mut self, which: &SandboxUnit, on: bool) {
         let endpoint = self.sandbox.clone();
         let tx = self.tx.clone();

@@ -18,8 +18,7 @@ from scraper.core.types import ChunkRow, Job, QuerySource, SourceRow, StoreError
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
-#: First line of a migration that runs one statement at a time outside a transaction,
-#: for statements such as create index concurrently that Postgres refuses inside one.
+#: First line of a migration that runs one statement at a time outside a transaction.
 CONCURRENT_MARKER = "-- concurrent:"
 
 _pool: ConnectionPool | None = None
@@ -110,9 +109,7 @@ def _only_comments(statement: str) -> bool:
 
 
 def _apply_unwrapped(conn: psycopg.Connection, sql: str) -> None:
-    """Runs a migration one statement at a time outside a transaction. Several statements in one
-    execute would put Postgres in an implicit transaction, which create index concurrently
-    refuses, so such a migration holds only statements this splitter can separate."""
+    """Runs a migration one statement at a time outside a transaction."""
     conn.commit()
     was = conn.autocommit
     conn.autocommit = True
