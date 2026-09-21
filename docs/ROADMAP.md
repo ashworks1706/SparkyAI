@@ -18,6 +18,7 @@
 ## 6 — Public beta v0.6
 
 - [ ] run on existing benchmarks
+- [ ] setup evals
 - [ ] make short tech writeup on readme
 - [ ] add demo video and website update
 - [ ] Staging + prod; canary releases; alerting; inference that scales under load
