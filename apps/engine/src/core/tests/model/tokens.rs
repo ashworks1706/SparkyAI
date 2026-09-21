@@ -1,6 +1,6 @@
 //! The prompt token estimator, and the settings the harness types are built from.
 
-use crate::core::config::{Agent, Retrieval, Router};
+use crate::core::config::{Agent, Retrieval};
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::conversation::message::Message;
@@ -54,7 +54,6 @@ fn the_loop_config_carries_the_agent_settings_unchanged() {
         cfg.confirmation_ttl.as_secs(),
         settings.confirmation_ttl_secs
     );
-    assert_eq!(cfg.retrieval_top_k, Retrieval::default().top_k);
 }
 
 #[test]
@@ -62,7 +61,6 @@ fn the_prompt_budget_carries_the_agent_settings_unchanged() {
     let settings = Agent::default();
     let budget = Budget::default();
     assert_eq!(budget.total, settings.prompt_budget_tokens);
-    assert_eq!(budget.evidence, settings.evidence_budget_tokens);
     assert_eq!(budget.history, settings.history_budget_tokens);
     assert_eq!(budget.memory, settings.memory_budget_tokens);
     assert_eq!(budget.chars_per_token, settings.chars_per_token);
@@ -81,7 +79,6 @@ fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
         max_distance: 0.5,
         collapse_tree: true,
         window: 3,
-        router: Router::default(),
         top_k: 9,
     };
     let tuning = RetrievalTuning::from(&settings);

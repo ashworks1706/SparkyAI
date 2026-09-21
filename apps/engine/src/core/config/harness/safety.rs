@@ -79,6 +79,14 @@ pub struct SandboxSettings {
     pub session_idle_secs: u64,
     /// Sessions one user may hold at once. Starting one past the cap reaps the least recently used.
     pub max_sessions: usize,
+    /// Session containers across every user. Starting one past the cap reaps the least recently
+    /// used of all of them.
+    pub max_sessions_total: usize,
+    /// Commands running at once across every user. A command past it waits for a slot.
+    pub max_running: usize,
+    /// Names this engine's containers apart from another engine's on the same runtime. Only
+    /// session containers of this instance are removed as orphans.
+    pub instance: String,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,
     /// Commands kept for the operator view of what the agent ran.
@@ -114,6 +122,9 @@ impl Default for SandboxSettings {
             risk: RiskClass::PrepareWrite,
             session_idle_secs: 900,
             max_sessions: 4,
+            max_sessions_total: 16,
+            max_running: 8,
+            instance: "default".into(),
             workspace_mb: 64,
             recent_commands: 200,
             egress: false,
@@ -130,8 +141,9 @@ impl Default for SandboxSettings {
 /// What the sandbox tells the model it is for, when sandbox.description is unset.
 pub const DESCRIPTION: &str = "Run a shell command in an isolated environment. Use it to work \
     something out rather than doing it in your head: arithmetic, dates, sorting, filtering, or \
-    reading a file an earlier tool left in the workspace. python3, jq and the usual text tools \
-    are installed. There is no network, so it cannot fetch anything or reach ASU.";
+    reading a file the user attached or an earlier tool left in the workspace. python3 with \
+    pandas, pypdf, docx and openpyxl, pdftotext, tesseract, jq, rg and the usual text tools are \
+    installed. There is no network, so it cannot fetch anything or reach ASU.";
 
 /// What the sandbox tells the model the command argument is.
 pub const COMMAND_DESCRIPTION: &str = "The shell command to run.";

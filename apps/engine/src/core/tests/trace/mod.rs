@@ -129,7 +129,6 @@ fn kind_matches_the_name_each_event_serialises_under() {
             step: 1,
             message_count: 0,
             estimated_tokens: 0,
-            evidence_ids: Vec::new(),
         },
         TraceEvent::ModelCall {
             step: 1,
@@ -164,11 +163,9 @@ fn kind_matches_the_name_each_event_serialises_under() {
             result: Ok(String::new()),
             duration_ms: 0,
         },
-        TraceEvent::Retrieval {
-            step: 1,
-            query: String::new(),
-            chunk_ids: Vec::new(),
-            duration_ms: 0,
+        TraceEvent::QueryCache {
+            source: String::new(),
+            outcome: crate::core::types::knowledge::cache::CacheOutcome::Miss,
         },
         TraceEvent::Completed {
             status: RunStatus::Answered,

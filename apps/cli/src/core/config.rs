@@ -64,6 +64,10 @@ pub struct Cli {
     pub log_lines: usize,
     /// Directory for persistent unit logs.
     pub log_dir: PathBuf,
+    /// Size a unit log file reaches before it is rotated to one .1 file, in mebibytes.
+    pub log_file_max_mb: u64,
+    /// Longest line kept from a unit's output; the rest of a longer line is dropped.
+    pub log_line_chars: usize,
     /// Seconds between health probes.
     pub health_interval_secs: u64,
     /// Milliseconds a port check waits before treating the port as free.
@@ -76,6 +80,8 @@ impl Default for Cli {
             phoenix_url: "http://localhost:6006".into(),
             log_lines: 5000,
             log_dir: PathBuf::from(".sparky/logs"),
+            log_file_max_mb: 20,
+            log_line_chars: 4_000,
             health_interval_secs: 5,
             port_check_ms: 150,
         }

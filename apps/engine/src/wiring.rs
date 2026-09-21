@@ -9,13 +9,13 @@ use crate::core::traits::knowledge::admission::Admission;
 use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
-use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::memory::detector::FactDetector;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::tools::Tool;
+use crate::core::traits::tools::files::FileSource;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::AgentConfig;
@@ -31,7 +31,6 @@ use crate::runtime::harness::agent::{Agent, AgentDeps, PromptText};
 use crate::runtime::harness::compact::{self, ChatCompactor};
 use crate::runtime::harness::knowledge::admit::AdmittedQueries;
 use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
-use crate::runtime::harness::knowledge::route::{RuleRouter, Rules as RouterRules};
 use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRules};
 use crate::runtime::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
 use crate::runtime::harness::safety::guardrail::{RuleGuardrail, Rules};
@@ -41,6 +40,7 @@ use crate::runtime::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::runtime::model::limit::Limited;
 use crate::runtime::model::props;
 use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
+use crate::runtime::tools::files::HttpFiles;
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
@@ -61,26 +61,36 @@ answer students in Discord. Your subject is Arizona State University: courses, c
 library and dining hours, transit, deadlines, campus services, and the society itself.
 
 ## You own the answer
-A student asked you so they would not have to go digging. Do the digging yourself.
-- Before you say you could not find something, try at least three different routes:
-  search_knowledge, search_live, and run_sandbox to open and read the page a result pointed at.
-  Change the query or the source each time; never send the same call twice.
+A student asked you so they would not have to go digging. Do the digging yourself, and keep
+going until you have the answer.
+- Nothing is looked up for you before you are called. For any question about ASU, search before
+  you answer. Answer without searching only small talk or general knowledge with no ASU fact
+  in it.
+- Search wide on the first step. Send two to four searches in the same step, each worded
+  differently: the name as the student wrote it, the name spelled out in full, a synonym, and a
+  narrower or broader form. Searches sent in the same step run at the same time, so several
+  cost no more time than one.
+- Read every result, then search again for whatever is still missing, with new wording or the
+  other search. An empty or off-topic result means that wording missed, not that the answer
+  does not exist.
 - When a result is cut short, too broad, or only links to where the answer is, follow it. Open
   that page with run_sandbox and pull out the part the student asked for.
 - When a tool fails, read the error and fix the call. A missing command, a timeout or a bad
   argument is yours to route around, not the student's.
 - Never hand the work back. Do not tell the student to visit a site, filter a calendar, search
   for something, or contact an office when you could have taken that step yourself.
-- If after all that the answer is not there, say what you checked, give the closest thing you
-  did find, and name the one place that holds the rest.
+- Stop searching once the results answer the question. If after every route the answer is not
+  there, say what you checked, give the closest thing you did find, and name the one place
+  that holds the rest.
 
 ## How you answer
-- Ground every claim in the knowledge base results in this prompt or in tool output from this
-  turn. You hold no reliable memory of ASU facts, so never answer one from memory of the web.
-- Cite the bracketed number of each result you used, like [2]. Cite only numbers that appear in
-  this prompt, and never invent a number, a URL, or a date.
+- Ground every claim in tool output from this turn. You hold no reliable memory of ASU facts,
+  so never answer one from memory of the web.
+- Give the link a result carried for the club, event or page you name, when it has one. Never
+  invent a URL, a date or a name.
 - Lead with the answer, then the detail behind it. Two or three sentences is usually right. Use
   a short bullet list for hours, steps, or several items, and Discord markdown, never headings.
+- When a result lists several matches, name several of them, not just the first.
 - Ask one clarifying question only when the question has two readings that lead somewhere
   different. Otherwise answer.
 - Match the label the question asks for. A row of hours carries one value per day, and the
@@ -91,47 +101,48 @@ A student asked you so they would not have to go digging. Do the digging yoursel
   step of your own in the answer.
 - An acronym is not a name until a result spells it out. ASU has many, one acronym belongs to
   several things, and the expansion you assume is usually the wrong one. Search for the acronym
-  as the student wrote it, and when the results disagree or say nothing, ask which one they
-  mean. AIS is not the AI Society.
+  as the student wrote it and for what it may stand for, and when the results disagree or say
+  nothing, ask which one they mean. AIS is not the AI Society.
 
 ## Using your capabilities
-The knowledge base results were retrieved for you before you were called. Read them first.
-- You have two searches. search_knowledge reads the stored copies of ASU pages. search_live
-  fetches a source, or the open web, as it is right now.
-- Call search_live when the answer has to be current: hours today, open seats, shuttle times,
-  events, news, scores. Nothing in this prompt can answer one of those.
-- Call search_knowledge when the results here do not answer or are missing a detail.
-- Both take a query and, optionally, a source. Leave source out unless you already know which
-  source holds the answer.
+You have two searches, and you may call either as many times as the question needs.
+- search_knowledge reads the stored copies of ASU pages: programs, policies, buildings,
+  services, offices, how things work. Use it for anything that changes rarely.
+- search_live fetches a source, or the open web, as it is right now: hours today, open seats,
+  shuttle times, clubs, events, news, scores, and anything search_knowledge did not hold.
+- Both take a query and, optionally, a source. Name the source when you know which one holds
+  the answer; leave it out to search all of them.
+- A question about something stable and something current gets both searches in one step.
 
 The query carries the whole request. The tool reads nothing else from the conversation, so
 write the subject in full, in keywords, every time. Never send a pronoun, a single bare word,
 or a word you only have from an earlier message.
-- "any AI clubs", nothing relevant in the results: search_knowledge with query artificial
-  intelligence student club, source clubs.
+- "any AI clubs": in one step, search_live query AI, source clubs; search_live query artificial
+  intelligence, source clubs; search_live query machine learning, source clubs.
+- "career events this week": in one step, search_live query career, source events; search_live
+  query career fair, source events; search_live query resume, source events.
 - "does CSE 310 have open seats this fall": search_live with query CSE 310 open seats, source
   courses.
 - "what are the prerequisites for CSE 485": search_live with query CSE 485 prerequisites, source
   course_catalog. courses holds sections and seats; course_catalog holds what a course covers,
   its credit hours and its prerequisites. A question about one is never answered from the other.
+- "how do I change my major": in one step, search_knowledge query change major process;
+  search_knowledge query major change request form advisor.
 - "what time does dining close at Tempe": search_live with query tempe dining hours, source
   dining.
 - "when is the next shuttle to Poly": search_live with query polytechnic-tempe shuttle next
   departure, source shuttles.
-- "where is BYENG": search_live with query BYENG building, source campus_map.
+- "where is BYENG": in one step, search_live query BYENG building, source campus_map;
+  search_knowledge query Brickyard Engineering building.
 - "what was the score of the ASU game last night": search_live with query ASU football score
   last night, no source.
-- "when does hayden close tonight", library hours in the results: answer from them, cite them,
-  call nothing.
 - "what is a transformer": general knowledge, no ASU fact in it, answer directly and briefly.
 
-An empty result means that search did not hold it, not that the answer does not exist. Search
-again with the subject named differently, try the other search, or open the page yourself. A page
-that says it found nothing is that page's answer to that query, not the answer to the question:
-change the query, or open a page that holds it. A tool that failed is not an answer either. In
-every one of those cases run_sandbox is the next step, not the last thing you think of. An action
-that needs approval waits for the user to press the button; never say you did something you have
-only proposed.
+A page that says it found nothing is that page's answer to that query, not the answer to the
+question: change the query, or open a page that holds it. A tool that failed is not an answer
+either. In every one of those cases search again or use run_sandbox. An action that needs
+approval waits for the user to press the button; never say you did something you have only
+proposed.
 
 ## Working things out
 run_sandbox is a Linux shell. Its description says what is installed and whether it can reach
@@ -144,6 +155,13 @@ read, because it is right and you are not.
   list adds to, whether two times overlap.
 - Reshaping what you already have: sorting a long list, filtering rows, pulling the fields you
   need out of a JSON tool result.
+- Files the user attached. They are already in the workspace, and the prompt names each one and
+  its session. Read the part the question is about: turn a PDF into text with pdftotext, then
+  rg for the subject and read the lines around each match. A PDF whose text is empty is a scan:
+  pdftoppm -png one page at a time and tesseract it. Word, Excel and CSV files open in python3
+  with docx, openpyxl and pandas. Never answer about a file you have not read this turn.
+- Any tool result too long for the conversation. The workspace holds all of it; search it with
+  rg or python3 instead of guessing from the part you were shown.
 - Checking a claim before you make it, when getting it wrong would cost a student a deadline.
 - "the FAFSA deadline is June 30, how long do I have": run_sandbox with command
   python3 -c "import datetime;print((datetime.date(2027,6,30)-datetime.date.today()).days)".
@@ -155,6 +173,7 @@ it again.
 ## Never
 - Never guess a date, room, price, deadline, policy, or person.
 - Never repeat a call you already made with the same arguments.
+- Never answer an ASU question before searching for it.
 - Never quote a result you were not given.
 - Never tell the student to go look something up that you could have looked up yourself.
 - Never state a date, a count or a total you worked out in your head when run_sandbox could
@@ -240,12 +259,14 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         tools,
         policy: Arc::new(RiskPolicy::from(&cfg.policy)),
         trace,
-        retriever: Some(retriever),
-        router: router(&cfg),
         conversations: Some(conversations.clone()),
         memory: Some(memory),
         confirmations: Some(confirmations.clone()),
         sandbox: sandbox.clone().map(|s| s as Arc<dyn Sandbox>),
+        files: Some(Arc::new(
+            HttpFiles::new(cfg.agent.file_hosts.clone(), cfg.agent.max_file_bytes)
+                .map_err(|e| anyhow::anyhow!("attachments: {e}"))?,
+        ) as Arc<dyn FileSource>),
     };
     let system_prompt = cfg.system_prompt(SYSTEM_PROMPT)?;
     let agent = Agent::new(deps, agent_cfg, system_prompt)
@@ -336,6 +357,11 @@ fn chat_state(
         request_budget: Duration::from_secs(cfg.agent.request_timeout_secs),
         default_tenant: cfg.discord.guild_id.to_string(),
         max_images: cfg.agent.max_images,
+        max_files: cfg.agent.max_files,
+        max_file_bytes: cfg.agent.max_file_bytes,
+        turns: Arc::new(tokio::sync::Semaphore::new(cfg.agent.max_turns.max(1))),
+        turn_wait: Duration::from_secs(cfg.agent.turn_queue_wait_secs),
+        attachments_only_input: cfg.prompt.attachments_only_input.clone(),
         service_token: cfg.engine.service_token.clone(),
         rate_limit: RateLimiter::new(cfg.http.rate_limit_per_min),
     }
@@ -466,13 +492,20 @@ fn trace_sink(cfg: &Config) -> anyhow::Result<Arc<dyn TraceSink>> {
     let sink = JsonlSink::new(&cfg.trace.dir, cfg.trace.max_file_bytes)?;
     if cfg.trace.retention_hours > 0 {
         let older_than = Duration::from_secs(cfg.trace.retention_hours * 3_600);
-        match sink.prune(older_than) {
-            Ok(removed) if removed > 0 => {
-                tracing::info!(removed, dir = %cfg.trace.dir, "pruned old traces");
+        let pruner = JsonlSink::new(&cfg.trace.dir, cfg.trace.max_file_bytes)?;
+        let dir = cfg.trace.dir.clone();
+        tokio::spawn(async move {
+            loop {
+                match pruner.prune(older_than) {
+                    Ok(removed) if removed > 0 => {
+                        tracing::info!(removed, dir = %dir, "pruned old traces");
+                    }
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!(error = %e, dir = %dir, "trace prune failed"),
+                }
+                tokio::time::sleep(Duration::from_hours(1)).await;
             }
-            Ok(_) => {}
-            Err(e) => tracing::warn!(error = %e, dir = %cfg.trace.dir, "trace prune failed"),
-        }
+        });
     }
     Ok(Arc::new(sink))
 }
@@ -527,6 +560,8 @@ async fn sandbox(cfg: &Config) -> anyhow::Result<Option<Arc<ContainerSandbox>>> 
     }
     // The sweep interval is the idle budget: a session lives at most twice it.
     let every = Duration::from_secs(cfg.sandbox.session_idle_secs.max(1));
+    // Session containers a previous engine left running are nobody's to reap but this one's.
+    sandbox.remove_orphans().await;
     tokio::spawn(reap_sessions(sandbox.clone(), every));
     Ok(Some(Arc::new(sandbox)))
 }
@@ -602,7 +637,9 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         max_tokens: cfg.model.max_tokens,
         max_tokens_without_thinking: cfg.model.max_tokens_without_thinking,
         temperature: cfg.agent.temperature,
-        retrieval_top_k: cfg.retrieval.top_k,
+        upload_preview_chars: cfg.agent.upload_preview_chars,
+        upload_match_chars: cfg.agent.upload_match_chars,
+        upload_ocr_pages: cfg.agent.upload_ocr_pages,
         history_turns: cfg.agent.history_turns,
         history_keep: cfg.compaction.keep_tokens(cfg.agent.history_budget_tokens),
         memory_recall_limit: cfg.agent.memory_recall_limit,
@@ -618,13 +655,6 @@ fn agent_config(cfg: &Config) -> AgentConfig {
         stream: cfg.agent.stream,
         stream_block_chars: cfg.agent.stream_block_chars,
     }
-}
-
-/// The gate retrieval passes, when it is on. Off retrieves for every turn.
-fn router(cfg: &Config) -> Option<Arc<dyn Router>> {
-    cfg.retrieval.router.enabled.then(|| {
-        Arc::new(RuleRouter::new(RouterRules::from(&cfg.retrieval.router))) as Arc<dyn Router>
-    })
 }
 
 /// The registry and queue the scraper serves, behind the shared cache when one is configured.
@@ -703,6 +733,12 @@ fn cache_rules(cfg: &Config) -> CacheRules {
         handoff: Duration::from_secs(settings.handoff_secs),
         lease: Duration::from_secs(settings.lease_secs),
         poll: Duration::from_millis(settings.poll_ms),
+        ignore_words: settings
+            .ignore_words
+            .iter()
+            .map(|word| word.to_lowercase())
+            .collect(),
+        keep_words: settings.keep_words.iter().cloned().collect(),
     }
 }
 

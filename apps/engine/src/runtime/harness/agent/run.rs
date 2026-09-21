@@ -5,8 +5,7 @@ use std::time::Instant;
 
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::Message;
-use crate::core::types::knowledge::evidence::{Citation, Evidence};
-use crate::core::types::knowledge::route::Route;
+use crate::core::types::knowledge::evidence::Citation;
 use crate::core::types::memory::Memory;
 use crate::core::types::model::Usage;
 use crate::core::types::tools::ToolRun;
@@ -15,9 +14,8 @@ use crate::core::types::tools::ToolRun;
 pub(super) struct Inputs {
     pub(super) history: Vec<Message>,
     pub(super) memory: Vec<Memory>,
-    pub(super) evidence: Vec<Evidence>,
-    /// What the router decided about retrieval for this request.
-    pub(super) route: Route,
+    /// One prompt line per file the user attached.
+    pub(super) uploads: Vec<String>,
 }
 
 /// Mutable state carried across steps.
@@ -33,8 +31,6 @@ pub(super) struct Run<'a> {
     pub(super) seen_calls: HashSet<String>,
     /// Tools that ran, in order, for the answer and the client.
     pub(super) tool_runs: Vec<ToolRun>,
-    /// Evidence chunks that fit the prompt on the most recent step.
-    pub(super) evidence_in_prompt: usize,
     /// Content of the memories that fit the prompt on the most recent step.
     pub(super) memories_in_prompt: Vec<String>,
     /// Pages the tools read, in the order they read them.
@@ -64,7 +60,6 @@ impl<'a> Run<'a> {
             new_turns,
             seen_calls: HashSet::new(),
             tool_runs: Vec::new(),
-            evidence_in_prompt: 0,
             memories_in_prompt: Vec::new(),
             tool_sources: Vec::new(),
             force_answer: false,
@@ -72,9 +67,4 @@ impl<'a> Run<'a> {
             appended_by_assembly,
         }
     }
-}
-
-/// What an answer may cite from retrieval: the chunks that fit the prompt.
-pub(super) fn cited(retrieved: Vec<Evidence>, run: &Run<'_>) -> Vec<Evidence> {
-    retrieved.into_iter().take(run.evidence_in_prompt).collect()
 }

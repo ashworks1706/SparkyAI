@@ -1,5 +1,6 @@
 //! Tool trait.
 
+pub mod files;
 pub mod sandbox;
 
 use async_trait::async_trait;

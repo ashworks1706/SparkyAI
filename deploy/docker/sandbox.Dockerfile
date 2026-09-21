@@ -5,7 +5,9 @@
 FROM debian:bookworm-slim
 
 # python3 with the libraries a one-off script reaches for: parsing HTML and XML, tables, dates,
-# HTTP. curl and wget go through the proxy. The rest is what a shell one-liner reaches for.
+# HTTP, and the documents a student uploads (PDF, Word, Excel, CSV, images). tesseract reads a
+# scanned PDF once pdftoppm has turned its pages into images. curl and wget go through the proxy.
+# The rest is what a shell one-liner reaches for.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         python3 \
@@ -17,6 +19,16 @@ RUN apt-get update \
         python3-yaml \
         python3-tabulate \
         python3-html2text \
+        python3-pypdf \
+        python3-docx \
+        python3-openpyxl \
+        python3-xlrd \
+        python3-numpy \
+        python3-pil \
+        python3-chardet \
+        python3-markdown \
+        tesseract-ocr \
+        tesseract-ocr-eng \
         ca-certificates \
         curl \
         wget \

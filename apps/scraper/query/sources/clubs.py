@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from scraper.core.types import QueryParam, QuerySource
-from scraper.ingest.extract import form_page_text
 from scraper.query.params import text, url
+from scraper.query.sundevil_central import extract_clubs, keywords
 
 
 def to_url(params: dict[str, str]) -> str:
     """The organization directory, narrowed to a keyword."""
     return url(
         "https://sundevilcentral.eoss.asu.edu/club_signup",
-        [("view", "all"), ("search", text(params, "keywords"))],
+        [("view", "all"), ("search", keywords(text(params, "keywords")))],
     )
 
 
@@ -25,7 +25,7 @@ QUERY = QuerySource(
     ),
     to_url=to_url,
     needs_js=True,
-    extractor=form_page_text,
+    extractor=extract_clubs,
     category="clubs",
     auth=True,
     index=False,

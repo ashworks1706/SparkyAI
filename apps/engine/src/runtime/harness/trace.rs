@@ -46,7 +46,7 @@ impl JsonlSink {
         self.dir.join(format!("{request_id}.jsonl"))
     }
 
-    /// Deletes trace files last modified more than older_than ago. Called once at boot.
+    /// Deletes trace files last modified more than older_than ago. Called at boot and hourly.
     pub fn prune(&self, older_than: Duration) -> std::io::Result<usize> {
         let cutoff = SystemTime::now()
             .checked_sub(older_than)

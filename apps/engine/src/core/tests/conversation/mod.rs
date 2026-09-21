@@ -37,6 +37,11 @@ fn state(rooms: Arc<Rooms>) -> ChatState {
         request_budget: Duration::from_secs(5),
         default_tenant: "g".into(),
         max_images: 4,
+        max_files: 4,
+        max_file_bytes: 2_000_000,
+        turns: Arc::new(tokio::sync::Semaphore::new(4)),
+        turn_wait: Duration::from_millis(50),
+        attachments_only_input: "what is this".into(),
         service_token: SecretString::from("t"),
         rate_limit: RateLimiter::new(0),
     }
@@ -375,4 +380,42 @@ async fn resetting_past_the_rate_limit_is_refused() {
     assert_eq!(first.status(), StatusCode::OK);
     let second = reset(State(state), headers(), Json(request())).await;
     assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn a_turn_past_the_turn_cap_is_refused_as_busy_rather_than_queued_forever() {
+    let mut full = state(Arc::new(Rooms::default()));
+    full.turns = Arc::new(tokio::sync::Semaphore::new(0));
+    let (status, reply) = send(&full, json!({"user_id": "u", "message": "hi"})).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{reply}");
+    assert!(reply["error"].as_str().unwrap_or_default().contains("busy"));
+
+    let free = state(Arc::new(Rooms::default()));
+    let (status, _) = send(&free, json!({"user_id": "u", "message": "hi"})).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "a permit is given back when a turn ends"
+    );
+    let (status, _) = send(&free, json!({"user_id": "u", "message": "hi again"})).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_message_that_is_only_an_attachment_is_answered() {
+    let state = state(Arc::new(Rooms::default()));
+    let (status, _) = send(
+        &state,
+        json!({"user_id": "u", "message": " ", "files": [{
+            "url": "https://cdn.discordapp.com/a.pdf", "name": "a.pdf", "size": 10
+        }]}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(&state, json!({"user_id": "u", "message": " "})).await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "nothing at all is still refused"
+    );
 }

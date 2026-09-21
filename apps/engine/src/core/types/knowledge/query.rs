@@ -67,10 +67,8 @@ pub enum QueryError {
     /// The scraper rejected it: unknown source, bad param, unreadable page. Goes back to the model.
     #[error("{0}")]
     Rejected(String),
-    /// The scraper did not claim the query in time, so it is not running.
-    #[error(
-        "the scraper is not running, so {0} cannot be fetched now; start it with just scraper serve"
-    )]
+    /// The scraper did not claim the query in time: it is busy or not running.
+    #[error("{0} did not answer in time; search again, or try search_knowledge or another source")]
     NoWorker(String),
     /// As many live queries are already running as the engine allows.
     #[error(

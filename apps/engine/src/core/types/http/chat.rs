@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::types::conversation::Visibility;
+use crate::core::types::conversation::file::FileAttachment;
 use crate::core::types::conversation::image::Attachment;
 use crate::core::types::knowledge::evidence::Citation;
 use crate::core::types::safety::policy::ConfirmationRequest;
@@ -41,6 +42,9 @@ pub struct ChatRequest {
     /// Images attached to the message.
     #[serde(default)]
     pub images: Vec<Attachment>,
+    /// Other files attached to the message, opened in the sandbox.
+    #[serde(default)]
+    pub files: Vec<FileAttachment>,
 }
 
 fn default_channel() -> String {

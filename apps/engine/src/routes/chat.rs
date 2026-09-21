@@ -25,6 +25,7 @@ use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
+use crate::core::types::conversation::file::FileAttachment;
 use crate::core::types::conversation::image::Attachment;
 use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
 use crate::core::types::model::ModelError;
@@ -49,6 +50,16 @@ pub struct ChatState {
     pub default_tenant: String,
     /// Images of one message sent to the model.
     pub max_images: usize,
+    /// Files of one message opened in the sandbox.
+    pub max_files: usize,
+    /// One permit per turn allowed to run at once.
+    pub turns: Arc<tokio::sync::Semaphore>,
+    /// Longest a turn waits for a permit.
+    pub turn_wait: Duration,
+    /// The question an empty message carrying attachments stands for.
+    pub attachments_only_input: String,
+    /// Largest file opened in the sandbox, in bytes.
+    pub max_file_bytes: u64,
     /// Bearer token every caller must present.
     pub service_token: SecretString,
     /// Per-user request limit.
@@ -232,13 +243,28 @@ async fn run_turn(
     req: ChatRequest,
     watcher: Option<UnboundedSender<Progress>>,
 ) -> Result<ChatResponse, Failure> {
+    let mut req = req;
     if req.message.trim().is_empty() {
-        return Err(Failure::new(
-            StatusCode::BAD_REQUEST,
-            Uuid::nil(),
-            "message is empty",
-        ));
+        if req.images.is_empty() && req.files.is_empty() {
+            return Err(Failure::new(
+                StatusCode::BAD_REQUEST,
+                Uuid::nil(),
+                "message is empty",
+            ));
+        }
+        req.message.clone_from(&state.attachments_only_input);
     }
+    // Held for the whole turn, detached streaming turns included, so together they stay bounded.
+    let Ok(Ok(_turn)) =
+        tokio::time::timeout(state.turn_wait, Arc::clone(&state.turns).acquire_owned()).await
+    else {
+        tracing::warn!("every turn slot is busy; the turn is refused");
+        return Err(Failure::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            Uuid::nil(),
+            "busy answering other questions; ask again in a minute",
+        ));
+    };
     let tenant = req
         .tenant_id
         .unwrap_or_else(|| state.default_tenant.clone());
@@ -246,7 +272,12 @@ async fn run_turn(
         .with_roles(req.roles)
         .with_visibility(req.visibility)
         .replying_to(req.reply_to)
-        .with_images(Attachment::accepted(req.images, state.max_images));
+        .with_images(Attachment::accepted(req.images, state.max_images))
+        .with_files(FileAttachment::accepted(
+            req.files,
+            state.max_files,
+            state.max_file_bytes,
+        ));
     let mut ctx = open(
         &state,
         ctx,

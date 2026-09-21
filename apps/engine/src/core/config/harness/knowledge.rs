@@ -1,4 +1,4 @@
-//! Settings for retrieval, the gate in front of it, and live source queries.
+//! Settings for retrieval and live source queries.
 
 use serde::Deserialize;
 
@@ -6,7 +6,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Retrieval {
-    /// Evidence chunks handed to the prompt per request.
+    /// Chunks search_knowledge returns per call.
     pub top_k: usize,
     /// Candidates pulled from each leg before fusion.
     pub candidates: i64,
@@ -26,33 +26,6 @@ pub struct Retrieval {
     pub collapse_tree: bool,
     /// Rows either side of a hit read back with it. 0 hands back the hit alone.
     pub window: i32,
-    /// The gate retrieval passes before it runs.
-    pub router: Router,
-}
-
-/// The rule gate on retrieval, run on every turn. Empty lists use the built-in ones.
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-pub struct Router {
-    /// Run the gate. Off retrieves for every turn.
-    pub enabled: bool,
-    /// Longest turn, in words, a chitchat marker may skip retrieval for.
-    pub max_chitchat_words: usize,
-    /// Markers of small talk.
-    pub chitchat: Vec<String>,
-    /// Cues that the answer has to be current.
-    pub live: Vec<String>,
-}
-
-impl Default for Router {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            max_chitchat_words: 4,
-            chitchat: Vec::new(),
-            live: Vec::new(),
-        }
-    }
 }
 
 impl Default for Retrieval {
@@ -68,7 +41,6 @@ impl Default for Retrieval {
             max_distance: 0.6,
             collapse_tree: true,
             window: 2,
-            router: Router::default(),
         }
     }
 }
@@ -124,6 +96,11 @@ pub struct QueryCache {
     pub poll_ms: u64,
     /// Budget for one call to the cache. A slow cache is treated as one that is not there.
     pub timeout_ms: u64,
+    /// Words left out of a query when it is keyed, so wordings that differ only by them share
+    /// one entry. Matched lowercase, as whole words.
+    pub ignore_words: Vec<String>,
+    /// Sources whose queries keep every word in the key, such as an open web search.
+    pub keep_words: Vec<String>,
 }
 
 impl Default for QueryCache {
@@ -137,6 +114,8 @@ impl Default for QueryCache {
             lease_secs: 120,
             poll_ms: 100,
             timeout_ms: 500,
+            ignore_words: Vec::new(),
+            keep_words: Vec::new(),
         }
     }
 }

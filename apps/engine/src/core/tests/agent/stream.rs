@@ -221,12 +221,11 @@ async fn a_draft_the_guardrail_refuses_is_withdrawn_and_never_shown_again() {
         tools: ToolSet::new(),
         policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
-        retriever: None,
-        router: None,
         conversations: None,
         memory: None,
         confirmations: None,
         sandbox: None,
+        files: None,
         compactor: None,
         guardrail: Some(Arc::new(RuleGuardrail::new(Rules {
             denied_phrases: vec!["ssn".into()],

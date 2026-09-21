@@ -14,16 +14,6 @@ pub struct PromptText {
     pub role_line_no_roles: String,
     /// Heading above recalled memories.
     pub memory_header: String,
-    /// Heading above retrieved evidence.
-    pub evidence_header: String,
-    /// Line written when retrieval found nothing.
-    pub no_evidence_line: String,
-    /// Line written when the router skipped retrieval as small talk.
-    pub no_retrieval_line: String,
-    /// Line written when the router skipped retrieval because the answer has to be current.
-    pub live_only_line: String,
-    /// Line written when the knowledge base could not be read.
-    pub no_index_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
     /// Heading above the message of ours a reply answers.
@@ -36,6 +26,14 @@ pub struct PromptText {
     pub answer_only_line: String,
     /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
     pub sandbox_retry_line: String,
+    /// Line naming a file the user attached and its text, with {name}, {kind}, {size},
+    /// {chars}, {text_path}, {path}, {session} and {preview}.
+    pub upload_line: String,
+    /// Line naming a file no text could be pulled from, with {name}, {kind}, {size}, {path}
+    /// and {session}.
+    pub upload_raw_line: String,
+    /// Line naming a file the user attached that could not be opened, with {reason}.
+    pub upload_failed_line: String,
     /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
@@ -52,17 +50,15 @@ impl From<&crate::core::config::Prompt> for PromptText {
             role_line: cfg.role_line.clone(),
             role_line_no_roles: cfg.role_line_no_roles.clone(),
             memory_header: cfg.memory_header.clone(),
-            evidence_header: cfg.evidence_header.clone(),
-            no_evidence_line: cfg.no_evidence_line.clone(),
-            no_retrieval_line: cfg.no_retrieval_line.clone(),
-            live_only_line: cfg.live_only_line.clone(),
-            no_index_line: cfg.no_index_line.clone(),
             capabilities_header: cfg.capabilities_header.clone(),
             reply_header: cfg.reply_header.clone(),
             result_cut_line: cfg.result_cut_line.clone(),
             date_line: cfg.date_line.clone(),
             answer_only_line: cfg.answer_only_line.clone(),
             sandbox_retry_line: cfg.sandbox_retry_line.clone(),
+            upload_line: cfg.upload_line.clone(),
+            upload_raw_line: cfg.upload_raw_line.clone(),
+            upload_failed_line: cfg.upload_failed_line.clone(),
             utc_offset_hours: cfg.utc_offset_hours,
         }
     }
@@ -93,11 +89,6 @@ impl PromptText {
             role_line: &self.role_line,
             role_line_no_roles: &self.role_line_no_roles,
             memory_header: &self.memory_header,
-            evidence_header: &self.evidence_header,
-            no_evidence_line: &self.no_evidence_line,
-            no_retrieval_line: &self.no_retrieval_line,
-            live_only_line: &self.live_only_line,
-            no_index_line: &self.no_index_line,
             capabilities_header: &self.capabilities_header,
             date_line: &self.date_line,
             reply_header: &self.reply_header,

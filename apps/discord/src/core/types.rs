@@ -49,6 +49,19 @@ impl Attachment {
     }
 }
 
+/// One non-image file attached to a message. Mirrors engine::core::types::conversation::file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileAttachment {
+    /// Direct link to the file.
+    pub url: String,
+    /// File name as uploaded.
+    pub name: String,
+    /// Media type Discord reported, empty when it reported none.
+    pub media_type: String,
+    /// Size in bytes Discord reported.
+    pub size: u64,
+}
+
 /// What the bot sends. Mirrors engine::core::types::chat::ChatRequest.
 #[derive(Debug, Serialize)]
 pub struct ChatRequest {
@@ -75,6 +88,9 @@ pub struct ChatRequest {
     /// Images attached to the message.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<Attachment>,
+    /// Other files attached to the message, opened in the engine sandbox.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<FileAttachment>,
 }
 
 /// An action the engine is holding until the caller who asked answers it.

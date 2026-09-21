@@ -1,7 +1,8 @@
-"""scraper run <source>|--all, scraper serve, scraper status, scraper migrate."""
+"""scraper run <source>|--all, scraper serve, scraper status, scraper login, scraper migrate."""
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 
 import structlog
@@ -10,7 +11,10 @@ import typer
 from scraper import jobs
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.ingest import auth, pipeline
+from scraper.core.types import AuthError, FetchError
+from scraper.ingest import pipeline
+from scraper.ingest.drivers import admin
+from scraper.ingest.drivers.asu_sso import Credentials
 from scraper.ingest.pace import HostPacer
 from scraper.sources import SOURCES
 from scraper.store import postgres
@@ -43,6 +47,7 @@ def run(
 ) -> None:
     """Fetch, extract, chunk, embed, and index one source, a category, or every source."""
     keys = selected(source, all_sources=all_sources, category=category)
+    require_session()
     pacer = HostPacer(settings().scraper.host_gap_secs)
     failures = 0
     for key in keys:
@@ -80,7 +85,11 @@ def selected(source: str | None, *, all_sources: bool, category: str | None) -> 
 
 @app.command()
 def serve() -> None:
-    """Run the scraper: live queries, result indexing, scheduled sources, one job queue. Blocks."""
+    """Run the scraper: live queries, result indexing, scheduled sources, one job queue. Blocks.
+
+    Requires the admin session; at a terminal it signs in first when the session is gone.
+    """
+    require_session()
     jobs.serve()
 
 
@@ -117,22 +126,72 @@ def _stamp(at: datetime | None) -> str:
 
 
 @app.command()
-def login() -> None:
-    """Capture the admin browser session for login-gated sources (clubs, Sun Devil Central events).
+def login(
+    if_needed: bool = typer.Option(
+        False, "--if-needed", help="Check the saved session first; sign in only if it is gone."
+    ),
+    check: bool = typer.Option(
+        False, "--check", help="Report whether the saved session works, then exit 0 or 1."
+    ),
+) -> None:
+    """Capture the admin session the scraper requires (clubs, Sun Devil Central events).
 
-    Opens a real browser; you sign in and complete any MFA yourself. Only cookies are saved, never
-    a password. Run it again whenever the session expires.
+    Opens the MyASU sign-in page, asks for your ASU username and password here, and waits for
+    you to approve Duo. Only cookies are saved, never the password.
     """
+    if check:
+        if not _session_ok():
+            typer.echo("admin session missing or expired", err=True)
+            raise typer.Exit(1)
+        typer.echo(f"admin session ok ({admin.state_path()})")
+        return
+    if if_needed:
+        require_session()
+        return
+    _capture()
+
+
+def _session_ok() -> bool:
+    """admin.check, exiting 1 when the check page cannot be reached at all."""
     try:
-        path = auth.capture_login()
-    except Exception as e:  # a missing display or browser surfaces here
-        typer.echo(f"login failed: {e}", err=True)
-        typer.echo(
-            "Run this on a machine with a display. If the browser is missing, run "
-            "`uv run playwright install chromium` in apps/scraper.",
-            err=True,
-        )
+        return admin.check()
+    except FetchError as e:
+        typer.echo(f"could not check the admin session: {e}", err=True)
         raise typer.Exit(1) from e
+
+
+def require_session() -> None:
+    """Exits unless the admin session works, signing in first when at a terminal."""
+    if _session_ok():
+        typer.echo(f"admin session ok ({admin.state_path()})")
+        return
+    typer.echo("admin session missing or expired; the scraper requires it", err=True)
+    if not sys.stdin.isatty():
+        typer.echo("not a terminal; run `just scraper login` first", err=True)
+        raise typer.Exit(1)
+    _capture()
+
+
+def _capture() -> None:
+    """Runs the interactive sign-in and saves the session. Exits 1 when it fails."""
+
+    def ask() -> Credentials:
+        username = typer.prompt("ASU username").strip()
+        password = typer.prompt("ASU password", hide_input=True)
+        return Credentials(username=username, password=password)
+
+    typer.echo("Opening the MyASU sign-in page.")
+    try:
+        path = admin.capture_login(ask, typer.echo)
+    except AuthError as e:
+        typer.echo(f"login failed: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:  # a missing browser surfaces here
+        typer.echo(f"login failed: {e}", err=True)
+        typer.echo("If Chromium is missing, run `uv run playwright install chromium`.", err=True)
+        raise typer.Exit(1) from e
+    if path is None:
+        raise typer.Exit(1)
     typer.echo(f"saved admin session to {path}")
 
 

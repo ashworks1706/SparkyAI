@@ -37,6 +37,17 @@ def ensure_bucket() -> None:
         client().create_bucket(Bucket=bucket)
 
 
+def delete_snapshots(keys: list[str]) -> int:
+    """Removes snapshots by key, a thousand per request. Returns how many were asked for."""
+    bucket = settings().object_store.bucket
+    for start in range(0, len(keys), 1000):
+        batch = keys[start : start + 1000]
+        client().delete_objects(
+            Bucket=bucket, Delete={"Objects": [{"Key": k} for k in batch], "Quiet": True}
+        )
+    return len(keys)
+
+
 def put_snapshot(key: str, body: bytes, content_type: str) -> str:
     """Stores a raw page. Returns the object key."""
     ensure_bucket()

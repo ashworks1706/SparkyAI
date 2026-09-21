@@ -12,30 +12,44 @@ use crate::core::types::{LogLine, Stream};
 #[derive(Debug)]
 pub struct LogWriter {
     dir: PathBuf,
-    files: HashMap<String, BufWriter<File>>,
+    files: HashMap<String, (BufWriter<File>, u64)>,
+    max_bytes: u64,
 }
 
 impl LogWriter {
-    /// Creates the log directory if it does not exist.
-    pub fn new(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
+    /// Creates the log directory if it does not exist. A file past max_bytes is rotated to one
+    /// .1 file beside it, replacing the previous one; 0 never rotates.
+    pub fn new(dir: impl Into<PathBuf>, max_bytes: u64) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
         Ok(Self {
             dir,
             files: HashMap::new(),
+            max_bytes,
         })
     }
 
-    /// Appends and flushes one line to the unit log file.
+    /// Appends and flushes one line to the unit log file, rotating it first when it is full.
     pub fn append(&mut self, unit: &str, line: &LogLine) -> std::io::Result<()> {
-        let file = match self.files.entry(log_name(unit)) {
+        let name = log_name(unit);
+        let path = self.dir.join(&name);
+        if self.max_bytes > 0
+            && self
+                .files
+                .get(&name)
+                .is_some_and(|(_, size)| *size >= self.max_bytes)
+        {
+            self.files.remove(&name);
+            let mut rotated = path.clone().into_os_string();
+            rotated.push(".1");
+            std::fs::rename(&path, rotated)?;
+        }
+        let (file, size) = match self.files.entry(name) {
             Entry::Occupied(open) => open.into_mut(),
             Entry::Vacant(slot) => {
-                let file = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(self.dir.join(slot.key()))?;
-                slot.insert(BufWriter::new(file))
+                let file = OpenOptions::new().create(true).append(true).open(&path)?;
+                let size = file.metadata().map_or(0, |m| m.len());
+                slot.insert((BufWriter::new(file), size))
             }
         };
         let stream = match line.stream {
@@ -43,12 +57,13 @@ impl LogWriter {
             Stream::Err => "err",
             Stream::Meta => "meta",
         };
-        writeln!(
-            file,
-            "{} {stream} {}",
+        let written = format!(
+            "{} {stream} {}\n",
             line.at.format("%Y-%m-%dT%H:%M:%S%:z"),
             line.text
-        )?;
+        );
+        file.write_all(written.as_bytes())?;
+        *size += written.len() as u64;
         file.flush()
     }
 }

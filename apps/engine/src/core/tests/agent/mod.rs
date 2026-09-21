@@ -6,6 +6,7 @@ mod citation;
 mod context;
 mod stream;
 mod thinking;
+mod uploads;
 
 use std::sync::Arc;
 use std::time::Duration;

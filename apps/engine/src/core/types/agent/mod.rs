@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::agent::thinking::ThinkingRules;
-use crate::core::types::knowledge::evidence::{Citation, Evidence};
+use crate::core::types::knowledge::evidence::Citation;
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::tools::ToolRun;
@@ -37,8 +37,12 @@ pub struct AgentConfig {
     pub max_tokens_without_thinking: u32,
     /// Sampling temperature.
     pub temperature: f32,
-    /// Evidence chunks to retrieve per request.
-    pub retrieval_top_k: usize,
+    /// Characters of an attached file's text put in the prompt.
+    pub upload_preview_chars: usize,
+    /// Characters of passages matching the question put in the prompt.
+    pub upload_match_chars: usize,
+    /// Pages of a scanned PDF read by OCR.
+    pub upload_ocr_pages: u32,
     /// Prior turns to load.
     pub history_turns: usize,
     /// Tokens of recent turns a compaction keeps whole.
@@ -74,8 +78,6 @@ pub struct AgentConfig {
 pub struct Answer {
     /// Final text. Empty when awaiting confirmation.
     pub text: String,
-    /// Evidence the answer was grounded in, best first.
-    pub evidence: Vec<Evidence>,
     /// Pages the tools read while answering, in the order they read them.
     #[serde(default)]
     pub sources: Vec<Citation>,
@@ -97,9 +99,9 @@ pub struct Answer {
 }
 
 impl Answer {
-    /// One citation per page the answer rests on: the evidence first, then what the tools read.
+    /// One citation per page the tools read while answering, each page once.
     pub fn citations(&self) -> Vec<Citation> {
-        let mut out = Evidence::citations(&self.evidence);
+        let mut out: Vec<Citation> = Vec::new();
         for source in &self.sources {
             if !out.iter().any(|c| c.url.is_some() && c.url == source.url) {
                 out.push(source.clone());

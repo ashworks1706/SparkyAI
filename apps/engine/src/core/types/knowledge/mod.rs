@@ -4,4 +4,3 @@ pub mod cache;
 pub mod evidence;
 pub mod query;
 pub mod retrieval;
-pub mod route;

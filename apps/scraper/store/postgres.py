@@ -32,7 +32,7 @@ def pool() -> ConnectionPool:
         _pool = ConnectionPool(
             settings().postgres.url.get_secret_value(),
             min_size=1,
-            max_size=4,
+            max_size=max(1, settings().postgres.scraper_pool_max),
             kwargs={"row_factory": dict_row},
             open=True,
         )
@@ -411,6 +411,37 @@ def backlog_at_least(conn: psycopg.Connection, kind: str, limit: int) -> bool:
         (kind, limit - 1),
     ).fetchone()
     return row is not None
+
+
+def prune_versions(conn: psycopg.Connection, keep: int, batch: int) -> list[str]:
+    """Removes each source's versions past the newest keep, at most batch of them.
+
+    A version the index still points at is never removed. Returns the snapshot keys of the
+    removed versions, for the object store to drop.
+    """
+    if keep <= 0 or batch <= 0:
+        return []
+    rows = conn.execute(
+        """
+        select id, snapshot_key from (
+            select id, snapshot_key,
+                   row_number() over (partition by source_id order by fetched_at desc) as rank
+            from source_versions
+        ) ranked
+        where rank > %s
+          and not exists (select 1 from chunks c where c.version_id = ranked.id)
+        limit %s
+        """,
+        (keep, batch),
+    ).fetchall()
+    if not rows:
+        return []
+    ids = [r["id"] for r in rows]
+    conn.execute(
+        "update source_versions set previous_id = null where previous_id = any(%s)", (ids,)
+    )
+    conn.execute("delete from source_versions where id = any(%s)", (ids,))
+    return [r["snapshot_key"] for r in rows if r["snapshot_key"]]
 
 
 def prune_jobs(conn: psycopg.Connection, older_than_secs: float, batch: int) -> int:

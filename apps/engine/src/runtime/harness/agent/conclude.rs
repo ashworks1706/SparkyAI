@@ -5,10 +5,9 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
 use crate::core::types::conversation::Visibility;
 use crate::core::types::conversation::message::{Message, Role};
-use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::trace::{RunStatus, TraceEvent};
-use crate::runtime::harness::agent::run::{Run, cited};
+use crate::runtime::harness::agent::run::Run;
 
 /// Whether a turn of this request belongs in the stored conversation.
 ///
@@ -30,19 +29,17 @@ impl Agent {
         run: &Run<'_>,
         status: RunStatus,
         text: String,
-        evidence: Vec<Evidence>,
         confirmation: Option<ConfirmationRequest>,
     ) -> Result<Answer, AgentError> {
         let said: Vec<Message> = run.new_turns.iter().filter(|m| said(m)).cloned().collect();
         self.persist(run.ctx, &said).await?;
         self.record_profile(run);
-        let evidence = cited(evidence, run);
         let text = if text.trim().is_empty() {
             status.explain().unwrap_or_default().to_owned()
         } else {
             text
         };
-        Ok(self.finish(run, status, text, evidence, confirmation))
+        Ok(self.finish(run, status, text, confirmation))
     }
 
     /// Hands the user turns to the profile writer on a detached task.
@@ -81,7 +78,6 @@ impl Agent {
         run: &Run<'_>,
         status: RunStatus,
         text: String,
-        evidence: Vec<Evidence>,
         confirmation: Option<ConfirmationRequest>,
     ) -> Answer {
         let cost_usd = self.cost(run.usage);
@@ -97,7 +93,6 @@ impl Agent {
         );
         Answer {
             text,
-            evidence,
             sources: run.tool_sources.clone(),
             confirmation,
             status,

@@ -24,6 +24,8 @@ fn rules() -> CacheRules {
         handoff: HANDOFF,
         lease: Duration::from_mins(2),
         poll: Duration::from_millis(5),
+        ignore_words: ["asu", "the"].map(str::to_owned).into(),
+        keep_words: ["web".to_owned()].into(),
     }
 }
 
@@ -115,6 +117,55 @@ async fn different_arguments_are_different_queries() {
         .await;
     let _ = layer
         .run(&ctx(), &request("courses", &[("term", "Spring 2027")]))
+        .await;
+    assert_eq!(sent.lock().map(|s| s.len()).unwrap_or_default(), 2);
+}
+
+#[tokio::test]
+async fn wordings_that_differ_by_case_punctuation_or_ignored_words_share_one_entry() {
+    let cache = Arc::new(FakeCache::new());
+    let (layer, sent, sink) = layered(
+        FakeQueries::new(vec![published("clubs")]).answering("clubs", "AI Society"),
+        cache,
+    );
+    let _ = layer
+        .run(&ctx(), &request("clubs", &[("keywords", "AI clubs")]))
+        .await;
+    let _ = layer
+        .run(
+            &ctx(),
+            &request("clubs", &[("keywords", "the ai clubs, ASU")]),
+        )
+        .await;
+    let _ = layer
+        .run(
+            &ctx(),
+            &request("clubs", &[("keywords", "AI robotics clubs")]),
+        )
+        .await;
+    assert_eq!(
+        sent.lock().map(|s| s.len()).unwrap_or_default(),
+        2,
+        "only a different subject is fetched again"
+    );
+    assert_eq!(
+        reported(&sink),
+        [CacheOutcome::Miss, CacheOutcome::Hit, CacheOutcome::Miss]
+    );
+}
+
+#[tokio::test]
+async fn a_source_that_keeps_its_words_is_keyed_as_written() {
+    let cache = Arc::new(FakeCache::new());
+    let (layer, sent, _) = layered(
+        FakeQueries::new(vec![published("web")]).answering("web", "scores"),
+        cache,
+    );
+    let _ = layer
+        .run(&ctx(), &request("web", &[("query", "ASU football score")]))
+        .await;
+    let _ = layer
+        .run(&ctx(), &request("web", &[("query", "football score")]))
         .await;
     assert_eq!(sent.lock().map(|s| s.len()).unwrap_or_default(), 2);
 }

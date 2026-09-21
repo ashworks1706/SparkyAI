@@ -93,7 +93,7 @@ fn log_buffer_drops_oldest_and_searches_wrapping() {
 #[test]
 fn log_writer_persists_unit_output_under_its_directory() -> Result<(), Box<dyn std::error::Error>> {
     let dir = std::env::temp_dir().join(format!("sparky-cli-logs-{}", uuid::Uuid::new_v4()));
-    let mut writer = LogWriter::new(&dir)?;
+    let mut writer = LogWriter::new(&dir, 0)?;
 
     writer.append("engine", &LogLine::now(Stream::Out, "ready"))?;
 
@@ -301,4 +301,29 @@ fn a_command_says_whether_it_is_running_and_how_it_ended() {
         cancelled.line()
     );
     assert!(cancelled.ended());
+}
+
+#[test]
+fn a_unit_log_past_its_size_is_rotated_to_one_old_file() -> std::io::Result<()> {
+    use crate::core::types::{LogLine, Stream};
+    use crate::units::logs::LogWriter;
+
+    let dir = std::env::temp_dir().join(format!("sparky-rotate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut writer = LogWriter::new(&dir, 200)?;
+    for i in 0..40 {
+        writer.append(
+            "engine",
+            &LogLine::now(Stream::Out, format!("line {i} {}", "x".repeat(20))),
+        )?;
+    }
+    let current = std::fs::metadata(dir.join("engine.log"))?.len();
+    let old = std::fs::metadata(dir.join("engine.log.1"))?.len();
+    assert!(
+        current <= 260,
+        "the live file stays near the cap: {current}"
+    );
+    assert!(old <= 260, "one old file, also near the cap: {old}");
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
 }

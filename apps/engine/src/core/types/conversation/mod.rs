@@ -1,5 +1,6 @@
 //! Visibility, Stored, ResetRequest, ResetResponse: who reads history, what it holds, how it ends.
 
+pub mod file;
 pub mod image;
 pub mod message;
 

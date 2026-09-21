@@ -100,6 +100,25 @@ pub fn render(evidence: &[Evidence], now: chrono::DateTime<Utc>) -> String {
     out.trim_end().to_owned()
 }
 
+impl StoredSearch {
+    /// One retrieval, its failures as tool errors.
+    async fn search(
+        &self,
+        ctx: &RequestContext,
+        request: &RetrievalQuery,
+    ) -> Result<Vec<Evidence>, ToolError> {
+        self.retriever
+            .retrieve(ctx, request)
+            .await
+            .map_err(|e| match e {
+                store @ RetrievalError::Store(_) => ToolError::Failed(store.to_string()),
+                embedding @ RetrievalError::Embedding(_) => {
+                    ToolError::Failed(embedding.to_string())
+                }
+            })
+    }
+}
+
 #[async_trait]
 impl Tool for StoredSearch {
     fn definition(&self) -> ToolDefinition {
@@ -109,24 +128,21 @@ impl Tool for StoredSearch {
     async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
         let (query, named) =
             arguments(args, &self.keys, KNOWLEDGE).map_err(ToolError::InvalidArguments)?;
-        let request = RetrievalQuery::new(query, self.top_k);
-        let request = match named
+        let broad = RetrievalQuery::new(query, self.top_k);
+        let category = named
             .as_deref()
-            .and_then(|key| self.categories.get(key).copied())
-        {
-            Some(category) => request.in_category(category),
-            None => request,
+            .and_then(|key| self.categories.get(key).copied());
+        let mut evidence = match category {
+            Some(category) => {
+                self.search(ctx, &broad.clone().in_category(category))
+                    .await?
+            }
+            None => Vec::new(),
         };
-        let evidence = self
-            .retriever
-            .retrieve(ctx, &request)
-            .await
-            .map_err(|e| match e {
-                store @ RetrievalError::Store(_) => ToolError::Failed(store.to_string()),
-                embedding @ RetrievalError::Embedding(_) => {
-                    ToolError::Failed(embedding.to_string())
-                }
-            })?;
+        // A source that holds nothing for the query is searched past, across every source.
+        if evidence.is_empty() {
+            evidence = self.search(ctx, &broad).await?;
+        }
         if evidence.is_empty() {
             return Ok(ToolOutput {
                 content: self.empty.clone(),

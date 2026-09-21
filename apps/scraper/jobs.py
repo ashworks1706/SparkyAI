@@ -17,6 +17,7 @@ from scraper.query import index
 from scraper.query.registry import QUERY_SOURCES
 from scraper.query.run import for_caller, run_job, should_index, source_of
 from scraper.sources import SOURCES
+from scraper.store import object as objects
 from scraper.store import postgres
 
 log = structlog.get_logger()
@@ -119,6 +120,7 @@ def enqueue_due(now: datetime) -> int:
     with postgres.connection() as conn:
         stale = postgres.requeue_stale(conn, BACKGROUND_KINDS, cfg.job_lease_secs)
         pruned = postgres.prune_jobs(conn, cfg.job_retention_hours * 3600.0, cfg.job_prune_batch)
+        snapshots = postgres.prune_versions(conn, cfg.keep_versions, cfg.job_prune_batch)
         rows = {r["key"]: r for r in postgres.status_rows(conn)}
         queued = sum(
             postgres.enqueue_job(conn, RUN, {"source": key}, RUN_PRIORITY)
@@ -126,8 +128,19 @@ def enqueue_due(now: datetime) -> int:
             if is_due(rows.get(key), now)
         )
         conn.commit()
-    if stale or queued or pruned:
-        log.info("queue topped up", runs=queued, requeued=stale, pruned=pruned)
+    if snapshots:
+        try:
+            objects.delete_snapshots(snapshots)
+        except Exception as e:  # the rows are gone; an unreachable store leaves only objects
+            log.warning("old snapshots not removed", count=len(snapshots), error=str(e))
+    if stale or queued or pruned or snapshots:
+        log.info(
+            "queue topped up",
+            runs=queued,
+            requeued=stale,
+            pruned=pruned,
+            versions_removed=len(snapshots),
+        )
     return queued
 
 
@@ -165,14 +178,13 @@ def serve() -> None:
         conn.commit()
     log.info("registry published", sources=count)
     stop = threading.Event()
-    for name, kinds, listen in (
-        ("live", LIVE_KINDS, True),
-        ("background", BACKGROUND_KINDS, False),
-    ):
+    lanes = [(f"live-{i}", LIVE_KINDS, True) for i in range(1, cfg.live_workers + 1)]
+    lanes.append(("background", BACKGROUND_KINDS, False))
+    for name, kinds, listen in lanes:
         threading.Thread(
             target=_lane, args=(name, kinds, stop, listen), name=name, daemon=True
         ).start()
-    log.info("serving", live=LIVE_KINDS, background=BACKGROUND_KINDS)
+    log.info("serving", live=LIVE_KINDS, live_workers=cfg.live_workers, background=BACKGROUND_KINDS)
     try:
         while True:
             try:

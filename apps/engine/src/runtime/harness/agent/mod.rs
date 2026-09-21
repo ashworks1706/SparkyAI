@@ -8,6 +8,7 @@ pub mod prompt;
 mod run;
 mod step;
 pub mod task;
+pub mod uploads;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -17,20 +18,18 @@ use tracing::field::Empty;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::conversation::compaction::Compactor;
-use crate::core::traits::knowledge::retrieval::Retriever;
-use crate::core::traits::knowledge::route::Router;
 use crate::core::traits::memory::MemoryStore;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::safety::policy::Policy;
+use crate::core::traits::tools::files::FileSource;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentConfig, AgentError, Answer};
 use crate::core::types::conversation::message::{Message, ToolCall};
-use crate::core::types::knowledge::route::Route;
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::{ConfirmationRequest, PendingAction};
 use crate::core::types::tools::ToolRun;
@@ -54,10 +53,6 @@ pub struct AgentDeps {
     pub policy: Arc<dyn Policy>,
     /// Receives every event.
     pub trace: Arc<dyn TraceSink>,
-    /// Evidence, when configured.
-    pub retriever: Option<Arc<dyn Retriever>>,
-    /// Decides whether a question is retrieved for, when configured. None retrieves for every turn.
-    pub router: Option<Arc<dyn Router>>,
     /// Conversation history, when configured.
     pub conversations: Option<Arc<dyn ConversationStore>>,
     /// Cross-conversation memory, when configured.
@@ -74,6 +69,8 @@ pub struct AgentDeps {
     pub profile_graph: Option<Arc<dyn ProfileGraph>>,
     /// Workspace a tool result too long to carry is written to, when configured.
     pub sandbox: Option<Arc<dyn Sandbox>>,
+    /// Downloads the files a caller attached, when configured. Needs the sandbox too.
+    pub files: Option<Arc<dyn FileSource>>,
 }
 
 /// Records the answer and how the run ended on the span it ran under.
@@ -234,8 +231,7 @@ impl Agent {
         let inputs = Inputs {
             history: self.history(ctx).await?,
             memory: Vec::new(),
-            evidence: Vec::new(),
-            route: Route::Retrieve,
+            uploads: Vec::new(),
         };
         self.loop_until_done(&mut run, &inputs).await
     }
@@ -251,7 +247,8 @@ impl Agent {
             },
         );
 
-        let inputs = self.load(ctx, input).await?;
+        let mut inputs = self.load(ctx).await?;
+        inputs.uploads = self.uploads(ctx, input).await;
         self.loop_until_done(&mut run, &inputs).await
     }
 
@@ -263,9 +260,7 @@ impl Agent {
     ) -> Result<Answer, AgentError> {
         loop {
             if let Some(stop) = self.check_limits(run) {
-                return self
-                    .conclude(run, stop, String::new(), inputs.evidence.clone(), None)
-                    .await;
+                return self.conclude(run, stop, String::new(), None).await;
             }
             run.steps += 1;
 
@@ -277,13 +272,7 @@ impl Agent {
                 Err(error) => {
                     // The turns of a failed request are still kept.
                     if let Err(kept) = self
-                        .conclude(
-                            run,
-                            RunStatus::Error,
-                            String::new(),
-                            inputs.evidence.clone(),
-                            None,
-                        )
+                        .conclude(run, RunStatus::Error, String::new(), None)
                         .await
                     {
                         tracing::error!(error = %kept, "turns of a failed request were not kept");
@@ -294,9 +283,7 @@ impl Agent {
             if self.send_to_sandbox(run, &status, confirmation.as_ref()) {
                 continue;
             }
-            return self
-                .conclude(run, status, text, inputs.evidence.clone(), confirmation)
-                .await;
+            return self.conclude(run, status, text, confirmation).await;
         }
     }
 

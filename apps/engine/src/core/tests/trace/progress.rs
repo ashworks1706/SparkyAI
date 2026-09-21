@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 use crate::core::tests::support::{MemorySink, ctx};
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::policy::Decision;
 use crate::core::types::trace::progress::{Progress, ProgressStyle};
@@ -82,16 +83,22 @@ fn events_the_caller_should_see_carry_their_own_wording() {
         "{denied:?}"
     );
 
-    let retrieval = TraceEvent::Retrieval {
-        step: 1,
-        query: "hayden hours".into(),
-        chunk_ids: vec![uuid::Uuid::new_v4(), uuid::Uuid::new_v4()],
-        duration_ms: 12,
+    let reused = TraceEvent::QueryCache {
+        source: "clubs".into(),
+        outcome: CacheOutcome::Hit,
     };
     assert!(
-        line(&retrieval)
+        line(&reused)
             .unwrap_or_default()
-            .contains("read 2 sources from the knowledge base")
+            .contains("reused a recent `clubs` result")
+    );
+    let fetched = TraceEvent::QueryCache {
+        source: "clubs".into(),
+        outcome: CacheOutcome::Miss,
+    };
+    assert!(
+        line(&fetched).is_none(),
+        "a fetch writes the tool line only"
     );
 }
 
@@ -200,14 +207,7 @@ fn a_tool_result_replaces_the_line_its_own_start_wrote() {
         "a thought lands where the thinking line was"
     );
     assert!(
-        TraceEvent::Retrieval {
-            step: 1,
-            query: "q".into(),
-            chunk_ids: Vec::new(),
-            duration_ms: 1,
-        }
-        .slot()
-        .is_none(),
+        TraceEvent::MemoryRecalled { count: 1 }.slot().is_none(),
         "an event with no slot appends"
     );
 }
@@ -218,7 +218,6 @@ fn bookkeeping_events_stay_out_of_the_callers_way() {
         step: 1,
         message_count: 4,
         estimated_tokens: 900,
-        evidence_ids: Vec::new(),
     };
     assert!(line(&assembled).is_none());
 
@@ -266,7 +265,6 @@ async fn a_run_with_a_listener_records_and_reports_at_once() {
             step: 1,
             message_count: 1,
             estimated_tokens: 1,
-            evidence_ids: Vec::new(),
         },
     );
 

@@ -72,6 +72,12 @@ pub struct Limits {
     pub session_idle_secs: u64,
     /// Sessions one caller may hold at once.
     pub max_sessions: usize,
+    /// Session containers across every caller.
+    pub max_sessions_total: usize,
+    /// Commands running at once across every caller.
+    pub max_running: usize,
+    /// Label value naming this engine's containers apart from another engine's.
+    pub instance: String,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,
     /// Commands kept for the operator view.
@@ -98,6 +104,9 @@ impl From<&crate::core::config::SandboxSettings> for Limits {
             max_output_chars: cfg.max_output_chars,
             session_idle_secs: cfg.session_idle_secs,
             max_sessions: cfg.max_sessions,
+            max_sessions_total: cfg.max_sessions_total,
+            max_running: cfg.max_running,
+            instance: cfg.instance.clone(),
             workspace_mb: cfg.workspace_mb,
             recent_commands: cfg.recent_commands,
             egress: cfg.egress.then(|| Egress {
@@ -118,6 +127,12 @@ fn held<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// Label every container the engine starts carries, so an operator can find them all.
 pub const LABEL: &str = "sparky.sandbox";
+
+/// Label naming which engine instance started a container.
+pub const INSTANCE_LABEL: &str = "sparky.sandbox.instance";
+
+/// Prefix of every session container name.
+const SESSION_PREFIX: &str = "sparky-sb-";
 
 /// What the engine knows about one live session container.
 #[derive(Debug, Clone)]
@@ -183,7 +198,7 @@ impl Drop for Running {
 }
 
 /// Runs commands in a container. Clones share the session registry and the command log.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ContainerSandbox {
     limits: Limits,
     /// Container name to what is known about it, for the idle sweep and the per-caller cap.
@@ -196,12 +211,21 @@ pub struct ContainerSandbox {
     ticket: Arc<AtomicU64>,
     /// Whether the tool is offered. An operator turns it off without restarting the engine.
     enabled: Arc<AtomicBool>,
+    /// One permit per command allowed to run at once, across every caller.
+    slots: Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for ContainerSandbox {
+    fn default() -> Self {
+        Self::new(Limits::default())
+    }
 }
 
 impl ContainerSandbox {
     /// Builds the sandbox over its limits.
     pub fn new(limits: Limits) -> Self {
         Self {
+            slots: Arc::new(tokio::sync::Semaphore::new(limits.max_running.max(1))),
             limits,
             sessions: Arc::default(),
             recent: Arc::default(),
@@ -243,7 +267,7 @@ impl ContainerSandbox {
     fn owner_prefix(ctx: &RequestContext) -> String {
         let mut hasher = DefaultHasher::new();
         (&ctx.tenant_id, &ctx.user_id).hash(&mut hasher);
-        format!("sparky-sb-{:016x}-", hasher.finish())
+        format!("{SESSION_PREFIX}{:016x}-", hasher.finish())
     }
 
     /// The container name a session runs under, scoped to the tenant and user.
@@ -336,6 +360,43 @@ impl ContainerSandbox {
         candidates.first().map(|(name, _)| (*name).clone())
     }
 
+    /// The least recently used session of every caller, when the engine holds the most it may.
+    pub(crate) fn least_recently_used_overall(&self) -> Option<String> {
+        let sessions = held(&self.sessions);
+        if sessions.len() < self.limits.max_sessions_total.max(1) {
+            return None;
+        }
+        sessions
+            .iter()
+            .min_by_key(|(_, live)| live.used)
+            .map(|(name, _)| name.clone())
+    }
+
+    /// Removes every session container of this instance the engine is not tracking: those a
+    /// previous process of it started and nothing will reap. Called at boot and on every sweep.
+    pub async fn remove_orphans(&self) {
+        let filter = format!("label={INSTANCE_LABEL}={}", self.limits.instance);
+        let Some(listed) = self
+            .inspect(&["ps", "--all", "--filter", &filter, "--format", "{{.Names}}"])
+            .await
+        else {
+            return;
+        };
+        let orphans: Vec<String> = {
+            let sessions = held(&self.sessions);
+            listed
+                .lines()
+                .map(str::trim)
+                .filter(|name| name.starts_with(SESSION_PREFIX) && !sessions.contains_key(*name))
+                .map(str::to_owned)
+                .collect()
+        };
+        for name in orphans {
+            tracing::info!(session = %name, "orphaned sandbox session removed");
+            self.runtime_ok(&["rm", "--force", &name]).await;
+        }
+    }
+
     /// The sessions idle past their budget.
     pub(crate) fn idle_sessions(&self) -> Vec<String> {
         let budget = Duration::from_secs(self.limits.session_idle_secs);
@@ -370,6 +431,12 @@ impl ContainerSandbox {
         if let Some(lru) = self.least_recently_used(ctx) {
             self.remove(&lru).await;
         }
+        if let Some(lru) = self.least_recently_used_overall() {
+            tracing::info!(session = %lru, "sandbox session cap reached; least recently used removed");
+            self.remove(&lru).await;
+        }
+        // Registered before it starts, so the orphan sweep never takes a container mid-start.
+        self.note_used(name, session, false);
         let out = Command::new(&self.limits.runtime)
             .arg("run")
             .arg("--detach")
@@ -393,6 +460,7 @@ impl ContainerSandbox {
             self.note_used(name, session, false);
             return Ok(());
         }
+        held(&self.sessions).remove(name);
         Err(SandboxError::Runtime(format!(
             "could not start the session: {}",
             why.trim()
@@ -429,6 +497,8 @@ impl ContainerSandbox {
         .into_iter()
         .map(str::to_owned)
         .collect();
+        args.push("--label".to_owned());
+        args.push(format!("{INSTANCE_LABEL}={}", l.instance));
         if let Some(egress) = &l.egress {
             let url = egress.proxy_url();
             for var in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"] {
@@ -584,6 +654,65 @@ pub(crate) fn clip(text: &str, max: usize) -> String {
     format!("{head}\n[{dropped} characters cut]\n{tail}")
 }
 
+/// What a command produced, each stream held to its head and tail of cap bytes.
+struct Bounded {
+    status: std::process::ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// Runs command and reads both streams as they arrive, keeping at most cap bytes of each
+/// stream's head and cap of its tail, so a command that prints without end costs bounded memory.
+async fn bounded_output(mut command: Command, cap: usize) -> std::io::Result<Bounded> {
+    let mut child = command.spawn()?;
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let (out, err, status) = tokio::join!(
+        read_bounded(stdout, cap),
+        read_bounded(stderr, cap),
+        child.wait()
+    );
+    Ok(Bounded {
+        status: status?,
+        stdout: out,
+        stderr: err,
+    })
+}
+
+/// The head and tail of a stream, cap bytes each, joined by a line naming what was dropped.
+async fn read_bounded<R: tokio::io::AsyncRead + Unpin>(stream: Option<R>, cap: usize) -> Vec<u8> {
+    use tokio::io::AsyncReadExt;
+
+    let Some(mut stream) = stream else {
+        return Vec::new();
+    };
+    let mut head: Vec<u8> = Vec::new();
+    let mut tail: VecDeque<u8> = VecDeque::new();
+    let mut dropped: usize = 0;
+    let mut buf = vec![0u8; 8192];
+    loop {
+        let n = match stream.read(&mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+        };
+        let chunk = buf.get(..n).unwrap_or_default();
+        let room = cap.saturating_sub(head.len()).min(chunk.len());
+        let (first, rest) = chunk.split_at(room);
+        head.extend_from_slice(first);
+        tail.extend(rest);
+        if tail.len() > cap {
+            let excess = tail.len() - cap;
+            tail.drain(..excess);
+            dropped += excess;
+        }
+    }
+    if dropped > 0 {
+        head.extend_from_slice(format!("\n[{dropped} bytes cut]\n").as_bytes());
+    }
+    head.extend(tail);
+    head
+}
+
 /// The shell that writes standard input to path, with no interpolation of the content.
 fn write_to(path: &str) -> String {
     format!("cat > {path}")
@@ -616,7 +745,14 @@ impl Sandbox for ContainerSandbox {
                 command.args(self.args());
             }
         }
+        let budget = self.limits.timeout.min(ctx.remaining());
+        // The runtime client is what a timeout kills here; the container is not. timeout inside
+        // it kills the command itself, so nothing outlives its budget in a session.
         command
+            .arg("timeout")
+            .arg("-s")
+            .arg("KILL")
+            .arg(budget.as_secs().max(1).to_string())
             .arg("sh")
             .arg("-c")
             .arg(&request.command)
@@ -624,8 +760,10 @@ impl Sandbox for ContainerSandbox {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
-
-        let budget = self.limits.timeout.min(ctx.remaining());
+        let _slot = tokio::time::timeout(budget, self.slots.clone().acquire_owned())
+            .await
+            .map_err(|_| SandboxError::Timeout)?
+            .map_err(|_| SandboxError::Runtime("the sandbox is shutting down".into()))?;
         let started = Instant::now();
         let running = self.command_started(SandboxCommand {
             // command_started stamps the ticket over this.
@@ -637,7 +775,8 @@ impl Sandbox for ContainerSandbox {
             exit_code: None,
             duration_ms: None,
         });
-        let ran = tokio::time::timeout(budget, command.output()).await;
+        let cap = self.limits.max_output_chars.saturating_mul(4).max(1024);
+        let ran = tokio::time::timeout(budget, bounded_output(command, cap)).await;
         let took = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         let output = match ran {
             Ok(Ok(output)) => output,
@@ -692,7 +831,7 @@ impl Sandbox for ContainerSandbox {
         let mut out: Vec<SandboxCommand> =
             held(&self.running).iter().map(|(_, c)| c.clone()).collect();
         out.extend(held(&self.recent).iter().rev().cloned());
-        out.sort_by(|a, b| b.id.cmp(&a.id));
+        out.sort_by_key(|c| std::cmp::Reverse(c.id));
         out
     }
 
@@ -761,6 +900,7 @@ pub async fn reap_sessions(sandbox: ContainerSandbox, every: Duration) {
     loop {
         tokio::time::sleep(every).await;
         sandbox.reap_idle().await;
+        sandbox.remove_orphans().await;
     }
 }
 

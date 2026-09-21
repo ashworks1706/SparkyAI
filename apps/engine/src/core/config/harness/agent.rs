@@ -25,6 +25,11 @@ pub struct Agent {
     pub model_slots: usize,
     /// How long a request waits for a free model slot before reporting the model busy.
     pub model_queue_wait_secs: u64,
+    /// Turns the engine runs at once. Each holds its history, attachments and tool results in
+    /// memory, so this bounds what they cost together.
+    pub max_turns: usize,
+    /// Longest a turn waits for a free turn slot before it is refused as busy.
+    pub turn_queue_wait_secs: u64,
     /// Sampling temperature.
     pub temperature: f32,
     /// Prior turns loaded into the prompt.
@@ -35,8 +40,6 @@ pub struct Agent {
     pub recall_in_public: bool,
     /// Whole-prompt token budget.
     pub prompt_budget_tokens: usize,
-    /// Cap on the evidence section.
-    pub evidence_budget_tokens: usize,
     /// Cap on prior turns.
     pub history_budget_tokens: usize,
     /// Cap on the memory section.
@@ -47,6 +50,18 @@ pub struct Agent {
     pub reply_budget_tokens: usize,
     /// Images of one message sent to the model. 0 sends none.
     pub max_images: usize,
+    /// Other files of one message copied into the sandbox. 0 opens none.
+    pub max_files: usize,
+    /// Largest attached file copied into the sandbox, in bytes.
+    pub max_file_bytes: u64,
+    /// Hosts attached files are downloaded from. Any other link is refused.
+    pub file_hosts: Vec<String>,
+    /// Characters of an attached file's text put in the prompt beside the question.
+    pub upload_preview_chars: usize,
+    /// Characters of the passages of an attached file that match the question, put in the prompt.
+    pub upload_match_chars: usize,
+    /// Pages of a scanned PDF read by OCR when it holds no text layer.
+    pub upload_ocr_pages: u32,
     /// Characters per token the budget estimator assumes.
     pub chars_per_token: usize,
     /// First retry wait, doubled per attempt.
@@ -81,17 +96,27 @@ impl Default for Agent {
             confirmation_ttl_secs: 600,
             model_slots: 2,
             model_queue_wait_secs: 30,
+            max_turns: 16,
+            turn_queue_wait_secs: 20,
             temperature: 0.6,
             history_turns: 20,
             memory_recall_limit: 10,
             recall_in_public: false,
             prompt_budget_tokens: 4_000,
-            evidence_budget_tokens: 1_200,
             history_budget_tokens: 1_000,
             memory_budget_tokens: 300,
             capabilities_budget_tokens: 600,
             reply_budget_tokens: 200,
             max_images: 4,
+            max_files: 4,
+            max_file_bytes: 2_000_000,
+            file_hosts: vec![
+                "cdn.discordapp.com".to_owned(),
+                "media.discordapp.net".to_owned(),
+            ],
+            upload_preview_chars: 800,
+            upload_match_chars: 2_400,
+            upload_ocr_pages: 3,
             chars_per_token: 4,
             retry_base_ms: 250,
             retry_cap_ms: 8_000,
@@ -120,7 +145,6 @@ impl Agent {
     pub fn budget(&self) -> Budget {
         Budget {
             total: self.prompt_budget_tokens,
-            evidence: self.evidence_budget_tokens,
             history: self.history_budget_tokens,
             memory: self.memory_budget_tokens,
             capabilities: self.capabilities_budget_tokens,
@@ -136,6 +160,7 @@ impl Default for ThinkingRules {
             mode: ThinkingMode::Auto,
             after_tools: true,
             max_quick_chars: 80,
+            plan_searches: true,
             cues: [
                 "why",
                 "how",
@@ -195,16 +220,6 @@ pub struct Prompt {
     pub role_line_no_roles: String,
     /// Heading above recalled memories.
     pub memory_header: String,
-    /// Heading above retrieved evidence.
-    pub evidence_header: String,
-    /// Line written when retrieval found nothing.
-    pub no_evidence_line: String,
-    /// Line written when the router skipped retrieval as small talk.
-    pub no_retrieval_line: String,
-    /// Line written when the router skipped retrieval because the answer has to be current.
-    pub live_only_line: String,
-    /// Line written when the knowledge base could not be read.
-    pub no_index_line: String,
     /// Heading above what the model may do.
     pub capabilities_header: String,
     /// Heading above the message of ours a reply answers.
@@ -217,6 +232,16 @@ pub struct Prompt {
     pub answer_only_line: String,
     /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
     pub sandbox_retry_line: String,
+    /// Line naming a file the user attached and its text, with {name}, {kind}, {size},
+    /// {chars}, {text_path}, {path}, {session} and {preview}.
+    pub upload_line: String,
+    /// Line naming a file no text could be pulled from, with {name}, {kind}, {size}, {path}
+    /// and {session}.
+    pub upload_raw_line: String,
+    /// Line naming a file the user attached that could not be opened, with {reason}.
+    pub upload_failed_line: String,
+    /// The question sent in place of an empty message that carries attachments.
+    pub attachments_only_input: String,
     /// Hours from UTC the date is rendered in.
     pub utc_offset_hours: i32,
 }
@@ -229,17 +254,16 @@ impl Default for Prompt {
             role_line: assemble::ROLE_LINE.into(),
             role_line_no_roles: assemble::ROLE_LINE_NO_ROLES.into(),
             memory_header: assemble::MEMORY_HEADER.into(),
-            evidence_header: assemble::EVIDENCE_HEADER.into(),
-            no_evidence_line: assemble::NO_EVIDENCE_LINE.into(),
-            no_retrieval_line: assemble::NO_RETRIEVAL_LINE.into(),
-            live_only_line: assemble::LIVE_ONLY_LINE.into(),
-            no_index_line: assemble::NO_INDEX_LINE.into(),
             capabilities_header: assemble::CAPABILITIES_HEADER.into(),
             reply_header: assemble::REPLY_HEADER.into(),
             result_cut_line: assemble::RESULT_CUT_LINE.into(),
             date_line: assemble::DATE_LINE.into(),
             answer_only_line: assemble::ANSWER_ONLY_LINE.into(),
             sandbox_retry_line: assemble::SANDBOX_RETRY_LINE.into(),
+            upload_line: assemble::UPLOAD_LINE.into(),
+            upload_raw_line: assemble::UPLOAD_RAW_LINE.into(),
+            upload_failed_line: assemble::UPLOAD_FAILED_LINE.into(),
+            attachments_only_input: assemble::ATTACHMENTS_ONLY_INPUT.into(),
             utc_offset_hours: -7,
         }
     }

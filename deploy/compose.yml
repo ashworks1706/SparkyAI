@@ -1,6 +1,9 @@
+# Every service has a memory ceiling, overridable per machine with SPARKY_MEM_<SERVICE> in .env.
+# The sandboxd ceiling bounds every run_sandbox container together.
 services:
   engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
+    mem_limit: ${SPARKY_MEM_ENGINE:-1g}
     entrypoint: ["/engine"]
     env_file:
       - { path: ../.env, required: false }
@@ -24,6 +27,7 @@ services:
   # needs egress to pull the sandbox image; the containers it starts get --network none.
   sandboxd:
     image: docker:27-dind
+    mem_limit: ${SPARKY_MEM_SANDBOXD:-5g}
     privileged: true
     command: ["dockerd", "--host=tcp://0.0.0.0:2375", "--tls=false"]
     environment:
@@ -33,6 +37,7 @@ services:
 
   discord:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
+    mem_limit: ${SPARKY_MEM_DISCORD:-256m}
     entrypoint: ["/discord"]
     env_file:
       - { path: ../.env, required: false }
@@ -44,6 +49,7 @@ services:
 
   scraper:
     build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
+    mem_limit: ${SPARKY_MEM_SCRAPER:-3g}
     command: ["serve"]
     env_file:
       - { path: ../.env, required: false }
@@ -54,10 +60,10 @@ services:
       SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
       SPARKY_SEARCH__BASE_URL: http://searxng:8080
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
-      # The admin session captured by `just scraper login`, mounted read-only from the host.
+      # The admin session captured by `just scraper login`. Writable so a refreshed session is kept.
       SPARKY_AUTH__STORAGE_STATE_PATH: /data/auth/admin_state.json
     volumes:
-      - ${SPARKY_AUTH_STATE_DIR:-./.sparky/auth}:/data/auth:ro
+      - ${SPARKY_AUTH_STATE_DIR:-../.sparky/auth}:/data/auth
     depends_on:
       postgres: { condition: service_healthy }
     restart: unless-stopped
@@ -65,6 +71,7 @@ services:
   # One llama-server per model. Started by just model.
   chat:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    mem_limit: ${SPARKY_MEM_CHAT:-8g}
     profiles: [model]
     command:
       - -hf
@@ -106,6 +113,7 @@ services:
 
   embed:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    mem_limit: ${SPARKY_MEM_EMBED:-3g}
     profiles: [model]
     command:
       - -hf
@@ -146,6 +154,7 @@ services:
   # Self-hosted metasearch for the scraper's web search. Started by just search.
   searxng:
     image: docker.io/searxng/searxng:2026.9.12-d4f00d15d
+    mem_limit: ${SPARKY_MEM_SEARXNG:-512m}
     profiles: [search]
     environment:
       SEARXNG_SECRET: ${SPARKY_SEARXNG_SECRET:-local-only-change-me-0000000000000000}
@@ -162,6 +171,7 @@ services:
   # Self-hosted Firecrawl for scraper fetch and extract. No API key (USE_DB_AUTHENTICATION off).
   firecrawl:
     image: ghcr.io/firecrawl/firecrawl:latest
+    mem_limit: ${SPARKY_MEM_FIRECRAWL:-2g}
     profiles: [crawl]
     environment:
       HOST: 0.0.0.0
@@ -185,6 +195,7 @@ services:
 
   firecrawl-playwright:
     image: ghcr.io/firecrawl/playwright-service:latest
+    mem_limit: ${SPARKY_MEM_FIRECRAWL_PLAYWRIGHT:-2g}
     profiles: [crawl]
     environment:
       PORT: 3000
@@ -192,16 +203,19 @@ services:
 
   firecrawl-redis:
     image: redis:7-alpine
+    mem_limit: ${SPARKY_MEM_FIRECRAWL_REDIS:-256m}
     profiles: [crawl]
     restart: unless-stopped
 
   firecrawl-rabbitmq:
     image: rabbitmq:3-management
+    mem_limit: ${SPARKY_MEM_FIRECRAWL_RABBITMQ:-512m}
     profiles: [crawl]
     restart: unless-stopped
 
   firecrawl-postgres:
     image: ghcr.io/firecrawl/nuq-postgres:latest
+    mem_limit: ${SPARKY_MEM_FIRECRAWL_POSTGRES:-512m}
     profiles: [crawl]
     environment:
       POSTGRES_USER: postgres
@@ -212,6 +226,7 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
+    mem_limit: ${SPARKY_MEM_POSTGRES:-2g}
     environment:
       POSTGRES_USER: sparky
       POSTGRES_PASSWORD: sparky
@@ -226,6 +241,7 @@ services:
   # Browse retrieval index and conversation tables on http://localhost:8081. Started by just db.
   pgweb:
     image: sosedoff/pgweb:latest
+    mem_limit: ${SPARKY_MEM_PGWEB:-128m}
     profiles: [db]
     environment:
       PGWEB_DATABASE_URL: postgres://sparky:sparky@postgres:5432/sparky?sslmode=disable
@@ -236,7 +252,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    mem_limit: ${SPARKY_MEM_REDIS:-384m}
+    # Cache entries carry a TTL; at the memory cap the least recently used of them go first.
+    command:
+      ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
     volumes: [redisdata:/data]
     ports: ["6379:6379"]
     healthcheck:
@@ -247,6 +266,7 @@ services:
 
   minio:
     image: quay.io/minio/minio
+    mem_limit: ${SPARKY_MEM_MINIO:-1g}
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -257,6 +277,7 @@ services:
   # Trace UI on http://localhost:6006 (loopback only). Started by just phoenix. No authentication.
   phoenix:
     image: arizephoenix/phoenix:version-20.11.0
+    mem_limit: ${SPARKY_MEM_PHOENIX:-2g}
     profiles: [phoenix]
     environment:
       PHOENIX_WORKING_DIR: /data
@@ -267,6 +288,7 @@ services:
   # Metrics store from llama-server; query at http://localhost:9090.
   prometheus:
     image: prom/prometheus:v3.1.0
+    mem_limit: ${SPARKY_MEM_PROMETHEUS:-1g}
     profiles: [metrics]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -281,6 +303,7 @@ services:
   # Dashboards over Prometheus on http://localhost:3000. Inference dashboard is provisioned.
   grafana:
     image: grafana/grafana:11.5.1
+    mem_limit: ${SPARKY_MEM_GRAFANA:-256m}
     profiles: [metrics]
     environment:
       GF_SECURITY_ADMIN_USER: admin
@@ -298,6 +321,7 @@ services:
   # GPU utilization and VRAM from nvidia-smi. Separate profile; needs a GPU.
   gpu-exporter:
     image: utkuozdemir/nvidia_gpu_exporter:1.3.2
+    mem_limit: ${SPARKY_MEM_GPU_EXPORTER:-128m}
     profiles: [gpu-metrics]
     # nvidia-smi runs under the utility capability from the nvidia runtime.
     environment:

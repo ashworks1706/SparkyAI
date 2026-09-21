@@ -2,6 +2,5 @@
 
 mod admit;
 mod cache;
-mod route;
 mod search;
 mod window;

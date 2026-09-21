@@ -1,4 +1,4 @@
-"""Fetchers: Firecrawl (default), plain httpx, or headless Chromium for JS pages."""
+"""Fetchers: Firecrawl (default), plain httpx, or a browser driver from ingest/drivers."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from scraper.core.settings import settings
 from scraper.core.types import Fetched, FetchError, FetchRejected
+from scraper.ingest.drivers import admin, public
 
 
 @retry(
@@ -20,50 +21,29 @@ from scraper.core.types import Fetched, FetchError, FetchRejected
 def fetch_http(url: str) -> Fetched:
     """One GET with retries on transport errors and 5xx."""
     s = settings().scraper
-    with httpx.Client(
-        headers={"User-Agent": s.user_agent},
-        timeout=s.request_timeout_secs,
-        follow_redirects=True,
-    ) as http:
-        r = http.get(url)
-    if r.status_code >= 500:
-        raise FetchError(f"{url} returned {r.status_code}")
-    if r.status_code >= 400:
-        raise FetchRejected(f"{url} returned {r.status_code}")
-    return Fetched(
-        url=str(r.url),
-        status=r.status_code,
-        body=r.content,
-        content_type=r.headers.get("content-type", "text/html"),
-    )
-
-
-def fetch_rendered(url: str) -> Fetched:
-    """Loads the page in headless Chromium and returns the rendered DOM."""
-    from playwright.sync_api import sync_playwright
-
-    s = settings().scraper
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            page = browser.new_page(user_agent=s.user_agent)
-            response = page.goto(
-                url, wait_until="networkidle", timeout=int(s.request_timeout_secs * 1000)
-            )
-            status = response.status if response else 0
-            html = page.content()
-            final_url = page.url
-        finally:
-            browser.close()
-    if status == 0:
-        raise FetchError(f"{url}: navigation returned no response")
-    if 400 <= status < 500:
-        raise FetchRejected(f"{url}: {status}")
-    if status >= 500:
-        raise FetchError(f"{url}: {status}")
-    return Fetched(
-        url=final_url, status=status, body=html.encode("utf-8"), content_type="text/html"
-    )
+    with (
+        httpx.Client(
+            headers={"User-Agent": s.user_agent},
+            timeout=s.request_timeout_secs,
+            follow_redirects=True,
+        ) as http,
+        http.stream("GET", url) as r,
+    ):
+        if r.status_code >= 500:
+            raise FetchError(f"{url} returned {r.status_code}")
+        if r.status_code >= 400:
+            raise FetchRejected(f"{url} returned {r.status_code}")
+        body = bytearray()
+        for chunk in r.iter_bytes():
+            body.extend(chunk)
+            if len(body) > s.max_page_bytes:
+                raise FetchRejected(f"{url} is larger than {s.max_page_bytes} bytes")
+        return Fetched(
+            url=str(r.url),
+            status=r.status_code,
+            body=bytes(body),
+            content_type=r.headers.get("content-type", "text/html"),
+        )
 
 
 def parse_firecrawl(url: str, payload: dict[str, Any]) -> Fetched:
@@ -127,13 +107,11 @@ def fetch_firecrawl(url: str) -> Fetched:
 def fetch(url: str, *, needs_js: bool = False, auth: bool = False) -> Fetched:
     """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path.
 
-    An authenticated fetch goes through the admin browser session regardless of the configured
-    fetcher, since Firecrawl and the plain HTTP client do not carry the session cookies.
+    An authenticated fetch goes through the admin driver regardless of the configured fetcher,
+    since Firecrawl and the plain HTTP client do not carry the session cookies.
     """
     if auth:
-        from scraper.ingest.auth import fetch_authenticated
-
-        return fetch_authenticated(url)
+        return admin.fetch_authenticated(url)
     if settings().scraper.fetcher == "firecrawl":
         return fetch_firecrawl(url)
-    return fetch_rendered(url) if needs_js else fetch_http(url)
+    return public.fetch_rendered(url) if needs_js else fetch_http(url)

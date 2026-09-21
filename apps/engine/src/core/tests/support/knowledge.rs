@@ -16,6 +16,8 @@ use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
 /// A Retriever double: one canned hit, and the queries it was asked, readable after it moves.
 pub struct Stored {
     hits: Vec<Evidence>,
+    /// Answers only a query that names no category.
+    unfiled: bool,
     asked: std::sync::Arc<std::sync::Mutex<Vec<RetrievalQuery>>>,
 }
 
@@ -33,7 +35,16 @@ impl Stored {
                 fetched_at: chrono::Utc::now() - chrono::Duration::hours(3),
                 score: 1.0,
             }],
+            unfiled: false,
             asked: std::sync::Arc::default(),
+        }
+    }
+
+    /// The same index, answering only a query that names no category.
+    pub fn unfiled(self) -> Self {
+        Self {
+            unfiled: true,
+            ..self
         }
     }
 
@@ -41,6 +52,7 @@ impl Stored {
     pub fn empty() -> Self {
         Self {
             hits: Vec::new(),
+            unfiled: false,
             asked: std::sync::Arc::default(),
         }
     }
@@ -60,6 +72,9 @@ impl Retriever for Stored {
     ) -> Result<Vec<Evidence>, RetrievalError> {
         if let Ok(mut asked) = self.asked.lock() {
             asked.push(query.clone());
+        }
+        if self.unfiled && query.category.is_some() {
+            return Ok(Vec::new());
         }
         Ok(self.hits.clone())
     }

@@ -14,17 +14,18 @@ use crate::runtime::harness::agent::call::thinking::{StepSignals, decide};
 use crate::runtime::harness::tools::ToolSet;
 
 fn rules() -> ThinkingRules {
-    AgentConfig::default().thinking
+    ThinkingRules {
+        plan_searches: false,
+        ..AgentConfig::default().thinking
+    }
 }
 
-/// A first step on input that retrieval ran for and found evidence chunks for.
-fn first(input: &str, evidence: usize) -> StepSignals<'_> {
+/// A first step on input, before any tool has run.
+fn first(input: &str) -> StepSignals<'_> {
     StepSignals {
         answer_only: false,
         tool_results: false,
         input,
-        retrieved: true,
-        evidence,
     }
 }
 
@@ -36,24 +37,31 @@ fn thinking_sent(sent: &Arc<Mutex<Vec<ModelRequest>>>) -> Vec<bool> {
 }
 
 #[test]
-fn a_short_question_with_evidence_answers_without_thinking() {
-    let choice = decide(&rules(), &first("when does hayden close tonight", 3));
+fn a_short_question_answers_without_thinking() {
+    let choice = decide(&rules(), &first("when does hayden close tonight"));
     assert!(!choice.on);
     assert_eq!(choice.reason, ThinkingReason::Quick);
 }
 
 #[test]
-fn a_question_retrieval_found_nothing_for_thinks() {
-    let choice = decide(&rules(), &first("when does hayden close tonight", 0));
-    assert!(choice.on);
-    assert_eq!(choice.reason, ThinkingReason::NoEvidence);
+fn the_step_that_plans_the_searches_thinks() {
+    let plan = decide(&AgentConfig::default().thinking, &first("clubs"));
+    assert_eq!((plan.on, plan.reason), (true, ThinkingReason::Plan));
+    let after = decide(
+        &AgentConfig::default().thinking,
+        &StepSignals {
+            tool_results: true,
+            ..first("clubs")
+        },
+    );
+    assert_eq!(after.reason, ThinkingReason::AfterTools);
 }
 
 #[test]
 fn a_cue_matches_whole_words_in_any_case() {
-    let asked = decide(&rules(), &first("Why is the shuttle late", 3));
+    let asked = decide(&rules(), &first("Why is the shuttle late"));
     assert_eq!((asked.on, asked.reason), (true, ThinkingReason::Cue));
-    let inside = decide(&rules(), &first("showhow tickets", 3));
+    let inside = decide(&rules(), &first("showhow tickets"));
     assert_eq!(
         inside.reason,
         ThinkingReason::Quick,
@@ -63,14 +71,14 @@ fn a_cue_matches_whole_words_in_any_case() {
         cues: vec!["Pros and cons".into()],
         ..rules()
     };
-    let matched = decide(&phrase, &first("pros and cons of the meal plan", 3));
+    let matched = decide(&phrase, &first("pros and cons of the meal plan"));
     assert_eq!(matched.reason, ThinkingReason::Cue);
 }
 
 #[test]
 fn a_long_question_thinks() {
     let long = "tell me about ".repeat(10);
-    let choice = decide(&rules(), &first(&long, 3));
+    let choice = decide(&rules(), &first(&long));
     assert_eq!((choice.on, choice.reason), (true, ThinkingReason::Long));
 }
 
@@ -80,7 +88,7 @@ fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
         &rules(),
         &StepSignals {
             tool_results: true,
-            ..first("when", 3)
+            ..first("when")
         },
     );
     assert_eq!((after.on, after.reason), (true, ThinkingReason::AfterTools));
@@ -92,7 +100,7 @@ fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
         &quiet,
         &StepSignals {
             tool_results: true,
-            ..first("why", 0)
+            ..first("why")
         },
     );
     assert!(!after.on);
@@ -101,7 +109,7 @@ fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
         &StepSignals {
             answer_only: true,
             tool_results: true,
-            ..first("why", 0)
+            ..first("why")
         },
     );
     assert_eq!(
@@ -114,7 +122,7 @@ fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
 fn a_fixed_mode_ignores_every_rule() {
     for (mode, on) in [(ThinkingMode::On, true), (ThinkingMode::Off, false)] {
         let fixed = ThinkingRules { mode, ..rules() };
-        for step in [first("hi", 3), first("why", 0)] {
+        for step in [first("hi"), first("why")] {
             let choice = decide(&fixed, &step);
             assert_eq!((choice.on, choice.reason), (on, ThinkingReason::Mode));
         }
@@ -132,6 +140,7 @@ async fn the_loop_sends_the_decision_with_each_call() {
     let cfg = AgentConfig {
         thinking: ThinkingRules {
             after_tools: false,
+            plan_searches: true,
             ..rules()
         },
         max_tokens: 4096,
@@ -143,7 +152,7 @@ async fn the_loop_sends_the_decision_with_each_call() {
     assert_eq!(
         thinking_sent(&sent),
         vec![true, false],
-        "no evidence thinks, then tool results with after_tools off do not"
+        "planning the searches thinks, then tool results with after_tools off do not"
     );
     let budgets: Vec<u32> = sent
         .lock()
@@ -191,6 +200,7 @@ async fn with_the_retry_off_a_spent_step_says_it_ran_out_of_room() {
     let cfg = AgentConfig {
         thinking: ThinkingRules {
             retry_without: false,
+            plan_searches: true,
             ..rules()
         },
         ..AgentConfig::default()

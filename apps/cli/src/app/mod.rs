@@ -87,8 +87,8 @@ impl App {
         } else {
             root.join(&cfg.cli.log_dir)
         };
-        let log_writer = LogWriter::new(log_dir)?;
-        let runner = Runner::new(root, tx.clone());
+        let log_writer = LogWriter::new(log_dir, cfg.cli.log_file_max_mb * 1024 * 1024)?;
+        let runner = Runner::new(root, tx.clone(), cfg.cli.log_line_chars);
         let sandbox = sandbox::Endpoint::from_config(&cfg);
         let units = units::catalog()
             .into_iter()

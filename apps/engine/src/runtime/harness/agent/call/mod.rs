@@ -20,7 +20,7 @@ use crate::core::types::agent::thinking::{ThinkingChoice, ThinkingReason};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse};
 use crate::core::types::trace::TraceEvent;
-use crate::runtime::harness::agent::run::{Inputs, Run};
+use crate::runtime::harness::agent::run::Run;
 use crate::runtime::harness::safety::redact::{json, truncate};
 
 /// Takes the thought out of the content of a response and returns it.
@@ -32,15 +32,13 @@ fn lift_thought(response: &mut ModelResponse) -> Option<String> {
 
 impl Agent {
     /// Whether the next model call of run thinks.
-    pub(super) fn thinking(&self, run: &Run<'_>, inputs: &Inputs) -> ThinkingChoice {
+    pub(super) fn thinking(&self, run: &Run<'_>) -> ThinkingChoice {
         thinking::decide(
             &self.cfg.thinking,
             &thinking::StepSignals {
                 answer_only: run.force_answer,
                 tool_results: run.new_turns.iter().any(|m| m.role == Role::Tool),
                 input: run.input,
-                retrieved: inputs.route.skipped().is_none(),
-                evidence: inputs.evidence.len(),
             },
         )
     }

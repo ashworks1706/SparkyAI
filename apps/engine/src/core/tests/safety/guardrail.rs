@@ -106,8 +106,6 @@ async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
         tools: ToolSet::new(),
         policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
-        retriever: None,
-        router: None,
         conversations: None,
         memory: None,
         confirmations: None,
@@ -116,6 +114,7 @@ async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
         profile: None,
         profile_graph: None,
         sandbox: None,
+        files: None,
     };
     let agent = Agent::new(deps, AgentConfig::default(), "sys");
     let Ok(answer) = agent.run(&ctx(), "what is my ssn").await else {
@@ -155,8 +154,6 @@ async fn a_blocked_capability_branch_stops_before_the_tool_runs() {
         tools: ToolSet::new().with(Arc::new(Echo(RiskClass::ReadPublic))),
         policy: Arc::new(RiskPolicy::default()),
         trace: sink.clone(),
-        retriever: None,
-        router: None,
         conversations: None,
         memory: None,
         confirmations: None,
@@ -165,6 +162,7 @@ async fn a_blocked_capability_branch_stops_before_the_tool_runs() {
         profile: None,
         profile_graph: None,
         sandbox: None,
+        files: None,
     };
     let agent = Agent::new(deps, AgentConfig::default(), "sys");
     let Ok(answer) = agent.run(&ctx(), "go").await else {

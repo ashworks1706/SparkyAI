@@ -1,6 +1,6 @@
 //! Tool output caching for live queries: reuse a recent answer, and never fetch one twice at once.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,6 +35,10 @@ pub struct CacheRules {
     pub lease: Duration,
     /// How often a request waiting on the lease looks for the answer.
     pub poll: Duration,
+    /// Lowercase words left out of a text parameter when it is keyed.
+    pub ignore_words: HashSet<String>,
+    /// Sources whose text parameters keep every word in the key.
+    pub keep_words: HashSet<String>,
 }
 
 impl CacheRules {
@@ -47,11 +51,14 @@ impl CacheRules {
 }
 
 /// The key one request and params map to, the same for every caller in a tenant.
-fn key(tenant_id: &str, request: &QueryRequest) -> String {
+fn key(tenant_id: &str, request: &QueryRequest, ignore: &HashSet<String>) -> String {
     let mut params: Vec<(&String, String)> = request
         .params
         .iter()
-        .map(|(name, value)| (name, value.to_string()))
+        .map(|(name, value)| match value.as_str() {
+            Some(text) => (name, keyed_text(text, ignore)),
+            None => (name, value.to_string()),
+        })
         .collect();
     params.sort();
     let mut canonical = format!("{tenant_id}\u{1f}{}", request.source);
@@ -65,6 +72,16 @@ fn key(tenant_id: &str, request: &QueryRequest) -> String {
         "{KEY_PREFIX}{}",
         Uuid::new_v5(&KEY_NAMESPACE, canonical.as_bytes())
     )
+}
+
+/// A text parameter as it is keyed: lowercase words, punctuation dropped, ignored words left out.
+fn keyed_text(text: &str, ignore: &HashSet<String>) -> String {
+    let lower = text.to_lowercase();
+    lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty() && !ignore.contains(*word))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Live queries over a shared cache: one fetch per query, and answers reused within their lifetime.
@@ -192,7 +209,13 @@ impl SourceQueries for CachedQueries {
         ctx: &RequestContext,
         request: &QueryRequest,
     ) -> Result<QueryOutcome, QueryError> {
-        let key = key(&ctx.tenant_id, request);
+        let none = HashSet::new();
+        let ignore = if self.rules.keep_words.contains(&request.source) {
+            &none
+        } else {
+            &self.rules.ignore_words
+        };
+        let key = key(&ctx.tenant_id, request, ignore);
         let mut outcome = CacheOutcome::Miss;
         let report = |outcome| {
             self.trace.emit(

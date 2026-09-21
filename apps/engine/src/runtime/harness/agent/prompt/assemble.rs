@@ -1,10 +1,8 @@
-//! Context assembly: fixed order, per-section budgets. Evidence and history trim first; rest kept.
+//! Context assembly: fixed order, per-section budgets. History trims first; the rest is kept.
 
 use crate::core::types::agent::assemble::{Assembled, Budget, Sections};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::{Message, Role};
-use crate::core::types::knowledge::evidence::age;
-use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::tokens::estimate;
 
 /// Builds the message list within budget.
@@ -52,10 +50,10 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
         messages.push(Message::system(block));
     }
 
-    let no_evidence = no_evidence_line(s);
-    used += no_evidence.as_deref().map_or(0, |b| estimate(b, cpt));
     let reply = reply_block(ctx, s, budget.reply, cpt);
     let reply_cost = reply.as_deref().map_or(0, |b| estimate(b, cpt));
+    let uploads = (!s.uploads.is_empty()).then(|| s.uploads.join("\n\n"));
+    used += uploads.as_deref().map_or(0, |b| estimate(b, cpt));
     let input_only = if s.input.is_empty() {
         0
     } else {
@@ -65,20 +63,7 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     let turn = fit_turn(s.turn, turn_room, cpt, s.templates.result_cut_line);
     let turn_cost: usize = turn.iter().map(|m| m.estimated_tokens(cpt)).sum();
 
-    let mut evidence_used = 0;
     let input_cost = input_only + turn_cost + reply_cost;
-    if let Some(block) = no_evidence {
-        messages.push(Message::system(block));
-    } else if !s.evidence.is_empty() {
-        // Evidence is capped by its own budget and by what remains after the sections above.
-        let evidence_budget = budget
-            .evidence
-            .min(budget.total.saturating_sub(used + input_cost));
-        let (block, spent, count) = evidence_block(s, evidence_budget, cpt);
-        used += spent;
-        evidence_used = count;
-        messages.push(Message::system(block));
-    }
 
     let remaining_total = budget.total.saturating_sub(used + input_cost);
     let (history, spent) = history_within(s.history, budget.history.min(remaining_total), cpt);
@@ -86,6 +71,10 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     messages.extend(history);
 
     if let Some(block) = reply {
+        messages.push(Message::system(block));
+    }
+
+    if let Some(block) = uploads {
         messages.push(Message::system(block));
     }
 
@@ -98,23 +87,8 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
     Assembled {
         messages,
         estimated_tokens: used,
-        evidence_used,
         memory_used,
     }
-}
-
-/// The line standing in for evidence when there is none. It is kept whatever the budget.
-fn no_evidence_line(s: &Sections<'_>) -> Option<String> {
-    if !s.evidence.is_empty() {
-        return None;
-    }
-    let line = match s.route.skipped() {
-        None => s.templates.no_evidence_line,
-        Some(Skipped::Chitchat) => s.templates.no_retrieval_line,
-        Some(Skipped::Live) => s.templates.live_only_line,
-        Some(Skipped::Unavailable) => s.templates.no_index_line,
-    };
-    Some(line.trim().to_owned()).filter(|l| !l.is_empty())
 }
 
 /// Prior turns within budget, keeping the newest, and what they cost.
@@ -196,39 +170,6 @@ fn cut(content: &str, tokens: usize, cpt: usize, cut_line: &str) -> String {
     let head = content.get(..end).unwrap_or_default().trim_end();
     let dropped = content.chars().count() - head.chars().count();
     format!("{head}\n{}", line(dropped))
-}
-
-/// The evidence section: header and every chunk that fits budget. Each entry is numbered to cite.
-fn evidence_block(s: &Sections<'_>, budget: usize, cpt: usize) -> (String, usize, usize) {
-    let mut block = format!("{}\n", s.templates.evidence_header.trim());
-    let mut spent = estimate(&block, cpt);
-    let mut count = 0;
-    for (i, e) in s.evidence.iter().enumerate() {
-        let page = e
-            .url
-            .as_deref()
-            .map(|url| format!(" - {url}"))
-            .unwrap_or_default();
-        let age = s
-            .now
-            .map(|now| format!(", {}", age(e.fetched_at, now)))
-            .unwrap_or_default();
-        let entry = format!(
-            "\n[{}] {}{page} (stored copy, fetched {}{age})\n{}\n",
-            i + 1,
-            e.title,
-            e.fetched_at.format("%Y-%m-%d"),
-            e.content.trim()
-        );
-        let cost = estimate(&entry, cpt);
-        if spent + cost > budget {
-            break;
-        }
-        block.push_str(&entry);
-        spent += cost;
-        count += 1;
-    }
-    (block, spent, count)
 }
 
 /// The memory section: the header and every memory that fits budget. None when there is no memory.

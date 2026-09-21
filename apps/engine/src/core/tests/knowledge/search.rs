@@ -177,7 +177,7 @@ fn the_source_filter_lists_a_hint_for_every_source_it_offers() {
     let help = source_help(SOURCE_DESCRIPTION, &sources, false);
     assert!(help.starts_with("Narrows the search"), "{help}");
     assert!(
-        help.contains("Leave it out to search all of them"),
+        help.contains("Leave it out unless"),
         "leaving it out is named as the default: {help}"
     );
     for source in &sources {
@@ -703,6 +703,34 @@ async fn a_stored_call_narrows_to_the_category_of_the_source_it_names() {
         queries[0].category.as_deref(),
         Some("library"),
         "the source names a key; the index is filtered by its category"
+    );
+}
+
+#[tokio::test]
+async fn a_source_that_holds_nothing_is_searched_past() {
+    let index = Stored::holding("advising", "Submit the change of major request").unfiled();
+    let asked = index.asked();
+    let tool = stored_tool(Arc::new(index));
+    let out = tool
+        .call(
+            &ctx(),
+            json!({"query": "change major process", "source": "courses"}),
+        )
+        .await;
+    let Ok(output) = out else {
+        unreachable!("the index answered, got {out:?}")
+    };
+    assert!(
+        output.content.contains("change of major"),
+        "{}",
+        output.content
+    );
+    let queries = asked.lock().map(|q| q.clone()).unwrap_or_default();
+    let categories: Vec<Option<String>> = queries.iter().map(|q| q.category.clone()).collect();
+    assert_eq!(categories.len(), 2, "the named source, then every source");
+    assert!(
+        categories[0].is_some() && categories[1].is_none(),
+        "{categories:?}"
     );
 }
 

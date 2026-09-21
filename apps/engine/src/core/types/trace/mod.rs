@@ -8,7 +8,6 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::core::types::knowledge::cache::CacheOutcome;
-use crate::core::types::knowledge::route::Skipped;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
@@ -35,8 +34,6 @@ pub enum TraceEvent {
         message_count: usize,
         /// Rough prompt token estimate.
         estimated_tokens: usize,
-        /// Evidence chunk ids included.
-        evidence_ids: Vec<Uuid>,
     },
     /// A model call is about to start. Once per step, whatever the retries.
     ModelStarted {
@@ -160,26 +157,21 @@ pub enum TraceEvent {
         /// Size of what was written.
         bytes: usize,
     },
+    /// A file the caller attached was copied into the sandbox workspace, or could not be.
+    FileAttached {
+        /// File name as uploaded.
+        name: String,
+        /// Size written. Zero when it failed.
+        bytes: usize,
+        /// Where it landed inside the workspace.
+        path: Option<String>,
+        /// Why it could not be opened.
+        error: Option<String>,
+    },
     /// Memory and the profile graph were read for the prompt.
     MemoryRecalled {
         /// Memories recalled.
         count: usize,
-    },
-    /// Retrieval ran.
-    Retrieval {
-        /// Loop step.
-        step: u32,
-        /// Query text.
-        query: String,
-        /// Chunk ids returned, best first.
-        chunk_ids: Vec<Uuid>,
-        /// Wall time.
-        duration_ms: u64,
-    },
-    /// The router skipped retrieval for this question.
-    RetrievalSkipped {
-        /// Why it was skipped.
-        reason: Skipped,
     },
     /// What the query cache did for a live query.
     QueryCache {
@@ -228,9 +220,8 @@ impl TraceEvent {
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
             Self::ToolResultStored { .. } => "tool_result_stored",
+            Self::FileAttached { .. } => "file_attached",
             Self::MemoryRecalled { .. } => "memory_recalled",
-            Self::Retrieval { .. } => "retrieval",
-            Self::RetrievalSkipped { .. } => "retrieval_skipped",
             Self::QueryCache { .. } => "query_cache",
             Self::QueryRefused { .. } => "query_refused",
             Self::Completed { .. } => "completed",
@@ -295,10 +286,19 @@ impl TraceEvent {
             Self::Compaction { turns } => Some(format!(
                 "\u{1f5dc}\u{fe0f} summarising {turns} earlier messages"
             )),
-            Self::Retrieval { chunk_ids, .. } => Some(format!(
-                "\u{1f4da} read {} {} from the knowledge base",
-                chunk_ids.len(),
-                plural(chunk_ids.len(), "source", "sources")
+            Self::FileAttached {
+                name, error: None, ..
+            } => Some(format!("\u{1f4ce} opened `{name}`")),
+            Self::FileAttached {
+                name,
+                error: Some(_),
+                ..
+            } => Some(format!("\u{1f4ce} could not open `{name}`")),
+            Self::QueryCache {
+                source,
+                outcome: CacheOutcome::Hit | CacheOutcome::Coalesced,
+            } => Some(format!(
+                "\u{267b}\u{fe0f} reused a recent `{source}` result"
             )),
             Self::QueryRefused { source, .. } => {
                 Some(format!("\u{1f6a6} `{source}` is busy right now"))
@@ -311,10 +311,8 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            // The tool call the skip leads to writes its own line, and so does a cached one.
             Self::ToolResultStored { .. }
             | Self::QueryCache { .. }
-            | Self::RetrievalSkipped { .. }
             | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }

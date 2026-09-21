@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::core::types::conversation::Visibility;
+use crate::core::types::conversation::file::FileAttachment;
 use crate::core::types::conversation::image::Attachment;
 use crate::core::types::trace::progress::Progress;
 
@@ -29,6 +30,8 @@ pub struct RequestContext {
     pub reply_to: Option<String>,
     /// Images attached to the caller's message.
     pub images: Vec<Attachment>,
+    /// Other files attached to the caller's message, opened in the sandbox.
+    pub files: Vec<FileAttachment>,
     /// Hard stop for the whole request.
     pub deadline: Instant,
     /// Cancelled by the caller or by the deadline.
@@ -49,6 +52,7 @@ impl RequestContext {
             visibility: Visibility::Public,
             reply_to: None,
             images: Vec::new(),
+            files: Vec::new(),
             deadline: Instant::now() + budget,
             cancel: CancellationToken::new(),
             progress: None,
@@ -82,6 +86,12 @@ impl RequestContext {
     /// Attaches images to the caller's message. More than most are dropped by the caller.
     pub fn with_images(mut self, images: Vec<Attachment>) -> Self {
         self.images = images;
+        self
+    }
+
+    /// Attaches files to the caller's message. More than most are dropped by the caller.
+    pub fn with_files(mut self, files: Vec<FileAttachment>) -> Self {
+        self.files = files;
         self
     }
 

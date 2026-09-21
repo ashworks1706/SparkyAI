@@ -13,13 +13,15 @@ log_level = "info,discord=debug"
 
 # ---------------------------------------------------------------- the agent loop
 [agent]
-max_steps = 8
+max_steps = 12
 max_model_retries = 2
-request_timeout_secs = 90
+request_timeout_secs = 110            # below the bot engine.request_timeout_secs of 120
 tool_timeout_secs = 20
 confirmation_ttl_secs = 600
 model_slots = 2                # match llama-server --parallel
 model_queue_wait_secs = 30
+max_turns = 16                 # turns running at once; each holds its history, files and tool results in memory
+turn_queue_wait_secs = 20      # longest a turn waits for a slot before it is refused as busy
 temperature = 0.6
 history_turns = 20
 memory_recall_limit = 10
@@ -31,8 +33,7 @@ recall_in_public = false
 # URLs and course codes finely. Tool schemas count against prompt_budget_tokens, and the engine
 # refuses to boot when they take over half of it. The prompt and model.max_tokens share one
 # llama-server slot: ctx-size 16384 over --parallel 2 is 8192 a slot.
-prompt_budget_tokens = 4000
-evidence_budget_tokens = 1200
+prompt_budget_tokens = 5500
 history_budget_tokens = 1000
 memory_budget_tokens = 300
 capabilities_budget_tokens = 600
@@ -41,6 +42,14 @@ reply_budget_tokens = 200
 # Images of one message the engine passes to the model. The edge caps what it sends in
 # bot.max_images; this caps what the HTTP surface accepts from any caller holding the token.
 max_images = 4
+# Other files of one message (PDF, Word, Excel, CSV, text) copied into the sandbox workspace,
+# the largest accepted, and the only hosts they are downloaded from.
+max_files = 4
+max_file_bytes = 2000000
+file_hosts = ["cdn.discordapp.com", "media.discordapp.net"]
+upload_preview_chars = 800       # characters of the start of an attached file's text put beside the question
+upload_match_chars = 2400        # characters of its passages that match the question
+upload_ocr_pages = 3             # pages of a scanned PDF read by OCR
 chars_per_token = 4
 # Fraction added to prompt_budget_tokens for the chat template. At boot the sum, with
 # model.max_tokens_without_thinking, must fit one slot of the chat server.
@@ -69,10 +78,12 @@ stream_block_chars = 160
 [agent.thinking]
 mode = "auto"                  # on, off, or auto
 # auto takes the first rule that applies: a call offered no tools does not think; a step with
-# tool results thinks when after_tools is set; a question holding a cue, longer than
-# max_quick_chars, or that retrieval ran for and found nothing for thinks; anything else does not.
+# tool results thinks when after_tools is set; a question holding a cue or longer than
+# max_quick_chars thinks; a step before any tool has run thinks when plan_searches is set, since
+# nothing is retrieved before the first call and that step picks the searches; else it does not.
 after_tools = true
 max_quick_chars = 80
+plan_searches = true
 cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
 # A call that thought and left no answer and no tool call is made again without thinking.
 retry_without = true
@@ -85,16 +96,9 @@ retry_without = true
 role_line = "The user is `{user}`. Roles: {roles}."
 role_line_no_roles = "The user is `{user}`. They hold no special roles."
 memory_header = "What you remember about this user:"
-evidence_header = "Stored copies of pages from the knowledge base, closest match first, each with when it was fetched. They may be out of date or may not answer the question. When the question needs current information, such as hours today, shuttles, events, news or scores, call search_live first. When these entries do not answer it, call search_knowledge with the subject named in full. Otherwise answer from them and from tool output only, and cite the bracketed number of every entry you use."
-no_evidence_line = "The knowledge base returned nothing for this question. Before you answer, call search_knowledge with the subject of the question written out in keywords, or call search_live when the answer has to be current. Say you do not have it only after one of them comes back empty."
-# Written instead when retrieval.router skipped retrieval, one line per reason.
-no_retrieval_line = "The knowledge base was not searched for this message: it asks for no ASU fact. Answer it directly and briefly, and cite nothing."
-live_only_line = "The knowledge base was not searched for this question: the answer has to be current, and a stored copy would be out of date. Call search_live with the subject written out in keywords, and answer from what it returns, or say you do not have it."
-# Written instead when the knowledge base could not be read at all.
-no_index_line = "The knowledge base could not be read for this question, so nothing from it is in this prompt. That is a fault on our side, not an answer. Call search_live with the subject written out in keywords, open the page yourself if what comes back is thin, and answer from that. Never tell the user the knowledge base is down."
 capabilities_header = "What you can do. Each line is a name, how it runs, and what it does."
 # {date} is filled in at assembly.
-date_line = "Today is {date}. Evidence rows are labelled by day or date; read the label the question asks for, never the first value in a row."
+date_line = "Today is {date}. Search results are labelled by day or date; read the label the question asks for, never the first value in a row."
 reply_header = "The user replied to this earlier message of yours. It is what they are answering, so read it as the immediate context of what they say next."
 # Closes a tool result cut to fit the prompt; {chars} is how much was left out.
 result_cut_line = "[{chars} more characters of this result were cut to fit. Search again with a narrower query to read them.]"
@@ -102,6 +106,13 @@ answer_only_line = "You have no tools on this step. Answer the user now in plain
 # Sent back when a tool failed and the sandbox was not tried, so the loop takes the last route
 # before it gives up. Empty turns the hand-back off.
 sandbox_retry_line = "A tool you called this turn failed, and you have not opened the page yourself. Do that now: call run_sandbox and fetch the page the question is about, then answer from what it prints. Tell the user you could not find something only after that has been tried."
+# One line per file the user attached. The engine turns the file into text in the sandbox first;
+# {preview} is the start of that text, {matches} the passages holding the most words of the
+# question, and {text_path} where the rest is.
+upload_line = "The user attached {name} ({kind}, {size}). Its text, {chars} characters, is at {text_path} in the sandbox workspace, session {session}; the file itself is at {path}. It begins:\n{preview}\n\nThe passages of it that hold the most words of the question:\n{matches}\n\nAnswer a question about this file from these passages, never from search results or memory. When they do not hold the answer, read more with run_sandbox in session {session}: rg -i -n -C 3 SUBJECT {text_path}, or sed -n START,ENDp {text_path} around a line number above."
+# When no text came out of the file, such as an image or an archive.
+upload_raw_line = "The user attached {name} ({kind}, {size}). It is at {path} in the sandbox workspace, session {session}, and no text could be pulled from it automatically. Open it with run_sandbox in that session before you answer: file {path} says what it is, and python3 with pypdf, docx, openpyxl or pandas, or pdftoppm and tesseract for a scan, reads it."
+upload_failed_line = "The user attached {name} ({kind}), but it could not be opened: {reason}. Say so if the question depends on it."
 utc_offset_hours = -7          # Arizona, no daylight saving
 
 # ---------------------------------------------------------------- the model
@@ -109,8 +120,9 @@ utc_offset_hours = -7          # Arizona, no daylight saving
 [model]
 name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
 # Token budget of a call that thinks, reasoning and answer together. One slot holds the prompt
-# and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot. See agent.thinking.
-max_tokens = 4096
+# and this: chat ctx-size 16384 over --parallel 2 is 8192 a slot, and a full prompt of
+# agent.prompt_budget_tokens leaves about this much. See agent.thinking.
+max_tokens = 2560
 # Token budget of a call that does not think.
 max_tokens_without_thinking = 1024
 usd_per_m_prompt = 0.0
@@ -145,7 +157,7 @@ thinking = false               # true spends the whole budget on reasoning and r
 # ---------------------------------------------------------------- retrieval
 # Two legs fused with reciprocal rank fusion. Turning both off is rejected at boot.
 [retrieval]
-top_k = 6                      # evidence chunks handed to the prompt
+top_k = 6                      # chunks search_knowledge returns per call
 candidates = 20                # pulled from each leg before fusion
 rrf_k = 60.0
 text_search_config = "english"
@@ -157,17 +169,6 @@ max_distance = 0.6             # cosine distance past which a dense match is dro
 # narrow so a match is precise; the window is what gives the model enough around it to read.
 # Overlapping windows merge, so nearby hits cost one passage, not two. 0 hands back the hit alone.
 window = 2
-
-# The rule gate in front of retrieval, run on every turn. It is rules, not a model call, so it
-# costs nothing on the critical path. Empty lists use the built-in ones. A turn holding a live cue
-# skips retrieval and is answered from a search tool; a turn of at most max_chitchat_words that
-# holds a chitchat marker and no live cue skips it and is answered directly. A skipped turn also
-# does not think: the no_evidence thinking rule applies only when retrieval actually ran.
-[retrieval.router]
-enabled = true
-max_chitchat_words = 4
-chitchat = []
-live = []
 
 # ---------------------------------------------------------------- what may run
 # Risk classes in order: read_public, read_authenticated, prepare_write, external_write,
@@ -190,11 +191,11 @@ disabled = []
 search = true
 # The source search_live fetches when a call names none. Must be a source the engine offers.
 live_default_source = "web"
-knowledge_description = "Search the stored knowledge base of ASU pages. Use it when the results already in this prompt do not answer, or you need a different part of the same page."
+knowledge_description = "Search the stored knowledge base of ASU pages: programs, policies, admissions, advising, buildings, services and offices, anything that changes rarely. Nothing is looked up before you are called, so search it for any such question. Send several searches with different wording in one step."
 live_description = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, such as hours today, open seats, shuttle times, events, news or scores, or when the knowledge base holds nothing."
 query_description = "What to search for, in keywords. This string is the whole request: the tool reads nothing else from the conversation, so name the subject in full and write no pronoun and no bare word. Bad: hours. Good: Hayden Library hours Sunday. Bad: does it have space left. Good: CSE 310 Fall 2026 open seats."
-source_description = "Narrows the search to one source. Leave it out to search all of them, which is right unless you already know which source holds the answer."
-nothing_stored = "The knowledge base holds nothing for that query. Search again with the subject named differently, or call search_live, or open the page yourself with run_sandbox. Say you do not have it only once all three have been tried this turn."
+source_description = "Narrows the search to one source. Leave it out unless the question is plainly about that one source: a wrong source returns nothing even when the answer is stored."
+nothing_stored = "The knowledge base holds nothing for that query. If you named a source, search again without it. Otherwise search again with the subject named differently, or call search_live, or open the page yourself with run_sandbox. Say you do not have it only once all of that has been tried this turn."
 
 # The classifier and the graph agent, detached from the request that produced the turn.
 # Enabled, every turn costs two extra model calls.
@@ -237,13 +238,16 @@ max_output_chars = 4000
 risk = "prepare_write"
 session_idle_secs = 900        # how long a named session stays up with nothing running
 max_sessions = 4               # sessions one user holds at once; a new one reaps the oldest
+max_sessions_total = 16        # session containers across every user; a new one reaps the least recently used
+max_running = 8                # commands running at once across every user; more wait for a slot
+instance = "default"           # names this engine's containers; give each engine on one runtime its own
 workspace_mb = 64
 recent_commands = 200          # commands kept for the console view of what Sparky ran
 egress = true
 egress_network = "sparky-sandbox"
 egress_proxy_image = "ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main"
 egress_proxy_name = "sparky-sandbox-proxy"
-description = "Run a shell command in an isolated Linux environment. Reach for it whenever a search did not give you what you need, before you tell the user you could not find something. It has python3 with requests, bs4, lxml and pandas, curl, wget, jq, rg, sqlite3, pdftotext and the usual text tools. It can fetch public web pages over HTTP and HTTPS, for example to read the ASU page a search pointed at. A long result from another tool is saved in the workspace and the result names the file; read it here with rg, grep or python3."
+description = "Run a shell command in an isolated Linux environment. Reach for it whenever a search did not give you what you need, before you tell the user you could not find something, and for any file the user attached or any tool result too long to read whole. It has python3 with requests, bs4, lxml, pandas, numpy, pypdf, docx, openpyxl, xlrd, PIL, yaml and markdown; pdftotext, pdftoppm and tesseract for PDFs and scans; curl, wget, jq, rg, sqlite3, file, unzip and the usual text tools. It can fetch public web pages over HTTP and HTTPS, for example to read the ASU page a search pointed at. Files the user attached and long results from other tools are already in the workspace, and the prompt or the result names the path and session; read them here with rg, grep or python3."
 command_description = "The shell command to run."
 session_description = "Name a session to keep files in the workspace between calls. Reuse the same name to resume it. Results an earlier tool wrote to the workspace name the session they are in."
 
@@ -280,7 +284,7 @@ timeout_secs = 90
 poll_ms = 100
 poll_max_ms = 1000
 max_in_flight = 16             # 0 removes the cap; keep it under postgres.max_connections
-claim_secs = 5                 # a query the scraper does not claim in this long reports that it is not running
+claim_secs = 15                # a query the scraper does not claim in this long reports that it is not running
 
 # Tool output caching for live queries, in Redis, shared by every engine replica. url is
 # per-machine and lives in .env as SPARKY_REDIS__URL; without it this must be off.
@@ -307,6 +311,9 @@ handoff_secs = 5               # floor under every lifetime, so the requests tha
 lease_secs = 120               # must cover query.timeout_secs, or two requests fetch the same query
 poll_ms = 100                  # how often a waiting request looks for the answer
 timeout_ms = 500               # a cache slower than this is treated as one that is not there
+# Left out of a query when it is keyed, so "AI clubs ASU" and "ai clubs" share one entry.
+ignore_words = ["asu", "arizona", "state", "university", "the", "a", "an", "at", "in", "of", "for", "on", "to", "and", "near", "me"]
+keep_words = ["web"]           # sources keyed on every word, where ASU changes the search
 
 # Per source, by registry key. Anything not named here takes the default for its kind above.
 [query.cache.ttl_secs]
@@ -318,6 +325,9 @@ social_media = 1800
 sports_news = 900
 news = 900
 courses = 300                  # open seat counts move during registration
+clubs = 21600                  # the group directory changes over days, not hours
+events = 1800                  # new events are posted through the day
+web = 600                      # an open web search for the same words
 
 # ---------------------------------------------------------------- MCP
 # Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
@@ -338,8 +348,8 @@ max_tool_description_chars = 160
 [trace]
 enabled = true
 dir = ".sparky/traces"
-max_file_bytes = 0             # 0 removes the limit
-retention_hours = 0            # 0 keeps them forever
+max_file_bytes = 2000000       # later events of one request are dropped past this; 0 removes the limit
+retention_hours = 336          # pruned hourly; 0 keeps them forever
 
 # Spans go to Phoenix over OTLP/HTTP at phoenix_url plus /v1/traces. phoenix_url is
 # per-machine and phoenix_api_key is a secret; both live in .env. An empty phoenix_url turns
@@ -378,12 +388,16 @@ direct_messages = true
 # Images of one message sent to the model. The model has to be one that reads images; see
 # deploy/inference/README.md. 0 sends none.
 max_images = 4
+# Other files of one message sent to the engine, which opens them in the sandbox, and the largest.
+max_files = 4
+max_file_bytes = 2000000
 
 # ---------------------------------------------------------------- postgres
 # url carries the password and lives in .env.
 [postgres]
 max_connections = 10
 acquire_timeout_secs = 5
+scraper_pool_max = 8           # scraper pool; covers scraper.live_workers, the background lane and the scheduler
 
 # ---------------------------------------------------------------- the scraper
 [scraper]
@@ -399,10 +413,15 @@ chunk_chars = 300
 chunk_overlap_chars = 0
 index_live_results = true          # index a live result after answering, for sources that allow it
 serve_poll_secs = 0.5              # longest a lane of scraper serve waits before looking again
+live_workers = 4                   # live queries scraper serve answers at once
+browser_skip = "image,media,font"  # resource types the browser drivers never load
+max_browsers = 2                   # Chromium browsers open at once across every lane
+max_page_bytes = 10000000          # largest page a plain HTTP fetch reads
+keep_versions = 5                  # versions kept per source with their snapshots; 0 keeps all
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
 job_lease_secs = 1800.0            # a background job running longer is queued again
 host_gap_secs = 5.0                # shortest gap between scheduled fetches to one host; ASU rate limits bursts
-query_max_chars = 6000             # a live result is always kept in the prompt; about 1500 tokens
+query_max_chars = 30000            # longest live result sent to the engine; past agent.tool_result_to_file_chars it goes to the sandbox workspace
 # Back pressure on the one table every process writes to. Past index_backlog_limit queued
 # live_index jobs a live result is answered but not indexed: answering is what a student is
 # waiting on, and the source is refetched on its schedule anyway. Finished jobs are removed after
@@ -435,13 +454,22 @@ wait_for_ms = 5000             # wait after load for ASU pages to fill in conten
 only_main_content = true
 
 # Admin authenticated browser session for login-gated sources (clubs, Sun Devil Central events).
-# An operator captures it once with `just scraper login`; only cookies are saved, never a password.
-# This is admin scoped and shared across guilds; it is not the per-user MyASU session.
+# `just scraper login` opens MyASU, asks for the username and password at the console, and waits
+# for Duo. Only cookies are saved, never a password. Admin scoped; not the per-user MyASU session.
 [auth]
-storage_state_path = ".sparky/auth/admin_state.json"   # per-machine; the deployed path lives in .env
-login_url = "https://sundevilcentral.eoss.asu.edu/"
+storage_state_path = "../../.sparky/auth/admin_state.json"   # relative to apps/scraper
+login_url = "https://my.asu.edu/"
+service_login_url = "https://sundevilcentral.eoss.asu.edu/webapp/auth/login"
+service_sso_text = "SSO Login"
+check_url = "https://sundevilcentral.eoss.asu.edu/events"
+sso_hosts = "weblogin.asu.edu,duosecurity.com,campusgroups.com"
 login_hosts = "weblogin.asu.edu,cas.asu.edu,login.microsoftonline.com,idp.asu.edu"
+login_paths = "/webapp/auth/login"
+login_headless = true
+login_attempts = 3
+duo_timeout_secs = 120.0
 nav_timeout_secs = 60.0
+fetch_attempts = 3
 
 # endpoint and keys are per-machine and live in .env.
 [object_store]
@@ -453,6 +481,8 @@ region = "us-east-1"
 phoenix_url = "http://localhost:6006"
 log_lines = 5000
 log_dir = ".sparky/logs"
+log_file_max_mb = 20           # a unit log past this is rotated to one .1 file
+log_line_chars = 4000          # longest line kept from a unit's output
 health_interval_secs = 5
 port_check_ms = 150
 

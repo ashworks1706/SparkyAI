@@ -101,6 +101,9 @@ impl Default for AgentConfig {
             tool_result_to_file_chars: agent.tool_result_to_file_chars,
             confirmation_ttl: std::time::Duration::from_secs(agent.confirmation_ttl_secs),
             temperature: agent.temperature,
+            upload_preview_chars: agent.upload_preview_chars,
+            upload_match_chars: agent.upload_match_chars,
+            upload_ocr_pages: agent.upload_ocr_pages,
             history_turns: agent.history_turns,
             history_keep: Compaction::default().keep_tokens(agent.history_budget_tokens),
             memory_recall_limit: agent.memory_recall_limit,
@@ -108,7 +111,6 @@ impl Default for AgentConfig {
             retry_base_ms: agent.retry_base_ms,
             retry_cap_ms: agent.retry_cap_ms,
             max_span_value_chars: agent.max_span_value_chars,
-            retrieval_top_k: Retrieval::default().top_k,
             budget: agent.budget(),
             stream: agent.stream,
             stream_block_chars: agent.stream_block_chars,
@@ -251,7 +253,6 @@ impl Config {
         }
         // Each section budget fits within the total.
         for (name, value) in [
-            ("evidence", self.agent.evidence_budget_tokens),
             ("history", self.agent.history_budget_tokens),
             ("memory", self.agent.memory_budget_tokens),
             ("capabilities", self.agent.capabilities_budget_tokens),

@@ -6,26 +6,9 @@ use uuid::Uuid;
 use crate::core::tests::support::ctx;
 use crate::core::types::agent::assemble::{Budget, Sections, Templates};
 use crate::core::types::conversation::message::{Message, Role};
-use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::evidence::age;
-use crate::core::types::knowledge::route::{Route, Skipped};
 use crate::core::types::memory::{Memory, MemoryKind};
 use crate::runtime::harness::agent::prompt::assemble::assemble;
-
-fn evidence(n: usize) -> Vec<Evidence> {
-    (0..n)
-        .map(|i| Evidence {
-            source_id: Uuid::new_v4(),
-            chunk_id: Uuid::new_v4(),
-            key: format!("doc_{i}"),
-            title: format!("Doc {i}"),
-            content: "x".repeat(400),
-            url: None,
-            fetched_at: Utc::now(),
-            score: 1.0,
-        })
-        .collect()
-}
 
 #[test]
 fn system_comes_first_and_input_last() {
@@ -41,27 +24,6 @@ fn system_comes_first_and_input_last() {
     );
     assert_eq!(out.messages.first().map(|m| m.role), Some(Role::System));
     assert_eq!(out.messages.last().map(|m| m.content.as_str()), Some("hi"));
-}
-
-#[test]
-fn evidence_is_trimmed_to_its_budget() {
-    let ev = evidence(20);
-    let out = assemble(
-        &ctx(),
-        &Sections {
-            system: "s",
-            evidence: &ev,
-            input: "q",
-            date: "Friday 11 September 2026",
-            ..Sections::default()
-        },
-        Budget {
-            evidence: 500,
-            ..Budget::default()
-        },
-    );
-    assert!(out.evidence_used < 20);
-    assert!(out.evidence_used >= 1);
 }
 
 #[test]
@@ -125,14 +87,12 @@ fn a_resumed_run_appends_no_input_of_its_own() {
         &Sections {
             system: "sys",
             memory: &[],
-            evidence: &[],
-            route: Route::Retrieve,
+            uploads: &[],
             history: &history,
             turn: &[],
             capabilities: "",
             input: "",
             date: "Friday 11 September 2026",
-            now: None,
             templates: Templates::default(),
         },
         Budget::default(),
@@ -153,7 +113,6 @@ fn a_resumed_run_appends_no_input_of_its_own() {
 
 #[test]
 fn the_wording_around_every_section_comes_from_configuration() {
-    let ev = evidence(1);
     let memories = vec![Memory {
         id: Uuid::new_v4(),
         kind: MemoryKind::Profile,
@@ -167,13 +126,11 @@ fn the_wording_around_every_section_comes_from_configuration() {
         &Sections {
             system: "s",
             memory: &memories,
-            evidence: &ev,
             input: "q",
             date: "Friday 11 September 2026",
             templates: Templates {
                 role_line_no_roles: "caller {user}",
                 memory_header: "REMEMBERED",
-                evidence_header: "SOURCES",
                 ..Templates::default()
             },
             ..Sections::default()
@@ -182,106 +139,7 @@ fn the_wording_around_every_section_comes_from_configuration() {
     );
     let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
     assert!(text.contains("REMEMBERED"), "{text}");
-    assert!(text.contains("SOURCES"), "{text}");
     assert!(text.contains("caller u"), "{text}");
-    assert!(!text.contains("Knowledge base results"), "{text}");
-}
-
-#[test]
-fn a_question_retrieval_found_nothing_for_says_so_instead_of_going_quiet() {
-    let empty = assemble(
-        &ctx(),
-        &Sections {
-            system: "s",
-            input: "q",
-            templates: Templates {
-                no_evidence_line: "NOTHING FOUND",
-                ..Templates::default()
-            },
-            ..Sections::default()
-        },
-        Budget::default(),
-    );
-    let text: String = empty.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(text.contains("NOTHING FOUND"), "{text}");
-    assert_eq!(empty.evidence_used, 0);
-
-    let ev = evidence(1);
-    let found = assemble(
-        &ctx(),
-        &Sections {
-            system: "s",
-            evidence: &ev,
-            input: "q",
-            templates: Templates {
-                no_evidence_line: "NOTHING FOUND",
-                ..Templates::default()
-            },
-            ..Sections::default()
-        },
-        Budget::default(),
-    );
-    let text: String = found.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(!text.contains("NOTHING FOUND"), "{text}");
-}
-
-#[test]
-fn a_turn_the_router_skipped_is_told_why_rather_than_that_nothing_was_found() {
-    let templates = Templates {
-        no_evidence_line: "NOTHING FOUND",
-        no_retrieval_line: "NOT SEARCHED",
-        live_only_line: "TOO OLD TO HELP",
-        ..Templates::default()
-    };
-    let line = |route| {
-        let out = assemble(
-            &ctx(),
-            &Sections {
-                system: "s",
-                input: "q",
-                route,
-                templates,
-                ..Sections::default()
-            },
-            Budget::default(),
-        );
-        out.messages
-            .iter()
-            .map(|m| m.content.clone())
-            .collect::<String>()
-    };
-    assert!(line(Route::Retrieve).contains("NOTHING FOUND"));
-    let chitchat = line(Route::Skip(Skipped::Chitchat));
-    assert!(chitchat.contains("NOT SEARCHED"), "{chitchat}");
-    assert!(
-        !chitchat.contains("NOTHING FOUND"),
-        "a skipped turn is never told retrieval came back empty"
-    );
-    let current = line(Route::Skip(Skipped::Live));
-    assert!(current.contains("TOO OLD TO HELP"), "{current}");
-    assert!(!current.contains("NOTHING FOUND"), "{current}");
-}
-
-#[test]
-fn an_evidence_entry_carries_its_number_its_page_and_its_date() {
-    let mut ev = evidence(1);
-    ev[0].url = Some("https://lib.asu.edu/hours".into());
-    let out = assemble(
-        &ctx(),
-        &Sections {
-            system: "s",
-            evidence: &ev,
-            input: "q",
-            ..Sections::default()
-        },
-        Budget::default(),
-    );
-    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(
-        text.contains("[1] Doc 0 - https://lib.asu.edu/hours"),
-        "{text}"
-    );
-    assert!(text.contains("(stored copy, fetched "), "{text}");
 }
 
 #[test]
@@ -305,31 +163,6 @@ fn the_capabilities_heading_is_written_around_the_rendered_list() {
         text.contains("WHAT YOU CAN DO\n- search_library_hours (tool)"),
         "{text}"
     );
-}
-
-#[test]
-fn a_finer_tokenizer_estimate_fits_less_into_the_same_budget() {
-    // Two characters per token fits less evidence than eight in the same budget.
-    let ev = evidence(20);
-    let count = |chars_per_token: usize| {
-        assemble(
-            &ctx(),
-            &Sections {
-                system: "s",
-                evidence: &ev,
-                input: "q",
-                date: "Friday 11 September 2026",
-                ..Sections::default()
-            },
-            Budget {
-                evidence: 800,
-                chars_per_token,
-                ..Budget::default()
-            },
-        )
-        .evidence_used
-    };
-    assert!(count(2) < count(8), "{} < {}", count(2), count(8));
 }
 
 #[test]
@@ -414,12 +247,10 @@ fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_dropped()
     );
     let result = Message::tool_result("c1", "search_news", "x".repeat(4_000));
     let turn = [call, result];
-    let ev = evidence(20);
     let out = assemble(
         &ctx(),
         &Sections {
             system: "s",
-            evidence: &ev,
             input: "latest news",
             turn: &turn,
             date: "Friday 11 September 2026",
@@ -441,37 +272,6 @@ fn the_tool_exchange_of_this_request_follows_the_question_and_is_never_dropped()
         out.messages.last().map(|m| m.role),
         Some(Role::Tool),
         "the tool result is the last thing the model reads"
-    );
-    assert_eq!(
-        out.evidence_used, 0,
-        "evidence gives way to the result of this turn when the budget is tight"
-    );
-}
-
-#[test]
-fn every_evidence_entry_says_it_is_a_stored_copy_and_how_old_it_is() {
-    let now = Utc::now();
-    let mut ev = evidence(1);
-    if let Some(first) = ev.first_mut() {
-        first.fetched_at = now - Duration::days(3);
-    }
-    let out = assemble(
-        &ctx(),
-        &Sections {
-            system: "s",
-            evidence: &ev,
-            input: "q",
-            now: Some(now),
-            ..Sections::default()
-        },
-        Budget::default(),
-    );
-    let text: String = out.messages.iter().map(|m| m.content.clone()).collect();
-    assert!(text.contains("(stored copy, fetched "), "{text}");
-    assert!(text.contains(", 3 days ago)"), "{text}");
-    assert!(
-        text.contains("call search_knowledge with the subject"),
-        "{text}"
     );
 }
 

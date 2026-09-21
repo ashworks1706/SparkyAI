@@ -3,8 +3,10 @@
 use serde::Deserialize;
 
 /// Default description of search_knowledge.
-pub const KNOWLEDGE_DESCRIPTION: &str = "Search the stored knowledge base of ASU pages. Use it when the results already in this \
-     prompt do not answer, or you need a different part of the same page.";
+pub const KNOWLEDGE_DESCRIPTION: &str = "Search the stored knowledge base of ASU pages: programs, policies, admissions, advising, \
+     buildings, services and offices, anything that changes rarely. Nothing is looked up \
+     before you are called, so search it for any such question. Send several searches with \
+     different wording in one step.";
 
 /// Default description of search_live.
 pub const LIVE_DESCRIPTION: &str = "Fetch an ASU source or the open web right now. Use it when the answer has to be current, \
@@ -18,13 +20,14 @@ pub const QUERY_DESCRIPTION: &str = "What to search for, in keywords. This strin
      CSE 310 Fall 2026 open seats.";
 
 /// Default lead of the source parameter of both search tools.
-pub const SOURCE_DESCRIPTION: &str = "Narrows the search to one source. Leave it out to search all of them, which is right \
-     unless you already know which source holds the answer.";
+pub const SOURCE_DESCRIPTION: &str = "Narrows the search to one source. Leave it out unless the question is plainly about that \
+     one source: a wrong source returns nothing even when the answer is stored.";
 
 /// Default answer of search_knowledge when the index holds nothing for the query.
-pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that query. Search again \
-     with the subject named differently, or call search_live, or open the page yourself with \
-     run_sandbox. Say you do not have it only once all three have been tried this turn.";
+pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that query. If you named a source, search again \
+     without it. Otherwise search again with the subject named differently, or call \
+     search_live, or open the page yourself with run_sandbox. Say you do not have it only \
+     once all of that has been tried this turn.";
 
 /// Which tools are registered and how the two search tools are worded.
 #[derive(Debug, Deserialize)]

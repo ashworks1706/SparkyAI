@@ -1331,3 +1331,42 @@ fn a_message_with_only_an_image_is_still_a_question() {
     let wire = serde_json::to_value(&none).unwrap_or_default();
     assert!(wire.get("images").is_none(), "no images writes no field");
 }
+
+#[test]
+fn files_that_are_not_images_are_sent_to_the_engine_within_the_cap() {
+    use crate::access::route::files;
+
+    let sent = files(
+        [
+            (
+                "https://cdn/syllabus.pdf",
+                "syllabus.pdf",
+                Some("application/pdf"),
+                120_000,
+            ),
+            (
+                "https://cdn/photo.png",
+                "photo.png",
+                Some("image/png"),
+                5_000,
+            ),
+            (
+                "https://cdn/huge.zip",
+                "huge.zip",
+                Some("application/zip"),
+                9_000_000,
+            ),
+            ("https://cdn/notes", "notes", None, 300),
+        ],
+        4,
+        2_000_000,
+    );
+    let names: Vec<&str> = sent.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["syllabus.pdf", "notes"],
+        "an image goes as an image, and a file over the cap is left out"
+    );
+    assert_eq!(sent[0].media_type, "application/pdf");
+    assert!(files([("https://cdn/a.pdf", "a.pdf", None, 1)], 0, 2_000_000).is_empty());
+}

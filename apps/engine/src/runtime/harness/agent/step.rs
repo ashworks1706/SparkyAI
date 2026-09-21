@@ -54,7 +54,7 @@ impl Agent {
     ) -> Result<StepOutcome, ModelError> {
         let ctx = run.ctx;
         let messages = self.prompt_for(run, inputs);
-        let thinking = self.thinking(run, inputs);
+        let thinking = self.thinking(run);
         self.deps
             .trace
             .emit(ctx, TraceEvent::ModelStarted { step: run.steps });
@@ -120,19 +120,16 @@ impl Agent {
             &Sections {
                 system: &self.system_prompt,
                 memory: &inputs.memory,
-                evidence: &inputs.evidence,
-                route: inputs.route,
+                uploads: &inputs.uploads,
                 history: &inputs.history,
                 turn,
                 capabilities: &self.capabilities(),
                 input: run.input,
                 date: &self.prompt.today(),
-                now: Some(chrono::Utc::now()),
                 templates: self.prompt.templates(),
             },
             budget,
         );
-        run.evidence_in_prompt = assembled.evidence_used;
         run.memories_in_prompt = inputs
             .memory
             .iter()
@@ -145,12 +142,6 @@ impl Agent {
                 step: run.steps,
                 message_count: assembled.messages.len(),
                 estimated_tokens: assembled.estimated_tokens + tool_tokens,
-                evidence_ids: inputs
-                    .evidence
-                    .iter()
-                    .take(assembled.evidence_used)
-                    .map(|item| item.chunk_id)
-                    .collect(),
             },
         );
         let mut messages = assembled.messages;

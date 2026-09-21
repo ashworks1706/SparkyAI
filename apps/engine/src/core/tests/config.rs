@@ -31,11 +31,7 @@ fn traces_default_to_the_sparky_state_directory() {
 #[test]
 fn every_section_budget_fits_inside_the_prompt_budget() {
     let a = Agent::default();
-    for section in [
-        a.evidence_budget_tokens,
-        a.history_budget_tokens,
-        a.memory_budget_tokens,
-    ] {
+    for section in [a.history_budget_tokens, a.memory_budget_tokens] {
         assert!(section <= a.prompt_budget_tokens);
     }
 }
@@ -262,8 +258,8 @@ fn a_negative_retrieval_window_is_rejected() {
 
 #[test]
 fn a_section_budget_above_the_prompt_budget_is_rejected() {
-    let e = err("[agent]\nprompt_budget_tokens = 1000\nevidence_budget_tokens = 4000\n");
-    assert!(e.contains("evidence_budget_tokens"), "{e}");
+    let e = err("[agent]\nprompt_budget_tokens = 1000\nhistory_budget_tokens = 4000\n");
+    assert!(e.contains("history_budget_tokens"), "{e}");
 }
 
 #[test]

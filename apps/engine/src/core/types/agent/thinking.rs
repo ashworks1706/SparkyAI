@@ -22,8 +22,10 @@ pub struct ThinkingRules {
     pub mode: ThinkingMode,
     /// Think on a step that has tool results to read.
     pub after_tools: bool,
-    /// Longest question, in characters, answered from evidence without thinking.
+    /// Longest question, in characters, answered without thinking.
     pub max_quick_chars: usize,
+    /// Think on a step with no tool results yet, where the model plans its searches.
+    pub plan_searches: bool,
     /// Words or phrases that make a question think, matched whole and case-insensitively.
     pub cues: Vec<String>,
     /// Ask again without thinking when thinking left no answer.
@@ -44,9 +46,9 @@ pub enum ThinkingReason {
     Cue,
     /// The question is longer than a quick one.
     Long,
-    /// Retrieval found nothing, so the model plans a tool call.
-    NoEvidence,
-    /// A short question with evidence in the prompt.
+    /// No tool has run yet, so the model plans its searches.
+    Plan,
+    /// A short question, with planning off.
     Quick,
     /// Thinking left no answer, so the call is made again without it.
     Retry,
@@ -61,7 +63,7 @@ impl ThinkingReason {
             Self::AfterTools => "after_tools",
             Self::Cue => "cue",
             Self::Long => "long",
-            Self::NoEvidence => "no_evidence",
+            Self::Plan => "plan",
             Self::Quick => "quick",
             Self::Retry => "retry",
         }

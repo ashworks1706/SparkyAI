@@ -26,6 +26,9 @@ def _toml_files() -> tuple[Path, ...]:
 
 class Postgres(BaseModel):
     url: SecretStr = SecretStr("postgres://sparky:sparky@localhost:5432/sparky")
+    # Pooled connections the scraper holds at most. Every lane of scraper serve takes one per job,
+    # so this covers scraper.live_workers plus the background lane and the scheduler.
+    scraper_pool_max: int = 8
 
 
 class ObjectStore(BaseModel):
@@ -70,18 +73,35 @@ class Firecrawl(BaseModel):
 class Auth(BaseModel):
     """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU.
 
-    An operator captures the session once with scraper login and completes any MFA themselves.
-    Only the browser storage state (cookies and local storage) is saved, never a password.
+    An operator runs scraper login, types a username and password at the console, and approves
+    Duo. Only the browser storage state (cookies and local storage) is saved, never a password.
     """
 
     # Where the captured storage state is read from and written to.
-    storage_state_path: str = ".sparky/auth/admin_state.json"
-    # Where scraper login sends the operator to sign in.
-    login_url: str = "https://sundevilcentral.eoss.asu.edu/"
+    storage_state_path: str = "../../.sparky/auth/admin_state.json"
+    # The MyASU page scraper login opens first; it redirects to the ASU sign-in form.
+    login_url: str = "https://my.asu.edu/"
+    # The login-gated service entered after MyASU, and the link on it that starts single sign-on.
+    service_login_url: str = "https://sundevilcentral.eoss.asu.edu/webapp/auth/login"
+    service_sso_text: str = "SSO Login"
+    # A page that only loads when signed in; scraper login --if-needed checks the session with it.
+    check_url: str = "https://sundevilcentral.eoss.asu.edu/events"
+    # Hosts a sign-in passes through, comma-separated. A page on one has not finished signing in.
+    sso_hosts: str = "weblogin.asu.edu,duosecurity.com,campusgroups.com"
     # Hosts that mean the browser is not signed in; a fetch redirected to one is an expired session.
     login_hosts: str = "weblogin.asu.edu,cas.asu.edu,login.microsoftonline.com,idp.asu.edu"
+    # Paths of a service's own sign-in page, comma-separated.
+    login_paths: str = "/webapp/auth/login"
+    # Run the sign-in browser without a window. Credentials and Duo prompts go through the console.
+    login_headless: bool = True
+    # Password attempts before scraper login gives up.
+    login_attempts: int = 3
+    # Longest scraper login waits for Duo to be approved.
+    duo_timeout_secs: float = 120.0
     # Longest a headless authenticated fetch waits for a page to settle.
     nav_timeout_secs: float = 60.0
+    # Tries an authenticated fetch gets when the browser hits a network error.
+    fetch_attempts: int = 3
 
 
 class Search(BaseModel):
@@ -115,11 +135,21 @@ class Scraper(BaseModel):
     user_agent: str = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
     request_timeout_secs: float = 30.0
     # Longest live query result handed back to the engine.
-    query_max_chars: int = 6_000
+    query_max_chars: int = 30_000
     # Index live query results after the caller has its answer, where the source allows it.
     index_live_results: bool = True
     # Longest a lane of scraper serve waits before looking at the queue again.
     serve_poll_secs: float = 0.5
+    # Live lanes scraper serve runs, each answering one live query at a time.
+    live_workers: int = 4
+    # Playwright resource types the browser drivers never load, comma-separated.
+    browser_skip: str = "image,media,font"
+    # Chromium browsers open at once across every lane. A fetch past it waits for one to close.
+    max_browsers: int = 2
+    # Largest page body a plain HTTP fetch reads, in bytes. A larger page is refused.
+    max_page_bytes: int = 10_000_000
+    # Versions kept per source, newest first, with their snapshots. 0 keeps every version.
+    keep_versions: int = 5
     # How often scraper serve queues the scheduled runs that have fallen due.
     schedule_every_secs: float = 60.0
     # A job running longer than this is treated as abandoned and requeued.

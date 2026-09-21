@@ -22,7 +22,7 @@ use crate::runtime::harness::safety::redact::{redact, redact_text, truncate};
 /// The workspace session a conversation's tool results are written to.
 ///
 /// One session per conversation, so a file written on an earlier turn is still there.
-fn workspace_session(ctx: &RequestContext) -> String {
+pub(super) fn workspace_session(ctx: &RequestContext) -> String {
     format!("turn{}", ctx.conversation_id.simple())
 }
 
@@ -33,8 +33,9 @@ fn handle(content: &str, path: &str, session: &str, head: usize) -> String {
     let bytes = content.len();
     format!(
         "{shown}\n\n[{bytes} bytes, {lines} lines. Only the first {head} characters are above. \
-         The whole result is in the sandbox workspace at {path}. Read it with run_sandbox, \
-         session {session}, for example: grep -i SUBJECT {path} or sed -n 1,40p {path}]"
+         The whole result is in the sandbox workspace at {path}. Counting, listing every item, \
+         or finding one entry needs all of it: read it with run_sandbox, session {session}, for \
+         example grep -c SUBJECT {path}, grep -i SUBJECT {path}, or sed -n 1,40p {path}]"
     )
 }
 

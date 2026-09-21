@@ -70,8 +70,8 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# Developer console: start/stop units, tail logs, run tasks
-cli:
+# Developer console: start/stop units, tail logs, run tasks. Requires the admin session
+cli: scraper-session
     cargo run -p cli --release
 
 # ---------- python: scraper + training ----------
@@ -85,6 +85,10 @@ check-training:
 # Scraper: serve, run a source like library_hours, or login to capture the admin session
 scraper *ARGS:
     cd apps/scraper && uv run scraper {{ARGS}}
+
+# Require the admin session; at a terminal, sign in through MyASU and Duo if it is gone
+scraper-session:
+    cd apps/scraper && uv run scraper login --if-needed
 
 # Apply migrations
 migrate:
@@ -111,8 +115,8 @@ web:
 
 # ---------- infra ----------
 
-# Start engine, discord, scraper, postgres, redis, minio
-up *ARGS:
+# Start engine, discord, scraper, postgres, redis, minio. Requires the admin session
+up *ARGS: scraper-session
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 down: sandbox-down

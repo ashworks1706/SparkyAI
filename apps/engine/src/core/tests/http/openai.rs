@@ -45,28 +45,27 @@ fn one_chat_keeps_one_conversation_and_two_chats_do_not_share() {
 #[test]
 fn tools_and_citations_ride_along_in_the_content() {
     use crate::core::types::agent::Answer;
-    use crate::core::types::knowledge::evidence::{Citation, Evidence};
+    use crate::core::types::knowledge::evidence::Citation;
     use crate::core::types::model::Usage;
     use crate::core::types::tools::ToolRun;
     use crate::core::types::trace::RunStatus;
 
     let answer = Answer {
         text: "Open 7am to 2am.".into(),
-        evidence: vec![Evidence {
-            source_id: uuid::Uuid::new_v4(),
-            chunk_id: uuid::Uuid::new_v4(),
-            key: "library_hours".into(),
-            title: "Library hours".into(),
-            content: String::new(),
-            url: Some("https://lib.asu.edu/hours".into()),
-            fetched_at: chrono::Utc::now(),
-            score: 1.0,
-        }],
-        sources: vec![Citation {
-            key: "courses".into(),
-            title: "ASU Class Search".into(),
-            url: Some("https://catalog.apps.asu.edu/catalog/classes/classlist?term=2267".into()),
-        }],
+        sources: vec![
+            Citation {
+                key: "library_hours".into(),
+                title: "Library hours".into(),
+                url: Some("https://lib.asu.edu/hours".into()),
+            },
+            Citation {
+                key: "courses".into(),
+                title: "ASU Class Search".into(),
+                url: Some(
+                    "https://catalog.apps.asu.edu/catalog/classes/classlist?term=2267".into(),
+                ),
+            },
+        ],
         confirmation: None,
         status: RunStatus::Answered,
         steps: 2,
@@ -86,7 +85,7 @@ fn tools_and_citations_ride_along_in_the_content() {
     assert!(out.contains("lib.asu.edu/hours"), "{out}");
     assert!(
         out.contains("catalog.apps.asu.edu"),
-        "a page a tool read is cited with the evidence: {out}"
+        "every page a tool read is cited: {out}"
     );
 }
 
@@ -98,7 +97,6 @@ fn a_bare_answer_carries_no_footers() {
 
     let answer = Answer {
         text: "No idea.".into(),
-        evidence: Vec::new(),
         sources: Vec::new(),
         confirmation: None,
         status: RunStatus::Answered,

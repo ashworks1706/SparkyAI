@@ -49,6 +49,10 @@ struct Handler {
     direct_messages: bool,
     /// Images of one message sent to the model.
     max_images: usize,
+    /// Other files of one message sent to the engine.
+    max_files: usize,
+    /// Largest file sent to the engine, in bytes.
+    max_file_bytes: u64,
     /// The bot user, set once the gateway is ready.
     me: OnceLock<UserId>,
     /// The role Discord manages for the bot, set once the gateway is ready.
@@ -90,6 +94,8 @@ pub async fn run(cfg: Config) -> anyhow::Result<()> {
         thread_archive: archive_after(cfg.bot.thread_auto_archive_minutes),
         direct_messages: cfg.bot.direct_messages,
         max_images: cfg.bot.max_images,
+        max_files: cfg.bot.max_files,
+        max_file_bytes: cfg.bot.max_file_bytes,
         me: OnceLock::new(),
         role: OnceLock::new(),
         last_ask: Mutex::new(HashMap::new()),
@@ -169,6 +175,9 @@ impl Handler {
         {
             return false;
         }
+        // Entries past the cooldown decide nothing, so the map holds only recent askers.
+        let cooldown = self.cooldown;
+        last.retain(|_, at| at.elapsed() < cooldown);
         last.insert(user, Instant::now());
         true
     }

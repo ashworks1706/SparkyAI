@@ -21,13 +21,15 @@ pub struct Runner {
     groups: HashMap<String, u32>,
     /// The docker compose logs -f children, by service name.
     followers: HashMap<String, Child>,
+    /// Longest line kept from a unit's output.
+    line_chars: usize,
     /// Variables this process took from .env rather than from the shell.
     from_dotenv: HashSet<String>,
 }
 
 impl Runner {
     /// A runner working from the repo root.
-    pub fn new(root: PathBuf, tx: UnboundedSender<Event>) -> Self {
+    pub fn new(root: PathBuf, tx: UnboundedSender<Event>, line_chars: usize) -> Self {
         let from_dotenv = dotenv(&root)
             .into_iter()
             .filter(|(key, value)| std::env::var(key).is_ok_and(|v| v == *value))
@@ -38,6 +40,7 @@ impl Runner {
             tx,
             groups: HashMap::new(),
             followers: HashMap::new(),
+            line_chars,
             from_dotenv,
         }
     }
@@ -233,10 +236,22 @@ impl Runner {
             self.note(unit_id, format!("$ {line}"));
         }
         if let Some(out) = child.stdout.take() {
-            pump(self.tx.clone(), unit_id.to_owned(), Stream::Out, out);
+            pump(
+                self.tx.clone(),
+                unit_id.to_owned(),
+                Stream::Out,
+                out,
+                self.line_chars,
+            );
         }
         if let Some(err) = child.stderr.take() {
-            pump(self.tx.clone(), unit_id.to_owned(), Stream::Err, err);
+            pump(
+                self.tx.clone(),
+                unit_id.to_owned(),
+                Stream::Err,
+                err,
+                self.line_chars,
+            );
         }
         Ok(child)
     }
@@ -280,7 +295,7 @@ fn describe(cmd: &std::process::Command) -> String {
     parts.join(" ")
 }
 
-fn pump<R>(tx: UnboundedSender<Event>, unit: String, stream: Stream, reader: R)
+fn pump<R>(tx: UnboundedSender<Event>, unit: String, stream: Stream, reader: R, line_chars: usize)
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
 {
@@ -299,7 +314,10 @@ where
                     break;
                 }
             };
-            let text = sanitize_line(&text);
+            let mut text = sanitize_line(&text);
+            if line_chars > 0 && text.chars().count() > line_chars {
+                text = text.chars().take(line_chars).collect::<String>() + " [line cut]";
+            }
             if tx
                 .send(Event::Log {
                     unit: unit.clone(),

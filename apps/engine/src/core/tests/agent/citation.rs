@@ -9,45 +9,15 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::core::tests::support::{agent, calls, text};
-use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::AgentConfig;
-use crate::core::types::agent::assemble::Budget;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::evidence::{Citation, Evidence};
-use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
+use crate::core::types::knowledge::evidence::Citation;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::harness::safety::redact::redact_text;
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
-}
-
-fn evidence(title: &str, chars: usize) -> Evidence {
-    Evidence {
-        source_id: Uuid::new_v4(),
-        chunk_id: Uuid::new_v4(),
-        key: title.into(),
-        title: title.into(),
-        content: "x".repeat(chars),
-        url: None,
-        fetched_at: Utc::now(),
-        score: 1.0,
-    }
-}
-
-/// Hands back more evidence than any budget holds.
-struct Flood(Vec<Evidence>);
-
-#[async_trait]
-impl Retriever for Flood {
-    async fn retrieve(
-        &self,
-        _ctx: &RequestContext,
-        _query: &RetrievalQuery,
-    ) -> Result<Vec<Evidence>, RetrievalError> {
-        Ok(self.0.clone())
-    }
 }
 
 /// A tool that reads one live page.
@@ -75,51 +45,6 @@ impl Tool for Finder {
 }
 
 #[tokio::test]
-async fn a_chunk_that_did_not_fit_the_prompt_is_not_cited() {
-    use crate::core::tests::support::{MemorySink, Scripted};
-    use crate::runtime::harness::agent::{Agent, AgentDeps};
-    use crate::runtime::harness::safety::policy::RiskPolicy;
-    use crate::runtime::harness::tools::ToolSet;
-
-    let flood: Vec<Evidence> = (0..20)
-        .map(|i| evidence(&format!("doc {i}"), 400))
-        .collect();
-    let deps = AgentDeps {
-        model: Arc::new(Scripted::new(vec![Ok(text("answered"))])),
-        tools: ToolSet::new(),
-        policy: Arc::new(RiskPolicy::default()),
-        trace: Arc::new(MemorySink::new()),
-        retriever: Some(Arc::new(Flood(flood))),
-        router: None,
-        conversations: None,
-        memory: None,
-        confirmations: None,
-        sandbox: None,
-        compactor: None,
-        guardrail: None,
-        profile: None,
-        profile_graph: None,
-    };
-    let cfg = AgentConfig {
-        retrieval_top_k: 20,
-        budget: Budget {
-            evidence: 500,
-            ..Budget::default()
-        },
-        ..AgentConfig::default()
-    };
-    let Ok(answer) = Agent::new(deps, cfg, "sys").run(&ctx(), "q").await else {
-        unreachable!("the run answered")
-    };
-    assert!(!answer.evidence.is_empty(), "something was cited");
-    assert!(
-        answer.evidence.len() < 20,
-        "citing all twenty would attribute the answer to chunks the model never saw, got {}",
-        answer.evidence.len()
-    );
-}
-
-#[tokio::test]
 async fn a_page_a_tool_read_is_cited() {
     use crate::core::tests::support::{MemorySink, Scripted};
     use crate::runtime::harness::agent::{Agent, AgentDeps};
@@ -140,12 +65,11 @@ async fn a_page_a_tool_read_is_cited() {
         tools: ToolSet::new().with(Arc::new(Finder(found))),
         policy: Arc::new(RiskPolicy::default()),
         trace: Arc::new(MemorySink::new()),
-        retriever: None,
-        router: None,
         conversations: None,
         memory: None,
         confirmations: None,
         sandbox: None,
+        files: None,
         compactor: None,
         guardrail: None,
         profile: None,
@@ -157,10 +81,6 @@ async fn a_page_a_tool_read_is_cited() {
     else {
         unreachable!("the run answered")
     };
-    assert!(
-        answer.evidence.is_empty(),
-        "a live page is not retrieval evidence"
-    );
     assert_eq!(
         answer.citations(),
         vec![wanted],
@@ -169,7 +89,7 @@ async fn a_page_a_tool_read_is_cited() {
 }
 
 #[tokio::test]
-async fn nothing_retrieved_cites_nothing() {
+async fn an_answer_without_tools_cites_nothing() {
     let (a, _sink) = agent(
         crate::core::tests::support::Scripted::new(vec![Ok(text("hello"))]),
         crate::runtime::harness::tools::ToolSet::new(),
@@ -178,7 +98,7 @@ async fn nothing_retrieved_cites_nothing() {
     let Ok(answer) = a.run(&ctx(), "hi").await else {
         unreachable!("the run answered")
     };
-    assert!(answer.evidence.is_empty());
+    assert!(answer.citations().is_empty());
 }
 
 #[test]

@@ -200,6 +200,8 @@ async fn a_reused_answer_takes_no_slot_and_touches_no_database() {
             handoff: Duration::from_secs(5),
             lease: Duration::from_mins(2),
             poll: Duration::from_millis(5),
+            ignore_words: std::collections::HashSet::new(),
+            keep_words: std::collections::HashSet::new(),
         },
     );
 

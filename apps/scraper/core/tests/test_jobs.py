@@ -51,14 +51,14 @@ def test_live_queries_outrank_indexing_which_outranks_scheduled_runs():
 
 
 def test_a_live_answer_queues_the_indexing_of_its_whole_page(monkeypatch, recorder):
-    answered(monkeypatch, "news", "x" * 9_000)
+    answered(monkeypatch, "news", "x" * 40_000)
     result = jobs.handle(recorder, job(jobs.QUERY, source="news", params={}))
     assert result["url"] == "https://x.test/news"
     assert result["text"].endswith("[truncated]"), "the caller gets the held text"
     assert recorder.queued == [
         (
             jobs.INDEX,
-            {"source": "news", "url": "https://x.test/news", "text": "x" * 9_000},
+            {"source": "news", "url": "https://x.test/news", "text": "x" * 40_000},
             jobs.INDEX_PRIORITY,
         )
     ], "the index gets all of it"

@@ -2,7 +2,7 @@
 
 use serenity::all::{ChannelId, ChannelType, GuildId, MessageFlags, RoleId, UserId};
 
-use crate::core::types::{Attachment, ChatRequest, Visibility};
+use crate::core::types::{Attachment, ChatRequest, FileAttachment, Visibility};
 
 /// Longest thread name Discord accepts, in characters.
 pub const THREAD_NAME_MAX: usize = 100;
@@ -135,6 +135,7 @@ pub fn chat_request(
         continue_channel,
         reply_to,
         images,
+        files: Vec::new(),
     }
 }
 
@@ -177,6 +178,38 @@ pub fn images<'a>(
         .into_iter()
         .filter_map(|(url, kind)| Attachment::new(url, kind.unwrap_or_default()))
         .take(most)
+        .collect()
+}
+
+/// The files of a message that are not images, no larger than max_bytes, at most most of them.
+///
+/// Each item is a link, file name, reported content type and size. An image goes to the model
+/// as an image instead, so it is never sent twice.
+pub fn files<'a>(
+    attachments: impl IntoIterator<Item = (&'a str, &'a str, Option<&'a str>, u64)>,
+    most: usize,
+    max_bytes: u64,
+) -> Vec<FileAttachment> {
+    attachments
+        .into_iter()
+        .filter(|(url, _, kind, size)| {
+            !url.is_empty()
+                && *size <= max_bytes
+                && Attachment::new(*url, kind.unwrap_or_default()).is_none()
+        })
+        .take(most)
+        .map(|(url, name, kind, size)| FileAttachment {
+            url: url.to_owned(),
+            name: name.to_owned(),
+            media_type: kind
+                .unwrap_or_default()
+                .split(';')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_ascii_lowercase(),
+            size,
+        })
         .collect()
 }
 

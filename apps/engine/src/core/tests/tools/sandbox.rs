@@ -457,7 +457,7 @@ fn a_session_idle_past_its_budget_is_swept_and_a_fresh_one_is_not() {
 /// Live check that the image carries what the tool description promises.
 #[tokio::test]
 #[ignore = "needs a container runtime"]
-async fn the_image_carries_python_and_jq() {
+async fn the_image_carries_python_jq_and_the_document_readers() {
     let s = ContainerSandbox::new(Limits {
         timeout: Duration::from_mins(1),
         ..Limits::default()
@@ -470,6 +470,14 @@ async fn the_image_carries_python_and_jq() {
         (
             r"python3 -c 'import datetime;print((datetime.date(2026,1,2)-datetime.date(2026,1,1)).days)'",
             "1",
+        ),
+        (
+            r"python3 -c 'import bs4,lxml,requests,pandas,pypdf,docx,openpyxl,xlrd,numpy,PIL,chardet,markdown,yaml;print(1)'",
+            "1",
+        ),
+        (
+            "for t in pdftotext pdftoppm tesseract rg sqlite3 file; do command -v $t >/dev/null || echo missing $t; done; echo ok",
+            "ok",
         ),
     ] {
         let Ok(out) = s
@@ -757,4 +765,143 @@ async fn egress_reaches_the_public_web_and_nothing_private() {
         direct.as_ref().is_ok_and(|o| o.stdout.trim() == "000"),
         "no route around the proxy: {direct:?}"
     );
+}
+
+#[test]
+fn past_the_engine_wide_cap_the_least_recently_used_session_of_anyone_goes() {
+    let s = ContainerSandbox::new(Limits {
+        max_sessions: 4,
+        max_sessions_total: 3,
+        ..Limits::default()
+    });
+    let mut names = Vec::new();
+    for user in ["ana", "ben", "cy"] {
+        let ctx = RequestContext::new("g", user, Duration::from_secs(5));
+        let name = ContainerSandbox::container_name(&ctx, "s");
+        s.note_used(&name, "s", true);
+        names.push(name);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(s.least_recently_used_overall().as_ref(), names.first());
+    let small = ContainerSandbox::new(Limits {
+        max_sessions_total: 10,
+        ..Limits::default()
+    });
+    small.note_used(&names[0], "s", true);
+    assert!(
+        small.least_recently_used_overall().is_none(),
+        "under the cap nothing goes"
+    );
+}
+
+/// Live check that a command printing without end hands back a bounded head and tail.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_command_that_prints_without_end_costs_bounded_memory() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_secs(30),
+        max_output_chars: 1_000,
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let out = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "head -c 50000000 /dev/zero | tr '\\0' x; echo END".into(),
+                session: None,
+            },
+        )
+        .await;
+    let Ok(out) = out else {
+        unreachable!("the command finished: {out:?}")
+    };
+    assert!(out.stdout.len() < 4_000, "{}", out.stdout.len());
+    assert!(out.stdout.trim_end().ends_with("END"), "the tail is kept");
+}
+
+/// Live check that a timed-out command is killed inside its session, not only its client.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_command_past_its_budget_is_killed_inside_the_session() {
+    let s = ContainerSandbox::new(Limits {
+        timeout: Duration::from_secs(2),
+        ..Limits::default()
+    });
+    let ctx = RequestContext::new("g", "u", Duration::from_mins(1));
+    let session = Some("budgeted".to_owned());
+    let slow = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "sleep 30".into(),
+                session: session.clone(),
+            },
+        )
+        .await;
+    // Either the in-container timeout ends it (exit 137) or the client timeout does.
+    assert!(
+        matches!(&slow, Err(SandboxError::Timeout))
+            || slow.as_ref().is_ok_and(|o| o.exit_code != 0),
+        "{slow:?}"
+    );
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let Ok(ps) = s
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "ps -eo comm | grep -c '^sleep' || true".into(),
+                session,
+            },
+        )
+        .await
+    else {
+        unreachable!("the session answered")
+    };
+    assert_eq!(ps.stdout.trim(), "0", "no sleep is left running");
+}
+
+/// Live check that a session container no engine tracks is removed.
+#[tokio::test]
+#[ignore = "needs a container runtime"]
+async fn a_session_left_by_an_earlier_engine_is_removed() {
+    let instance = format!("orphan-test-{}", uuid::Uuid::new_v4().simple());
+    let limits = || Limits {
+        instance: instance.clone(),
+        ..Limits::default()
+    };
+    let left = ContainerSandbox::new(limits());
+    let ctx = RequestContext::new("g", "orphan-owner", Duration::from_mins(1));
+    let Ok(out) = left
+        .run(
+            &ctx,
+            &SandboxRequest {
+                command: "true".into(),
+                session: Some("leftover".into()),
+            },
+        )
+        .await
+    else {
+        unreachable!("the session started")
+    };
+    assert_eq!(out.exit_code, 0);
+    let name = ContainerSandbox::container_name(&ctx, "leftover");
+
+    // A fresh engine knows nothing of it.
+    let fresh = ContainerSandbox::new(limits());
+    fresh.remove_orphans().await;
+    let still = tokio::process::Command::new("docker")
+        .args([
+            "ps",
+            "--all",
+            "--filter",
+            &format!("name=^{name}$"),
+            "--format",
+            "{{.Names}}",
+        ])
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+        .unwrap_or_default();
+    assert!(still.is_empty(), "{name} is still there");
 }

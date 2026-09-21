@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 from scraper.core.types import Job, QueryError
-from scraper.ingest.extract import extract_text
+from scraper.ingest.extract import extract_text, form_page_text
 from scraper.query.params import term_code
 from scraper.query.registry import QUERY_SOURCES, url_for
 from scraper.query.run import run_job
@@ -171,7 +171,7 @@ def test_a_page_that_lists_results_inside_a_form_keeps_them():
 
     html = b"<main><form><ul><li>Robotics Club</li></ul></form></main>"
     page = Fetched(url="https://x.test", status=200, body=html, content_type="text/html")
-    assert "Robotics Club" in QUERY_SOURCES["clubs"].extractor(page)
+    assert "Robotics Club" in form_page_text(page)
     assert "Robotics Club" not in extract_text(html), "other pages still drop forms"
 
 
