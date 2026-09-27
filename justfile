@@ -31,27 +31,27 @@ bootstrap: env hooks setup infra migrate
 # ---------- everything ----------
 
 # Format, lint, and test every unit
-check: check-rust check-scraper check-training check-web
+check: check-rust check-scraper check-evals check-web
     @echo "all units ok"
 
 # Format every unit in place
 fmt:
     cargo fmt --all
     cd apps/scraper && uvx ruff format . && uvx ruff check --fix .
-    cd apps/training && uvx ruff format . && uvx ruff check --fix .
+    cd apps/evals && uvx ruff format . && uvx ruff check --fix .
     cd apps/web      && npx eslint . --fix
 
 # Install every unit's dependencies
 setup:
     cd apps/scraper && uv sync --extra dev
-    cd apps/training && uv sync --extra dev
+    cd apps/evals && uv sync --extra dev
     cd apps/web      && npm ci
     cargo fetch
 
 # Remove build artifacts and virtualenvs
 clean:
     cargo clean
-    rm -rf apps/scraper/.venv apps/training/.venv apps/web/node_modules apps/web/dist
+    rm -rf apps/scraper/.venv apps/evals/.venv apps/web/node_modules apps/web/dist
 
 # ---------- rust: engine + discord ----------
 
@@ -74,15 +74,15 @@ discord *ARGS:
 cli: scraper-session
     cargo run -p cli --release
 
-# ---------- python: scraper + training ----------
+# ---------- python: scraper + evals ----------
 
 # Lint and test the scraper
 check-scraper:
     cd apps/scraper && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
-# Lint and test training
-check-training:
-    cd apps/training && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
+# Lint and test evals
+check-evals:
+    cd apps/evals && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
 
 # Run a scraper command, such as serve, run library_hours, or login
 scraper *ARGS:
@@ -98,7 +98,7 @@ migrate:
 
 # Run evals
 eval *ARGS:
-    cd apps/training && uv run eval {{ARGS}}
+    cd apps/evals && uv run eval {{ARGS}}
 
 # ---------- web ----------
 

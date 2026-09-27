@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from training.core.types import EvalCase, Score, TurnResult
+from evals.core.types import EvalCase, Score, TurnResult
 
 #: Named in every case, on top of whatever the case itself forbids.
 INTERNALS = ("search_live", "search_knowledge", "run_sandbox", "tool call", "source key")

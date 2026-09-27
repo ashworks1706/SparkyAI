@@ -1,7 +1,7 @@
 [project]
-name = "training"
+name = "evals"
 version = "0.1.0"
-description = "Training: engine evals with a baseline gate"
+description = "Engine evals with a baseline gate"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.5",
@@ -15,19 +15,18 @@ dependencies = [
 dev = ["ruff>=0.16.8", "pytest>=9.1.1"]
 
 [project.scripts]
-eval = "training.evals.cli:app"
+eval = "evals.cli:app"
 
 [build-system]
 requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = { "training" = "." }
+package-dir = { "evals" = "." }
 packages = [
-    "training",
-    "training.core",
-    "training.evals",
-    "training.evals.suites",
+    "evals",
+    "evals.core",
+    "evals.suites",
 ]
 
 [tool.ruff]

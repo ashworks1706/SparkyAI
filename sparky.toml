@@ -408,10 +408,10 @@ log_line_chars = 4000          # longest line kept from a unit's output
 health_interval_secs = 5
 port_check_ms = 150
 
-# ---------------------------------------------------------------- training and evals
+# ---------------------------------------------------------------- evals
 # engine_url and engine_service_token live in .env.
-[training]
+[evals]
 state_dir = "../../.sparky"
-cases_dir = "evals/cases"
-baseline_path = "evals/baseline.json"
+cases_dir = "cases"
+baseline_path = "baseline.json"
 request_timeout_secs = 180.0

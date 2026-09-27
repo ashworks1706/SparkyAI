@@ -1,5 +1,5 @@
-from training.core.types import EvalCase, Expectation, TurnResult
-from training.evals.suites import (
+from evals.core.types import EvalCase, Expectation, TurnResult
+from evals.suites import (
     clarification,
     grounding,
     latency,

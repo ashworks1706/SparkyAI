@@ -9,12 +9,12 @@ from typing import Any
 
 import httpx
 
-from training.core.settings import settings
-from training.core.types import EvalCase, RunnerError, TurnResult
+from evals.core.settings import settings
+from evals.core.types import EvalCase, RunnerError, TurnResult
 
 
 def load_cases(cases_dir: Path | None = None) -> list[EvalCase]:
-    cases_dir = cases_dir or settings().training.cases_dir
+    cases_dir = cases_dir or settings().evals.cases_dir
     cases: list[EvalCase] = []
     for path in sorted(cases_dir.glob("*.jsonl")):
         for line in path.read_text().splitlines():
@@ -26,10 +26,10 @@ def load_cases(cases_dir: Path | None = None) -> list[EvalCase]:
 
 
 def read_trace(request_id: str, traces_dir: Path | None = None) -> list[dict[str, Any]]:
-    path = (traces_dir or settings().training.traces_dir) / f"{request_id}.jsonl"
+    path = (traces_dir or settings().evals.traces_dir) / f"{request_id}.jsonl"
     if not path.exists():
         raise RunnerError(
-            f"trace {path} not found; check that the engine and training state directories match"
+            f"trace {path} not found; check that the engine and evals state directories match"
         )
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
@@ -42,7 +42,7 @@ def ask(
     user_id: str,
     engine_url: str | None = None,
 ) -> TurnResult:
-    cfg = settings().training
+    cfg = settings().evals
     body = {"user_id": user_id, "roles": roles, "message": question, "channel_id": "eval"}
     if conversation_id:
         body["conversation_id"] = conversation_id
@@ -50,7 +50,7 @@ def ask(
     token = cfg.engine_service_token.get_secret_value()
     if not token:
         raise RunnerError(
-            "SPARKY_TRAINING__ENGINE_SERVICE_TOKEN is unset; the engine rejects unauthenticated "
+            "SPARKY_EVALS__ENGINE_SERVICE_TOKEN is unset; the engine rejects unauthenticated "
             "calls, so every case would fail with 401"
         )
     started = time.monotonic()

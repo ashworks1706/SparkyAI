@@ -8,7 +8,7 @@ touched() { grep -qE "$1" <<<"$changed"; }
 
 touched '^(apps/(engine|discord|cli)/|Cargo\.(toml|lock)|scripts/)' && run check-rust
 touched '^apps/scraper/' && run check-scraper
-touched '^apps/training/' && run check-training
+touched '^apps/evals/' && run check-evals
 touched '^apps/web/' && run check-web
 touched '^docs/ARCHITECTURE\.md$' && run diagrams
 :
