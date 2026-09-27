@@ -843,7 +843,7 @@ async fn build_tools(
             tool_timeout_secs: server.tool_timeout_secs,
             ..McpLimits::from(&cfg.mcp)
         };
-        let remote = mcp::connect(&server.url, &server.tools, &limits)
+        let remote = mcp::connect(&server.url, &server.tools, &server.risks, &limits)
             .await
             .map_err(|e| anyhow::anyhow!("mcp server {} at {}: {e}", server.name, server.url))?;
         let mut registered = 0;

@@ -3,6 +3,11 @@
 pub mod files;
 pub mod knowledge;
 pub mod mcp;
+#[allow(
+    dead_code,
+    reason = "called by the per-user session routes of roadmap phase 8"
+)]
+pub mod oauth;
 pub mod sandbox;
 
 /// The structured payload a tool hands back beside its text; unserializable values log, yield None.

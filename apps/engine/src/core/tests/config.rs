@@ -488,3 +488,62 @@ fn sandbox_egress_names_its_network_and_proxy() {
     assert!(e.contains("sandbox.egress_proxy_image"), "{e}");
     assert!(load("[sandbox]\nenabled = true\negress = true\n").is_ok());
 }
+
+#[test]
+fn the_committed_google_calendar_server_is_off_and_pinned() {
+    use crate::core::types::tools::RiskClass;
+
+    let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
+    let cfg: Result<Config, String> = {
+        use figment::providers::{Format, Toml};
+        figment::Figment::new()
+            .merge(Toml::string(SECRETS))
+            .merge(Toml::file(file))
+            .extract()
+            .map_err(|e| e.to_string())
+    };
+    let Ok(cfg) = cfg else {
+        unreachable!("sparky.toml loads")
+    };
+    let Some(calendar) = cfg.mcp.servers.iter().find(|s| s.name == "google_calendar") else {
+        unreachable!("sparky.toml declares google_calendar")
+    };
+    assert!(calendar.url.is_empty());
+    assert!(cfg.mcp.resolved_servers().is_empty());
+    assert_eq!(calendar.risks.len(), calendar.tools.len());
+    assert_eq!(
+        calendar.risks.get("update_event"),
+        Some(&RiskClass::Destructive)
+    );
+    assert_eq!(
+        calendar.risks.get("list_events"),
+        Some(&RiskClass::ReadAuthenticated)
+    );
+    assert!(!cfg.oauth.google.enabled);
+}
+
+#[test]
+fn a_risk_pinned_outside_the_exposed_tools_is_rejected() {
+    let e = err("[[mcp.servers]]\nname = \"c\"\nurl = \"http://one/mcp\"\n\
+                 tools = [\"list_events\"]\n\
+                 [mcp.servers.risks]\ncreate_event = \"external_write\"\n");
+    assert!(e.contains("create_event"), "{e}");
+    ok("[[mcp.servers]]\nname = \"c\"\nurl = \"http://one/mcp\"\n\
+        [mcp.servers.risks]\ncreate_event = \"external_write\"\n");
+}
+
+#[test]
+fn an_enabled_google_oauth_client_needs_its_credentials() {
+    assert!(!ok("").oauth.google.enabled);
+    let e = err("[oauth.google]\nenabled = true\n");
+    assert!(e.contains("client_id"), "{e}");
+    ok(
+        "[oauth.google]\nenabled = true\nclient_id = \"c\"\nclient_secret = \"s\"\n\
+        redirect_url = \"https://x/cb\"\n",
+    );
+    let e = err(
+        "[oauth.google]\nenabled = true\nclient_id = \"c\"\nclient_secret = \"s\"\n\
+                 redirect_url = \"https://x/cb\"\ntoken_url = \"http://x/token\"\n",
+    );
+    assert!(e.contains("https"), "{e}");
+}
