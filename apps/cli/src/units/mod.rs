@@ -227,13 +227,8 @@ fn tasks() -> Vec<Unit> {
             &["scraper", "run", "--all"],
             "every source and static page, paced per host",
         ),
-        task_static(
-            &["data", "export"],
-            "Phoenix llm spans to .sparky/training/data",
-        ),
         task_static(&["eval", "run"], "golden cases against the engine"),
         task_static(&["eval", "compare"], "fail on regression"),
-        task_static(&["train", "sft"], "QLoRA → GGUF (GPU)"),
     ]
 }
 

@@ -6,7 +6,7 @@ description: Run the full gate (`just check`: fmt-check, lint, tests, dependency
 Run `just check` from the repo root. It runs, per unit:
 
 - Rust: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `./scripts/check-deps.sh`
-- `apps/scraper`, `apps/training`: `ruff check`, `ruff format --check`, `pytest`
+- `apps/scraper`, `apps/training` (evals only; fine-tuning lives in loupe): `ruff check`, `ruff format --check`, `pytest`
 - `apps/web`: `eslint`, `vite build`
 
 If only one unit changed, `just check-rust` / `check-scraper` / `check-training` / `check-web` is fine.

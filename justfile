@@ -96,17 +96,9 @@ scraper-session:
 migrate:
     cd apps/scraper && uv run scraper migrate
 
-# Run a training command
-train *ARGS:
-    cd apps/training && uv run train {{ARGS}}
-
 # Run evals
 eval *ARGS:
     cd apps/training && uv run eval {{ARGS}}
-
-# Run a dataset command
-data *ARGS:
-    cd apps/training && uv run data {{ARGS}}
 
 # ---------- web ----------
 

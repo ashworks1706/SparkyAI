@@ -28,7 +28,7 @@
 Only after Phase 5 yields clean interaction data.
 
 - [ ] Baseline the untouched model on the eval suite
-- [ ] Post-train in stages, each gated on evals (`just train sft` + `just eval compare`; pipeline in place, no run yet)
+- [ ] Post-train in stages, each gated on evals (`loupe train sft` in [loupe](https://github.com/ashworks1706/loupe), then `just eval compare` here; pipeline in place, no run yet)
 - [ ] Release: weights, quantized variants, config, dataset description, evals, limitations
 
 ## 8 — Authenticated tasks v0.7

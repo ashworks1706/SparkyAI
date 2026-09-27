@@ -1,4 +1,4 @@
-"""Settings from sparky.toml and SPARKY_* env: where traces, Phoenix, the engine, and data live."""
+"""Settings from sparky.toml and SPARKY_* env: where traces, the engine, and eval files live."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, SecretStr
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -23,20 +23,10 @@ def _toml_files() -> tuple[Path, ...]:
     return (Path("../../sparky.toml"), Path("sparky.toml"))
 
 
-class Telemetry(BaseModel):
-    """Where the export reads spans back from. Shared with every app that writes them."""
-
-    phoenix_url: str = ""
-    phoenix_api_key: SecretStr = SecretStr("")
-    project_name: str = "sparky"
-
-
 class Training(BaseModel):
     engine_url: str = "http://localhost:8080"
     # Bearer token the engine /chat route requires.
     engine_service_token: SecretStr = SecretStr("")
-    # Spans read per request from the Phoenix spans endpoint, which serves at most 1000.
-    phoenix_page_spans: int = Field(default=1000, ge=1, le=1000)
     state_dir: Path = Path("../../.sparky")
     cases_dir: Path = Path("evals/cases")
     baseline_path: Path = Path("evals/baseline.json")
@@ -47,16 +37,8 @@ class Training(BaseModel):
         return self.state_dir / "traces"
 
     @property
-    def data_dir(self) -> Path:
-        return self.state_dir / "training" / "data"
-
-    @property
     def eval_report_path(self) -> Path:
         return self.state_dir / "training" / "evals" / "last.json"
-
-    @property
-    def output_dir(self) -> Path:
-        return self.state_dir / "training" / "outputs"
 
 
 class Settings(BaseSettings):
@@ -69,7 +51,6 @@ class Settings(BaseSettings):
     )
 
     training: Training = Training()
-    telemetry: Telemetry = Telemetry()
 
     @classmethod
     def settings_customise_sources(
