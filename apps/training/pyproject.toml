@@ -1,7 +1,7 @@
 [project]
 name = "training"
 version = "0.1.0"
-description = "Training: dataset export from traces, engine evals with a baseline gate, SFT with GGUF export"
+description = "Training: engine evals with a baseline gate"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.5",
@@ -9,26 +9,12 @@ dependencies = [
     "httpx>=0.28.1",
     "typer>=0.27.2",
     "rich>=15.0.0",
-    "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
-train = [
-    "torch>=2.14.0",
-    "transformers>=5.17.0",
-    "peft>=0.21.0",
-    "trl>=1.13.0",
-    "accelerate>=1.15.0",
-    "datasets>=5.0.1",
-    "bitsandbytes>=0.50.2; sys_platform == 'linux'",
-    "unsloth>=2026.9.7; sys_platform == 'linux'",
-    "tensorboard>=2.21.0",
-]
 dev = ["ruff>=0.16.8", "pytest>=9.1.1"]
 
 [project.scripts]
-data = "training.datasets.cli:app"
-train = "training.posttrain.cli:app"
 eval = "training.evals.cli:app"
 
 [build-system]
@@ -40,10 +26,8 @@ package-dir = { "training" = "." }
 packages = [
     "training",
     "training.core",
-    "training.datasets",
     "training.evals",
     "training.evals.suites",
-    "training.posttrain",
 ]
 
 [tool.ruff]

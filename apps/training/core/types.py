@@ -1,33 +1,10 @@
-"""Types shared across datasets, evals, and post-training."""
+"""Types for the engine evals."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class Message(BaseModel):
-    """One chat turn, matching the engine core::types::message::Message."""
-
-    role: Literal["system", "user", "assistant", "tool"]
-    content: str = ""
-    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
-    tool_call_id: str | None = None
-    tool_name: str | None = None
-
-
-class TrainingExample(BaseModel):
-    """One model call: the full prompt and the reply. One llm generation."""
-
-    id: str
-    messages: list[Message]
-    response: Message
-    model: str | None = None
-    session_id: str | None = None
-    user_id: str | None = None
-    tool_count: int = 0
+from pydantic import BaseModel, Field
 
 
 class Expectation(BaseModel):
@@ -108,68 +85,5 @@ class EvalReport(BaseModel):
     suites: list[SuiteReport]
 
 
-class LoraConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    r: int
-    alpha: int
-    dropout: float
-    target_modules: list[str]
-
-
-class TrainConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    epochs: int
-    per_device_batch_size: int
-    gradient_accumulation: int
-    learning_rate: float
-    warmup_ratio: float
-    logging_steps: int
-    seed: int
-
-
-class ExportConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    gguf_quant: str
-
-
-class SftConfig(BaseModel):
-    """configs/train/sft.yaml. An unknown or missing key fails."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    base_model: str
-    dataset: Path
-    output_dir: Path
-    max_seq_length: int
-    load_in_4bit: bool
-    lora: LoraConfig
-    train: TrainConfig
-    export: ExportConfig
-
-
-class SftPlan(BaseModel):
-    """What train sft would do, printed before it does it."""
-
-    base_model: str
-    dataset: Path
-    output_dir: Path
-    examples: int
-    with_tool_calls: int
-    max_seq_length: int
-    epochs: int
-    gguf_quant: str
-
-
-class ExportError(RuntimeError):
-    """Phoenix answered with something other than complete llm generations."""
-
-
 class RunnerError(RuntimeError):
     """A case could not be run: no cases, engine unreachable, or no trace for the request."""
-
-
-class SftError(RuntimeError):
-    """SFT cannot start or did not produce a GGUF."""

@@ -21,7 +21,7 @@ just cli              # developer console (TUI): every unit, its logs, and tasks
 just scraper ...      # e.g. just scraper run library_hours, just scraper serve, just scraper login
 just scraper-session  # require the admin ASU session; sign in through MyASU and Duo if it is gone
 just migrate
-just train | eval | data ...
+just eval ...         # run, baseline, compare: golden cases against the engine
 just infra            # postgres, redis, minio
 just phoenix          # Phoenix on :6006: traces, LLM generations, product events
 just db               # pgweb on :8081
@@ -53,7 +53,7 @@ apps/discord/     Rust bin: serenity bot, HTTP client of engine, never links it.
 apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
 apps/scraper/     Python: fetch, chunk, embed, write the index. scraper serve runs the jobs queue: live search_live jobs, indexing of their results, scheduled source runs. Owns migrations. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
-apps/training/    Python: datasets, post-training, eval runners and cases (GPU, occasional)
+apps/training/    Python: eval runners, suites, cases, and the baseline gate. Fine-tuning lives in loupe (https://github.com/ashworks1706/loupe).
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```

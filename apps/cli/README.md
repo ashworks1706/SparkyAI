@@ -61,7 +61,7 @@ Commands: `:start engine`, `:stop chat`, `:restart discord`, `:clear`, `:help`, 
 | tools | searxng, firecrawl | same, `--profile search` / `crawl` |
 | apps | engine, discord, scraper, web | `setsid just <recipe>`; stop sends SIGTERM to the process group |
 | sandboxes | the switch, then one row per live container | read from the engine at `GET /sandbox`. Enter on the switch stops the agent being offered `run_sandbox`; enter on a container removes it. The switch's log pane lists every command the agent ran, the running one included |
-| tasks | doctor, setup, migrate, scraper status, check, scraper run --all, data export, eval run, eval compare, train sft | `just <recipe>`, exit code shown as ✓ / ✗. Other recipes run from the command line and appear here while they run |
+| tasks | doctor, setup, migrate, scraper status, check, scraper run --all, eval run, eval compare | `just <recipe>`, exit code shown as ✓ / ✗. Other recipes run from the command line and appear here while they run |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes as a deploy host; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
 Container state comes from `docker compose ps`. The status bar probes the engine, the chat model, and Phoenix.

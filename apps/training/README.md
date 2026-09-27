@@ -1,24 +1,27 @@
 # apps/training
 
-Dataset preparation, deterministic engine evals, and GGUF model exports.
+Deterministic engine evals with a baseline gate.
 
 ```bash
-just data export | verify | stats
 just eval run | baseline | compare
-just train sft --dry-run
-just train sft
 ```
 
 | Module | Holds |
 |---|---|
-| `datasets/export.py` | the engine's `llm` spans from Phoenix to `TrainingExample` (full prompt and reply) |
-| `datasets/redact.py` | regex PII removal: emails, phones, Discord and ASU ids, bot tokens |
-| `datasets/verify.py` | schema, non-empty replies, named tool calls, dedupe by content hash |
 | `evals/runner.py` | posts each golden case to `/chat` and reads the engine's JSONL trace for that request |
 | `evals/suites/` | deterministic scorers: tool selection and arguments, grounding, refusal, permissions, clarification, memory, latency |
 | `evals/cases/` | hand-written ASU questions with expectations; add a line and it runs |
-| `posttrain/sft.py` | Unsloth QLoRA and TRL, chat template from the base model, TensorBoard logs, GGUF export |
 
-Outputs (datasets, reports, checkpoints, TensorBoard logs, exports) go under `.sparky/training/`. Engine traces are read from `.sparky/traces/`. Golden cases and the promoted baseline are committed in `evals/`.
+Reports go under `.sparky/training/evals/`. Engine traces are read from `.sparky/traces/`. Golden cases and the promoted baseline are committed in `evals/`. Evals need a live engine.
 
-Data export needs Phoenix and `SPARKY_TELEMETRY__PHOENIX_URL` in `.env`, plus `SPARKY_TELEMETRY__PHOENIX_API_KEY` when Phoenix authenticates; it reads the project named by `telemetry.project_name`. Evals need a live engine.
+## Fine-tuning
+
+Dataset export and post-training live in [loupe](https://github.com/ashworks1706/loupe). It reads SparkyAI's `llm` spans from Phoenix and returns a GGUF:
+
+```bash
+loupe data export --name sparky-sft --source phoenix --url http://127.0.0.1:6006 --project sparky --redact-extra asu-id
+loupe data verify --name sparky-sft
+loupe train sft experiments/sparky-sft/sft.yaml
+```
+
+Serve the result with `SPARKY_CHAT_GGUF=<file> just model`, then gate it here with `just eval run` and `just eval compare`.

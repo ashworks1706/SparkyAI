@@ -53,7 +53,7 @@ On push to `main`, CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `s
 - Database: `just db` starts pgweb on http://localhost:8081, loopback only. It edits live data. `chunks.embedding` does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback. They scrape `llama-server` (`chat` and `embed` run with `--metrics`). On a GPU host `just gpu-metrics` adds utilisation, VRAM and temperature panels; the exporter runs under the nvidia container runtime with the `utility` driver capability.
 
-Phoenix holds one `llm` span per model call (full prompt, full reply, token counts, latency) inside a trace tree per conversation; the training pipeline reads these spans. Prometheus holds server-side time series: throughput, queue depth, batching.
+Phoenix holds one `llm` span per model call (full prompt, full reply, token counts, latency) inside a trace tree per conversation; [loupe](https://github.com/ashworks1706/loupe) reads these spans for fine-tuning. Prometheus holds server-side time series: throughput, queue depth, batching.
 
 ### Phoenix
 
@@ -61,7 +61,7 @@ Phoenix holds one `llm` span per model call (full prompt, full reply, token coun
 just phoenix       # trace UI on http://localhost:6006, loopback
 ```
 
-One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata` volume, UI and OTLP endpoint on one port. Export is off until `SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006` is in `.env`. For the compose apps set `SPARKY_PHOENIX_URL=http://phoenix:6006`. Phoenix has no authentication by default and holds full prompts and replies, so in production it has no host port. When it does authenticate, set `SPARKY_TELEMETRY__PHOENIX_API_KEY`; every app and `just data export` send it as a bearer token. `just data export` reads `llm` spans through `GET /v1/projects/<project>/spans`.
+One container, `arizephoenix/phoenix:version-20.11.0`, data in the `phoenixdata` volume, UI and OTLP endpoint on one port. Export is off until `SPARKY_TELEMETRY__PHOENIX_URL=http://localhost:6006` is in `.env`. For the compose apps set `SPARKY_PHOENIX_URL=http://phoenix:6006`. Phoenix has no authentication by default and holds full prompts and replies, so in production it has no host port. When it does authenticate, set `SPARKY_TELEMETRY__PHOENIX_API_KEY`; every app sends it as a bearer token, and so does `loupe data export` in [loupe](https://github.com/ashworks1706/loupe), which reads `llm` spans through `GET /v1/projects/<project>/spans`.
 
 ### Reading the dashboard
 

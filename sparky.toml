@@ -415,4 +415,3 @@ state_dir = "../../.sparky"
 cases_dir = "evals/cases"
 baseline_path = "evals/baseline.json"
 request_timeout_secs = 180.0
-phoenix_page_spans = 1000        # Phoenix serves at most 1000 spans a page

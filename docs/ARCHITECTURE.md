@@ -15,7 +15,7 @@ This document describes the current shape of the system and its rules. Order of 
 | Page rendering | Firecrawl, self-hosted | `deploy/compose.yml` profile `crawl` |
 | Web search | SearXNG, self-hosted | `deploy/compose.yml` profile `search` |
 | Web | Vite, React, TypeScript, shadcn | `apps/web` |
-| Post-training | Unsloth QLoRA, TRL, TensorBoard, GGUF | `apps/training/posttrain` |
+| Post-training | Phoenix `llm` spans in, GGUF out | [loupe](https://github.com/ashworks1706/loupe), a separate repo |
 | Evals | golden cases against the engine, baseline gate | `apps/training/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` | compose service `chat`, profile `model` |
 | Embeddings | Qwen3-Embedding-0.6B, 1024 dimensions, on `llama-server` | compose service `embed`, profile `model` |
@@ -70,11 +70,11 @@ apps/
     jobs.py         the job queue: handlers, lanes, scheduling
     store/          postgres and object storage, the only place a connection opens
     migrations/     the schema
-  training/       Python. Datasets from Phoenix llm spans, evals with a baseline gate, SFT to GGUF.
+  training/       Python. Evals with a baseline gate.
   web/            Vite and React frontend and admin UI
 deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search
 docs/             ROADMAP.md, this file
-.sparky/          ignored local state: traces, logs, training data, reports
+.sparky/          ignored local state: traces, logs, eval reports
 ```
 
 Each Python app directory is its own importable package (`apps/scraper` is `scraper`) with no `src/` layer. `pyproject.toml` maps the package to `.` and lists its subpackages, so a new subpackage is added there.
@@ -658,7 +658,7 @@ A conversation belongs to one tenant, user, channel, and visibility. The bot hol
 | chunk text, `vector(1024)` embedding, generated `tsvector` | PostgreSQL with pgvector, rebuildable from snapshots |
 | raw page snapshots | object storage |
 | live query cache and leases | Redis, shared across engine replicas |
-| local traces, console logs, training data | `.sparky/`, ignored |
+| local traces, console logs, eval reports | `.sparky/`, ignored |
 
 ```mermaid
 erDiagram
@@ -707,13 +707,13 @@ flowchart TD
     C --> E["llm<br/>full prompt and reply, thinking"]
     C --> F["tool<br/>redacted arguments and result"]
     F --> G["scrape.query<br/>scraper, separate trace"]
-    E -.->|"one llm span, one training example"| H["apps/training data export"]
+    E -.->|"one llm span, one training example"| H["loupe data export"]
 ```
 
 Traces go to two places:
 
 - JSONL at `.sparky/traces/<request_id>.jsonl`: the complete local record of trace events.
-- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. `apps/training` reads `llm` spans back through `GET /v1/projects/<project>/spans`.
+- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. [loupe](https://github.com/ashworks1706/loupe) reads `llm` spans back through `GET /v1/projects/<project>/spans`.
 
 An empty `phoenix_url` turns export off. `telemetry.phoenix_api_key` is sent as a bearer token when set. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot records each product event as one span under the interaction (`[analytics]`).
 
