@@ -1,5 +1,6 @@
 //! ToolDefinition, RiskClass, ToolOutput, ToolError.
 
+pub mod oauth;
 pub mod sandbox;
 
 use serde::{Deserialize, Serialize};

@@ -279,6 +279,40 @@ max_tool_description_chars = 160
 # tools = []
 # required_props_only = true
 # tool_timeout_secs = 45
+# risks = { page_snapshot = "read_public" }   # per-tool class in place of the one derived from the name
+
+# Google Calendar on Google's MCP server. Off: an empty url drops the server. It needs a per-user
+# grant from [oauth.google], which waits on the per-user sessions of roadmap phase 8.
+[[mcp.servers]]
+name = "google_calendar"
+url = ""                       # https://calendarmcp.googleapis.com/mcp/v1
+tools = [
+  "list_events", "list_calendars", "get_event", "search_events", "suggest_time",
+  "create_event", "respond_to_event", "update_event", "delete_event",
+]
+tool_timeout_secs = 30
+
+[mcp.servers.risks]
+list_events = "read_authenticated"
+list_calendars = "read_authenticated"
+get_event = "read_authenticated"
+search_events = "read_authenticated"
+suggest_time = "read_authenticated"
+create_event = "external_write"
+respond_to_event = "external_write"
+update_event = "destructive"
+delete_event = "destructive"
+
+# ---------------------------------------------------------------- OAuth
+# Per-user grants. client_secret lives in .env. Off until the per-user sessions of phase 8.
+[oauth.google]
+enabled = false
+client_id = ""
+redirect_url = ""
+scopes = ["https://www.googleapis.com/auth/calendar.events"]
+authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
+token_url = "https://oauth2.googleapis.com/token"
+timeout_secs = 30
 
 # ---------------------------------------------------------------- traces
 [trace]

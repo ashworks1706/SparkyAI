@@ -1,5 +1,6 @@
 //! MCP servers as tools, each gated by Policy through a RiskClass derived from its name.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -142,10 +143,26 @@ pub fn risk_for(name: &str) -> RiskClass {
     RiskClass::ExternalWrite
 }
 
+/// The pinned risk of a tool, or the risk derived from its name when none is pinned.
+pub fn pinned_risk(name: &str, risks: &BTreeMap<String, RiskClass>) -> RiskClass {
+    risks.get(name).copied().unwrap_or_else(|| risk_for(name))
+}
+
+/// Pinned tool names the server does not list, sorted.
+pub fn unoffered(risks: &BTreeMap<String, RiskClass>, offered: &[String]) -> Vec<String> {
+    risks
+        .keys()
+        .filter(|name| !offered.contains(name))
+        .cloned()
+        .collect()
+}
+
 /// Connects to a Streamable-HTTP MCP server, wraps its tools. allow limits exposure; empty is all.
+/// risks pins the class of named tools; a pin the server does not list is an error.
 pub async fn connect(
     url: &str,
     allow: &[String],
+    risks: &BTreeMap<String, RiskClass>,
     limits: &McpLimits,
 ) -> Result<Vec<Arc<dyn Tool>>, String> {
     let transport = StreamableHttpClientTransport::from_uri(url);
@@ -157,6 +174,14 @@ pub async fn connect(
         }
     });
     let remote = peer.list_all_tools().await.map_err(|e| e.to_string())?;
+    let offered: Vec<String> = remote.iter().map(|t| t.name.to_string()).collect();
+    let missing = unoffered(risks, &offered);
+    if !missing.is_empty() {
+        return Err(format!(
+            "risks pin tools the server does not list: {}",
+            missing.join(", ")
+        ));
+    }
     let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
     for t in remote {
         let name = t.name.to_string();
@@ -164,7 +189,7 @@ pub async fn connect(
             continue;
         }
         let definition = ToolDefinition {
-            risk: risk_for(&name),
+            risk: pinned_risk(&name, risks),
             description: t
                 .description
                 .as_deref()

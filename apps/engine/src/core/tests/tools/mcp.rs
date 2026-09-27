@@ -79,3 +79,40 @@ fn compact_schema_trims_descriptions_and_noise() {
             .is_some_and(|d| d.len() <= 80)
     );
 }
+
+#[test]
+fn a_pinned_risk_replaces_the_one_derived_from_the_name() {
+    use std::collections::BTreeMap;
+
+    use crate::runtime::tools::mcp::pinned_risk;
+
+    let risks = BTreeMap::from([
+        ("update_event".to_owned(), RiskClass::Destructive),
+        ("list_events".to_owned(), RiskClass::ReadAuthenticated),
+    ]);
+    assert_eq!(pinned_risk("update_event", &risks), RiskClass::Destructive);
+    assert_eq!(
+        pinned_risk("list_events", &risks),
+        RiskClass::ReadAuthenticated
+    );
+    assert_eq!(
+        pinned_risk("create_event", &risks),
+        RiskClass::ExternalWrite
+    );
+    assert_eq!(pinned_risk("page_snapshot", &risks), RiskClass::ReadPublic);
+}
+
+#[test]
+fn a_pin_the_server_does_not_list_is_reported() {
+    use std::collections::BTreeMap;
+
+    use crate::runtime::tools::mcp::unoffered;
+
+    let risks = BTreeMap::from([
+        ("create_event".to_owned(), RiskClass::ExternalWrite),
+        ("list_events".to_owned(), RiskClass::ReadAuthenticated),
+    ]);
+    let offered = vec!["list_events".to_owned()];
+    assert_eq!(unoffered(&risks, &offered), vec!["create_event".to_owned()]);
+    assert!(unoffered(&BTreeMap::new(), &offered).is_empty());
+}

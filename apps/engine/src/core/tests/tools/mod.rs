@@ -1,4 +1,5 @@
-//! Tools: MCP risk mapping and the sandbox.
+//! Tools: MCP risk mapping, Google OAuth, and the sandbox.
 
 mod mcp;
+mod oauth;
 mod sandbox;

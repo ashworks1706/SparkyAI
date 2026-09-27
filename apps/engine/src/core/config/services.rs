@@ -268,3 +268,48 @@ impl Default for Telemetry {
         }
     }
 }
+
+/// OAuth clients for per-user grants.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct OAuth {
+    /// Google, for Calendar through its MCP server.
+    pub google: GoogleOAuth,
+}
+
+/// A Google OAuth 2.0 web client. Off by default.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct GoogleOAuth {
+    /// Whether the client is built at boot.
+    pub enabled: bool,
+    /// OAuth client id from the Google Cloud console.
+    pub client_id: String,
+    /// OAuth client secret. Lives in .env.
+    pub client_secret: SecretString,
+    /// Where Google sends the user back with a code.
+    pub redirect_url: String,
+    /// Scopes requested in one grant.
+    pub scopes: Vec<String>,
+    /// Google authorization endpoint.
+    pub authorize_url: String,
+    /// Google token endpoint.
+    pub token_url: String,
+    /// Budget for one token request.
+    pub timeout_secs: u64,
+}
+
+impl Default for GoogleOAuth {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            client_id: String::new(),
+            client_secret: SecretString::from(""),
+            redirect_url: String::new(),
+            scopes: vec!["https://www.googleapis.com/auth/calendar.events".into()],
+            authorize_url: "https://accounts.google.com/o/oauth2/v2/auth".into(),
+            token_url: "https://oauth2.googleapis.com/token".into(),
+            timeout_secs: 30,
+        }
+    }
+}

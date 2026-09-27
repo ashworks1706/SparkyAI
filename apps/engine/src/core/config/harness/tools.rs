@@ -1,6 +1,10 @@
 //! Which tools are registered, how the search tools are worded, and the MCP servers.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
+
+use crate::core::types::tools::RiskClass;
 
 /// Default description of search_knowledge.
 pub const KNOWLEDGE_DESCRIPTION: &str = "Search the stored knowledge base of ASU pages: programs, policies, admissions, advising, \
@@ -98,6 +102,9 @@ pub struct McpServer {
     /// Overrides agent.tool_timeout_secs for the tools of this server.
     #[serde(default)]
     pub tool_timeout_secs: Option<u64>,
+    /// Risk class per remote tool name, in place of the class derived from the name.
+    #[serde(default)]
+    pub risks: BTreeMap<String, RiskClass>,
 }
 
 impl Mcp {
