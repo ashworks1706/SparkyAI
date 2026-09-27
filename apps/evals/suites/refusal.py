@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from training.core.types import EvalCase, Score, TurnResult
+from evals.core.types import EvalCase, Score, TurnResult
 
 _DECLINE = re.compile(
     r"(can(?:no|')t|cannot|unable|not (?:able|available|find|have)|"

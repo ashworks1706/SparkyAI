@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from training.core.types import EvalCase, Score, TurnResult
+from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:

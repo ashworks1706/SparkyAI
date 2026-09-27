@@ -11,7 +11,7 @@ just doctor | env | hooks | bootstrap   # first run
 just check            # the gate: fmt-check, lint, test every unit. CI and the pre-commit hook run the same recipes for the units a change touches
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
 just check-scraper    # ruff + pytest in apps/scraper
-just check-training   # ruff + pytest in apps/training
+just check-evals      # ruff + pytest in apps/evals
 just check-web        # eslint + tsc --noEmit + vitest + vite build in apps/web
 just fmt              # format every unit in place
 just setup            # install every unit's deps
@@ -53,7 +53,7 @@ apps/discord/     Rust bin: serenity bot, HTTP client of engine, never links it.
 apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
 apps/scraper/     Python: fetch, chunk, embed, write the index. scraper serve runs the jobs queue: live search_live jobs, indexing of their results, scheduled source runs. Owns migrations. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
-apps/training/    Python: eval runners, suites, cases, and the baseline gate. Fine-tuning lives in loupe (https://github.com/ashworks1706/loupe).
+apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, runner, suites, cases.
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```

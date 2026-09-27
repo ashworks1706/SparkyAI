@@ -46,18 +46,18 @@ jobs:
             scraper:
               - *shared
               - apps/scraper/**
-            training:
+            evals:
               - *shared
-              - apps/training/**
+              - apps/evals/**
       - id: python
         env:
           ALL: ${{ github.event_name == 'workflow_dispatch' }}
           SCRAPER: ${{ steps.filter.outputs.scraper }}
-          TRAINING: ${{ steps.filter.outputs.training }}
+          EVALS: ${{ steps.filter.outputs.evals }}
         run: |
           pkgs=()
           { [ "$SCRAPER" = true ] || [ "$ALL" = true ]; } && pkgs+=(scraper)
-          { [ "$TRAINING" = true ] || [ "$ALL" = true ]; } && pkgs+=(training)
+          { [ "$EVALS" = true ] || [ "$ALL" = true ]; } && pkgs+=(evals)
           echo "pkgs=$(printf '%s\n' "${pkgs[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   rust:

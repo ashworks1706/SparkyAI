@@ -23,13 +23,13 @@ def _toml_files() -> tuple[Path, ...]:
     return (Path("../../sparky.toml"), Path("sparky.toml"))
 
 
-class Training(BaseModel):
+class Evals(BaseModel):
     engine_url: str = "http://localhost:8080"
     # Bearer token the engine /chat route requires.
     engine_service_token: SecretStr = SecretStr("")
     state_dir: Path = Path("../../.sparky")
-    cases_dir: Path = Path("evals/cases")
-    baseline_path: Path = Path("evals/baseline.json")
+    cases_dir: Path = Path("cases")
+    baseline_path: Path = Path("baseline.json")
     request_timeout_secs: float = 180.0
 
     @property
@@ -38,7 +38,7 @@ class Training(BaseModel):
 
     @property
     def eval_report_path(self) -> Path:
-        return self.state_dir / "training" / "evals" / "last.json"
+        return self.state_dir / "evals" / "last.json"
 
 
 class Settings(BaseSettings):
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    training: Training = Training()
+    evals: Evals = Evals()
 
     @classmethod
     def settings_customise_sources(

@@ -20,10 +20,10 @@ updates:
     groups:
       scraper: { patterns: ["*"] }
   - package-ecosystem: uv
-    directory: /apps/training
+    directory: /apps/evals
     schedule: { interval: weekly }
     groups:
-      training: { patterns: ["*"] }
+      evals: { patterns: ["*"] }
   - package-ecosystem: npm
     directory: /apps/web
     schedule: { interval: weekly }

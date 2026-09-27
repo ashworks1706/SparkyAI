@@ -15,8 +15,8 @@ This document describes the current shape of the system and its rules. Order of 
 | Page rendering | Firecrawl, self-hosted | `deploy/compose.yml` profile `crawl` |
 | Web search | SearXNG, self-hosted | `deploy/compose.yml` profile `search` |
 | Web | Vite, React, TypeScript, shadcn | `apps/web` |
-| Post-training | Phoenix `llm` spans in, GGUF out | [loupe](https://github.com/ashworks1706/loupe), a separate repo |
-| Evals | golden cases against the engine, baseline gate | `apps/training/evals` |
+| Fine-tuning | lives outside this repo | [loupe](https://github.com/ashworks1706/loupe), a separate repo |
+| Evals | golden cases against the engine, baseline gate | `apps/evals` |
 | Chat model | Qwen3 GGUF on `llama-server` | compose service `chat`, profile `model` |
 | Embeddings | Qwen3-Embedding-0.6B, 1024 dimensions, on `llama-server` | compose service `embed`, profile `model` |
 | Database, vector store, job queue | PostgreSQL 17 with pgvector | schema in `apps/scraper/migrations` |
@@ -70,7 +70,7 @@ apps/
     jobs.py         the job queue: handlers, lanes, scheduling
     store/          postgres and object storage, the only place a connection opens
     migrations/     the schema
-  training/       Python. Evals with a baseline gate.
+  evals/          Python. Evals with a baseline gate.
   web/            Vite and React frontend and admin UI
 deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search
 docs/             ROADMAP.md, this file
@@ -707,13 +707,12 @@ flowchart TD
     C --> E["llm<br/>full prompt and reply, thinking"]
     C --> F["tool<br/>redacted arguments and result"]
     F --> G["scrape.query<br/>scraper, separate trace"]
-    E -.->|"one llm span, one training example"| H["loupe data export"]
 ```
 
 Traces go to two places:
 
 - JSONL at `.sparky/traces/<request_id>.jsonl`: the complete local record of trace events.
-- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`. [loupe](https://github.com/ashworks1706/loupe) reads `llm` spans back through `GET /v1/projects/<project>/spans`.
+- Phoenix: spans exported over OTLP/HTTP to `telemetry.phoenix_url` plus `/v1/traces`, read as a tree per conversation. They carry `gen_ai.*` attributes beside the OpenInference ones the Phoenix UI reads: `user.id` for the user, `session.id` for the conversation. The resource attribute `openinference.project.name` puts them in the project named by `telemetry.project_name`.
 
 An empty `phoenix_url` turns export off. `telemetry.phoenix_api_key` is sent as a bearer token when set. The scraper exports `scrape.source`, `scrape.index`, and `scrape.query` spans. The bot records each product event as one span under the interaction (`[analytics]`).
 
@@ -750,7 +749,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, such as an eval profile. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `object_store`, `cli`, `training`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 
