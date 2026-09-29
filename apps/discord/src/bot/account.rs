@@ -8,7 +8,7 @@ use tracing::Instrument;
 
 use super::commands;
 use super::{Handler, error_kind, event, option_str, tell};
-use crate::core::types::{ForgetRequest, ProfileRequest, ResetRequest};
+use crate::core::types::{AuthorizeRequest, ForgetRequest, ProfileRequest, ResetRequest};
 use crate::render::components::{self, CustomId};
 use crate::render::reply;
 
@@ -158,6 +158,87 @@ impl Handler {
                         .with("kind", error_kind(&e)),
                 );
                 reply::memory_failure(&e)
+            }
+        };
+        finish(ctx, cmd, vec![text]).await;
+    }
+
+    /// Gives the caller a private link to connect their ASU Canvas account.
+    pub(super) async fn login(&self, ctx: &Context, cmd: &CommandInteraction) {
+        if !defer_private(ctx, cmd).await {
+            return;
+        }
+        let req = AuthorizeRequest {
+            user: cmd.user.id.to_string(),
+        };
+        let span = tracing::info_span!(
+            "discord.login",
+            "discord.command" = "login",
+            "user.id" = %cmd.user.id,
+        );
+        let text = match self.engine.canvas_login(&req).instrument(span).await {
+            Ok(resp) => {
+                tracing::info!(user = %cmd.user.id, "canvas login link issued");
+                self.record(event(
+                    "discord_login",
+                    cmd.user.id,
+                    cmd.guild_id,
+                    cmd.channel_id,
+                ));
+                format!(
+                    "Connect your ASU Canvas with this link (only you can see it):\n{}\n\nYou sign \
+                     in through ASU. Once connected, send me a direct message and ask about your \
+                     courses, assignments, or grades.",
+                    resp.url
+                )
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, user = %cmd.user.id, "canvas login failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "login")
+                        .with("kind", error_kind(&e)),
+                );
+                "Canvas login is not available right now.".to_owned()
+            }
+        };
+        finish(ctx, cmd, vec![text]).await;
+    }
+
+    /// Disconnects the caller's ASU Canvas account.
+    pub(super) async fn logout(&self, ctx: &Context, cmd: &CommandInteraction) {
+        if !defer_private(ctx, cmd).await {
+            return;
+        }
+        let req = AuthorizeRequest {
+            user: cmd.user.id.to_string(),
+        };
+        let span = tracing::info_span!(
+            "discord.logout",
+            "discord.command" = "logout",
+            "user.id" = %cmd.user.id,
+        );
+        let text = match self.engine.canvas_logout(&req).instrument(span).await {
+            Ok(done) => {
+                tracing::info!(user = %cmd.user.id, removed = done.removed, "canvas disconnected");
+                self.record(
+                    event("discord_logout", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("removed", done.removed),
+                );
+                if done.removed {
+                    "Your ASU Canvas is disconnected.".to_owned()
+                } else {
+                    "You had no Canvas connected.".to_owned()
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, user = %cmd.user.id, "canvas logout failed");
+                self.record(
+                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
+                        .with("stage", "logout")
+                        .with("kind", error_kind(&e)),
+                );
+                "Could not disconnect Canvas right now.".to_owned()
             }
         };
         finish(ctx, cmd, vec![text]).await;

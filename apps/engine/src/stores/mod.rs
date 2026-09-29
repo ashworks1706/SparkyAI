@@ -4,4 +4,5 @@ pub mod confirmation;
 pub mod conversation;
 pub mod knowledge;
 pub mod memory;
+pub mod oauth;
 pub mod postgres;

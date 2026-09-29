@@ -12,6 +12,7 @@ use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
 use crate::core::traits::memory::detector::FactDetector;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
+use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::safety::guardrail::Guardrail;
 use crate::core::traits::tools::Tool;
@@ -23,6 +24,7 @@ use crate::core::types::model::tokens::estimate;
 use crate::routes::Limits;
 use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
+use crate::routes::oauth::OAuthState;
 use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
 use crate::runtime::harness::agent::prompt::capability;
@@ -46,12 +48,14 @@ use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
 use crate::runtime::tools::mcp::{self, McpLimits};
+use crate::runtime::tools::oauth::CanvasOAuthClient;
 use crate::runtime::tools::sandbox::{
     ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
     reap_sessions,
 };
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::memory::profile::PgProfileGraph;
+use crate::stores::oauth::PgOAuth;
 use crate::stores::postgres::{
     self, PgConfirmations, PgConversations, PgMemory, PgRetriever, PgSourceQueries, RetrievalTuning,
 };
@@ -231,6 +235,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let conversations = Arc::new(PgConversations::new(pool.clone()));
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
+    let (oauth_store, canvas_oauth, oauth_state) = oauth_wiring(&cfg, &pool)?;
 
     let queries = source_queries(&cfg, &pool, Arc::clone(&trace)).await?;
     let sandbox = sandbox(&cfg).await?;
@@ -239,6 +244,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         queries,
         Arc::clone(&retriever) as Arc<dyn Retriever>,
         sandbox.clone(),
+        oauth_store.clone(),
+        canvas_oauth.clone(),
     )
     .await?;
     // Measured at boot with every tool offered, which is the largest the section ever gets.
@@ -276,7 +283,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
 
     let state = chat_state(&cfg, agent, conversations, confirmations);
     let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
-    let router = http_router(&cfg, state, profile, pool, sandbox);
+    let router = http_router(&cfg, state, profile, oauth_state, pool, sandbox);
 
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;
     tracing::info!(addr = %cfg.app.http_addr, "listening");
@@ -288,11 +295,36 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     .await
 }
 
+/// The grant store, the Canvas client when its login is on, and the state the OAuth routes read.
+type OAuthWiring = (Arc<dyn OAuthStore>, Option<Arc<CanvasOAuthClient>>, OAuthState);
+
+/// Builds the grant store, the Canvas client, and the OAuth route state from the settings.
+fn oauth_wiring(cfg: &Config, pool: &sqlx::postgres::PgPool) -> anyhow::Result<OAuthWiring> {
+    let store: Arc<dyn OAuthStore> = Arc::new(PgOAuth::new(pool.clone()));
+    let canvas = if cfg.oauth.canvas.enabled {
+        Some(Arc::new(
+            CanvasOAuthClient::new(&cfg.oauth.canvas)
+                .map_err(|e| anyhow::anyhow!("oauth.canvas: {e}"))?,
+        ))
+    } else {
+        None
+    };
+    let state = OAuthState {
+        store: store.clone(),
+        canvas: canvas.clone(),
+        service_token: cfg.engine.service_token.clone(),
+        // A login link stays valid for ten minutes.
+        state_ttl: Duration::from_secs(600),
+    };
+    Ok((store, canvas, state))
+}
+
 /// The whole HTTP surface, with the state each group of routes reads.
 fn http_router(
     cfg: &Config,
     state: ChatState,
     profile: ProfileState,
+    oauth: OAuthState,
     pool: sqlx::postgres::PgPool,
     sandbox: Option<Arc<ContainerSandbox>>,
 ) -> axum::Router {
@@ -309,6 +341,7 @@ fn http_router(
         health,
         profile,
         sandbox_state(cfg, sandbox),
+        oauth,
         limits,
         &cfg.http.cors_origins,
     )
@@ -810,6 +843,8 @@ async fn build_tools(
     queries: Arc<dyn SourceQueries>,
     retriever: Arc<dyn Retriever>,
     sandbox: Option<Arc<ContainerSandbox>>,
+    oauth_store: Arc<dyn OAuthStore>,
+    canvas_oauth: Option<Arc<CanvasOAuthClient>>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
@@ -865,7 +900,9 @@ async fn build_tools(
     }
     if cfg.canvas.enabled {
         let mut registered = 0;
-        for tool in canvas::tools(&cfg.canvas).map_err(|e| anyhow::anyhow!("canvas: {e}"))? {
+        for tool in canvas::tools(&cfg.canvas, oauth_store, canvas_oauth)
+            .map_err(|e| anyhow::anyhow!("canvas: {e}"))?
+        {
             if disabled(&tool.definition().name) {
                 continue;
             }

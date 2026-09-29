@@ -7,7 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use url::Url;
 
-use crate::core::config::GoogleOAuth;
+use crate::core::config::{CanvasOAuth, GoogleOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
 
 /// Longest OAuth error code repeated from a response.
@@ -115,34 +115,151 @@ impl GoogleOAuthClient {
     }
 
     async fn token(&self, form: &[(&str, &str)]) -> Result<TokenResponse, OAuthError> {
+        post_token(
+            &self.http,
+            &self.token_url,
+            &self.client_id,
+            &self.client_secret,
+            form,
+        )
+        .await
+    }
+}
+
+/// A Canvas OAuth web client for per-user grants. Canvas returns a refresh token by default and
+/// takes no offline or consent parameters.
+pub struct CanvasOAuthClient {
+    http: reqwest::Client,
+    client_id: String,
+    client_secret: SecretString,
+    redirect_url: String,
+    scopes: Vec<String>,
+    authorize_url: Url,
+    token_url: Url,
+}
+
+impl CanvasOAuthClient {
+    /// Builds the client from its settings.
+    ///
+    /// # Errors
+    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
+    pub fn new(cfg: &CanvasOAuth) -> Result<Self, OAuthError> {
+        let parse = |s: &str| Url::parse(s).map_err(|e| OAuthError::NotConfigured(e.to_string()));
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_secs(cfg.timeout_secs))
+            .build()
+            .map_err(|e| OAuthError::NotConfigured(e.to_string()))?;
+        Ok(Self {
+            http,
+            client_id: cfg.client_id.clone(),
+            client_secret: cfg.client_secret.clone(),
+            redirect_url: cfg.redirect_url.clone(),
+            scopes: cfg.scopes.clone(),
+            authorize_url: parse(&cfg.authorize_url)?,
+            token_url: parse(&cfg.token_url)?,
+        })
+    }
+
+    /// The consent URL the user opens. state binds the callback to this request.
+    #[must_use]
+    pub fn authorize_url(&self, state: &str) -> String {
+        let mut url = self.authorize_url.clone();
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs
+                .append_pair("client_id", &self.client_id)
+                .append_pair("redirect_uri", &self.redirect_url)
+                .append_pair("response_type", "code")
+                .append_pair("state", state);
+            if !self.scopes.is_empty() {
+                pairs.append_pair("scope", &self.scopes.join(" "));
+            }
+        }
+        url.into()
+    }
+
+    /// Tokens for an authorization code.
+    ///
+    /// # Errors
+    /// Any `OAuthError`.
+    pub async fn exchange(&self, code: &str) -> Result<OAuthTokens, OAuthError> {
+        let response = post_token(
+            &self.http,
+            &self.token_url,
+            &self.client_id,
+            &self.client_secret,
+            &[
+                ("grant_type", "authorization_code"),
+                ("code", code),
+                ("redirect_uri", &self.redirect_url),
+            ],
+        )
+        .await?;
+        tokens(response, None)
+    }
+
+    /// New tokens for a grant, keeping the refresh token the response leaves out.
+    ///
+    /// # Errors
+    /// Any `OAuthError`; `NoRefreshToken` when the grant has none.
+    pub async fn refresh(&self, previous: &OAuthTokens) -> Result<OAuthTokens, OAuthError> {
+        let refresh = previous
+            .refresh_token
+            .as_ref()
+            .ok_or(OAuthError::NoRefreshToken)?;
+        let response = post_token(
+            &self.http,
+            &self.token_url,
+            &self.client_id,
+            &self.client_secret,
+            &[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh.expose_secret()),
+            ],
+        )
+        .await?;
+        tokens(response, Some(previous))
+    }
+}
+
+/// Posts a token request with the client credentials appended, returning the parsed response.
+async fn post_token(
+    http: &reqwest::Client,
+    token_url: &Url,
+    client_id: &str,
+    client_secret: &SecretString,
+    form: &[(&str, &str)],
+) -> Result<TokenResponse, OAuthError> {
+    // The serializer is not Send, so it is finished and dropped before the request is awaited.
+    let encoded = {
         let mut body = url::form_urlencoded::Serializer::new(String::new());
         body.extend_pairs(form);
-        body.append_pair("client_id", &self.client_id);
-        body.append_pair("client_secret", self.client_secret.expose_secret());
-        let response = self
-            .http
-            .post(self.token_url.clone())
-            .header(
-                reqwest::header::CONTENT_TYPE,
-                "application/x-www-form-urlencoded",
-            )
-            .body(body.finish())
-            .send()
-            .await
-            .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
-        let status = response.status();
-        let text = response
-            .text()
-            .await
-            .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
-        if !status.is_success() {
-            return Err(OAuthError::Refused {
-                status: status.as_u16(),
-                code: error_code(&text),
-            });
-        }
-        serde_json::from_str(&text).map_err(|_| OAuthError::Malformed("not a token object".into()))
+        body.append_pair("client_id", client_id);
+        body.append_pair("client_secret", client_secret.expose_secret());
+        body.finish()
+    };
+    let response = http
+        .post(token_url.clone())
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(encoded)
+        .send()
+        .await
+        .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
+    if !status.is_success() {
+        return Err(OAuthError::Refused {
+            status: status.as_u16(),
+            code: error_code(&text),
+        });
     }
+    serde_json::from_str(&text).map_err(|_| OAuthError::Malformed("not a token object".into()))
 }
 
 /// A transport failure named by its kind, never by its URL or body.

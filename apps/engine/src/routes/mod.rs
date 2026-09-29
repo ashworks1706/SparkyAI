@@ -10,6 +10,7 @@ use tower_http::trace::TraceLayer;
 pub mod chat;
 pub mod conversation;
 pub mod health;
+pub mod oauth;
 pub mod openai;
 pub mod profile;
 pub mod rate_limit;
@@ -60,6 +61,7 @@ pub fn router(
     health_state: health::HealthState,
     profile_state: profile::ProfileState,
     sandbox_state: sandbox::SandboxState,
+    oauth_state: oauth::OAuthState,
     limits: Limits,
     cors_origins: &[String],
 ) -> Router {
@@ -83,11 +85,17 @@ pub fn router(
         .route("/sandbox/enabled", post(sandbox::switch))
         .route("/sandbox/{name}", delete(sandbox::kill))
         .with_state(sandbox_state);
+    let oauth = Router::new()
+        .route("/oauth/{provider}/authorize", post(oauth::authorize))
+        .route("/oauth/{provider}/logout", post(oauth::disconnect))
+        .route("/oauth/{provider}/callback", get(oauth::callback))
+        .with_state(oauth_state);
     let mut router = Router::new()
         .merge(health)
         .merge(chat)
         .merge(profile)
         .merge(sandbox)
+        .merge(oauth)
         .route("/v1/models", get(openai::models))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
         .layer(TraceLayer::new_for_http());

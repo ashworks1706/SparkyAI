@@ -11,35 +11,80 @@ use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 
 use crate::core::config::Canvas as CanvasConfig;
+use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::canvas::Canvas;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::canvas::{Assignment, CanvasError, Course, CourseGrade};
+use crate::core::types::tools::oauth::USER_SCOPE;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::canvas::client::HttpCanvas;
+use crate::runtime::tools::oauth::CanvasOAuthClient;
 use crate::runtime::tools::structured;
 
-/// The Canvas token used for a request.
-///
-/// Today it is the shared token from configuration. The per-user grant store of roadmap phase 8
-/// resolves the caller's own token here, keyed by ctx.user_id, before falling back to this one.
+/// The provider key Canvas grants are stored under.
+const PROVIDER: &str = "canvas";
+
+/// Resolves the Canvas token for a caller: their own per-user grant, else the shared fallback.
 pub struct Credentials {
-    token: SecretString,
+    store: Arc<dyn OAuthStore>,
+    oauth: Option<Arc<CanvasOAuthClient>>,
+    fallback: SecretString,
 }
 
 impl Credentials {
-    /// Holds the configured token.
-    pub fn new(token: SecretString) -> Self {
-        Self { token }
+    /// Builds the resolver over the grant store, the client used to refresh, and the shared token.
+    pub fn new(
+        store: Arc<dyn OAuthStore>,
+        oauth: Option<Arc<CanvasOAuthClient>>,
+        fallback: SecretString,
+    ) -> Self {
+        Self {
+            store,
+            oauth,
+            fallback,
+        }
     }
 
-    /// The token to use for the caller, or None when Canvas is not connected.
-    pub fn resolve(&self, _ctx: &RequestContext) -> Option<&SecretString> {
-        if self.token.expose_secret().trim().is_empty() {
-            None
+    /// The token for the caller, refreshing an expired grant when it can. None is not connected.
+    async fn resolve(&self, ctx: &RequestContext) -> Result<Option<SecretString>, ToolError> {
+        let grant = self
+            .store
+            .load_grant(USER_SCOPE, &ctx.user_id, PROVIDER)
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, "could not read a canvas grant");
+                ToolError::Failed("could not read your Canvas connection".to_owned())
+            })?;
+        if let Some(mut grant) = grant {
+            if grant.expired() {
+                let Some(oauth) = &self.oauth else {
+                    return Ok(None);
+                };
+                match oauth.refresh(&grant).await {
+                    Ok(fresh) => {
+                        if let Err(error) = self
+                            .store
+                            .save_grant(USER_SCOPE, &ctx.user_id, PROVIDER, &fresh)
+                            .await
+                        {
+                            tracing::warn!(%error, "could not save a refreshed canvas grant");
+                        }
+                        grant = fresh;
+                    }
+                    Err(error) => {
+                        tracing::info!(%error, "canvas grant could not be refreshed");
+                        return Ok(None);
+                    }
+                }
+            }
+            return Ok(Some(grant.access_token));
+        }
+        if self.fallback.expose_secret().trim().is_empty() {
+            Ok(None)
         } else {
-            Some(&self.token)
+            Ok(Some(self.fallback.clone()))
         }
     }
 }
@@ -138,22 +183,23 @@ impl Tool for CanvasTool {
                 "Canvas is available only in a direct message with me, not in a server.".to_owned(),
             ));
         }
-        let token = self.creds.resolve(ctx).ok_or_else(|| {
-            ToolError::Failed(
-                "Canvas is not connected. Ask the operator to set canvas.access_token.".to_owned(),
-            )
-        })?;
+        let Some(token) = self.creds.resolve(ctx).await? else {
+            return Err(ToolError::Failed(
+                "You have not connected Canvas. Send /login in a direct message to connect it."
+                    .to_owned(),
+            ));
+        };
         match self.query {
             Query::Courses => {
-                let courses = self.client.courses(token).await.map_err(failed)?;
+                let courses = self.client.courses(&token).await.map_err(failed)?;
                 Ok(courses_output(courses, self.max_items))
             }
             Query::Assignments => {
-                let assignments = self.client.assignments(token).await.map_err(failed)?;
+                let assignments = self.client.assignments(&token).await.map_err(failed)?;
                 Ok(assignments_output(assignments, self.max_items))
             }
             Query::Grades => {
-                let grades = self.client.grades(token).await.map_err(failed)?;
+                let grades = self.client.grades(&token).await.map_err(failed)?;
                 Ok(grades_output(grades, self.max_items))
             }
         }
@@ -246,16 +292,19 @@ fn grades_output(grades: Vec<CourseGrade>, max: usize) -> ToolOutput {
     }
 }
 
-/// The Canvas tools, built over one shared client and the configured token.
-pub fn tools(cfg: &CanvasConfig) -> Result<Vec<Arc<dyn Tool>>, CanvasError> {
+/// The Canvas tools, over the API client, the per-user grant store, and the client used to refresh.
+pub fn tools(
+    cfg: &CanvasConfig,
+    store: Arc<dyn OAuthStore>,
+    oauth: Option<Arc<CanvasOAuthClient>>,
+) -> Result<Vec<Arc<dyn Tool>>, CanvasError> {
     let client: Arc<dyn Canvas> = Arc::new(HttpCanvas::new(
         &cfg.base_url,
         Duration::from_secs(cfg.timeout_secs),
         cfg.max_items,
     )?);
-    let creds = Arc::new(Credentials::new(SecretString::from(
-        cfg.access_token.expose_secret().to_owned(),
-    )));
+    let fallback = SecretString::from(cfg.access_token.expose_secret().to_owned());
+    let creds = Arc::new(Credentials::new(store, oauth, fallback));
     Ok([Query::Courses, Query::Assignments, Query::Grades]
         .into_iter()
         .map(|q| {

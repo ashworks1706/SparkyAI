@@ -314,6 +314,18 @@ authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 timeout_secs = 30
 
+# Per-user Canvas login. Turn on with the developer key from ASU: set enabled, client_id and
+# redirect_url here, and client_secret in .env. The user signs in through ASU SSO themselves.
+# scopes empty asks for the full access the key allows; name read scopes to narrow it.
+[oauth.canvas]
+enabled = false
+client_id = ""
+redirect_url = ""
+scopes = []
+authorize_url = "https://canvas.asu.edu/login/oauth2/auth"
+token_url = "https://canvas.asu.edu/login/oauth2/token"
+timeout_secs = 30
+
 # ---------------------------------------------------------------- Canvas
 # Read-only Canvas tools (courses, assignments, grades), in a direct message only.
 # Off until a Canvas API token is set. access_token lives in .env. When a per-user grant store

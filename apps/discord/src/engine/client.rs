@@ -12,8 +12,9 @@ use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::types::{
-    ChatRequest, ChatResponse, ConfirmRequest, EngineError, ErrorFrame, ForgetRequest,
-    ForgetResponse, ProfileList, ProfileRequest, Progress, ResetRequest, ResetResponse, Update,
+    AuthorizeRequest, AuthorizeResponse, ChatRequest, ChatResponse, ConfirmRequest,
+    DisconnectResponse, EngineError, ErrorFrame, ForgetRequest, ForgetResponse, ProfileList,
+    ProfileRequest, Progress, ResetRequest, ResetResponse, Update,
 };
 use crate::engine::sse::{drain_frames, take_complete};
 
@@ -63,6 +64,22 @@ impl EngineClient {
     /// Forgets one remembered thing, or everything without a label. 503 if profile graph is off.
     pub async fn forget(&self, req: &ForgetRequest) -> Result<ForgetResponse, EngineError> {
         self.post("/profile/forget", req).await
+    }
+
+    /// Mints a Canvas consent URL for the caller. 503 when canvas login is not enabled.
+    pub async fn canvas_login(
+        &self,
+        req: &AuthorizeRequest,
+    ) -> Result<AuthorizeResponse, EngineError> {
+        self.post("/oauth/canvas/authorize", req).await
+    }
+
+    /// Disconnects the caller's Canvas grant.
+    pub async fn canvas_logout(
+        &self,
+        req: &AuthorizeRequest,
+    ) -> Result<DisconnectResponse, EngineError> {
+        self.post("/oauth/canvas/logout", req).await
     }
 
     /// Posts a JSON body and reads a JSON reply.

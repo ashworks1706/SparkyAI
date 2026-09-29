@@ -10,6 +10,10 @@ pub const MEMORY: &str = "memory";
 pub const FORGET: &str = "forget";
 /// Name of the label option on /forget.
 pub const LABEL: &str = "label";
+/// The /login command, which connects the user's ASU Canvas account.
+pub const LOGIN: &str = "login";
+/// The /logout command, which disconnects the user's Canvas account.
+pub const LOGOUT: &str = "logout";
 
 /// Every command the bot registers on its guild.
 pub fn all() -> Vec<CreateCommand> {
@@ -24,5 +28,8 @@ pub fn all() -> Vec<CreateCommand> {
                 LABEL,
                 "The thing to forget, as /memory shows it. Leave empty to forget everything",
             )),
+        CreateCommand::new(LOGIN)
+            .description("Connect your ASU Canvas so Sparky can check it in DMs"),
+        CreateCommand::new(LOGOUT).description("Disconnect your ASU Canvas from Sparky"),
     ]
 }

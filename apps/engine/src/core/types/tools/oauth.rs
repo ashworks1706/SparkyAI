@@ -4,10 +4,6 @@ use chrono::{DateTime, Utc};
 use secrecy::SecretString;
 
 /// Tokens from one grant. Secrets never leave this value except as a bearer header.
-#[allow(
-    dead_code,
-    reason = "held by the per-user session store of roadmap phase 8"
-)]
 #[derive(Debug, Clone)]
 pub struct OAuthTokens {
     /// Bearer token for the provider's APIs and MCP servers.
@@ -20,11 +16,30 @@ pub struct OAuthTokens {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+impl OAuthTokens {
+    /// Whether the access token has passed the moment the provider gave for it.
+    #[must_use]
+    pub fn expired(&self) -> bool {
+        self.expires_at.is_some_and(|at| at <= Utc::now())
+    }
+}
+
+/// The scope per-user grants are stored under. A grant belongs to the person, not to one guild,
+/// so it is keyed by the caller and this fixed scope rather than by the guild they connected in.
+pub const USER_SCOPE: &str = "user";
+
+/// The caller and provider a pending consent belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Consent {
+    /// The tenant the login was started in.
+    pub tenant_id: String,
+    /// The caller who started the login.
+    pub user_id: String,
+    /// The provider being connected.
+    pub provider: String,
+}
+
 /// Why a grant or a refresh failed. Carries no token and no response body.
-#[allow(
-    dead_code,
-    reason = "raised by the per-user session routes of roadmap phase 8"
-)]
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum OAuthError {
     /// The client is not configured for the request.

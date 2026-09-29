@@ -275,6 +275,45 @@ impl Default for Telemetry {
 pub struct OAuth {
     /// Google, for Calendar through its MCP server.
     pub google: GoogleOAuth,
+    /// Canvas, for a student's own courses, assignments, and grades.
+    pub canvas: CanvasOAuth,
+}
+
+/// A Canvas OAuth 2.0 web client for per-user grants. Off by default.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct CanvasOAuth {
+    /// Whether the client is built at boot and the login flow is offered.
+    pub enabled: bool,
+    /// OAuth client id from the Canvas developer key.
+    pub client_id: String,
+    /// OAuth client secret. Lives in .env.
+    pub client_secret: SecretString,
+    /// Where Canvas sends the user back with a code.
+    pub redirect_url: String,
+    /// Scopes requested in one grant. Empty asks for the full access the key allows.
+    pub scopes: Vec<String>,
+    /// Canvas authorization endpoint.
+    pub authorize_url: String,
+    /// Canvas token endpoint.
+    pub token_url: String,
+    /// Budget for one token request.
+    pub timeout_secs: u64,
+}
+
+impl Default for CanvasOAuth {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            client_id: String::new(),
+            client_secret: SecretString::from(""),
+            redirect_url: String::new(),
+            scopes: Vec::new(),
+            authorize_url: "https://canvas.asu.edu/login/oauth2/auth".into(),
+            token_url: "https://canvas.asu.edu/login/oauth2/token".into(),
+            timeout_secs: 30,
+        }
+    }
 }
 
 /// Canvas LMS integration. Off by default. Read-only, in a direct message only.
