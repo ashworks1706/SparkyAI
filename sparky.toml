@@ -281,35 +281,13 @@ max_tool_description_chars = 160
 # tool_timeout_secs = 45
 # risks = { page_snapshot = "read_public" }   # per-tool class in place of the one derived from the name
 
-# Google Calendar on Google's MCP server. Off: an empty url drops the server. It needs a per-user
-# grant from [oauth.google], which waits on the per-user sessions of roadmap phase 8.
-[[mcp.servers]]
-name = "google_calendar"
-url = ""                       # https://calendarmcp.googleapis.com/mcp/v1
-tools = [
-  "list_events", "list_calendars", "get_event", "search_events", "suggest_time",
-  "create_event", "respond_to_event", "update_event", "delete_event",
-]
-tool_timeout_secs = 30
-
-[mcp.servers.risks]
-list_events = "read_authenticated"
-list_calendars = "read_authenticated"
-get_event = "read_authenticated"
-search_events = "read_authenticated"
-suggest_time = "read_authenticated"
-create_event = "external_write"
-respond_to_event = "external_write"
-update_event = "destructive"
-delete_event = "destructive"
-
 # ---------------------------------------------------------------- OAuth
 # Per-user grants. client_secret lives in .env. Off until the per-user sessions of phase 8.
 [oauth.google]
 enabled = false
 client_id = ""
 redirect_url = ""
-scopes = ["https://www.googleapis.com/auth/calendar.events"]
+scopes = ["https://www.googleapis.com/auth/calendar.events.readonly"]
 authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 timeout_secs = 30
@@ -355,6 +333,14 @@ base_url = "https://graph.microsoft.com/v1.0"
 timeout_secs = 30
 max_items = 15
 
+# Google Calendar, read-only, in a direct message only. On with oauth.google; each caller reads
+# their own calendar through their per-user grant.
+[gcal]
+enabled = false
+base_url = "https://www.googleapis.com/calendar/v3"
+timeout_secs = 30
+max_items = 15
+
 # Academic paper search over Semantic Scholar. Public, no key.
 [papers]
 enabled = true
@@ -370,9 +356,11 @@ timeout_secs = 20
 max_chars = 1500
 
 # Valley Metro realtime. Off until feed_url (a GTFS-realtime JSON feed) is set in .env; it may
-# carry a key, so it is a secret. Reports active vehicles by route.
+# carry a key, so it is a secret. Reports active vehicles by route. routes_url points at the
+# static GTFS routes.txt so route ids resolve to names; empty leaves ids unresolved.
 [transit]
 enabled = false
+routes_url = ""                # https://gtfs.valleymetro.org/gtfs/routes.txt
 timeout_secs = 20
 max_items = 20
 

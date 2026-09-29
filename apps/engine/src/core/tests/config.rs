@@ -490,9 +490,7 @@ fn sandbox_egress_names_its_network_and_proxy() {
 }
 
 #[test]
-fn the_committed_google_calendar_server_is_off_and_pinned() {
-    use crate::core::types::tools::RiskClass;
-
+fn the_committed_google_calendar_tool_is_off_and_read_only() {
     let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
     let cfg: Result<Config, String> = {
         use figment::providers::{Format, Toml};
@@ -505,21 +503,16 @@ fn the_committed_google_calendar_server_is_off_and_pinned() {
     let Ok(cfg) = cfg else {
         unreachable!("sparky.toml loads")
     };
-    let Some(calendar) = cfg.mcp.servers.iter().find(|s| s.name == "google_calendar") else {
-        unreachable!("sparky.toml declares google_calendar")
-    };
-    assert!(calendar.url.is_empty());
-    assert!(cfg.mcp.resolved_servers().is_empty());
-    assert_eq!(calendar.risks.len(), calendar.tools.len());
-    assert_eq!(
-        calendar.risks.get("update_event"),
-        Some(&RiskClass::Destructive)
-    );
-    assert_eq!(
-        calendar.risks.get("list_events"),
-        Some(&RiskClass::ReadAuthenticated)
-    );
+    assert!(!cfg.gcal.enabled);
     assert!(!cfg.oauth.google.enabled);
+    assert!(
+        cfg.oauth
+            .google
+            .scopes
+            .iter()
+            .all(|s| s.ends_with("readonly"))
+    );
+    assert!(!cfg.mcp.servers.iter().any(|s| s.name == "google_calendar"));
 }
 
 #[test]

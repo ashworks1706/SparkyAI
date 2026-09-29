@@ -126,8 +126,8 @@ impl GoogleOAuthClient {
     }
 }
 
-/// A standard OAuth 2.0 web client for per-user grants. Fits providers that return a refresh
-/// token by default and take no offline or consent parameters, such as Canvas and Microsoft.
+/// A standard OAuth 2.0 web client for per-user grants. Fits Canvas and Microsoft as they are,
+/// and Google with the offline and consent parameters that make it return a refresh token.
 pub struct WebOAuthClient {
     http: reqwest::Client,
     client_id: String,
@@ -136,6 +136,7 @@ pub struct WebOAuthClient {
     scopes: Vec<String>,
     authorize_url: Url,
     token_url: Url,
+    extra_authorize: Vec<(&'static str, &'static str)>,
 }
 
 impl WebOAuthClient {
@@ -171,6 +172,28 @@ impl WebOAuthClient {
         )
     }
 
+    /// Builds the client from a Google settings section, asking for offline access.
+    ///
+    /// # Errors
+    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
+    pub fn google(cfg: &GoogleOAuth) -> Result<Self, OAuthError> {
+        let mut client = Self::new(
+            &cfg.client_id,
+            &cfg.client_secret,
+            &cfg.redirect_url,
+            &cfg.scopes,
+            &cfg.authorize_url,
+            &cfg.token_url,
+            cfg.timeout_secs,
+        )?;
+        client.extra_authorize = vec![
+            ("access_type", "offline"),
+            ("prompt", "consent"),
+            ("include_granted_scopes", "true"),
+        ];
+        Ok(client)
+    }
+
     /// Builds the client from its fields.
     ///
     /// # Errors
@@ -197,6 +220,7 @@ impl WebOAuthClient {
             scopes: scopes.to_vec(),
             authorize_url: parse(authorize_url)?,
             token_url: parse(token_url)?,
+            extra_authorize: Vec::new(),
         })
     }
 
@@ -213,6 +237,9 @@ impl WebOAuthClient {
                 .append_pair("state", state);
             if !self.scopes.is_empty() {
                 pairs.append_pair("scope", &self.scopes.join(" "));
+            }
+            for (key, value) in &self.extra_authorize {
+                pairs.append_pair(key, value);
             }
         }
         url.into()

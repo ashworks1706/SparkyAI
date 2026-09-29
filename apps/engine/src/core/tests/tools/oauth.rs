@@ -216,3 +216,28 @@ async fn a_canvas_code_becomes_tokens_without_requiring_a_refresh_token() {
     assert_eq!(tokens.access_token.expose_secret(), "a1");
     assert!(tokens.refresh_token.is_none());
 }
+
+#[test]
+fn the_google_consent_url_asks_for_offline_access() {
+    let cfg = GoogleOAuth {
+        enabled: true,
+        client_id: "gid".into(),
+        client_secret: SecretString::from("gsecret"),
+        redirect_url: "https://sparky.example/oauth/google/callback".into(),
+        ..GoogleOAuth::default()
+    };
+    let client = match WebOAuthClient::google(&cfg) {
+        Ok(c) => c,
+        Err(e) => unreachable!("the google client builds: {e}"),
+    };
+    let url = client.authorize_url("s2");
+    for part in [
+        "client_id=gid",
+        "state=s2",
+        "access_type=offline",
+        "prompt=consent",
+    ] {
+        assert!(url.contains(part), "{part} missing from {url}");
+    }
+    assert!(!url.contains("gsecret"));
+}

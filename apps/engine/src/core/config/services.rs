@@ -386,6 +386,31 @@ impl Default for Outlook {
     }
 }
 
+/// Google Calendar read-only tool. Off by default; needs an oauth.google grant.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Gcal {
+    /// Whether the Google Calendar tool is registered at boot.
+    pub enabled: bool,
+    /// Base URL of the Google Calendar API, no trailing path.
+    pub base_url: String,
+    /// Budget for one request.
+    pub timeout_secs: u64,
+    /// Most events one call returns to the model.
+    pub max_items: usize,
+}
+
+impl Default for Gcal {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: "https://www.googleapis.com/calendar/v3".into(),
+            timeout_secs: 30,
+            max_items: 15,
+        }
+    }
+}
+
 /// Academic paper search over Semantic Scholar. No key; a public read.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -444,6 +469,8 @@ pub struct Transit {
     pub enabled: bool,
     /// GTFS-realtime vehicle positions feed that returns JSON. Lives in .env; may carry a key.
     pub feed_url: SecretString,
+    /// Static GTFS routes.txt URL, for mapping route ids to names. Empty leaves ids unresolved.
+    pub routes_url: String,
     /// Budget for one request.
     pub timeout_secs: u64,
     /// Most rows returned to the model.
@@ -455,6 +482,7 @@ impl Default for Transit {
         Self {
             enabled: false,
             feed_url: SecretString::from(""),
+            routes_url: String::new(),
             timeout_secs: 20,
             max_items: 20,
         }
@@ -518,7 +546,7 @@ impl Default for GoogleOAuth {
             client_id: String::new(),
             client_secret: SecretString::from(""),
             redirect_url: String::new(),
-            scopes: vec!["https://www.googleapis.com/auth/calendar.events".into()],
+            scopes: vec!["https://www.googleapis.com/auth/calendar.events.readonly".into()],
             authorize_url: "https://accounts.google.com/o/oauth2/v2/auth".into(),
             token_url: "https://oauth2.googleapis.com/token".into(),
             timeout_secs: 30,
