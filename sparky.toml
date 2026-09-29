@@ -211,10 +211,14 @@ description = "Run a shell command in an isolated Linux environment. Reach for i
 command_description = "The shell command to run."
 session_description = "Name a session to keep files in the workspace between calls. Reuse the same name to resume it. Results an earlier tool wrote to the workspace name the session they are in."
 
-# The gate every model response passes.
+# The gate every model response passes. denied_phrases block an answer wherever they appear.
+# protected_terms are removed from an answer as whole words; the registered tool names are added
+# to them at boot, so the agent cannot spill a tool name to a student.
 [guardrail]
 enabled = true
 denied_phrases = []
+protected_terms = []
+redaction = "[hidden]"
 max_answer_chars = 8000
 replacement = "I cannot answer that. Ask a moderator if you need help."
 

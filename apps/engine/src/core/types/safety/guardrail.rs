@@ -15,6 +15,13 @@ pub enum Verdict {
         /// Why it was blocked, for the trace.
         reason: String,
     },
+    /// The response proceeds with this text in place of the original.
+    Redact {
+        /// The cleaned text the user sees instead of the original.
+        text: String,
+        /// Why it was redacted, for the trace.
+        reason: String,
+    },
 }
 
 /// Which branch of the loop a response is on.

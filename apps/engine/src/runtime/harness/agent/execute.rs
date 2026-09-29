@@ -247,6 +247,7 @@ impl Agent {
             .timeout_secs
             .map_or(self.cfg.tool_timeout, Duration::from_secs);
         let limit = declared.min(ctx.remaining());
+        let risk = tool.definition().risk;
         let span = tracing::info_span!(
             "tool",
             "gen_ai.operation.name" = "execute_tool",
@@ -263,6 +264,7 @@ impl Agent {
             "session.id" = %ctx.conversation_id,
             "user.id" = %ctx.user_id,
             "sparky.step" = step,
+            "sparky.risk" = ?risk,
             "otel.status_code" = Empty,
             "otel.status_message" = Empty,
         );
