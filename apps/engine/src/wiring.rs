@@ -1,5 +1,6 @@
 //! Construct concrete adapters, hand them to the harness, build the router, serve.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,11 +49,12 @@ use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
 use crate::runtime::tools::mcp::{self, McpLimits};
-use crate::runtime::tools::oauth::CanvasOAuthClient;
+use crate::runtime::tools::oauth::WebOAuthClient;
 use crate::runtime::tools::sandbox::{
     ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
     reap_sessions,
 };
+use crate::runtime::tools::{outlook, papers, transit, wiki};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::oauth::PgOAuth;
@@ -235,7 +237,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     let conversations = Arc::new(PgConversations::new(pool.clone()));
     let memory = Arc::new(PgMemory::new(pool.clone()));
     let confirmations: Arc<dyn ConfirmationStore> = Arc::new(PgConfirmations::new(pool.clone()));
-    let (oauth_store, canvas_oauth, oauth_state) = oauth_wiring(&cfg, &pool)?;
+    let (oauth_store, oauth_providers, oauth_state) = oauth_wiring(&cfg, &pool)?;
 
     let queries = source_queries(&cfg, &pool, Arc::clone(&trace)).await?;
     let sandbox = sandbox(&cfg).await?;
@@ -244,8 +246,8 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         queries,
         Arc::clone(&retriever) as Arc<dyn Retriever>,
         sandbox.clone(),
-        oauth_store.clone(),
-        canvas_oauth.clone(),
+        oauth_store,
+        oauth_providers,
     )
     .await?;
     // Measured at boot with every tool offered, which is the largest the section ever gets.
@@ -295,32 +297,35 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     .await
 }
 
-/// The grant store, the Canvas client when its login is on, and the state the OAuth routes read.
+/// The grant store, a web OAuth client per enabled provider, and the state the OAuth routes read.
 type OAuthWiring = (
     Arc<dyn OAuthStore>,
-    Option<Arc<CanvasOAuthClient>>,
+    HashMap<String, Arc<WebOAuthClient>>,
     OAuthState,
 );
 
-/// Builds the grant store, the Canvas client, and the OAuth route state from the settings.
+/// Builds the grant store, the per-provider OAuth clients, and the OAuth route state.
 fn oauth_wiring(cfg: &Config, pool: &sqlx::postgres::PgPool) -> anyhow::Result<OAuthWiring> {
     let store: Arc<dyn OAuthStore> = Arc::new(PgOAuth::new(pool.clone()));
-    let canvas = if cfg.oauth.canvas.enabled {
-        Some(Arc::new(
-            CanvasOAuthClient::new(&cfg.oauth.canvas)
-                .map_err(|e| anyhow::anyhow!("oauth.canvas: {e}"))?,
-        ))
-    } else {
-        None
-    };
+    let mut providers: HashMap<String, Arc<WebOAuthClient>> = HashMap::new();
+    if cfg.oauth.canvas.enabled {
+        let client = WebOAuthClient::canvas(&cfg.oauth.canvas)
+            .map_err(|e| anyhow::anyhow!("oauth.canvas: {e}"))?;
+        providers.insert("canvas".to_owned(), Arc::new(client));
+    }
+    if cfg.oauth.microsoft.enabled {
+        let client = WebOAuthClient::microsoft(&cfg.oauth.microsoft)
+            .map_err(|e| anyhow::anyhow!("oauth.microsoft: {e}"))?;
+        providers.insert("microsoft".to_owned(), Arc::new(client));
+    }
     let state = OAuthState {
         store: store.clone(),
-        canvas: canvas.clone(),
+        providers: providers.clone(),
         service_token: cfg.engine.service_token.clone(),
         // A login link stays valid for ten minutes.
         state_ttl: Duration::from_secs(600),
     };
-    Ok((store, canvas, state))
+    Ok((store, providers, state))
 }
 
 /// The whole HTTP surface, with the state each group of routes reads.
@@ -848,7 +853,7 @@ async fn build_tools(
     retriever: Arc<dyn Retriever>,
     sandbox: Option<Arc<ContainerSandbox>>,
     oauth_store: Arc<dyn OAuthStore>,
-    canvas_oauth: Option<Arc<CanvasOAuthClient>>,
+    oauth_providers: HashMap<String, Arc<WebOAuthClient>>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
@@ -903,20 +908,50 @@ async fn build_tools(
         );
     }
     if cfg.canvas.enabled {
-        let mut registered = 0;
-        for tool in canvas::tools(&cfg.canvas, oauth_store, canvas_oauth)
-            .map_err(|e| anyhow::anyhow!("canvas: {e}"))?
-        {
-            if disabled(&tool.definition().name) {
-                continue;
-            }
-            tools = tools.with(tool);
-            registered += 1;
-        }
-        tracing::info!(base_url = %cfg.canvas.base_url, count = registered, "canvas tools registered");
+        let canvas_oauth = oauth_providers.get("canvas").cloned();
+        let built = canvas::tools(&cfg.canvas, oauth_store.clone(), canvas_oauth)
+            .map_err(|e| anyhow::anyhow!("canvas: {e}"))?;
+        tools = register(tools, built, &disabled, "canvas");
+    }
+    if cfg.outlook.enabled {
+        let microsoft_oauth = oauth_providers.get("microsoft").cloned();
+        let built = outlook::tools(&cfg.outlook, oauth_store.clone(), microsoft_oauth)
+            .map_err(|e| anyhow::anyhow!("outlook: {e}"))?;
+        tools = register(tools, built, &disabled, "outlook");
+    }
+    if cfg.papers.enabled {
+        let built = papers::tools(&cfg.papers).map_err(|e| anyhow::anyhow!("papers: {e}"))?;
+        tools = register(tools, built, &disabled, "papers");
+    }
+    if cfg.wikipedia.enabled {
+        let built = wiki::tools(&cfg.wikipedia).map_err(|e| anyhow::anyhow!("wikipedia: {e}"))?;
+        tools = register(tools, built, &disabled, "wikipedia");
+    }
+    if cfg.transit.enabled {
+        let built = transit::tools(&cfg.transit).map_err(|e| anyhow::anyhow!("transit: {e}"))?;
+        tools = register(tools, built, &disabled, "transit");
     }
     tracing::info!(tools = ?tools, "tool set");
     Ok((tools, mcp_names))
+}
+
+/// Adds each built tool that is not disabled to the set, logging how many an integration added.
+fn register(
+    mut tools: ToolSet,
+    built: Vec<Arc<dyn Tool>>,
+    disabled: &dyn Fn(&str) -> bool,
+    integration: &str,
+) -> ToolSet {
+    let mut count = 0;
+    for tool in built {
+        if disabled(&tool.definition().name) {
+            continue;
+        }
+        tools = tools.with(tool);
+        count += 1;
+    }
+    tracing::info!(integration, count, "tools registered");
+    tools
 }
 
 /// Resolves on Ctrl-C or SIGTERM.

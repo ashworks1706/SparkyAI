@@ -7,7 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use url::Url;
 
-use crate::core::config::{CanvasOAuth, GoogleOAuth};
+use crate::core::config::{CanvasOAuth, GoogleOAuth, MicrosoftOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
 
 /// Longest OAuth error code repeated from a response.
@@ -126,9 +126,9 @@ impl GoogleOAuthClient {
     }
 }
 
-/// A Canvas OAuth web client for per-user grants. Canvas returns a refresh token by default and
-/// takes no offline or consent parameters.
-pub struct CanvasOAuthClient {
+/// A standard OAuth 2.0 web client for per-user grants. Fits providers that return a refresh
+/// token by default and take no offline or consent parameters, such as Canvas and Microsoft.
+pub struct WebOAuthClient {
     http: reqwest::Client,
     client_id: String,
     client_secret: SecretString,
@@ -138,25 +138,65 @@ pub struct CanvasOAuthClient {
     token_url: Url,
 }
 
-impl CanvasOAuthClient {
-    /// Builds the client from its settings.
+impl WebOAuthClient {
+    /// Builds the client from a Canvas settings section.
     ///
     /// # Errors
     /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
-    pub fn new(cfg: &CanvasOAuth) -> Result<Self, OAuthError> {
+    pub fn canvas(cfg: &CanvasOAuth) -> Result<Self, OAuthError> {
+        Self::new(
+            &cfg.client_id,
+            &cfg.client_secret,
+            &cfg.redirect_url,
+            &cfg.scopes,
+            &cfg.authorize_url,
+            &cfg.token_url,
+            cfg.timeout_secs,
+        )
+    }
+
+    /// Builds the client from a Microsoft settings section.
+    ///
+    /// # Errors
+    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
+    pub fn microsoft(cfg: &MicrosoftOAuth) -> Result<Self, OAuthError> {
+        Self::new(
+            &cfg.client_id,
+            &cfg.client_secret,
+            &cfg.redirect_url,
+            &cfg.scopes,
+            &cfg.authorize_url,
+            &cfg.token_url,
+            cfg.timeout_secs,
+        )
+    }
+
+    /// Builds the client from its fields.
+    ///
+    /// # Errors
+    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
+    fn new(
+        client_id: &str,
+        client_secret: &SecretString,
+        redirect_url: &str,
+        scopes: &[String],
+        authorize_url: &str,
+        token_url: &str,
+        timeout_secs: u64,
+    ) -> Result<Self, OAuthError> {
         let parse = |s: &str| Url::parse(s).map_err(|e| OAuthError::NotConfigured(e.to_string()));
         let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(cfg.timeout_secs))
+            .timeout(Duration::from_secs(timeout_secs))
             .build()
             .map_err(|e| OAuthError::NotConfigured(e.to_string()))?;
         Ok(Self {
             http,
-            client_id: cfg.client_id.clone(),
-            client_secret: cfg.client_secret.clone(),
-            redirect_url: cfg.redirect_url.clone(),
-            scopes: cfg.scopes.clone(),
-            authorize_url: parse(&cfg.authorize_url)?,
-            token_url: parse(&cfg.token_url)?,
+            client_id: client_id.to_owned(),
+            client_secret: client_secret.clone(),
+            redirect_url: redirect_url.to_owned(),
+            scopes: scopes.to_vec(),
+            authorize_url: parse(authorize_url)?,
+            token_url: parse(token_url)?,
         })
     }
 

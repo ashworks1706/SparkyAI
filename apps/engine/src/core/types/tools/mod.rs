@@ -2,6 +2,7 @@
 
 pub mod canvas;
 pub mod oauth;
+pub mod outlook;
 pub mod sandbox;
 
 use serde::{Deserialize, Serialize};

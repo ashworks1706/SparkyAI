@@ -277,6 +277,8 @@ pub struct OAuth {
     pub google: GoogleOAuth,
     /// Canvas, for a student's own courses, assignments, and grades.
     pub canvas: CanvasOAuth,
+    /// Microsoft, for a student's own Outlook calendar and mail.
+    pub microsoft: MicrosoftOAuth,
 }
 
 /// A Canvas OAuth 2.0 web client for per-user grants. Off by default.
@@ -312,6 +314,149 @@ impl Default for CanvasOAuth {
             authorize_url: "https://canvas.asu.edu/login/oauth2/auth".into(),
             token_url: "https://canvas.asu.edu/login/oauth2/token".into(),
             timeout_secs: 30,
+        }
+    }
+}
+
+/// A Microsoft OAuth 2.0 web client for per-user grants. Off by default.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct MicrosoftOAuth {
+    /// Whether the client is built at boot and the login flow is offered.
+    pub enabled: bool,
+    /// Application (client) id from the Azure app registration.
+    pub client_id: String,
+    /// OAuth client secret. Lives in .env.
+    pub client_secret: SecretString,
+    /// Where Microsoft sends the user back with a code.
+    pub redirect_url: String,
+    /// Scopes requested in one grant. offline_access is needed for refresh.
+    pub scopes: Vec<String>,
+    /// Microsoft authorization endpoint. The path carries the tenant.
+    pub authorize_url: String,
+    /// Microsoft token endpoint. The path carries the tenant.
+    pub token_url: String,
+    /// Budget for one token request.
+    pub timeout_secs: u64,
+}
+
+impl Default for MicrosoftOAuth {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            client_id: String::new(),
+            client_secret: SecretString::from(""),
+            redirect_url: String::new(),
+            scopes: vec![
+                "openid".into(),
+                "profile".into(),
+                "offline_access".into(),
+                "Calendars.Read".into(),
+                "Mail.Read".into(),
+            ],
+            authorize_url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize".into(),
+            token_url: "https://login.microsoftonline.com/common/oauth2/v2.0/token".into(),
+            timeout_secs: 30,
+        }
+    }
+}
+
+/// Outlook (Microsoft Graph) read-only tools. Off by default; needs an oauth.microsoft grant.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Outlook {
+    /// Whether the Outlook tools are registered at boot.
+    pub enabled: bool,
+    /// Base URL of Microsoft Graph, no trailing path.
+    pub base_url: String,
+    /// Budget for one Graph request.
+    pub timeout_secs: u64,
+    /// Most rows one list tool returns to the model.
+    pub max_items: usize,
+}
+
+impl Default for Outlook {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: "https://graph.microsoft.com/v1.0".into(),
+            timeout_secs: 30,
+            max_items: 15,
+        }
+    }
+}
+
+/// Academic paper search over Semantic Scholar. No key; a public read.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Papers {
+    /// Whether the paper search tool is registered at boot.
+    pub enabled: bool,
+    /// Base URL of the Semantic Scholar graph API, no trailing path.
+    pub base_url: String,
+    /// Budget for one request.
+    pub timeout_secs: u64,
+    /// Most papers returned to the model.
+    pub max_items: usize,
+}
+
+impl Default for Papers {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_url: "https://api.semanticscholar.org/graph/v1".into(),
+            timeout_secs: 20,
+            max_items: 5,
+        }
+    }
+}
+
+/// Wikipedia lookups over the MediaWiki API. No key; a public read.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Wikipedia {
+    /// Whether the Wikipedia tool is registered at boot.
+    pub enabled: bool,
+    /// The MediaWiki API endpoint.
+    pub base_url: String,
+    /// Budget for one request.
+    pub timeout_secs: u64,
+    /// Most characters of the summary returned to the model.
+    pub max_chars: usize,
+}
+
+impl Default for Wikipedia {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_url: "https://en.wikipedia.org/w/api.php".into(),
+            timeout_secs: 20,
+            max_chars: 1500,
+        }
+    }
+}
+
+/// Valley Metro transit realtime. Off by default; needs a GTFS-realtime JSON feed URL.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Transit {
+    /// Whether the transit tool is registered at boot.
+    pub enabled: bool,
+    /// GTFS-realtime vehicle positions feed that returns JSON. Lives in .env; may carry a key.
+    pub feed_url: SecretString,
+    /// Budget for one request.
+    pub timeout_secs: u64,
+    /// Most rows returned to the model.
+    pub max_items: usize,
+}
+
+impl Default for Transit {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            feed_url: SecretString::from(""),
+            timeout_secs: 20,
+            max_items: 20,
         }
     }
 }

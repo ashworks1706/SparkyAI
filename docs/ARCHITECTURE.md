@@ -466,7 +466,7 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 | Class | Examples | Default behavior |
 |---|---|---|
 | `ReadPublic` | `search_knowledge`, `search_live` | run |
-| `ReadAuthenticated` | `canvas_courses`, a page inside the user's own session | allowed in a direct message; elsewhere deny unless `policy.allow_authenticated_reads` |
+| `ReadAuthenticated` | `canvas_courses`, `outlook_mail`, a page inside the user's own session | allowed in a direct message; elsewhere deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
 | `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
 | `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm |
@@ -480,7 +480,13 @@ The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` an
 
 `Credentials` resolves the token for a caller: the caller's own per-user grant first, then the shared `canvas.access_token` fallback (which lives in `.env`, for a single-user or test setup). An expired grant is refreshed with the Canvas client and the new tokens are saved. Grants are keyed by the caller and a fixed user scope, not by the guild, since a Canvas account belongs to the person; they are held in `oauth_grants` by `stores::oauth::PgOAuth` behind the `OAuthStore` trait.
 
-Per-user login is the Canvas OAuth 2.0 authorization-code flow, on when `[oauth.canvas] enabled` is set (`client_secret` in `.env`). `/login` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through ASU SSO themselves; SparkyAI never sees a password. Canvas redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code with `runtime::tools::oauth::CanvasOAuthClient` and saves the grant. `/logout` calls `POST /oauth/{provider}/logout` to delete it. This is per-user and read-only, the first cut of the Phase 8 authenticated integrations.
+## Per-user OAuth and integrations
+
+Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::oauth::WebOAuthClient` serves Canvas and Microsoft (Google keeps its own client for its offline params); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::grant` resolves a caller's token for a provider and refreshes an expired grant.
+
+`runtime/tools/outlook` offers read-only Outlook tools over Microsoft Graph, off until `[outlook] enabled` with an `oauth.microsoft` grant: `outlook_calendar` and `outlook_mail`, both `ReadAuthenticated` and direct-message only, keyed to the `microsoft` provider. Turning it on needs an Azure app registration (`[oauth.microsoft]`), and reading ASU accounts needs ASU admin consent.
+
+Three public, no-auth tools sit beside the ASU sources: `search_papers` (Semantic Scholar), `wikipedia_lookup` (MediaWiki), and `valley_metro` (a Valley Metro GTFS-realtime JSON feed, off until `[transit] feed_url` is set). They are `ReadPublic` and take a query; their parse functions are tested on canned bodies. `valley_metro` reports active vehicles by route id; resolving ids to route names needs the static GTFS feed, a later enhancement.
 
 A confirmation is bound to a hash of the exact arguments, belongs to the caller who was asked, is single use, and expires after `agent.confirmation_ttl_secs`. Its summary names the tool, the arguments, and whether the action can be undone. The policy decision is recorded in the trace.
 
@@ -757,7 +763,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, such as an eval profile. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `oauth` (with `oauth.google` and `oauth.canvas`), `canvas`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `oauth` (with `oauth.google`, `oauth.canvas`, and `oauth.microsoft`), `canvas`, `outlook`, `papers`, `wikipedia`, `transit`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 

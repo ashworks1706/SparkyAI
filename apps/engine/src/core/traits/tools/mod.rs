@@ -2,6 +2,7 @@
 
 pub mod canvas;
 pub mod files;
+pub mod outlook;
 pub mod sandbox;
 
 use async_trait::async_trait;

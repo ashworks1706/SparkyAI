@@ -19,77 +19,14 @@ use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::canvas::{
     Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
 };
-use crate::core::types::tools::oauth::USER_SCOPE;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::canvas::client::HttpCanvas;
-use crate::runtime::tools::oauth::CanvasOAuthClient;
+use crate::runtime::tools::grant::Credentials;
+use crate::runtime::tools::oauth::WebOAuthClient;
 use crate::runtime::tools::structured;
 
 /// The provider key Canvas grants are stored under.
 const PROVIDER: &str = "canvas";
-
-/// Resolves the Canvas token for a caller: their own per-user grant, else the shared fallback.
-pub struct Credentials {
-    store: Arc<dyn OAuthStore>,
-    oauth: Option<Arc<CanvasOAuthClient>>,
-    fallback: SecretString,
-}
-
-impl Credentials {
-    /// Builds the resolver over the grant store, the client used to refresh, and the shared token.
-    pub fn new(
-        store: Arc<dyn OAuthStore>,
-        oauth: Option<Arc<CanvasOAuthClient>>,
-        fallback: SecretString,
-    ) -> Self {
-        Self {
-            store,
-            oauth,
-            fallback,
-        }
-    }
-
-    /// The token for the caller, refreshing an expired grant when it can. None is not connected.
-    async fn resolve(&self, ctx: &RequestContext) -> Result<Option<SecretString>, ToolError> {
-        let grant = self
-            .store
-            .load_grant(USER_SCOPE, &ctx.user_id, PROVIDER)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, "could not read a canvas grant");
-                ToolError::Failed("could not read your Canvas connection".to_owned())
-            })?;
-        if let Some(mut grant) = grant {
-            if grant.expired() {
-                let Some(oauth) = &self.oauth else {
-                    return Ok(None);
-                };
-                match oauth.refresh(&grant).await {
-                    Ok(fresh) => {
-                        if let Err(error) = self
-                            .store
-                            .save_grant(USER_SCOPE, &ctx.user_id, PROVIDER, &fresh)
-                            .await
-                        {
-                            tracing::warn!(%error, "could not save a refreshed canvas grant");
-                        }
-                        grant = fresh;
-                    }
-                    Err(error) => {
-                        tracing::info!(%error, "canvas grant could not be refreshed");
-                        return Ok(None);
-                    }
-                }
-            }
-            return Ok(Some(grant.access_token));
-        }
-        if self.fallback.expose_secret().trim().is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(self.fallback.clone()))
-        }
-    }
-}
 
 /// Which read a Canvas tool performs.
 #[derive(Debug, Clone, Copy)]
@@ -452,7 +389,7 @@ fn assignment_grades_output(items: Vec<AssignmentGrade>, max: usize) -> ToolOutp
 pub fn tools(
     cfg: &CanvasConfig,
     store: Arc<dyn OAuthStore>,
-    oauth: Option<Arc<CanvasOAuthClient>>,
+    oauth: Option<Arc<WebOAuthClient>>,
 ) -> Result<Vec<Arc<dyn Tool>>, CanvasError> {
     let client: Arc<dyn Canvas> = Arc::new(HttpCanvas::new(
         &cfg.base_url,
@@ -460,7 +397,7 @@ pub fn tools(
         cfg.max_items,
     )?);
     let fallback = SecretString::from(cfg.access_token.expose_secret().to_owned());
-    let creds = Arc::new(Credentials::new(store, oauth, fallback));
+    let creds = Arc::new(Credentials::new(store, oauth, PROVIDER, fallback));
     Ok(ALL
         .into_iter()
         .map(|q| {
