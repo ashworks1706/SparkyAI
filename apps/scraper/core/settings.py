@@ -70,10 +70,7 @@ class Firecrawl(BaseModel):
 
 
 class Auth(BaseModel):
-    """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU.
-
-    Only the browser storage state is saved, never a password.
-    """
+    """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU."""
 
     # Where the captured storage state is read from and written to.
     storage_state_path: str = "../../.sparky/auth/admin_state.json"

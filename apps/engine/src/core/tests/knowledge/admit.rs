@@ -221,7 +221,6 @@ async fn a_reused_answer_takes_no_slot_and_touches_no_database() {
 }
 
 /// Live check against Redis: cargo test -p engine -- --ignored redis
-/// SPARKY_REDIS__URL overrides where it looks.
 #[tokio::test]
 #[ignore = "needs a redis server"]
 async fn a_real_redis_caps_slots_and_drops_holders_that_never_left() {

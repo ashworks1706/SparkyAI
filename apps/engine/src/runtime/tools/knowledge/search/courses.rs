@@ -55,8 +55,7 @@ pub fn term_in(query: &str) -> Option<String> {
     })
 }
 
-/// Words a student writes around a course. The class search keyword box matches subject,
-/// catalog number and course title.
+/// Words a student writes around a course.
 const INTENT_WORDS: &[&str] = &[
     "about",
     "any",

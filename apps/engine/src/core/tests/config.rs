@@ -58,7 +58,6 @@ fn the_committed_sparky_toml_loads_and_validates() {
 }
 
 /// The SPARKY_SECTION__KEY lines of .env.example as the TOML layer they stand for.
-/// A line without the section separator is read by compose or the justfile, not by config.
 fn env_example_as_toml() -> String {
     use std::collections::BTreeMap;
     use std::fmt::Write as _;

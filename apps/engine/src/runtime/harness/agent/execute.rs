@@ -116,7 +116,6 @@ impl Agent {
     }
 
     /// A result too long to carry, written to the workspace and replaced by its head and a path.
-    /// Unchanged when the handoff is off, no sandbox is configured, or the write fails.
     async fn offloaded(
         &self,
         ctx: &RequestContext,

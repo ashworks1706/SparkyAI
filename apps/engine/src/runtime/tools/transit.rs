@@ -1,6 +1,4 @@
-//! valley_metro: active Valley Metro vehicles from a GTFS-realtime JSON feed. Off until a feed URL
-//! is set. Route ids are resolved to names from the static GTFS routes.txt when transit.routes_url
-//! is set; the routes are fetched once and cached.
+//! valley_metro: active Valley Metro vehicles from a GTFS-realtime JSON feed.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;

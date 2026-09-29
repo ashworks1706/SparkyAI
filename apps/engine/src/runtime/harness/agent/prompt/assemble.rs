@@ -92,7 +92,6 @@ pub fn assemble(ctx: &RequestContext, s: &Sections<'_>, budget: Budget) -> Assem
 }
 
 /// Prior turns within budget, keeping the newest, and what they cost.
-/// A leading summary stays first. History never starts on an orphaned tool result.
 fn history_within(history: &[Message], budget: usize, cpt: usize) -> (Vec<Message>, usize) {
     let (summary, rest) = match history.split_first() {
         Some((first, rest)) if first.role == Role::Summary => (Some(first), rest),
@@ -118,8 +117,7 @@ fn history_within(history: &[Message], budget: usize, cpt: usize) -> (Vec<Messag
     (summary.into_iter().chain(kept).cloned().collect(), spent)
 }
 
-/// The turns of this request within room tokens. Tool results over their share are cut.
-/// Results are visited smallest first; each takes at most an even share of what is left.
+/// The turns of this request within room tokens, cutting tool results over their share.
 fn fit_turn(turn: &[Message], room: usize, cpt: usize, cut_line: &str) -> Vec<Message> {
     let mut out = turn.to_vec();
     let cost: usize = out.iter().map(|m| m.estimated_tokens(cpt)).sum();
@@ -190,7 +188,6 @@ fn memory_block(s: &Sections<'_>, budget: usize, cpt: usize) -> Option<(String, 
 }
 
 /// The message of ours the caller replied to, quoted under its header and cut to budget.
-/// None when the caller replied to nothing, or the quote holds no text.
 fn reply_block(
     ctx: &RequestContext,
     s: &Sections<'_>,

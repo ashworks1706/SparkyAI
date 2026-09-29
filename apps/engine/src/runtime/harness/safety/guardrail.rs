@@ -117,11 +117,13 @@ impl Guardrail for RuleGuardrail {
 /// Replaces every whole-word occurrence of a protected term. None when nothing matched.
 fn redact_terms(text: &str, terms: &[String], redaction: &str) -> Option<(String, usize)> {
     let chars: Vec<char> = text.chars().collect();
-    let terms: Vec<Vec<char>> = terms
+    let mut terms: Vec<Vec<char>> = terms
         .iter()
         .filter(|t| !t.is_empty())
         .map(|t| t.chars().collect())
         .collect();
+    // Longest first, so the longest term matching at a position wins over a shorter prefix.
+    terms.sort_by_key(|t| std::cmp::Reverse(t.len()));
     let mut out = String::with_capacity(text.len());
     let mut count = 0;
     let mut i = 0;

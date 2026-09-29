@@ -35,7 +35,6 @@ pub struct Guardrail {
     /// Phrases that block a response wherever they appear. Matched without case.
     pub denied_phrases: Vec<String>,
     /// Terms removed from an answer wherever they appear as a whole word, matched without case.
-    /// The registered tool names are added to these at boot.
     pub protected_terms: Vec<String>,
     /// Shown in an answer in place of a protected term.
     pub redaction: String,
@@ -86,13 +85,11 @@ pub struct SandboxSettings {
     pub session_idle_secs: u64,
     /// Sessions one user may hold at once. Starting one past the cap reaps the least recently used.
     pub max_sessions: usize,
-    /// Session containers across every user. Starting one past the cap reaps the least recently
-    /// used of all of them.
+    /// Session containers across every user, capped by reaping the least recently used.
     pub max_sessions_total: usize,
     /// Commands running at once across every user. A command past it waits for a slot.
     pub max_running: usize,
-    /// Names this engine's containers apart from another engine's on the same runtime. Only
-    /// session containers of this instance are removed as orphans.
+    /// Names this engine's containers apart from another engine's on the same runtime.
     pub instance: String,
     /// Size of the writable workspace, in mebibytes.
     pub workspace_mb: u32,

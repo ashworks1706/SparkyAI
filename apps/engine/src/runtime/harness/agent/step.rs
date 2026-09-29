@@ -203,7 +203,6 @@ impl Agent {
                 replacement,
                 reason,
             } => {
-                // A span event on the request, so a block shows in Phoenix as well as the trace.
                 tracing::warn!(
                     stage = stage.as_str(),
                     reason,

@@ -29,10 +29,7 @@ def _clean(node: Tag | None) -> str:
 
 
 def public_cards(fetched: Fetched) -> str:
-    """One line per event card on the public calendar: name, date, time, place, and its page.
-
-    A page without cards goes through the line-based extractor.
-    """
+    """One line per event card on the public calendar: name, date, time, place, and its page."""
     if fetched.text is not None:
         return extract_events(fetched)
     out: list[str] = []

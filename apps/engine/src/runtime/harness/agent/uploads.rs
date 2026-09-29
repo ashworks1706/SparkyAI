@@ -15,8 +15,7 @@ const COMMON: [&str; 40] = [
     "file", "form", "document", "attached", "there", "they",
 ];
 
-/// The words of question a passage is ranked by: lowercase, three letters or more, not common,
-/// each once, at most twelve. Letters and digits only, so they are safe on a command line.
+/// The words of question a passage is ranked by: lowercase, three letters or more, not common.
 pub fn terms(question: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for word in question
@@ -33,13 +32,7 @@ pub fn terms(question: &str) -> Vec<String> {
     out
 }
 
-/// The sandbox command that turns an uploaded file at path into text beside it at path.txt, then
-/// prints the character count, the first preview characters, and the passages holding the most
-/// of terms, up to matches characters.
-///
-/// A PDF is read by pdftotext, and by tesseract over its first ocr_pages pages when it holds no
-/// text layer. Word, Excel and CSV go through python3. Any other text file is copied; a binary
-/// file gives empty text.
+/// The sandbox command that turns an uploaded file at path into text beside it at path.txt.
 pub fn to_text(
     path: &str,
     terms: &[String],
@@ -91,8 +84,7 @@ for _,i in ranked:
     )
 }
 
-/// What the conversion printed: whether it took OCR, the character count, the preview, and the
-/// passages that match the question.
+/// What the conversion printed: OCR use, character count, preview, and matching passages.
 pub fn converted(stdout: &str) -> Converted {
     let ocr = stdout.lines().next().is_some_and(|l| l.trim() == "OCR");
     let chars = stdout
@@ -145,7 +137,6 @@ fn size(bytes: usize) -> String {
 
 impl Agent {
     /// Copies every attached file into the workspace and returns the prompt lines naming them.
-    /// A file that cannot be read or written gets a line saying so. Empty when nothing is attached.
     pub(super) async fn uploads(&self, ctx: &RequestContext, input: &str) -> Vec<String> {
         let mut lines = Vec::new();
         let session = workspace_session(ctx);
@@ -204,8 +195,6 @@ impl Agent {
     }
 
     /// Downloads one file, writes it to the workspace, and converts it to text there.
-    /// Returns its path, its size, and what the conversion found. A conversion that fails leaves
-    /// the file in place with no text, for the model to read itself.
     async fn upload(
         &self,
         ctx: &RequestContext,

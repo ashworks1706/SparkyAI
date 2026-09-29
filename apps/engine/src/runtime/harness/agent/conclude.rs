@@ -11,8 +11,7 @@ use crate::core::types::safety::policy::ConfirmationRequest;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::Run;
 
-/// Whether a turn of this request belongs in the stored conversation: the question and the
-/// answer, never a tool call or its result.
+/// Whether a turn of this request belongs in the stored conversation.
 pub(super) fn said(message: &Message) -> bool {
     match message.role {
         Role::User => true,
@@ -57,8 +56,8 @@ impl Agent {
             return;
         }
         let (tenant, user) = (run.ctx.tenant_id.clone(), run.ctx.user_id.clone());
-        // Carry the request span into the detached task so its profile spans nest under this run.
-        let span = tracing::Span::current();
+        // A child of the request span, so the write nests under the run without holding it open.
+        let span = tracing::info_span!("profile.write");
         tokio::spawn(async move { writer.record(tenant, user, turn).await }.instrument(span));
     }
 

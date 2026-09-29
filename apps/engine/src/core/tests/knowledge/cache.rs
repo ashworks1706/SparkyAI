@@ -333,7 +333,6 @@ async fn an_entry_survives_a_round_trip_through_its_stored_form() {
 }
 
 /// Live check against Redis: cargo test -p engine -- --ignored redis
-/// SPARKY_REDIS__URL overrides where it looks.
 #[tokio::test]
 #[ignore = "needs a redis server"]
 async fn a_real_redis_holds_a_lease_and_an_answer() {

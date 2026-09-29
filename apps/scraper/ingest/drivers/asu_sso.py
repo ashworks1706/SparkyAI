@@ -73,11 +73,7 @@ def sign_in(
     timeout_secs: float,
     notify: Callable[[str], None],
 ) -> None:
-    """Fills the CAS form on page, submits it, and waits out Duo until the page leaves sso_hosts.
-
-    Raises BadCredentials when CAS shows its form again, and AuthError when Duo is not approved
-    within timeout_secs.
-    """
+    """Fills the CAS form on page, submits it, and waits out Duo until the page leaves sso_hosts."""
     page.fill(_USERNAME, creds.username)
     page.fill(_PASSWORD, creds.password)
     page.click(_SUBMIT)

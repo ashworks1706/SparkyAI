@@ -24,8 +24,7 @@ impl OAuthTokens {
     }
 }
 
-/// The scope per-user grants are stored under. A grant belongs to the person, not to one guild,
-/// so it is keyed by the caller and this fixed scope rather than by the guild they connected in.
+/// The scope per-user grants are stored under, keyed by the caller not the guild.
 pub const USER_SCOPE: &str = "user";
 
 /// The caller and provider a pending consent belongs to.

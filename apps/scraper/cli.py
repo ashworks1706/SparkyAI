@@ -85,10 +85,7 @@ def selected(source: str | None, *, all_sources: bool, category: str | None) -> 
 
 @app.command()
 def serve() -> None:
-    """Run the scraper: live queries, result indexing, scheduled sources, one job queue. Blocks.
-
-    Requires the admin session; at a terminal it signs in first when the session is gone.
-    """
+    """Run the scraper: live queries, result indexing, scheduled sources, one job queue. Blocks."""
     require_session()
     jobs.serve()
 
@@ -134,11 +131,7 @@ def login(
         False, "--check", help="Report whether the saved session works, then exit 0 or 1."
     ),
 ) -> None:
-    """Capture the admin session the scraper requires (clubs, Sun Devil Central events).
-
-    Opens the MyASU sign-in page, asks for your ASU username and password here, and waits for
-    you to approve Duo. Only cookies are saved, never the password.
-    """
+    """Capture the admin session the scraper requires (clubs, Sun Devil Central events)."""
     if check:
         if not _session_ok():
             typer.echo("admin session missing or expired", err=True)

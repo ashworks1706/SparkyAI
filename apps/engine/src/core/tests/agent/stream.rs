@@ -262,6 +262,56 @@ async fn a_draft_the_guardrail_refuses_is_withdrawn_and_never_shown_again() {
 }
 
 #[tokio::test]
+async fn a_protected_term_is_redacted_in_a_streamed_draft() {
+    let sink = Arc::new(MemorySink::new());
+    let mut rules = Rules {
+        denied_phrases: Vec::new(),
+        protected_terms: Vec::new(),
+        redaction: "[hidden]".into(),
+        max_answer_chars: 0,
+        replacement: "blocked".into(),
+    };
+    rules.protect(["search_live".to_owned()]);
+    let deps = AgentDeps {
+        model: Arc::new(
+            Scripted::new(vec![Ok(text("Use search_live to check. Then read it."))]).streaming(),
+        ),
+        tools: ToolSet::new(),
+        policy: Arc::new(RiskPolicy::default()),
+        trace: sink.clone(),
+        conversations: None,
+        memory: None,
+        confirmations: None,
+        sandbox: None,
+        files: None,
+        compactor: None,
+        guardrail: Some(Arc::new(RuleGuardrail::new(rules))),
+        profile: None,
+        profile_graph: None,
+    };
+    let answer = Agent::new(deps, AgentConfig::default(), "sys")
+        .run(&ctx(), "q")
+        .await
+        .ok();
+    assert_eq!(
+        answer.map(|a| a.text),
+        Some("Use [hidden] to check. Then read it.".into())
+    );
+    let drafts: Vec<String> = live(&sink)
+        .into_iter()
+        .filter_map(|e| match e {
+            TraceEvent::AnswerDraft { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        drafts,
+        vec!["Use [hidden] to check.".to_owned()],
+        "the streamed draft is redacted too"
+    );
+}
+
+#[tokio::test]
 async fn with_streaming_off_nothing_is_shown_before_the_call_returns() {
     let (agent, sink) = agent(
         Scripted::new(vec![Ok(reasoned(

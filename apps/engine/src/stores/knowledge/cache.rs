@@ -1,5 +1,4 @@
-//! Redis: live query answers, the leases that keep one fetch per query, and the cap on how
-//! many of those fetches reach the database at once.
+//! Redis: live query answers, the leases that keep one fetch per query, and the fetch cap.
 
 use std::time::Duration;
 
@@ -100,8 +99,7 @@ impl QueryCache for RedisQueryCache {
     }
 }
 
-/// Live queries in flight, as a sorted set scored by when each slot was taken. Holders that
-/// never give a slot back fall out of the set once they are older than the lease.
+/// Live queries in flight, as a sorted set scored by when each slot was taken.
 pub struct RedisAdmission {
     conn: ConnectionManager,
     budget: Duration,

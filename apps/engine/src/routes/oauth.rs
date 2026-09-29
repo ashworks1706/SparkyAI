@@ -1,5 +1,4 @@
-//! Per-user OAuth login: POST /oauth/{provider}/authorize mints a consent URL for the bot, and
-//! GET /oauth/{provider}/callback receives the code, exchanges it, and stores the grant.
+//! Per-user OAuth login: authorize mints a consent URL and callback exchanges the code.
 
 use std::collections::HashMap;
 use std::sync::Arc;

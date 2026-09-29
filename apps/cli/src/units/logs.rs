@@ -17,8 +17,7 @@ pub struct LogWriter {
 }
 
 impl LogWriter {
-    /// Creates the log directory if it does not exist. A file past max_bytes is rotated to one
-    /// .1 file beside it, replacing the previous one; 0 never rotates.
+    /// Creates the log directory if it does not exist, rotating a full file to one .1 beside it.
     pub fn new(dir: impl Into<PathBuf>, max_bytes: u64) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;

@@ -16,8 +16,7 @@ pub struct Compaction {
     pub temperature: f32,
     /// Wall-clock budget for the call.
     pub timeout_secs: u64,
-    /// Share of agent.history_budget_tokens a compaction keeps as recent turns. The rest is
-    /// left for the summary and for the turns that come after it.
+    /// Share of agent.history_budget_tokens a compaction keeps as recent turns.
     pub keep_share: f64,
 }
 

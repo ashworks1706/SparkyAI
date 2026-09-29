@@ -157,8 +157,7 @@ pub fn unoffered(risks: &BTreeMap<String, RiskClass>, offered: &[String]) -> Vec
         .collect()
 }
 
-/// Connects to a Streamable-HTTP MCP server, wraps its tools. allow limits exposure; empty is all.
-/// risks pins the class of named tools; a pin the server does not list is an error.
+/// Connects to a Streamable-HTTP MCP server and wraps its tools.
 pub async fn connect(
     url: &str,
     allow: &[String],
