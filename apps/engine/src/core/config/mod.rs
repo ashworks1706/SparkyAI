@@ -88,6 +88,9 @@ pub struct Config {
     /// Outlook (Microsoft Graph) integration. Off by default.
     #[serde(default)]
     pub outlook: Outlook,
+    /// Google Calendar integration. Off by default.
+    #[serde(default)]
+    pub gcal: Gcal,
     /// Academic paper search.
     #[serde(default)]
     pub papers: Papers,

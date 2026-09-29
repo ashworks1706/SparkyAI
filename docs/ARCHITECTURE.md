@@ -120,7 +120,7 @@ flowchart LR
     SCR -->|"spans"| OBS
 ```
 
-Processes talk only at these edges. The engine and the scraper meet only in PostgreSQL: the engine queues a job and reads its row, the scraper claims it and writes the result. Only the scraper reaches the web. MCP servers are optional and none is configured by default. `sparky.toml` declares `google_calendar` with an empty `url`, which keeps it off until the per-user sessions of Phase 8.
+Processes talk only at these edges. The engine and the scraper meet only in PostgreSQL: the engine queues a job and reads its row, the scraper claims it and writes the result. Only the scraper reaches the web. MCP servers are optional and none is configured by default.
 
 The engine serves `/chat` and `/chat/stream` for the bot and `/v1/chat/completions` for OpenAI-compatible clients; all three run the same loop. Every route except health and `/v1/models` requires the bearer token in `SPARKY_ENGINE__SERVICE_TOKEN`, and every route that carries a user applies the per-user `http.rate_limit_per_min`. The sandbox routes carry no user and are gated by the token alone, so any holder of it, `apps/discord` included, can read and stop the sandbox: `GET /sandbox` reports what is running, `DELETE /sandbox/{name}` removes one session container, and `POST /sandbox/enabled` stops the agent being offered `run_sandbox`. `apps/cli` shows and drives the containers through them, since the engine starts the containers outside compose.
 
@@ -466,7 +466,7 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 | Class | Examples | Default behavior |
 |---|---|---|
 | `ReadPublic` | `search_knowledge`, `search_live` | run |
-| `ReadAuthenticated` | `canvas_courses`, `outlook_mail`, a page inside the user's own session | allowed in a direct message; elsewhere deny unless `policy.allow_authenticated_reads` |
+| `ReadAuthenticated` | `canvas_courses`, `outlook_mail`, `google_calendar`, a page inside the user's own session | allowed in a direct message; elsewhere deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
 | `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
 | `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm |
@@ -482,11 +482,13 @@ The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` an
 
 ## Per-user OAuth and integrations
 
-Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::oauth::WebOAuthClient` serves Canvas and Microsoft (Google keeps its own client for its offline params); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::grant` resolves a caller's token for a provider and refreshes an expired grant.
+Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::oauth::WebOAuthClient` serves Canvas, Microsoft, and Google (Google adds `access_type=offline` and `prompt=consent` so a refresh token is issued); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::grant` resolves a caller's token for a provider and refreshes an expired grant.
 
 `runtime/tools/outlook` offers read-only Outlook tools over Microsoft Graph, off until `[outlook] enabled` with an `oauth.microsoft` grant: `outlook_calendar` and `outlook_mail`, both `ReadAuthenticated` and direct-message only, keyed to the `microsoft` provider. Turning it on needs an Azure app registration (`[oauth.microsoft]`), and reading ASU accounts needs ASU admin consent.
 
-Three public, no-auth tools sit beside the ASU sources: `search_papers` (Semantic Scholar), `wikipedia_lookup` (MediaWiki), and `valley_metro` (a Valley Metro GTFS-realtime JSON feed, off until `[transit] feed_url` is set). They are `ReadPublic` and take a query; their parse functions are tested on canned bodies. `valley_metro` reports active vehicles by route id; resolving ids to route names needs the static GTFS feed, a later enhancement.
+`runtime/tools/gcal` offers a read-only `google_calendar` tool over the Google Calendar API, off until `[gcal] enabled` with an `oauth.google` grant: it lists the caller's upcoming events, is `ReadAuthenticated` and direct-message only, and is keyed to the `google` provider. The Calendar REST client sits behind the `GoogleCalendar` trait in `core/traits/tools/gcal.rs`. Turning it on needs a Google Cloud OAuth client (`[oauth.google]`) requesting `calendar.events.readonly`.
+
+Three public, no-auth tools sit beside the ASU sources: `search_papers` (Semantic Scholar), `wikipedia_lookup` (MediaWiki), and `valley_metro` (a Valley Metro GTFS-realtime JSON feed, off until `[transit] feed_url` is set). They are `ReadPublic` and take a query; their parse functions are tested on canned bodies. `valley_metro` reports active vehicles by route; when `[transit] routes_url` points at the static GTFS `routes.txt`, route ids resolve to route names, fetched once and cached, otherwise the ids stand.
 
 A confirmation is bound to a hash of the exact arguments, belongs to the caller who was asked, is single use, and expires after `agent.confirmation_ttl_secs`. Its summary names the tool, the arguments, and whether the action can be undone. The policy decision is recorded in the trace.
 

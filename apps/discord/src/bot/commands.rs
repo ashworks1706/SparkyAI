@@ -17,7 +17,11 @@ pub const LOGOUT: &str = "logout";
 /// Name of the service option on /login and /logout.
 pub const SERVICE: &str = "service";
 /// The services a login connects: the option value is the provider key the engine expects.
-pub const SERVICES: [(&str, &str); 2] = [("Canvas", "canvas"), ("Outlook", "microsoft")];
+pub const SERVICES: [(&str, &str); 3] = [
+    ("Canvas", "canvas"),
+    ("Outlook", "microsoft"),
+    ("Google Calendar", "google"),
+];
 
 /// Every command the bot registers on its guild.
 pub fn all() -> Vec<CreateCommand> {

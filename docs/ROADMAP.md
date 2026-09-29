@@ -37,7 +37,7 @@ Only after Phase 5 yields clean interaction data.
 - [ ] Human confirmation for any authenticated or consequential submission
 - [x] Add Canvas, MyASU integration. Read-only Canvas per user (courses, assignments, grades, announcements, calendar, per-assignment grades), direct-message only, on with `[oauth.canvas]` plus `[canvas]`. MyASU integrations beyond Canvas are still open.
 - [x] Add Microsoft/Outlook. Read-only Outlook calendar and mail per user, direct-message only, on with `[oauth.microsoft]` plus `[outlook]`. Needs an Azure app registration and ASU admin consent to reach ASU accounts.
-- [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off. The per-user store, consent routes, and provider map now exist; the remaining piece is injecting the per-user token into MCP calls, which the MCP layer does not do yet.
+- [x] Add Google Calendar. Native read-only `google_calendar` tool (`runtime/tools/gcal`) per user, direct-message only, on with `[oauth.google]` plus `[gcal]`. Needs a Google Cloud OAuth client requesting `calendar.events.readonly`. Built native rather than over the MCP server, which cannot inject a per-user token.
 - [x] Public no-auth tools: `search_papers` (Semantic Scholar), `wikipedia_lookup`, and `valley_metro` (GTFS-realtime, off until a feed URL is set).
 
 ## 9 — v1.0

@@ -54,7 +54,7 @@ use crate::runtime::tools::sandbox::{
     ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
     reap_sessions,
 };
-use crate::runtime::tools::{outlook, papers, transit, wiki};
+use crate::runtime::tools::{gcal, outlook, papers, transit, wiki};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::memory::profile::PgProfileGraph;
 use crate::stores::oauth::PgOAuth;
@@ -317,6 +317,11 @@ fn oauth_wiring(cfg: &Config, pool: &sqlx::postgres::PgPool) -> anyhow::Result<O
         let client = WebOAuthClient::microsoft(&cfg.oauth.microsoft)
             .map_err(|e| anyhow::anyhow!("oauth.microsoft: {e}"))?;
         providers.insert("microsoft".to_owned(), Arc::new(client));
+    }
+    if cfg.oauth.google.enabled {
+        let client = WebOAuthClient::google(&cfg.oauth.google)
+            .map_err(|e| anyhow::anyhow!("oauth.google: {e}"))?;
+        providers.insert("google".to_owned(), Arc::new(client));
     }
     let state = OAuthState {
         store: store.clone(),
@@ -918,6 +923,12 @@ async fn build_tools(
         let built = outlook::tools(&cfg.outlook, oauth_store.clone(), microsoft_oauth)
             .map_err(|e| anyhow::anyhow!("outlook: {e}"))?;
         tools = register(tools, built, &disabled, "outlook");
+    }
+    if cfg.gcal.enabled {
+        let google_oauth = oauth_providers.get("google").cloned();
+        let built = gcal::tools(&cfg.gcal, oauth_store.clone(), google_oauth)
+            .map_err(|e| anyhow::anyhow!("gcal: {e}"))?;
+        tools = register(tools, built, &disabled, "gcal");
     }
     if cfg.papers.enabled {
         let built = papers::tools(&cfg.papers).map_err(|e| anyhow::anyhow!("papers: {e}"))?;

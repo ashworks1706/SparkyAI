@@ -85,6 +85,48 @@ fn transit_counts_vehicles_by_route() {
 }
 
 #[test]
+fn transit_resolves_route_ids_to_names() {
+    let feed = r#"{"entity":[
+        {"vehicle":{"trip":{"routeId":"0"}}},
+        {"vehicle":{"trip":{"routeId":"SME"}}}]}"#;
+    let routes = "route_id,route_short_name,route_long_name\n\
+                  0,0,Central Ave / 1st Ave\n\
+                  SME,SME,Streetcar\n";
+    let out = match transit::from_json_with_routes(feed, None, 20, routes) {
+        Ok(out) => out,
+        Err(e) => unreachable!("transit parse: {e}"),
+    };
+    assert!(
+        out.content.contains("Central Ave / 1st Ave (route 0)"),
+        "{}",
+        out.content
+    );
+    assert!(
+        out.content.contains("Streetcar (route SME)"),
+        "{}",
+        out.content
+    );
+}
+
+#[test]
+fn transit_filters_by_route_name() {
+    let feed = r#"{"entity":[
+        {"vehicle":{"trip":{"routeId":"0"}}},
+        {"vehicle":{"trip":{"routeId":"SME"}}}]}"#;
+    let routes = "route_id,route_short_name,route_long_name\nSME,SME,Streetcar\n";
+    let out = match transit::from_json_with_routes(feed, Some("streetcar"), 20, routes) {
+        Ok(out) => out,
+        Err(e) => unreachable!("transit parse: {e}"),
+    };
+    assert!(
+        out.content.contains("Streetcar (route SME): 1"),
+        "{}",
+        out.content
+    );
+    assert!(!out.content.contains("route 0"), "{}", out.content);
+}
+
+#[test]
 fn transit_filters_to_one_route() {
     let body = r#"{"entity":[
         {"vehicle":{"trip":{"routeId":"0"}}},

@@ -2,6 +2,7 @@
 
 pub mod canvas;
 pub mod files;
+pub mod gcal;
 pub mod grant;
 pub mod knowledge;
 pub mod mcp;
