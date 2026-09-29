@@ -375,24 +375,43 @@ fn validate_mcp_risks(mcp: &Mcp) -> Result<(), ConfigError> {
 /// An enabled OAuth client needs its credentials, a redirect, scopes, and https endpoints.
 fn validate_oauth(oauth: &OAuth) -> Result<(), ConfigError> {
     let google = &oauth.google;
-    if !google.enabled {
-        return Ok(());
+    if google.enabled {
+        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.google: {m}")));
+        if google.client_id.trim().is_empty() || google.client_secret.expose_secret().is_empty() {
+            return invalid("client_id and client_secret must be set when enabled");
+        }
+        if google.redirect_url.trim().is_empty() {
+            return invalid("redirect_url must be set when enabled");
+        }
+        if google.scopes.is_empty() {
+            return invalid("scopes must name at least one scope");
+        }
+        if !google.authorize_url.starts_with("https://")
+            || !google.token_url.starts_with("https://")
+        {
+            return invalid("authorize_url and token_url must be https");
+        }
+        if google.timeout_secs == 0 {
+            return invalid("timeout_secs must be at least 1");
+        }
     }
-    let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.google: {m}")));
-    if google.client_id.trim().is_empty() || google.client_secret.expose_secret().is_empty() {
-        return invalid("client_id and client_secret must be set when enabled");
-    }
-    if google.redirect_url.trim().is_empty() {
-        return invalid("redirect_url must be set when enabled");
-    }
-    if google.scopes.is_empty() {
-        return invalid("scopes must name at least one scope");
-    }
-    if !google.authorize_url.starts_with("https://") || !google.token_url.starts_with("https://") {
-        return invalid("authorize_url and token_url must be https");
-    }
-    if google.timeout_secs == 0 {
-        return invalid("timeout_secs must be at least 1");
+    let canvas = &oauth.canvas;
+    if canvas.enabled {
+        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.canvas: {m}")));
+        if canvas.client_id.trim().is_empty() || canvas.client_secret.expose_secret().is_empty() {
+            return invalid("client_id and client_secret must be set when enabled");
+        }
+        if canvas.redirect_url.trim().is_empty() {
+            return invalid("redirect_url must be set when enabled");
+        }
+        if !canvas.authorize_url.starts_with("https://")
+            || !canvas.token_url.starts_with("https://")
+        {
+            return invalid("authorize_url and token_url must be https");
+        }
+        if canvas.timeout_secs == 0 {
+            return invalid("timeout_secs must be at least 1");
+        }
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-//! Canvas tools: direct-message gating, connection gating, error mapping, and the replies.
+//! Canvas tools: DM gating, per-user grant resolution, error mapping, and the replies.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,12 +8,15 @@ use chrono::{DateTime, Utc};
 use secrecy::SecretString;
 use serde_json::json;
 
+use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::canvas::Canvas;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
+use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
 use crate::core::types::tools::canvas::{Assignment, CanvasError, Course, CourseGrade};
+use crate::core::types::tools::oauth::{Consent, OAuthTokens};
 use crate::runtime::tools::canvas::{CanvasTool, Credentials, Query};
 
 /// A Canvas double that answers with canned rows, or a set error status.
@@ -57,6 +60,62 @@ impl Canvas for FakeCanvas {
     }
 }
 
+/// A grant store double holding one caller's grant.
+struct FakeGrants {
+    grant: Option<OAuthTokens>,
+}
+
+#[async_trait]
+impl OAuthStore for FakeGrants {
+    async fn save_grant(
+        &self,
+        _tenant: &str,
+        _user: &str,
+        _provider: &str,
+        _tokens: &OAuthTokens,
+    ) -> Result<(), StoreError> {
+        Ok(())
+    }
+    async fn load_grant(
+        &self,
+        _tenant: &str,
+        _user: &str,
+        _provider: &str,
+    ) -> Result<Option<OAuthTokens>, StoreError> {
+        Ok(self.grant.clone())
+    }
+    async fn delete_grant(
+        &self,
+        _tenant: &str,
+        _user: &str,
+        _provider: &str,
+    ) -> Result<bool, StoreError> {
+        Ok(false)
+    }
+    async fn begin_consent(
+        &self,
+        _state: &str,
+        _tenant: &str,
+        _user: &str,
+        _provider: &str,
+        _ttl: Duration,
+    ) -> Result<(), StoreError> {
+        Ok(())
+    }
+    async fn take_consent(&self, _state: &str) -> Result<Option<Consent>, StoreError> {
+        Ok(None)
+    }
+}
+
+fn grant(token: &str) -> OAuthTokens {
+    OAuthTokens {
+        access_token: SecretString::from(token.to_owned()),
+        refresh_token: None,
+        scopes: Vec::new(),
+        expires_at: None,
+    }
+}
+
 fn dm() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5)).with_visibility(Visibility::Private)
 }
@@ -65,18 +124,19 @@ fn server() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5)).with_visibility(Visibility::Public)
 }
 
-fn tool(query: Query, fake: FakeCanvas, token: &str) -> CanvasTool {
-    CanvasTool::new(
-        query,
-        Arc::new(fake),
-        Arc::new(Credentials::new(SecretString::from(token.to_owned()))),
-        20,
-    )
+/// A tool whose credentials come from a stored grant, else the shared fallback token.
+fn tool(query: Query, fake: FakeCanvas, stored: Option<OAuthTokens>, fallback: &str) -> CanvasTool {
+    let creds = Credentials::new(
+        Arc::new(FakeGrants { grant: stored }),
+        None,
+        SecretString::from(fallback.to_owned()),
+    );
+    CanvasTool::new(query, Arc::new(fake), Arc::new(creds), 20)
 }
 
 #[tokio::test]
 async fn canvas_is_refused_outside_a_direct_message() {
-    let out = tool(Query::Courses, FakeCanvas::empty(), "tok")
+    let out = tool(Query::Courses, FakeCanvas::empty(), None, "tok")
         .call(&server(), json!({}))
         .await;
     assert!(
@@ -86,18 +146,18 @@ async fn canvas_is_refused_outside_a_direct_message() {
 }
 
 #[tokio::test]
-async fn an_unconnected_user_is_told_to_connect() {
-    let out = tool(Query::Courses, FakeCanvas::empty(), "")
+async fn an_unconnected_user_is_told_to_log_in() {
+    let out = tool(Query::Courses, FakeCanvas::empty(), None, "")
         .call(&dm(), json!({}))
         .await;
     assert!(
-        matches!(&out, Err(ToolError::Failed(m)) if m.contains("not connected")),
+        matches!(&out, Err(ToolError::Failed(m)) if m.contains("/login")),
         "{out:?}"
     );
 }
 
 #[tokio::test]
-async fn courses_are_listed_with_name_and_code() {
+async fn a_stored_grant_is_used_when_present() {
     let fake = FakeCanvas {
         courses: vec![Course {
             id: 1,
@@ -106,7 +166,7 @@ async fn courses_are_listed_with_name_and_code() {
         }],
         ..FakeCanvas::empty()
     };
-    let out = tool(Query::Courses, fake, "tok")
+    let out = tool(Query::Courses, fake, Some(grant("tok")), "")
         .call(&dm(), json!({}))
         .await;
     assert!(
@@ -128,7 +188,7 @@ async fn assignments_carry_course_due_date_and_points() {
         }],
         ..FakeCanvas::empty()
     };
-    let out = tool(Query::Assignments, fake, "tok")
+    let out = tool(Query::Assignments, fake, None, "tok")
         .call(&dm(), json!({}))
         .await;
     assert!(
@@ -148,7 +208,7 @@ async fn grades_show_the_letter_and_score() {
         }],
         ..FakeCanvas::empty()
     };
-    let out = tool(Query::Grades, fake, "tok")
+    let out = tool(Query::Grades, fake, None, "tok")
         .call(&dm(), json!({}))
         .await;
     assert!(
@@ -164,7 +224,7 @@ async fn an_expired_token_is_named_as_such() {
         error: Some(401),
         ..FakeCanvas::empty()
     };
-    let out = tool(Query::Courses, fake, "tok")
+    let out = tool(Query::Courses, fake, None, "tok")
         .call(&dm(), json!({}))
         .await;
     assert!(

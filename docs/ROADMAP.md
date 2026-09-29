@@ -33,10 +33,10 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [ ] A mechanism for per-user authenticated sessions. 
+- [x] A mechanism for per-user authenticated sessions. Grants are stored per user in `oauth_grants` behind `OAuthStore`; `/login` and the `/oauth/{provider}/{authorize,callback,logout}` routes drive the OAuth 2.0 flow, the user signs in through ASU themselves, and no password is stored.
 - [ ] Human confirmation for any authenticated or consequential submission
-- [~] Add Canvas, MyASU integration. Read-only Canvas tools (courses, assignments, grades) are built behind `[canvas]`, off by default, direct-message only, keyed to a shared `canvas.access_token`; the per-user OAuth grant that makes them per student is the remaining piece.
-- [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off; they need the per-user session store and the consent routes.
+- [x] Add Canvas, MyASU integration. Read-only Canvas per user (courses, assignments, grades), direct-message only, on with `[oauth.canvas]` plus `[canvas]`. MyASU integrations beyond Canvas are still open.
+- [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off; the per-user session store and consent routes they waited on now exist, so Google can reuse them.
 
 ## 9 — v1.0
 

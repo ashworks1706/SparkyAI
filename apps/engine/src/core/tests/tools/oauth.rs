@@ -4,9 +4,9 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 
-use crate::core::config::GoogleOAuth;
+use crate::core::config::{CanvasOAuth, GoogleOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
-use crate::runtime::tools::oauth::GoogleOAuthClient;
+use crate::runtime::tools::oauth::{CanvasOAuthClient, GoogleOAuthClient};
 
 /// Serves one response and hands back the request it answered.
 async fn serve(status: &'static str, body: &'static str) -> (String, oneshot::Receiver<String>) {
@@ -173,4 +173,46 @@ async fn a_response_without_an_access_token_is_malformed() {
         client(&url).exchange("c").await.err(),
         Some(OAuthError::Malformed(_))
     ));
+}
+
+fn canvas_client(token_url: &str) -> CanvasOAuthClient {
+    let cfg = CanvasOAuth {
+        enabled: true,
+        client_id: "cid".into(),
+        client_secret: SecretString::from("csecret"),
+        redirect_url: "https://sparky.example/oauth/canvas/callback".into(),
+        token_url: token_url.into(),
+        ..CanvasOAuth::default()
+    };
+    match CanvasOAuthClient::new(&cfg) {
+        Ok(c) => c,
+        Err(e) => unreachable!("the canvas client builds: {e}"),
+    }
+}
+
+#[test]
+fn the_canvas_consent_url_omits_offline_and_carries_the_state() {
+    let url = canvas_client("https://canvas.asu.edu/login/oauth2/token").authorize_url("s9");
+    assert!(url.starts_with("https://canvas.asu.edu/login/oauth2/auth?"));
+    for part in [
+        "client_id=cid",
+        "response_type=code",
+        "state=s9",
+        "redirect_uri=https%3A%2F%2Fsparky.example%2Foauth%2Fcanvas%2Fcallback",
+    ] {
+        assert!(url.contains(part), "{part} missing from {url}");
+    }
+    assert!(!url.contains("access_type"));
+    assert!(!url.contains("prompt=consent"));
+}
+
+#[tokio::test]
+async fn a_canvas_code_becomes_tokens_without_requiring_a_refresh_token() {
+    let (url, _) = serve("200 OK", r#"{"access_token":"a1","expires_in":3600}"#).await;
+    let tokens = match canvas_client(&url).exchange("code-9").await {
+        Ok(t) => t,
+        Err(e) => unreachable!("the canvas exchange succeeds: {e}"),
+    };
+    assert_eq!(tokens.access_token.expose_secret(), "a1");
+    assert!(tokens.refresh_token.is_none());
 }
