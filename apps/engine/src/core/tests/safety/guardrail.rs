@@ -17,9 +17,18 @@ fn ctx() -> RequestContext {
 fn rules(denied: &[&str], max_answer_chars: usize) -> Rules {
     Rules {
         denied_phrases: denied.iter().map(|p| p.to_lowercase()).collect(),
+        protected_terms: Vec::new(),
+        redaction: "[hidden]".into(),
         max_answer_chars,
         replacement: "blocked".into(),
     }
+}
+
+/// Rules that redact the given whole-word terms from an answer.
+fn protecting(terms: &[&str]) -> Rules {
+    let mut rules = rules(&[], 0);
+    rules.protect(terms.iter().map(|t| (*t).to_owned()));
+    rules
 }
 
 #[tokio::test]
@@ -82,6 +91,70 @@ async fn an_empty_denied_phrase_matches_nothing() {
     );
 }
 
+#[tokio::test]
+async fn a_protected_term_is_redacted_from_an_answer() {
+    let g = RuleGuardrail::new(protecting(&["search_live", "run_sandbox"]));
+    let v = g
+        .check(
+            &ctx(),
+            Stage::Answer,
+            "I will use search_live and run_sandbox now",
+        )
+        .await;
+    let Verdict::Redact { text, .. } = v else {
+        unreachable!("a protected term is redacted")
+    };
+    assert_eq!(text, "I will use [hidden] and [hidden] now");
+}
+
+#[tokio::test]
+async fn redaction_matches_whole_words_only() {
+    let g = RuleGuardrail::new(protecting(&["search"]));
+    // search_live embeds search but is not the whole word search.
+    let v = g
+        .check(&ctx(), Stage::Answer, "try search_live for hours")
+        .await;
+    assert_eq!(
+        v,
+        Verdict::Pass,
+        "a term inside a longer identifier is left alone"
+    );
+}
+
+#[tokio::test]
+async fn redaction_ignores_case() {
+    let g = RuleGuardrail::new(protecting(&["valley_metro"]));
+    let v = g.check(&ctx(), Stage::Answer, "call Valley_Metro").await;
+    assert!(matches!(v, Verdict::Redact { text, .. } if text == "call [hidden]"));
+}
+
+#[tokio::test]
+async fn a_protected_term_in_a_capability_branch_is_left() {
+    let g = RuleGuardrail::new(protecting(&["search_live"]));
+    let v = g
+        .check(&ctx(), Stage::Capability, "planning to call search_live")
+        .await;
+    assert_eq!(
+        v,
+        Verdict::Pass,
+        "the capability branch is not shown to the user"
+    );
+}
+
+#[tokio::test]
+async fn a_denied_phrase_beats_a_protected_term() {
+    let mut r = protecting(&["search_live"]);
+    r.denied_phrases = vec!["ssn".into()];
+    let g = RuleGuardrail::new(r);
+    let v = g
+        .check(&ctx(), Stage::Answer, "your ssn via search_live")
+        .await;
+    assert!(
+        matches!(v, Verdict::Block { .. }),
+        "a block wins over a redaction"
+    );
+}
+
 #[test]
 fn the_default_rules_come_from_configuration() {
     let cfg = config::Guardrail::default();
@@ -130,6 +203,50 @@ async fn a_blocked_answer_replaces_the_text_and_ends_the_run() {
             .iter()
             .any(|r| matches!(r.event, TraceEvent::GuardrailBlocked { .. })),
         "the block is traced"
+    );
+}
+
+#[tokio::test]
+async fn a_leaked_tool_name_is_redacted_before_the_user_sees_it() {
+    use crate::core::tests::support::MemorySink;
+    use crate::core::types::agent::AgentConfig;
+    use crate::core::types::trace::{RunStatus, TraceEvent};
+    use crate::runtime::harness::agent::{Agent, AgentDeps};
+    use crate::runtime::harness::safety::policy::RiskPolicy;
+    use crate::runtime::harness::tools::ToolSet;
+
+    let sink = Arc::new(MemorySink::new());
+    let deps = AgentDeps {
+        model: Arc::new(Scripted::new(vec![Ok(text(
+            "Check the catalog with search_live for open seats.",
+        ))])),
+        tools: ToolSet::new(),
+        policy: Arc::new(RiskPolicy::default()),
+        trace: sink.clone(),
+        conversations: None,
+        memory: None,
+        confirmations: None,
+        compactor: None,
+        guardrail: Some(Arc::new(RuleGuardrail::new(protecting(&["search_live"])))),
+        profile: None,
+        profile_graph: None,
+        sandbox: None,
+        files: None,
+    };
+    let agent = Agent::new(deps, AgentConfig::default(), "sys");
+    let Ok(answer) = agent.run(&ctx(), "any open seats").await else {
+        unreachable!("a redaction does not end the run")
+    };
+    assert_eq!(answer.status, RunStatus::Answered);
+    assert_eq!(
+        answer.text,
+        "Check the catalog with [hidden] for open seats."
+    );
+    assert!(
+        sink.records()
+            .iter()
+            .any(|r| matches!(r.event, TraceEvent::GuardrailRedacted { .. })),
+        "the redaction is traced"
     );
 }
 

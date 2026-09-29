@@ -34,6 +34,11 @@ pub struct Guardrail {
     pub enabled: bool,
     /// Phrases that block a response wherever they appear. Matched without case.
     pub denied_phrases: Vec<String>,
+    /// Terms removed from an answer wherever they appear as a whole word, matched without case.
+    /// The registered tool names are added to these at boot.
+    pub protected_terms: Vec<String>,
+    /// Shown in an answer in place of a protected term.
+    pub redaction: String,
     /// Longest answer allowed. 0 removes the limit.
     pub max_answer_chars: usize,
     /// Shown in place of a blocked response.
@@ -45,6 +50,8 @@ impl Default for Guardrail {
         Self {
             enabled: true,
             denied_phrases: Vec::new(),
+            protected_terms: Vec::new(),
+            redaction: "[hidden]".into(),
             max_answer_chars: 8_000,
             replacement: "I cannot answer that. Ask a moderator if you need help.".into(),
         }

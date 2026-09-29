@@ -115,6 +115,15 @@ pub enum TraceEvent {
         /// Why it was refused.
         reason: String,
     },
+    /// The guardrail removed protected terms from a response before showing it.
+    GuardrailRedacted {
+        /// Loop step.
+        step: u32,
+        /// Which branch the response was on.
+        stage: Stage,
+        /// What was removed, for the trace.
+        reason: String,
+    },
     /// History that no longer fits is being replaced by one turn.
     Compaction {
         /// Stored messages being replaced, a previous summary included.
@@ -216,6 +225,7 @@ impl TraceEvent {
             Self::ModelError { .. } => "model_error",
             Self::PolicyDecision { .. } => "policy_decision",
             Self::GuardrailBlocked { .. } => "guardrail_blocked",
+            Self::GuardrailRedacted { .. } => "guardrail_redacted",
             Self::Compaction { .. } => "compaction",
             Self::ToolStarted { .. } => "tool_started",
             Self::ToolCall { .. } => "tool_call",
@@ -311,7 +321,9 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            Self::ToolResultStored { .. }
+            // Redaction leaves the answer readable, so it stays out of the live progress line.
+            Self::GuardrailRedacted { .. }
+            | Self::ToolResultStored { .. }
             | Self::QueryCache { .. }
             | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }

@@ -66,21 +66,27 @@ impl Agent {
                 text: truncate(&text, limit),
             },
             Release::Answer(text) => {
-                if let Some(guardrail) = &self.deps.guardrail
-                    && let Verdict::Block { .. } = guardrail.check(ctx, Stage::Answer, &text).await
-                {
-                    let shown = draft.shown();
-                    draft.withhold();
-                    if shown {
-                        self.deps
-                            .trace
-                            .emit(ctx, TraceEvent::AnswerDraftCleared { step });
+                let shown_text = if let Some(guardrail) = &self.deps.guardrail {
+                    match guardrail.check(ctx, Stage::Answer, &text).await {
+                        Verdict::Block { .. } => {
+                            let shown = draft.shown();
+                            draft.withhold();
+                            if shown {
+                                self.deps
+                                    .trace
+                                    .emit(ctx, TraceEvent::AnswerDraftCleared { step });
+                            }
+                            return;
+                        }
+                        Verdict::Redact { text, .. } => text,
+                        Verdict::Pass => text,
                     }
-                    return;
-                }
+                } else {
+                    text
+                };
                 TraceEvent::AnswerDraft {
                     step,
-                    text: truncate(&text, limit),
+                    text: truncate(&shown_text, limit),
                 }
             }
         };

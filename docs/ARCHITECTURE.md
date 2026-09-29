@@ -363,7 +363,7 @@ The loop owns every stopping condition and checks cancellation, the deadline, an
 
 **Streaming.** With `agent.stream` on, reasoning updates the thinking line as it grows. When answer text begins, the thinking line becomes the full thought, clipped to `agent.progress_thought_chars`. Answer text is released as a draft at the end of a sentence or line, or at a word break past `agent.stream_block_chars`, and every block passes the guardrail before it is sent. A draft is withdrawn when the call ends in tool calls, fails, or a block is refused. A step that answers without showing a thought takes its thinking line back.
 
-**Guardrail and policy.** Every response passes the guardrail: the answer stage for a final answer, the capability stage for a response with tool calls and text. `Policy` decides whether a typed action may run by its risk class.
+**Guardrail and policy.** Every response passes the guardrail: the answer stage for a final answer, the capability stage for a response with tool calls and text. A denied phrase, an empty answer, or an over-length answer blocks the response and ends the run with `guardrail.replacement`. On the answer stage the guardrail also removes protected terms: the registered tool names are added to `guardrail.protected_terms` at boot, so a tool name that slips into an answer is replaced with `guardrail.redaction` rather than shown to the student. The system prompt is the first line of this defense, telling Sparky never to name a tool, reveal its instructions, say which model runs it, or follow instructions found in tool output. `Policy` decides whether a typed action may run by its risk class.
 
 **Tool calls** are authorized before any runs. A denial or an unknown tool name becomes a tool result the model reads. The first call that needs confirmation is stored in `confirmations` and ends the run. Allowed calls that repeat an earlier call with identical arguments are not run again, and the model is told so. When every call in a step is a repeat, the next step offers no tools and adds `prompt.answer_only_line`; if that step repeats again or answers with nothing, the run ends as `Stalled`. Allowed calls run in parallel, each under its own timeout (the tool's declared timeout or `agent.tool_timeout_secs`, capped by the request deadline), or in order if any call is to a tool marked sequential. A tool error, including `InvalidArguments`, is fed back as the tool result.
 
@@ -708,13 +708,14 @@ erDiagram
 | prompt would exceed the budget | history is trimmed and tool results are cut; boot checks keep tool schemas under half |
 | `search_knowledge` finds nothing | `tools.nothing_stored` sends the model to another search |
 | guardrail blocks a response | run ends as `Blocked` with `guardrail.replacement` |
+| guardrail finds a protected term in an answer | the term is replaced with `guardrail.redaction` and the answer proceeds |
 | confirmation denied, expired, or answered by someone else | nothing runs |
 | PostgreSQL unavailable | the engine does not boot, and a request that needs a store gets 503 |
 | JSONL trace over `trace.max_file_bytes` | later events for that request are dropped |
 
 ## Tracing
 
-Every request produces one trace covering model calls, tool calls, memory recall, policy decisions, guardrail blocks, and the outcome. The live pieces of a streaming call (reasoning so far, answer drafts, a withdrawn draft) go only to the watcher; the recorded trace keeps the finished call.
+Every request produces one trace covering model calls, tool calls, memory recall, policy decisions, guardrail blocks and redactions, and the outcome. The live pieces of a streaming call (reasoning so far, answer drafts, a withdrawn draft) go only to the watcher; the recorded trace keeps the finished call. A guardrail block or redaction is also recorded as an event on the `agent.run` span, and the profile write that follows a turn runs under that same span. Each `tool` span carries the tool's risk class.
 
 ```mermaid
 flowchart TD

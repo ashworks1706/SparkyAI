@@ -1,5 +1,7 @@
 //! Keeping the turns, recording the outcome, and building the answer.
 
+use tracing::Instrument;
+
 use super::{Agent, ms};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::{AgentError, Answer};
@@ -55,7 +57,9 @@ impl Agent {
             return;
         }
         let (tenant, user) = (run.ctx.tenant_id.clone(), run.ctx.user_id.clone());
-        tokio::spawn(async move { writer.record(tenant, user, turn).await });
+        // Carry the request span into the detached task so its profile spans nest under this run.
+        let span = tracing::Span::current();
+        tokio::spawn(async move { writer.record(tenant, user, turn).await }.instrument(span));
     }
 
     /// Appends the turns of this request to the conversation store, when one is configured.

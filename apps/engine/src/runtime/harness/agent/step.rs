@@ -12,11 +12,21 @@ use crate::runtime::harness::agent::prompt::assemble;
 use crate::runtime::harness::agent::run::{Inputs, Run};
 use crate::runtime::harness::safety::redact::truncate;
 
+/// What the guardrail did to a response on a step.
+enum Guarded {
+    /// The response proceeds as written.
+    Pass,
+    /// The response proceeds with this text in place of the original.
+    Redacted(String),
+    /// The response is refused and the run stops here.
+    Blocked(StepOutcome),
+}
+
 /// The outcome of a step that asked for no capabilities.
-fn answered(response: &ModelResponse, force_answer: bool) -> StepOutcome {
-    let written_call = force_answer && is_call_text(&response.content);
-    if !response.content.trim().is_empty() && !written_call {
-        return StepOutcome::Stop(RunStatus::Answered, response.content.clone(), None);
+fn answered(response: &ModelResponse, content: &str, force_answer: bool) -> StepOutcome {
+    let written_call = force_answer && is_call_text(content);
+    if !content.trim().is_empty() && !written_call {
+        return StepOutcome::Stop(RunStatus::Answered, content.to_owned(), None);
     }
     let (status, text) = if force_answer {
         (
@@ -68,9 +78,11 @@ impl Agent {
         } else {
             Stage::Capability
         };
-        if let Some(blocked) = self.guarded(ctx, run.steps, stage, &response.content).await {
-            return Ok(blocked);
-        }
+        let content = match self.guarded(ctx, run.steps, stage, &response.content).await {
+            Guarded::Blocked(stop) => return Ok(stop),
+            Guarded::Redacted(text) => text,
+            Guarded::Pass => response.content.clone(),
+        };
 
         if response.tool_calls.is_empty() {
             // A step that showed a thought keeps it in place of the answered line.
@@ -79,7 +91,7 @@ impl Agent {
                     .trace
                     .emit(ctx, TraceEvent::ModelAnswered { step: run.steps });
             }
-            return Ok(answered(&response, run.force_answer));
+            return Ok(answered(&response, &content, run.force_answer));
         }
 
         let runnable = match self.authorize_all(run, &response.tool_calls).await {
@@ -176,35 +188,53 @@ impl Agent {
         true
     }
 
-    /// Checks a response against the guardrail. A block ends the run with the replacement text.
-    async fn guarded(
-        &self,
-        ctx: &RequestContext,
-        step: u32,
-        stage: Stage,
-        text: &str,
-    ) -> Option<StepOutcome> {
-        let guardrail = self.deps.guardrail.as_ref()?;
+    /// Checks a response against the guardrail. A block ends the run; a redaction rewrites the text.
+    async fn guarded(&self, ctx: &RequestContext, step: u32, stage: Stage, text: &str) -> Guarded {
+        let Some(guardrail) = self.deps.guardrail.as_ref() else {
+            return Guarded::Pass;
+        };
         // An empty capability branch is not checked.
         if stage == Stage::Capability && text.trim().is_empty() {
-            return None;
+            return Guarded::Pass;
         }
-        let verdict = guardrail.check(ctx, stage, text).await;
-        let Verdict::Block {
-            replacement,
-            reason,
-        } = verdict
-        else {
-            return None;
-        };
-        self.deps.trace.emit(
-            ctx,
-            TraceEvent::GuardrailBlocked {
-                step,
-                stage,
+        match guardrail.check(ctx, stage, text).await {
+            Verdict::Pass => Guarded::Pass,
+            Verdict::Block {
+                replacement,
                 reason,
-            },
-        );
-        Some(StepOutcome::Stop(RunStatus::Blocked, replacement, None))
+            } => {
+                // A span event on the request, so a block shows in Phoenix as well as the trace.
+                tracing::warn!(
+                    stage = stage.as_str(),
+                    reason,
+                    "guardrail blocked a response"
+                );
+                self.deps.trace.emit(
+                    ctx,
+                    TraceEvent::GuardrailBlocked {
+                        step,
+                        stage,
+                        reason,
+                    },
+                );
+                Guarded::Blocked(StepOutcome::Stop(RunStatus::Blocked, replacement, None))
+            }
+            Verdict::Redact { text, reason } => {
+                tracing::info!(
+                    stage = stage.as_str(),
+                    reason,
+                    "guardrail redacted a response"
+                );
+                self.deps.trace.emit(
+                    ctx,
+                    TraceEvent::GuardrailRedacted {
+                        step,
+                        stage,
+                        reason,
+                    },
+                );
+                Guarded::Redacted(text)
+            }
+        }
     }
 }
