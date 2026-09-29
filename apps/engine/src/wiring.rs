@@ -296,7 +296,11 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
 }
 
 /// The grant store, the Canvas client when its login is on, and the state the OAuth routes read.
-type OAuthWiring = (Arc<dyn OAuthStore>, Option<Arc<CanvasOAuthClient>>, OAuthState);
+type OAuthWiring = (
+    Arc<dyn OAuthStore>,
+    Option<Arc<CanvasOAuthClient>>,
+    OAuthState,
+);
 
 /// Builds the grant store, the Canvas client, and the OAuth route state from the settings.
 fn oauth_wiring(cfg: &Config, pool: &sqlx::postgres::PgPool) -> anyhow::Result<OAuthWiring> {

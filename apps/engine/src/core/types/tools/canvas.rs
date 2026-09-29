@@ -40,6 +40,49 @@ pub struct CourseGrade {
     pub grade: Option<String>,
 }
 
+/// One announcement posted in a course.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Announcement {
+    /// Announcement title.
+    pub title: String,
+    /// Course it was posted in.
+    pub course: String,
+    /// When it was posted, if given.
+    pub posted_at: Option<DateTime<Utc>>,
+    /// The opening of the message, with markup removed.
+    pub body: Option<String>,
+    /// Link to the announcement.
+    pub url: Option<String>,
+}
+
+/// One item on the caller's upcoming calendar.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CalendarEvent {
+    /// Event title.
+    pub title: String,
+    /// When it starts, if given.
+    pub start_at: Option<DateTime<Utc>>,
+    /// Where it is, if given.
+    pub location: Option<String>,
+    /// Link to the event.
+    pub url: Option<String>,
+}
+
+/// The caller's grade on one assignment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AssignmentGrade {
+    /// Course the assignment belongs to.
+    pub course: String,
+    /// Assignment name.
+    pub name: String,
+    /// Score the caller received, if graded.
+    pub score: Option<f64>,
+    /// Points the assignment is worth, if set.
+    pub points: Option<f64>,
+    /// Letter grade recorded, if any.
+    pub grade: Option<String>,
+}
+
 /// A Canvas request that could not be answered.
 #[derive(Debug, thiserror::Error)]
 pub enum CanvasError {

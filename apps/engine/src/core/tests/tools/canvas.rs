@@ -15,26 +15,27 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
-use crate::core::types::tools::canvas::{Assignment, CanvasError, Course, CourseGrade};
+use crate::core::types::tools::canvas::{
+    Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
+};
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
 use crate::runtime::tools::canvas::{CanvasTool, Credentials, Query};
 
 /// A Canvas double that answers with canned rows, or a set error status.
+#[derive(Default)]
 struct FakeCanvas {
     courses: Vec<Course>,
     assignments: Vec<Assignment>,
     grades: Vec<CourseGrade>,
+    announcements: Vec<Announcement>,
+    calendar: Vec<CalendarEvent>,
+    assignment_grades: Vec<AssignmentGrade>,
     error: Option<u16>,
 }
 
 impl FakeCanvas {
     fn empty() -> Self {
-        Self {
-            courses: Vec::new(),
-            assignments: Vec::new(),
-            grades: Vec::new(),
-            error: None,
-        }
+        Self::default()
     }
 }
 
@@ -56,6 +57,27 @@ impl Canvas for FakeCanvas {
         match self.error {
             Some(status) => Err(CanvasError::Refused(status)),
             None => Ok(self.grades.clone()),
+        }
+    }
+    async fn announcements(&self, _token: &SecretString) -> Result<Vec<Announcement>, CanvasError> {
+        match self.error {
+            Some(status) => Err(CanvasError::Refused(status)),
+            None => Ok(self.announcements.clone()),
+        }
+    }
+    async fn calendar(&self, _token: &SecretString) -> Result<Vec<CalendarEvent>, CanvasError> {
+        match self.error {
+            Some(status) => Err(CanvasError::Refused(status)),
+            None => Ok(self.calendar.clone()),
+        }
+    }
+    async fn assignment_grades(
+        &self,
+        _token: &SecretString,
+    ) -> Result<Vec<AssignmentGrade>, CanvasError> {
+        match self.error {
+            Some(status) => Err(CanvasError::Refused(status)),
+            None => Ok(self.assignment_grades.clone()),
         }
     }
 }
@@ -229,6 +251,69 @@ async fn an_expired_token_is_named_as_such() {
         .await;
     assert!(
         matches!(&out, Err(ToolError::Failed(m)) if m.contains("expired")),
+        "{out:?}"
+    );
+}
+
+#[tokio::test]
+async fn announcements_carry_title_and_course() {
+    let fake = FakeCanvas {
+        announcements: vec![Announcement {
+            title: "Midterm moved".into(),
+            course: "CSE 471".into(),
+            posted_at: None,
+            body: Some("The midterm is now next week.".into()),
+            url: Some("https://canvas.asu.edu/a/1".into()),
+        }],
+        ..FakeCanvas::empty()
+    };
+    let out = tool(Query::Announcements, fake, None, "tok")
+        .call(&dm(), json!({}))
+        .await;
+    assert!(
+        matches!(&out, Ok(o) if o.content.contains("Midterm moved") && o.content.contains("CSE 471")),
+        "{out:?}"
+    );
+}
+
+#[tokio::test]
+async fn calendar_lists_upcoming_events_with_location() {
+    let fake = FakeCanvas {
+        calendar: vec![CalendarEvent {
+            title: "Lecture".into(),
+            start_at: None,
+            location: Some("COOR 170".into()),
+            url: None,
+        }],
+        ..FakeCanvas::empty()
+    };
+    let out = tool(Query::Calendar, fake, None, "tok")
+        .call(&dm(), json!({}))
+        .await;
+    assert!(
+        matches!(&out, Ok(o) if o.content.contains("Lecture") && o.content.contains("COOR 170")),
+        "{out:?}"
+    );
+}
+
+#[tokio::test]
+async fn assignment_grades_show_score_over_points() {
+    let fake = FakeCanvas {
+        assignment_grades: vec![AssignmentGrade {
+            course: "CSE 471".into(),
+            name: "HW1".into(),
+            score: Some(18.0),
+            points: Some(20.0),
+            grade: None,
+        }],
+        ..FakeCanvas::empty()
+    };
+    let out = tool(Query::AssignmentGrades, fake, None, "tok")
+        .call(&dm(), json!({}))
+        .await;
+    assert!(
+        matches!(&out, Ok(o) if o.content.contains("HW1")
+            && o.content.contains("18") && o.content.contains("20")),
         "{out:?}"
     );
 }
