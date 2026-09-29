@@ -1,6 +1,7 @@
 //! Per-user OAuth login: POST /oauth/{provider}/authorize mints a consent URL for the bot, and
 //! GET /oauth/{provider}/callback receives the code, exchanges it, and stores the grant.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,18 +16,15 @@ use uuid::Uuid;
 use crate::core::traits::oauth::OAuthStore;
 use crate::core::types::tools::oauth::USER_SCOPE;
 use crate::routes::chat::authorized;
-use crate::runtime::tools::oauth::CanvasOAuthClient;
-
-/// The only provider a login serves today.
-pub const CANVAS: &str = "canvas";
+use crate::runtime::tools::oauth::WebOAuthClient;
 
 /// What the OAuth routes read.
 #[derive(Clone)]
 pub struct OAuthState {
     /// Where grants and pending logins are held.
     pub store: Arc<dyn OAuthStore>,
-    /// The Canvas client, when canvas login is enabled.
-    pub canvas: Option<Arc<CanvasOAuthClient>>,
+    /// The web OAuth client per enabled provider, by provider key.
+    pub providers: HashMap<String, Arc<WebOAuthClient>>,
     /// Bearer token the authorize route requires.
     pub service_token: SecretString,
     /// How long a pending login stays valid.
@@ -75,27 +73,24 @@ pub async fn authorize(
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
     }
-    if provider != CANVAS {
-        return (StatusCode::NOT_FOUND, "unknown provider").into_response();
-    }
-    let Some(canvas) = &state.canvas else {
+    let Some(client) = state.providers.get(&provider) else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            "canvas login is not enabled",
+            "login is not enabled for this provider",
         )
             .into_response();
     };
     let token = Uuid::new_v4().to_string();
     if let Err(error) = state
         .store
-        .begin_consent(&token, USER_SCOPE, &req.user, CANVAS, state.state_ttl)
+        .begin_consent(&token, USER_SCOPE, &req.user, &provider, state.state_ttl)
         .await
     {
-        tracing::error!(%error, "could not start a canvas login");
+        tracing::error!(%error, %provider, "could not start a login");
         return (StatusCode::INTERNAL_SERVER_ERROR, "could not start login").into_response();
     }
     Json(AuthorizeResponse {
-        url: canvas.authorize_url(&token),
+        url: client.authorize_url(&token),
     })
     .into_response()
 }
@@ -106,14 +101,11 @@ pub async fn callback(
     Path(provider): Path<String>,
     Query(query): Query<CallbackQuery>,
 ) -> Response {
-    if provider != CANVAS {
-        return page("Unknown provider.");
-    }
-    let Some(canvas) = &state.canvas else {
-        return page("Canvas login is not enabled.");
+    let Some(client) = state.providers.get(&provider) else {
+        return page("Login is not enabled for this provider.");
     };
     if let Some(error) = query.error.as_deref() {
-        tracing::info!(%error, "canvas login refused at the provider");
+        tracing::info!(%error, %provider, "login refused at the provider");
         return page("The login was cancelled or refused. You can close this tab.");
     }
     let (Some(code), Some(login)) = (query.code, query.state) else {
@@ -125,29 +117,29 @@ pub async fn callback(
             return page("This login link has expired or was already used. Run /login again.");
         }
         Err(error) => {
-            tracing::error!(%error, "could not read a canvas login state");
+            tracing::error!(%error, "could not read a login state");
             return page("Something went wrong finishing the login. Run /login again.");
         }
     };
-    if consent.provider != CANVAS {
+    if consent.provider != provider {
         return page("This login link was for another provider.");
     }
-    let tokens = match canvas.exchange(&code).await {
+    let tokens = match client.exchange(&code).await {
         Ok(tokens) => tokens,
         Err(error) => {
-            tracing::warn!(%error, "canvas code exchange failed");
-            return page("Canvas would not complete the login. Run /login again.");
+            tracing::warn!(%error, %provider, "code exchange failed");
+            return page("The provider would not complete the login. Run /login again.");
         }
     };
     if let Err(error) = state
         .store
-        .save_grant(&consent.tenant_id, &consent.user_id, CANVAS, &tokens)
+        .save_grant(&consent.tenant_id, &consent.user_id, &provider, &tokens)
         .await
     {
-        tracing::error!(%error, "could not save a canvas grant");
+        tracing::error!(%error, "could not save a grant");
         return page("Could not save your connection. Run /login again.");
     }
-    page("You are connected. Return to Discord and ask me about your Canvas.")
+    page("You are connected. Return to Discord and ask me in a direct message.")
 }
 
 /// Removes a caller's grant. Requires the service token.
@@ -160,17 +152,17 @@ pub async fn disconnect(
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
     }
-    if provider != CANVAS {
+    if !state.providers.contains_key(&provider) {
         return (StatusCode::NOT_FOUND, "unknown provider").into_response();
     }
     match state
         .store
-        .delete_grant(USER_SCOPE, &req.user, CANVAS)
+        .delete_grant(USER_SCOPE, &req.user, &provider)
         .await
     {
         Ok(removed) => Json(DisconnectResponse { removed }).into_response(),
         Err(error) => {
-            tracing::error!(%error, "could not delete a canvas grant");
+            tracing::error!(%error, %provider, "could not delete a grant");
             (StatusCode::INTERNAL_SERVER_ERROR, "could not disconnect").into_response()
         }
     }

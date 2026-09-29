@@ -6,7 +6,7 @@ use tokio::sync::oneshot;
 
 use crate::core::config::{CanvasOAuth, GoogleOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
-use crate::runtime::tools::oauth::{CanvasOAuthClient, GoogleOAuthClient};
+use crate::runtime::tools::oauth::{GoogleOAuthClient, WebOAuthClient};
 
 /// Serves one response and hands back the request it answered.
 async fn serve(status: &'static str, body: &'static str) -> (String, oneshot::Receiver<String>) {
@@ -175,7 +175,7 @@ async fn a_response_without_an_access_token_is_malformed() {
     ));
 }
 
-fn canvas_client(token_url: &str) -> CanvasOAuthClient {
+fn canvas_client(token_url: &str) -> WebOAuthClient {
     let cfg = CanvasOAuth {
         enabled: true,
         client_id: "cid".into(),
@@ -184,9 +184,9 @@ fn canvas_client(token_url: &str) -> CanvasOAuthClient {
         token_url: token_url.into(),
         ..CanvasOAuth::default()
     };
-    match CanvasOAuthClient::new(&cfg) {
+    match WebOAuthClient::canvas(&cfg) {
         Ok(c) => c,
-        Err(e) => unreachable!("the canvas client builds: {e}"),
+        Err(e) => unreachable!("the web client builds: {e}"),
     }
 }
 

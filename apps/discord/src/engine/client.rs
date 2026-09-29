@@ -66,20 +66,23 @@ impl EngineClient {
         self.post("/profile/forget", req).await
     }
 
-    /// Mints a Canvas consent URL for the caller. 503 when canvas login is not enabled.
-    pub async fn canvas_login(
+    /// Mints a consent URL for the caller and a provider. 503 when that login is not enabled.
+    pub async fn oauth_login(
         &self,
+        provider: &str,
         req: &AuthorizeRequest,
     ) -> Result<AuthorizeResponse, EngineError> {
-        self.post("/oauth/canvas/authorize", req).await
+        self.post(&format!("/oauth/{provider}/authorize"), req)
+            .await
     }
 
-    /// Disconnects the caller's Canvas grant.
-    pub async fn canvas_logout(
+    /// Disconnects the caller's grant for a provider.
+    pub async fn oauth_logout(
         &self,
+        provider: &str,
         req: &AuthorizeRequest,
     ) -> Result<DisconnectResponse, EngineError> {
-        self.post("/oauth/canvas/logout", req).await
+        self.post(&format!("/oauth/{provider}/logout"), req).await
     }
 
     /// Posts a JSON body and reads a JSON reply.

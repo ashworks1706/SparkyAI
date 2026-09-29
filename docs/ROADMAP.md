@@ -33,10 +33,12 @@ Only after Phase 5 yields clean interaction data.
 
 ## 8 — Authenticated tasks v0.7
 
-- [x] A mechanism for per-user authenticated sessions. Grants are stored per user in `oauth_grants` behind `OAuthStore`; `/login` and the `/oauth/{provider}/{authorize,callback,logout}` routes drive the OAuth 2.0 flow, the user signs in through ASU themselves, and no password is stored.
+- [x] A mechanism for per-user authenticated sessions. Grants are stored per user in `oauth_grants` behind `OAuthStore`; `/login <service>` and the `/oauth/{provider}/{authorize,callback,logout}` routes drive the OAuth 2.0 flow over a provider map, the user signs in through the provider themselves, and no password is stored.
 - [ ] Human confirmation for any authenticated or consequential submission
-- [x] Add Canvas, MyASU integration. Read-only Canvas per user (courses, assignments, grades), direct-message only, on with `[oauth.canvas]` plus `[canvas]`. MyASU integrations beyond Canvas are still open.
-- [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off; the per-user session store and consent routes they waited on now exist, so Google can reuse them.
+- [x] Add Canvas, MyASU integration. Read-only Canvas per user (courses, assignments, grades, announcements, calendar, per-assignment grades), direct-message only, on with `[oauth.canvas]` plus `[canvas]`. MyASU integrations beyond Canvas are still open.
+- [x] Add Microsoft/Outlook. Read-only Outlook calendar and mail per user, direct-message only, on with `[oauth.microsoft]` plus `[outlook]`. Needs an Azure app registration and ASU admin consent to reach ASU accounts.
+- [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off. The per-user store, consent routes, and provider map now exist; the remaining piece is injecting the per-user token into MCP calls, which the MCP layer does not do yet.
+- [x] Public no-auth tools: `search_papers` (Semantic Scholar), `wikipedia_lookup`, and `valley_metro` (GTFS-realtime, off until a feed URL is set).
 
 ## 9 — v1.0
 

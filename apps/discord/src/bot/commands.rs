@@ -10,10 +10,14 @@ pub const MEMORY: &str = "memory";
 pub const FORGET: &str = "forget";
 /// Name of the label option on /forget.
 pub const LABEL: &str = "label";
-/// The /login command, which connects the user's ASU Canvas account.
+/// The /login command, which connects one of the user's accounts.
 pub const LOGIN: &str = "login";
-/// The /logout command, which disconnects the user's Canvas account.
+/// The /logout command, which disconnects one of the user's accounts.
 pub const LOGOUT: &str = "logout";
+/// Name of the service option on /login and /logout.
+pub const SERVICE: &str = "service";
+/// The services a login connects: the option value is the provider key the engine expects.
+pub const SERVICES: [(&str, &str); 2] = [("Canvas", "canvas"), ("Outlook", "microsoft")];
 
 /// Every command the bot registers on its guild.
 pub fn all() -> Vec<CreateCommand> {
@@ -29,7 +33,24 @@ pub fn all() -> Vec<CreateCommand> {
                 "The thing to forget, as /memory shows it. Leave empty to forget everything",
             )),
         CreateCommand::new(LOGIN)
-            .description("Connect your ASU Canvas so Sparky can check it in DMs"),
-        CreateCommand::new(LOGOUT).description("Disconnect your ASU Canvas from Sparky"),
+            .description("Connect an account (Canvas, Outlook) so Sparky can check it in DMs")
+            .add_option(service_option()),
+        CreateCommand::new(LOGOUT)
+            .description("Disconnect an account (Canvas, Outlook) from Sparky")
+            .add_option(service_option()),
     ]
+}
+
+/// The required service choice shared by /login and /logout.
+fn service_option() -> CreateCommandOption {
+    let mut option = CreateCommandOption::new(
+        CommandOptionType::String,
+        SERVICE,
+        "Which account to connect or disconnect",
+    )
+    .required(true);
+    for (label, value) in SERVICES {
+        option = option.add_string_choice(label, value);
+    }
+    option
 }

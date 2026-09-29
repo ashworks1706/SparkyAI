@@ -326,6 +326,18 @@ authorize_url = "https://canvas.asu.edu/login/oauth2/auth"
 token_url = "https://canvas.asu.edu/login/oauth2/token"
 timeout_secs = 30
 
+# Per-user Microsoft login for Outlook. Turn on with an Azure app registration: set enabled,
+# client_id and redirect_url here, and client_secret in .env. Replace common in the URLs with the
+# tenant id to limit sign-in to one org. The user signs in through Microsoft themselves.
+[oauth.microsoft]
+enabled = false
+client_id = ""
+redirect_url = ""
+scopes = ["openid", "profile", "offline_access", "Calendars.Read", "Mail.Read"]
+authorize_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+timeout_secs = 30
+
 # ---------------------------------------------------------------- Canvas
 # Read-only Canvas tools (courses, assignments, grades), in a direct message only.
 # Off until a Canvas API token is set. access_token lives in .env. When a per-user grant store
@@ -334,6 +346,34 @@ timeout_secs = 30
 enabled = false
 base_url = "https://canvas.asu.edu"
 timeout_secs = 30
+max_items = 20
+
+# Outlook calendar and mail, read-only, in a direct message only. On with oauth.microsoft.
+[outlook]
+enabled = false
+base_url = "https://graph.microsoft.com/v1.0"
+timeout_secs = 30
+max_items = 15
+
+# Academic paper search over Semantic Scholar. Public, no key.
+[papers]
+enabled = true
+base_url = "https://api.semanticscholar.org/graph/v1"
+timeout_secs = 20
+max_items = 5
+
+# Wikipedia lookups over the MediaWiki API. Public, no key.
+[wikipedia]
+enabled = true
+base_url = "https://en.wikipedia.org/w/api.php"
+timeout_secs = 20
+max_chars = 1500
+
+# Valley Metro realtime. Off until feed_url (a GTFS-realtime JSON feed) is set in .env; it may
+# carry a key, so it is a secret. Reports active vehicles by route.
+[transit]
+enabled = false
+timeout_secs = 20
 max_items = 20
 
 # ---------------------------------------------------------------- traces

@@ -85,6 +85,18 @@ pub struct Config {
     /// Canvas LMS integration. Off by default.
     #[serde(default)]
     pub canvas: Canvas,
+    /// Outlook (Microsoft Graph) integration. Off by default.
+    #[serde(default)]
+    pub outlook: Outlook,
+    /// Academic paper search.
+    #[serde(default)]
+    pub papers: Papers,
+    /// Wikipedia lookups.
+    #[serde(default)]
+    pub wikipedia: Wikipedia,
+    /// Valley Metro transit. Off by default.
+    #[serde(default)]
+    pub transit: Transit,
 }
 
 /// Default budgets. Every field comes from the agent section.
@@ -229,6 +241,7 @@ impl Config {
         validate_mcp_risks(&self.mcp)?;
         validate_oauth(&self.oauth)?;
         validate_canvas(&self.canvas)?;
+        validate_integrations(self)?;
         validate_query_cache(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
@@ -412,6 +425,47 @@ fn validate_oauth(oauth: &OAuth) -> Result<(), ConfigError> {
         if canvas.timeout_secs == 0 {
             return invalid("timeout_secs must be at least 1");
         }
+    }
+    let microsoft = &oauth.microsoft;
+    if microsoft.enabled {
+        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.microsoft: {m}")));
+        if microsoft.client_id.trim().is_empty()
+            || microsoft.client_secret.expose_secret().is_empty()
+        {
+            return invalid("client_id and client_secret must be set when enabled");
+        }
+        if microsoft.redirect_url.trim().is_empty() {
+            return invalid("redirect_url must be set when enabled");
+        }
+        if !microsoft.authorize_url.starts_with("https://")
+            || !microsoft.token_url.starts_with("https://")
+        {
+            return invalid("authorize_url and token_url must be https");
+        }
+        if microsoft.timeout_secs == 0 {
+            return invalid("timeout_secs must be at least 1");
+        }
+    }
+    Ok(())
+}
+
+fn validate_integrations(cfg: &Config) -> Result<(), ConfigError> {
+    if cfg.outlook.enabled {
+        if !cfg.outlook.base_url.starts_with("https://") {
+            return Err(ConfigError::Invalid(
+                "outlook: base_url must be https".into(),
+            ));
+        }
+        if cfg.outlook.timeout_secs == 0 || cfg.outlook.max_items == 0 {
+            return Err(ConfigError::Invalid(
+                "outlook: timeout_secs and max_items must be at least 1".into(),
+            ));
+        }
+    }
+    if cfg.transit.enabled && cfg.transit.feed_url.expose_secret().trim().is_empty() {
+        return Err(ConfigError::Invalid(
+            "transit: feed_url must be set when enabled".into(),
+        ));
     }
     Ok(())
 }

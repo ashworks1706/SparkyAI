@@ -19,7 +19,8 @@ use crate::core::types::tools::canvas::{
     Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
 };
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
-use crate::runtime::tools::canvas::{CanvasTool, Credentials, Query};
+use crate::runtime::tools::canvas::{CanvasTool, Query};
+use crate::runtime::tools::grant::Credentials;
 
 /// A Canvas double that answers with canned rows, or a set error status.
 #[derive(Default)]
@@ -151,6 +152,7 @@ fn tool(query: Query, fake: FakeCanvas, stored: Option<OAuthTokens>, fallback: &
     let creds = Credentials::new(
         Arc::new(FakeGrants { grant: stored }),
         None,
+        "canvas",
         SecretString::from(fallback.to_owned()),
     );
     CanvasTool::new(query, Arc::new(fake), Arc::new(creds), 20)
