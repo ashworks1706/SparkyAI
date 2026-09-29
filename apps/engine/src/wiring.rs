@@ -40,6 +40,7 @@ use crate::runtime::harness::trace::{Fanout, JsonlSink, NullSink};
 use crate::runtime::model::limit::Limited;
 use crate::runtime::model::props;
 use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
+use crate::runtime::tools::canvas;
 use crate::runtime::tools::files::HttpFiles;
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
@@ -861,6 +862,17 @@ async fn build_tools(
             count = registered,
             "mcp tools registered"
         );
+    }
+    if cfg.canvas.enabled {
+        let mut registered = 0;
+        for tool in canvas::tools(&cfg.canvas).map_err(|e| anyhow::anyhow!("canvas: {e}"))? {
+            if disabled(&tool.definition().name) {
+                continue;
+            }
+            tools = tools.with(tool);
+            registered += 1;
+        }
+        tracing::info!(base_url = %cfg.canvas.base_url, count = registered, "canvas tools registered");
     }
     tracing::info!(tools = ?tools, "tool set");
     Ok((tools, mcp_names))

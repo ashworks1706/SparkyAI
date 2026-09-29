@@ -82,6 +82,9 @@ pub struct Config {
     /// OAuth clients for per-user grants.
     #[serde(default)]
     pub oauth: OAuth,
+    /// Canvas LMS integration. Off by default.
+    #[serde(default)]
+    pub canvas: Canvas,
 }
 
 /// Default budgets. Every field comes from the agent section.
@@ -225,6 +228,7 @@ impl Config {
         validate_tools(&self.tools)?;
         validate_mcp_risks(&self.mcp)?;
         validate_oauth(&self.oauth)?;
+        validate_canvas(&self.canvas)?;
         validate_query_cache(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
@@ -389,6 +393,26 @@ fn validate_oauth(oauth: &OAuth) -> Result<(), ConfigError> {
     }
     if google.timeout_secs == 0 {
         return invalid("timeout_secs must be at least 1");
+    }
+    Ok(())
+}
+
+fn validate_canvas(canvas: &Canvas) -> Result<(), ConfigError> {
+    if !canvas.enabled {
+        return Ok(());
+    }
+    let invalid = |m: &str| Err(ConfigError::Invalid(format!("canvas: {m}")));
+    if !canvas.base_url.starts_with("https://") {
+        return invalid("base_url must be https when enabled");
+    }
+    if canvas.access_token.expose_secret().trim().is_empty() {
+        return invalid("access_token must be set when enabled");
+    }
+    if canvas.timeout_secs == 0 {
+        return invalid("timeout_secs must be at least 1");
+    }
+    if canvas.max_items == 0 {
+        return invalid("max_items must be at least 1");
     }
     Ok(())
 }

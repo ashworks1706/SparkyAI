@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::core::traits::safety::policy::Policy;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::Visibility;
 use crate::core::types::safety::policy::{ConfirmationRequest, Decision, ProposedAction};
 use crate::core::types::tools::RiskClass;
 
@@ -85,9 +86,12 @@ impl Policy for RiskPolicy {
                 reason: format!("`{}` is forbidden", action.tool),
             };
         }
-        if action.risk == RiskClass::ReadAuthenticated && !self.allow_authenticated_reads {
+        if action.risk == RiskClass::ReadAuthenticated
+            && !self.allow_authenticated_reads
+            && ctx.visibility != Visibility::Private
+        {
             return Decision::Deny {
-                reason: "authenticated reads are not enabled".into(),
+                reason: "authenticated reads run only in a direct message".into(),
             };
         }
         if action.risk >= RiskClass::ExternalWrite && !self.may_write(ctx) {

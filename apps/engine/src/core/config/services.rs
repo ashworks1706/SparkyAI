@@ -277,6 +277,34 @@ pub struct OAuth {
     pub google: GoogleOAuth,
 }
 
+/// Canvas LMS integration. Off by default. Read-only, in a direct message only.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Canvas {
+    /// Whether the Canvas tools are registered at boot.
+    pub enabled: bool,
+    /// Base URL of the Canvas instance, no trailing path.
+    pub base_url: String,
+    /// Canvas API token used until per-user grants exist. Lives in .env.
+    pub access_token: SecretString,
+    /// Budget for one Canvas API request.
+    pub timeout_secs: u64,
+    /// Most rows one list tool returns to the model.
+    pub max_items: usize,
+}
+
+impl Default for Canvas {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: "https://canvas.asu.edu".into(),
+            access_token: SecretString::from(""),
+            timeout_secs: 30,
+            max_items: 20,
+        }
+    }
+}
+
 /// A Google OAuth 2.0 web client. Off by default.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
