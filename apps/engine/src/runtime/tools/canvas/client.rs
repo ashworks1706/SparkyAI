@@ -1,5 +1,6 @@
 //! Canvas REST client over reqwest. Read-only, one token per call.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -9,7 +10,37 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 use crate::core::traits::tools::canvas::Canvas;
-use crate::core::types::tools::canvas::{Assignment, CanvasError, Course, CourseGrade};
+use crate::core::types::tools::canvas::{
+    Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
+};
+
+/// Longest announcement body kept, in characters.
+const BODY_CHARS: usize = 240;
+
+/// text with HTML tags removed, whitespace collapsed, and held to BODY_CHARS.
+fn plain(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut in_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if in_tag => {}
+            c if c.is_whitespace() => {
+                if !out.ends_with(' ') {
+                    out.push(' ');
+                }
+            }
+            c => out.push(c),
+        }
+    }
+    let trimmed = out.trim();
+    if trimmed.chars().count() > BODY_CHARS {
+        trimmed.chars().take(BODY_CHARS).collect::<String>() + "..."
+    } else {
+        trimmed.to_owned()
+    }
+}
 
 /// Names a reqwest failure without repeating the URL or the token.
 fn kind_of(error: &reqwest::Error) -> String {
@@ -73,6 +104,53 @@ struct RawAssignment {
     points_possible: Option<f64>,
     #[serde(default)]
     html_url: Option<String>,
+}
+
+/// One announcement from the announcements endpoint.
+#[derive(Debug, Deserialize)]
+struct RawAnnouncement {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    posted_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    context_code: String,
+}
+
+/// One item from the upcoming events endpoint.
+#[derive(Debug, Deserialize)]
+struct RawEvent {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    start_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    location_name: Option<String>,
+    #[serde(default)]
+    html_url: Option<String>,
+}
+
+/// One assignment with the caller's submission included.
+#[derive(Debug, Deserialize)]
+struct RawGradedAssignment {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    points_possible: Option<f64>,
+    submission: Option<RawSubmission>,
+}
+
+/// The caller's submission on an assignment.
+#[derive(Debug, Deserialize)]
+struct RawSubmission {
+    #[serde(default)]
+    score: Option<f64>,
+    #[serde(default)]
+    grade: Option<String>,
 }
 
 impl HttpCanvas {
@@ -202,5 +280,96 @@ impl Canvas for HttpCanvas {
                 }
             })
             .collect())
+    }
+
+    async fn announcements(&self, token: &SecretString) -> Result<Vec<Announcement>, CanvasError> {
+        let courses = self.courses(token).await?;
+        if courses.is_empty() {
+            return Ok(Vec::new());
+        }
+        let names: HashMap<u64, String> = courses.iter().map(|c| (c.id, c.name.clone())).collect();
+        let mut query = vec![
+            ("per_page", self.page_size.to_string()),
+            ("active_only", "true".to_owned()),
+        ];
+        for c in &courses {
+            query.push(("context_codes[]", format!("course_{}", c.id)));
+        }
+        let raw: Vec<RawAnnouncement> = self.get(token, "announcements", &query).await?;
+        Ok(raw
+            .into_iter()
+            .map(|a| {
+                let course = a
+                    .context_code
+                    .strip_prefix("course_")
+                    .and_then(|id| id.parse::<u64>().ok())
+                    .and_then(|id| names.get(&id).cloned())
+                    .unwrap_or_default();
+                let body = if a.message.trim().is_empty() {
+                    None
+                } else {
+                    Some(plain(&a.message))
+                };
+                Announcement {
+                    title: a.title,
+                    course,
+                    posted_at: a.posted_at,
+                    body,
+                    url: a.html_url,
+                }
+            })
+            .collect())
+    }
+
+    async fn calendar(&self, token: &SecretString) -> Result<Vec<CalendarEvent>, CanvasError> {
+        let raw: Vec<RawEvent> = self.get(token, "users/self/upcoming_events", &[]).await?;
+        Ok(raw
+            .into_iter()
+            .take(self.page_size)
+            .map(|e| CalendarEvent {
+                title: e.title,
+                start_at: e.start_at,
+                location: e.location_name,
+                url: e.html_url,
+            })
+            .collect())
+    }
+
+    async fn assignment_grades(
+        &self,
+        token: &SecretString,
+    ) -> Result<Vec<AssignmentGrade>, CanvasError> {
+        let courses = self.courses(token).await?;
+        let mut out: Vec<AssignmentGrade> = Vec::new();
+        for course in courses.into_iter().take(self.page_size) {
+            let raw: Vec<RawGradedAssignment> = self
+                .get(
+                    token,
+                    &format!("courses/{}/assignments", course.id),
+                    &[
+                        ("include[]", "submission".to_owned()),
+                        ("per_page", self.page_size.to_string()),
+                    ],
+                )
+                .await?;
+            for a in raw {
+                let Some(sub) = a.submission else { continue };
+                if sub.score.is_none() && sub.grade.is_none() {
+                    continue;
+                }
+                out.push(AssignmentGrade {
+                    course: course.name.clone(),
+                    name: a.name,
+                    score: sub.score,
+                    points: a.points_possible,
+                    grade: sub.grade,
+                });
+            }
+            if out.len() >= self.page_size {
+                break;
+            }
+        }
+        out.truncate(self.page_size);
+        Ok(out)
     }
 }

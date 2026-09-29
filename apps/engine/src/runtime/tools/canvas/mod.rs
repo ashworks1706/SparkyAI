@@ -16,7 +16,9 @@ use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::canvas::Canvas;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
-use crate::core::types::tools::canvas::{Assignment, CanvasError, Course, CourseGrade};
+use crate::core::types::tools::canvas::{
+    Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
+};
 use crate::core::types::tools::oauth::USER_SCOPE;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::canvas::client::HttpCanvas;
@@ -98,7 +100,23 @@ pub enum Query {
     Assignments,
     /// Current grade per course.
     Grades,
+    /// Recent course announcements.
+    Announcements,
+    /// Upcoming calendar items.
+    Calendar,
+    /// Grade per graded assignment.
+    AssignmentGrades,
 }
+
+/// Every read a Canvas tool is built for.
+const ALL: [Query; 6] = [
+    Query::Courses,
+    Query::Assignments,
+    Query::Grades,
+    Query::Announcements,
+    Query::Calendar,
+    Query::AssignmentGrades,
+];
 
 impl Query {
     /// The tool name the model calls.
@@ -107,10 +125,13 @@ impl Query {
             Self::Courses => "canvas_courses",
             Self::Assignments => "canvas_assignments",
             Self::Grades => "canvas_grades",
+            Self::Announcements => "canvas_announcements",
+            Self::Calendar => "canvas_calendar",
+            Self::AssignmentGrades => "canvas_assignment_grades",
         }
     }
 
-    /// What the tool does, for the model.
+    /// What the tool does, for the model. Every tool names the direct-message and connect gate.
     fn description(self) -> &'static str {
         match self {
             Self::Courses => {
@@ -124,6 +145,18 @@ impl Query {
             Self::Grades => {
                 "List the user's current grade in each active Canvas course. Works only in a \
                  direct message, and only after the user has connected Canvas."
+            }
+            Self::Announcements => {
+                "List recent announcements across the user's active Canvas courses. Works only in \
+                 a direct message, and only after the user has connected Canvas."
+            }
+            Self::Calendar => {
+                "List the user's upcoming Canvas calendar events, soonest first. Works only in a \
+                 direct message, and only after the user has connected Canvas."
+            }
+            Self::AssignmentGrades => {
+                "List the user's score on each graded Canvas assignment, by course. Works only in \
+                 a direct message, and only after the user has connected Canvas."
             }
         }
     }
@@ -201,6 +234,22 @@ impl Tool for CanvasTool {
             Query::Grades => {
                 let grades = self.client.grades(&token).await.map_err(failed)?;
                 Ok(grades_output(grades, self.max_items))
+            }
+            Query::Announcements => {
+                let items = self.client.announcements(&token).await.map_err(failed)?;
+                Ok(announcements_output(items, self.max_items))
+            }
+            Query::Calendar => {
+                let items = self.client.calendar(&token).await.map_err(failed)?;
+                Ok(calendar_output(items, self.max_items))
+            }
+            Query::AssignmentGrades => {
+                let items = self
+                    .client
+                    .assignment_grades(&token)
+                    .await
+                    .map_err(failed)?;
+                Ok(assignment_grades_output(items, self.max_items))
             }
         }
     }
@@ -292,6 +341,113 @@ fn grades_output(grades: Vec<CourseGrade>, max: usize) -> ToolOutput {
     }
 }
 
+/// A moment as the model reads it, or a note that none is set.
+fn moment(at: Option<chrono::DateTime<chrono::Utc>>) -> String {
+    match at {
+        Some(at) => at.format("%b %d, %Y %H:%M UTC").to_string(),
+        None => "no date".to_owned(),
+    }
+}
+
+/// The announcements reply.
+fn announcements_output(items: Vec<Announcement>, max: usize) -> ToolOutput {
+    let shown: Vec<Announcement> = items.into_iter().take(max).collect();
+    let text = if shown.is_empty() {
+        "No recent announcements.".to_owned()
+    } else {
+        let mut lines = format!("{} recent announcements:", shown.len());
+        for a in &shown {
+            let body = a
+                .body
+                .as_deref()
+                .map(|b| format!(" - {b}"))
+                .unwrap_or_default();
+            let link = a
+                .url
+                .as_deref()
+                .map(|u| format!(" {u}"))
+                .unwrap_or_default();
+            let _ = write!(
+                lines,
+                "\n- {} ({}) {}{}{}",
+                a.title,
+                a.course,
+                moment(a.posted_at),
+                body,
+                link
+            );
+        }
+        lines
+    };
+    ToolOutput {
+        content: text,
+        data: structured(&shown),
+        sources: Vec::new(),
+    }
+}
+
+/// The calendar reply.
+fn calendar_output(items: Vec<CalendarEvent>, max: usize) -> ToolOutput {
+    let shown: Vec<CalendarEvent> = items.into_iter().take(max).collect();
+    let text = if shown.is_empty() {
+        "No upcoming calendar events.".to_owned()
+    } else {
+        let mut lines = format!("{} upcoming events:", shown.len());
+        for e in &shown {
+            let place = e
+                .location
+                .as_deref()
+                .map(|l| format!(" at {l}"))
+                .unwrap_or_default();
+            let link = e
+                .url
+                .as_deref()
+                .map(|u| format!(" {u}"))
+                .unwrap_or_default();
+            let _ = write!(
+                lines,
+                "\n- {} {}{}{}",
+                e.title,
+                moment(e.start_at),
+                place,
+                link
+            );
+        }
+        lines
+    };
+    ToolOutput {
+        content: text,
+        data: structured(&shown),
+        sources: Vec::new(),
+    }
+}
+
+/// The per-assignment grades reply.
+fn assignment_grades_output(items: Vec<AssignmentGrade>, max: usize) -> ToolOutput {
+    let shown: Vec<AssignmentGrade> = items.into_iter().take(max).collect();
+    let text = if shown.is_empty() {
+        "No graded assignments yet.".to_owned()
+    } else {
+        let mut lines = "Assignment grades:".to_owned();
+        for g in &shown {
+            let mark = match (&g.grade, g.score, g.points) {
+                (Some(letter), Some(score), Some(points)) => format!("{letter} ({score}/{points})"),
+                (_, Some(score), Some(points)) => format!("{score}/{points}"),
+                (Some(letter), _, _) => letter.clone(),
+                (_, Some(score), None) => score.to_string(),
+                _ => "graded".to_owned(),
+            };
+            let _ = write!(lines, "\n- {} ({}): {}", g.name, g.course, mark);
+        }
+        lines
+    };
+    ToolOutput {
+        content: text,
+        data: structured(&shown),
+        sources: Vec::new(),
+    }
+}
+
 /// The Canvas tools, over the API client, the per-user grant store, and the client used to refresh.
 pub fn tools(
     cfg: &CanvasConfig,
@@ -305,7 +461,7 @@ pub fn tools(
     )?);
     let fallback = SecretString::from(cfg.access_token.expose_secret().to_owned());
     let creds = Arc::new(Credentials::new(store, oauth, fallback));
-    Ok([Query::Courses, Query::Assignments, Query::Grades]
+    Ok(ALL
         .into_iter()
         .map(|q| {
             Arc::new(CanvasTool::new(
