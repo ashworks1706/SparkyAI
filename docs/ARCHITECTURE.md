@@ -466,13 +466,17 @@ A public request recalls no memory and no profile graph unless `agent.recall_in_
 | Class | Examples | Default behavior |
 |---|---|---|
 | `ReadPublic` | `search_knowledge`, `search_live` | run |
-| `ReadAuthenticated` | a page inside the user's own session | deny unless `policy.allow_authenticated_reads` |
+| `ReadAuthenticated` | `canvas_courses`, a page inside the user's own session | allowed in a direct message; elsewhere deny unless `policy.allow_authenticated_reads` |
 | `PrepareWrite` | `run_sandbox`, a draft, a form filled without submitting | run |
 | `ExternalWrite` | post, create a ticket, book, submit | require a `policy.write_roles` role, then confirm |
 | `Destructive` | delete, cancel | require a `policy.write_roles` role, then confirm |
 | `Forbidden` | another user's session, bypassing policy | deny |
 
-The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above. `policy.confirm_from` names the lowest class held for approval. `Forbidden` is denied regardless of settings. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off.
+The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` and above. `policy.confirm_from` names the lowest class held for approval. `Forbidden` is denied regardless of settings. Defaults are `["MANAGE_GUILD"]`, `external_write`, and authenticated reads off. `ReadAuthenticated` is also allowed whenever the exchange is private (a direct message), so a user's own data is read only in their own channel, never in a shared server.
+
+## Canvas
+
+`runtime/tools/canvas` offers read-only Canvas tools, off until `[canvas] enabled` is set: `canvas_courses`, `canvas_assignments`, and `canvas_grades`. Each is `ReadAuthenticated` and refuses outside a direct message, so a user's Canvas data is only ever read in their own channel. The Canvas REST client sits behind the `Canvas` trait in `core/traits/tools/canvas.rs`. `Credentials` resolves the token for a caller: today it returns the shared `canvas.access_token` from configuration, which lives in `.env`; the per-user grant store of Phase 8 slots in here, keyed by the caller, before that fallback. Authenticated Canvas content answers the caller and is never indexed, memorized, or traced as evidence.
 
 A confirmation is bound to a hash of the exact arguments, belongs to the caller who was asked, is single use, and expires after `agent.confirmation_ttl_secs`. Its summary names the tool, the arguments, and whether the action can be undone. The policy decision is recorded in the trace.
 
@@ -749,7 +753,7 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, such as an eval profile. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `canvas`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
 A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 

@@ -35,7 +35,7 @@ Only after Phase 5 yields clean interaction data.
 
 - [ ] A mechanism for per-user authenticated sessions. 
 - [ ] Human confirmation for any authenticated or consequential submission
-- [ ] Add Canvas, MyASU integration. 
+- [~] Add Canvas, MyASU integration. Read-only Canvas tools (courses, assignments, grades) are built behind `[canvas]`, off by default, direct-message only, keyed to a shared `canvas.access_token`; the per-user OAuth grant that makes them per student is the remaining piece.
 - [ ] Turn on Google Calendar: the `google_calendar` MCP server entry (risks pinned) and the Google OAuth client (`[oauth.google]`, `runtime/tools/oauth.rs`) are in place and off; they need the per-user session store and the consent routes.
 
 ## 9 — v1.0

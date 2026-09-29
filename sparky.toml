@@ -314,6 +314,16 @@ authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
 token_url = "https://oauth2.googleapis.com/token"
 timeout_secs = 30
 
+# ---------------------------------------------------------------- Canvas
+# Read-only Canvas tools (courses, assignments, grades), in a direct message only.
+# Off until a Canvas API token is set. access_token lives in .env. When a per-user grant store
+# exists the token becomes per user; until then this one token answers for every caller.
+[canvas]
+enabled = false
+base_url = "https://canvas.asu.edu"
+timeout_secs = 30
+max_items = 20
+
 # ---------------------------------------------------------------- traces
 [trace]
 enabled = true

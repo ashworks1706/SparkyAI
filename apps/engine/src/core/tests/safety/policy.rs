@@ -134,3 +134,23 @@ async fn authenticated_reads_open_only_when_they_are_switched_on() {
         Decision::Allow
     ));
 }
+
+#[tokio::test]
+async fn authenticated_reads_are_allowed_in_a_direct_message() {
+    use crate::core::types::conversation::Visibility;
+    let closed = RiskPolicy::default();
+    let dm = ctx(&[]).with_visibility(Visibility::Private);
+    assert!(matches!(
+        closed
+            .authorize(&dm, &action(RiskClass::ReadAuthenticated))
+            .await,
+        Decision::Allow
+    ));
+    // A public server still denies them when the global switch is off.
+    assert!(matches!(
+        closed
+            .authorize(&ctx(&[]), &action(RiskClass::ReadAuthenticated))
+            .await,
+        Decision::Deny { .. }
+    ));
+}
