@@ -96,8 +96,7 @@ pub struct QueryCache {
     pub poll_ms: u64,
     /// Budget for one call to the cache. A slow cache is treated as one that is not there.
     pub timeout_ms: u64,
-    /// Words left out of a query when it is keyed, so wordings that differ only by them share
-    /// one entry. Matched lowercase, as whole words.
+    /// Words left out of a query when it is keyed, matched lowercase as whole words.
     pub ignore_words: Vec<String>,
     /// Sources whose queries keep every word in the key, such as an open web search.
     pub keep_words: Vec<String>,

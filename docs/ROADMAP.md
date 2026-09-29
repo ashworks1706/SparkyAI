@@ -39,6 +39,7 @@ Only after Phase 5 yields clean interaction data.
 - [x] Add Microsoft/Outlook. Read-only Outlook calendar and mail per user, direct-message only, on with `[oauth.microsoft]` plus `[outlook]`. Needs an Azure app registration and ASU admin consent to reach ASU accounts.
 - [x] Add Google Calendar. Native read-only `google_calendar` tool (`runtime/tools/gcal`) per user, direct-message only, on with `[oauth.google]` plus `[gcal]`. Needs a Google Cloud OAuth client requesting `calendar.events.readonly`. Built native rather than over the MCP server, which cannot inject a per-user token.
 - [x] Public no-auth tools: `search_papers` (Semantic Scholar), `wikipedia_lookup`, and `valley_metro` (GTFS-realtime, off until a feed URL is set).
+- [x] Response guardrail: block denied phrases, redact registered tool names from answers, and defend identity and the prompt against disclosure and injection in the system prompt. Guardrail blocks and redactions are traced and shown on the `agent.run` span.
 
 ## 9 — v1.0
 

@@ -602,7 +602,6 @@ fn sandbox_state(
 }
 
 /// The sandbox, when it is enabled and its runtime answers. Starts the session sweeper.
-/// sandbox.required decides whether an unreachable runtime fails the boot or only warns.
 async fn sandbox(cfg: &Config) -> anyhow::Result<Option<Arc<ContainerSandbox>>> {
     if !cfg.sandbox.enabled {
         return Ok(None);

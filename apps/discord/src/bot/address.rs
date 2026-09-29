@@ -1,5 +1,4 @@
-//! Messages addressed to the bot: a mention in a channel, a reply in a thread, or a direct
-//! message. A mention opens the thread the conversation then lives in.
+//! Messages addressed to the bot: a mention in a channel, a reply in a thread, or a direct message.
 
 use std::collections::HashMap;
 
@@ -150,7 +149,6 @@ impl Handler {
     }
 
     /// Role names for the turn. None means the lookup failed and the caller was told so.
-    /// A direct message carries no guild roles.
     async fn roles_for(
         &self,
         ctx: &Context,

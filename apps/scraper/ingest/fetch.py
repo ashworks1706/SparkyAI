@@ -105,10 +105,7 @@ def fetch_firecrawl(url: str) -> Fetched:
 
 
 def fetch(url: str, *, needs_js: bool = False, auth: bool = False) -> Fetched:
-    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path.
-
-    An authenticated fetch always goes through the admin driver.
-    """
+    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path."""
     if auth:
         return admin.fetch_authenticated(url)
     if settings().scraper.fetcher == "firecrawl":

@@ -41,9 +41,6 @@ pub struct GoogleOAuthClient {
 
 impl GoogleOAuthClient {
     /// Builds the client from its settings.
-    ///
-    /// # Errors
-    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
     pub fn new(cfg: &GoogleOAuth) -> Result<Self, OAuthError> {
         let parse = |s: &str| Url::parse(s).map_err(|e| OAuthError::NotConfigured(e.to_string()));
         let http = reqwest::Client::builder()
@@ -78,9 +75,6 @@ impl GoogleOAuthClient {
     }
 
     /// Tokens for an authorization code.
-    ///
-    /// # Errors
-    /// Any `OAuthError`; `NoRefreshToken` when the grant is not offline.
     pub async fn exchange(&self, code: &str) -> Result<OAuthTokens, OAuthError> {
         let tokens = self
             .token(&[
@@ -97,9 +91,6 @@ impl GoogleOAuthClient {
     }
 
     /// New tokens for a grant, keeping what the response leaves out.
-    ///
-    /// # Errors
-    /// Any `OAuthError`; `NoRefreshToken` when the grant has none.
     pub async fn refresh(&self, previous: &OAuthTokens) -> Result<OAuthTokens, OAuthError> {
         let refresh = previous
             .refresh_token
@@ -126,8 +117,7 @@ impl GoogleOAuthClient {
     }
 }
 
-/// A standard OAuth 2.0 web client for per-user grants. Fits Canvas and Microsoft as they are,
-/// and Google with the offline and consent parameters that make it return a refresh token.
+/// A standard OAuth 2.0 web client for per-user grants.
 pub struct WebOAuthClient {
     http: reqwest::Client,
     client_id: String,
@@ -141,9 +131,6 @@ pub struct WebOAuthClient {
 
 impl WebOAuthClient {
     /// Builds the client from a Canvas settings section.
-    ///
-    /// # Errors
-    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
     pub fn canvas(cfg: &CanvasOAuth) -> Result<Self, OAuthError> {
         Self::new(
             &cfg.client_id,
@@ -157,9 +144,6 @@ impl WebOAuthClient {
     }
 
     /// Builds the client from a Microsoft settings section.
-    ///
-    /// # Errors
-    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
     pub fn microsoft(cfg: &MicrosoftOAuth) -> Result<Self, OAuthError> {
         Self::new(
             &cfg.client_id,
@@ -173,9 +157,6 @@ impl WebOAuthClient {
     }
 
     /// Builds the client from a Google settings section, asking for offline access.
-    ///
-    /// # Errors
-    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
     pub fn google(cfg: &GoogleOAuth) -> Result<Self, OAuthError> {
         let mut client = Self::new(
             &cfg.client_id,
@@ -195,9 +176,6 @@ impl WebOAuthClient {
     }
 
     /// Builds the client from its fields.
-    ///
-    /// # Errors
-    /// `NotConfigured` when an endpoint is not a URL or the HTTP client cannot be built.
     fn new(
         client_id: &str,
         client_secret: &SecretString,
@@ -246,9 +224,6 @@ impl WebOAuthClient {
     }
 
     /// Tokens for an authorization code.
-    ///
-    /// # Errors
-    /// Any `OAuthError`.
     pub async fn exchange(&self, code: &str) -> Result<OAuthTokens, OAuthError> {
         let response = post_token(
             &self.http,
@@ -266,9 +241,6 @@ impl WebOAuthClient {
     }
 
     /// New tokens for a grant, keeping the refresh token the response leaves out.
-    ///
-    /// # Errors
-    /// Any `OAuthError`; `NoRefreshToken` when the grant has none.
     pub async fn refresh(&self, previous: &OAuthTokens) -> Result<OAuthTokens, OAuthError> {
         let refresh = previous
             .refresh_token

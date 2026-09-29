@@ -114,7 +114,6 @@ const COLUMNS: &str = "c.id as chunk_id, c.source_id, s.key, \
                        c.fetched_at, c.parent_id, c.version_id, c.ordinal, c.level";
 
 /// Chunks of the caller tenant and of tenant public, which every guild reads.
-/// Each leg binds the category at its own position. An empty category matches every row.
 fn from(at: usize) -> String {
     format!(
         "from chunks c join sources s on s.id = c.source_id
@@ -193,7 +192,6 @@ pub(crate) enum Take {
 }
 
 /// What each ranked row contributes, highest ranked first.
-/// A summary keeps its own text; a chunk takes the span holding it, each span handed back once.
 pub(crate) fn takes(rows: &[(i32, Uuid, i32)], spans: &[Span]) -> Vec<Take> {
     let mut seen: HashSet<usize> = HashSet::new();
     rows.iter()
@@ -325,7 +323,6 @@ impl PgRetriever {
 
 impl PgRetriever {
     /// The text of each span, its rows joined in order, aligned with the spans given.
-    /// Only level 0 rows are read.
     async fn windows(
         &self,
         ctx: &RequestContext,
@@ -386,8 +383,7 @@ impl PgRetriever {
             let content = match take {
                 Take::Skip => continue,
                 Take::Own => c.content,
-                // A span with no rows behind it, such as one whose version another tenant owns,
-                // falls back to the text of the hit.
+                // A span with no rows behind it falls back to the text of the hit.
                 Take::Span(at) => match widened.get(at) {
                     Some(text) if !text.is_empty() => text.clone(),
                     _ => c.content,

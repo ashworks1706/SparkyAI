@@ -1,7 +1,4 @@
-"""The admin authenticated driver: one operator's ASU session for login-gated shared sources.
-
-Only the browser storage state is saved, never the password. Authenticated content is never indexed.
-"""
+"""The admin authenticated driver: one operator's ASU session for login-gated shared sources."""
 
 from __future__ import annotations
 
@@ -51,10 +48,7 @@ def has_session() -> bool:
 
 
 def check() -> bool:
-    """Whether the saved session still reaches auth.check_url, through single sign-on if needed.
-
-    Raises FetchError when the page cannot be reached, which says nothing about the session.
-    """
+    """Whether the saved session still reaches auth.check_url, through single sign-on if needed."""
     if not has_session():
         return False
     try:
@@ -66,10 +60,7 @@ def check() -> bool:
 
 
 def capture_login(ask: Ask, notify: Notify) -> Path | None:
-    """Signs in through MyASU and Duo, enters each service, and saves the session.
-
-    Returns the saved path, or None when ask skips. Raises AuthError when sign-in fails.
-    """
+    """Signs in through MyASU and Duo, enters each service, and saves the session."""
     from playwright.sync_api import sync_playwright
 
     cfg = settings().auth
@@ -137,11 +128,7 @@ def _enter_service(page: Page, cfg: Auth) -> None:
 
 
 def fetch_authenticated(url: str) -> Fetched:
-    """Loads url in a headless browser carrying the admin session and returns the rendered DOM.
-
-    Raises AuthError when the session is missing or expired, and FetchError when the page cannot
-    be reached after auth.fetch_attempts tries. Never falls back to an unauthenticated fetch.
-    """
+    """Loads url in a headless browser carrying the admin session and returns the rendered DOM."""
     cfg = settings().auth
     path = state_path()
     if not path.exists():

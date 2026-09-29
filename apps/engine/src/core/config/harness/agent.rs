@@ -25,8 +25,7 @@ pub struct Agent {
     pub model_slots: usize,
     /// How long a request waits for a free model slot before reporting the model busy.
     pub model_queue_wait_secs: u64,
-    /// Turns the engine runs at once. Each holds its history, attachments and tool results in
-    /// memory, so this bounds what they cost together.
+    /// Turns the engine runs at once.
     pub max_turns: usize,
     /// Longest a turn waits for a free turn slot before it is refused as busy.
     pub turn_queue_wait_secs: u64,
@@ -232,11 +231,9 @@ pub struct Prompt {
     pub answer_only_line: String,
     /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
     pub sandbox_retry_line: String,
-    /// Line naming a file the user attached and its text, with {name}, {kind}, {size},
-    /// {chars}, {text_path}, {path}, {session} and {preview}.
+    /// Line naming a file the user attached and its text.
     pub upload_line: String,
-    /// Line naming a file no text could be pulled from, with {name}, {kind}, {size}, {path}
-    /// and {session}.
+    /// Line naming a file no text could be pulled from.
     pub upload_raw_line: String,
     /// Line naming a file the user attached that could not be opened, with {reason}.
     pub upload_failed_line: String,

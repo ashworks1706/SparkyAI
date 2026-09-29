@@ -411,11 +411,7 @@ def backlog_at_least(conn: psycopg.Connection, kind: str, limit: int) -> bool:
 
 
 def prune_versions(conn: psycopg.Connection, keep: int, batch: int) -> list[str]:
-    """Removes each source's versions past the newest keep, at most batch of them.
-
-    A version the index still points at is never removed. Returns the snapshot keys of the
-    removed versions, for the object store to drop.
-    """
+    """Removes each source's versions past the newest keep, at most batch of them."""
     if keep <= 0 or batch <= 0:
         return []
     rows = conn.execute(

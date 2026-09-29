@@ -1,5 +1,4 @@
-//! A command in an isolated container: read-only root, capped resources, non-root user, and either
-//! no network or an internal network whose only way out is the egress proxy.
+//! A command in an isolated container: read-only root, capped resources, non-root user, restricted network.
 
 use std::collections::{HashMap, VecDeque};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -367,8 +366,7 @@ impl ContainerSandbox {
             .map(|(name, _)| name.clone())
     }
 
-    /// Removes every session container of this instance the engine is not tracking: those a
-    /// previous process of it started and nothing will reap. Called at boot and on every sweep.
+    /// Removes every session container of this instance the engine is not tracking.
     pub async fn remove_orphans(&self) {
         let filter = format!("label={INSTANCE_LABEL}={}", self.limits.instance);
         let Some(listed) = self
@@ -505,7 +503,6 @@ impl ContainerSandbox {
     }
 
     /// Makes the egress network and its proxy ready, when egress is on.
-    /// Creates the network internal if missing; refuses an existing one that is not internal.
     pub async fn prepare_egress(&self) -> Result<(), SandboxError> {
         let Some(egress) = &self.limits.egress else {
             return Ok(());
@@ -652,8 +649,7 @@ struct Bounded {
     stderr: Vec<u8>,
 }
 
-/// Runs command and reads both streams as they arrive, keeping at most cap bytes of each
-/// stream's head and cap of its tail, so a command that prints without end costs bounded memory.
+/// Runs command and reads both streams, keeping at most cap bytes of each stream's head and tail.
 async fn bounded_output(mut command: Command, cap: usize) -> std::io::Result<Bounded> {
     let mut child = command.spawn()?;
     let stdout = child.stdout.take();

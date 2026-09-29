@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 /// One image attached to a user's message.
-/// The model is sent the link, not the bytes; a server with no route to the host sees no image.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
     /// Direct link to the image.

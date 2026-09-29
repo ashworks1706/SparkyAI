@@ -30,8 +30,7 @@ const QUERY_JOB_KIND: &str = "source_query";
 const QUERY_CHANNEL: &str = "source_query";
 
 impl PgSourceQueries {
-    /// Polls a queued job, backing off from interval to poll_max between looks; unclaimed by the
-    /// scraper in claim reports not running.
+    /// Polls a queued job, backing off from interval to poll_max between looks.
     pub fn new(pool: PgPool, interval: Duration, poll_max: Duration, claim: Duration) -> Self {
         Self {
             pool,

@@ -42,8 +42,6 @@ pub struct Arrival {
 }
 
 /// Why the bot answers this message, or None when the message is not for it.
-///
-/// In a thread only a reply to the bot counts; outside one, addressing the bot opens a thread.
 pub fn trigger(arrival: Arrival) -> Option<Trigger> {
     match arrival.at {
         Arrived::Direct => Some(Trigger::Direct),

@@ -1,5 +1,4 @@
-//! GET /sandbox, DELETE /sandbox/{name}, POST /sandbox/enabled: what the agent is running and
-//! the two ways an operator stops it.
+//! GET /sandbox, DELETE /sandbox/{name}, POST /sandbox/enabled: what the agent runs and how to stop it.
 
 use std::sync::Arc;
 

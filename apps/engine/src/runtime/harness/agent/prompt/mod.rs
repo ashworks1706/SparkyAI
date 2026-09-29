@@ -26,11 +26,9 @@ pub struct PromptText {
     pub answer_only_line: String,
     /// Line sent back when a tool failed and the sandbox was not tried. Empty turns it off.
     pub sandbox_retry_line: String,
-    /// Line naming a file the user attached and its text, with {name}, {kind}, {size},
-    /// {chars}, {text_path}, {path}, {session} and {preview}.
+    /// Line naming a file the user attached and its text.
     pub upload_line: String,
-    /// Line naming a file no text could be pulled from, with {name}, {kind}, {size}, {path}
-    /// and {session}.
+    /// Line naming a file no text could be pulled from.
     pub upload_raw_line: String,
     /// Line naming a file the user attached that could not be opened, with {reason}.
     pub upload_failed_line: String,

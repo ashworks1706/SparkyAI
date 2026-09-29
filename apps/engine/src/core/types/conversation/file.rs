@@ -27,8 +27,7 @@ impl FileAttachment {
             .collect()
     }
 
-    /// The name as a workspace file name: letters, digits, hyphen, underscore and single dots,
-    /// no leading dot, at most 48 characters with the extension kept.
+    /// The name as a workspace file name, sanitized and length-capped.
     pub fn safe_name(&self) -> String {
         let mut cleaned = String::new();
         for c in self.name.chars() {

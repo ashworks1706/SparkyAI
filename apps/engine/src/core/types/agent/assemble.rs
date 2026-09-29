@@ -48,11 +48,9 @@ pub const MEMORY_HEADER: &str = "What you remember about this user:";
 /// Default line naming the current date, with {date}.
 pub const DATE_LINE: &str = "Today is {date}. Search results are labelled by day or date; read \
                              the label the question asks for, never the first value in a row.";
-/// Default line naming a file the user attached and its text, with {name}, {kind}, {size},
-/// {chars}, {text_path}, {path}, {session}, {preview} and {matches}.
+/// Default line naming a file the user attached and its text.
 pub const UPLOAD_LINE: &str = "The user attached {name} ({kind}, {size}). Its text, {chars} characters, is at {text_path} in the sandbox workspace, session {session}; the file itself is at {path}. It begins:\n{preview}\n\nThe passages of it that hold the most words of the question:\n{matches}\n\nAnswer a question about this file from these passages, never from search results or memory. When they do not hold the answer, read more with run_sandbox in session {session}: rg -i -n -C 3 SUBJECT {text_path}, or sed -n START,ENDp {text_path} around a line number above.";
-/// Default line naming a file no text could be pulled from, with {name}, {kind}, {size}, {path}
-/// and {session}.
+/// Default line naming a file no text could be pulled from.
 pub const UPLOAD_RAW_LINE: &str = "The user attached {name} ({kind}, {size}). It is at {path} in the sandbox workspace, session {session}, and no text could be pulled from it automatically. Open it with run_sandbox in that session before you answer: file {path} says what it is, and python3 with pypdf, docx, openpyxl or pandas, or pdftoppm and tesseract for a scan, reads it.";
 /// Default line naming a file the user attached that could not be opened, with {reason}.
 pub const UPLOAD_FAILED_LINE: &str = "The user attached {name} ({kind}), but it could not be opened: {reason}. Say so if the question depends on it.";

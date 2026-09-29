@@ -321,7 +321,6 @@ impl TraceEvent {
             Self::ModelError { retried: true, .. } => {
                 Some("\u{1f504} the model stumbled, retrying".to_owned())
             }
-            // Redaction leaves the answer readable, so it stays out of the live progress line.
             Self::GuardrailRedacted { .. }
             | Self::ToolResultStored { .. }
             | Self::QueryCache { .. }
