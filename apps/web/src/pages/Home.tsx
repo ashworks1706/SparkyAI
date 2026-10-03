@@ -1,26 +1,23 @@
-import Ambient from "@/components/landing/Ambient";
-import Hero from "@/components/landing/Hero";
-import HowItWorks from "@/components/landing/HowItWorks";
-import InAction from "@/components/landing/InAction";
-import Nav from "@/components/landing/Nav";
-import OpenSource from "@/components/landing/OpenSource";
-import SiteFooter from "@/components/landing/SiteFooter";
-import UseCases from "@/components/landing/UseCases";
-import ReadmeSection from "@/components/sections/ReadmeSection";
+import Footer from "@/components/site/Footer";
+import Hero from "@/components/site/Hero";
+import HowItWorks from "@/components/site/HowItWorks";
+import InAction from "@/components/site/InAction";
+import Nav from "@/components/site/Nav";
+import OpenSource from "@/components/site/OpenSource";
+import Sources from "@/components/site/Sources";
 
+/** The landing page. */
 const Home = () => (
-  <div className="min-h-screen scroll-smooth text-stone-900">
-    <Ambient />
+  <div className="min-h-screen">
     <Nav />
     <main>
       <Hero />
       <InAction />
-      <UseCases />
+      <Sources />
       <HowItWorks />
       <OpenSource />
-      <ReadmeSection />
     </main>
-    <SiteFooter />
+    <Footer />
   </div>
 );
 
