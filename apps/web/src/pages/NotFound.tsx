@@ -1,43 +1,21 @@
+import { Link } from "react-router-dom";
+import Hanko from "@/components/site/Hanko";
 
-import { useLocation, Link } from "react-router-dom";
-import { useEffect } from "react";
-import { Home } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { BrandMark } from "@/components/brand/BrandLogo";
-
-const NotFound = () => {
-  const location = useLocation();
-
-  useEffect(() => {
-    console.error(
-      "404 Error: User attempted to access non-existent route:",
-      location.pathname
-    );
-  }, [location.pathname]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
-      <div className="text-center max-w-md">
-        <BrandMark className="mx-auto mb-6 h-24 w-auto" />
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-sparky-maroon/10 mb-8">
-          <span className="text-5xl font-bold text-sparky-maroon">404</span>
-        </div>
-        
-        <h1 className="text-3xl font-bold text-gray-900 mb-3">Page not found</h1>
-        
-        <p className="text-gray-600 mb-8">
-          Sorry, we couldn't find the page you're looking for. It might have been moved or doesn't exist.
-        </p>
-        
-        <Button asChild>
-          <Link to="/" className="inline-flex items-center gap-2">
-            <Home className="h-4 w-4" />
-            <span>Back to Home</span>
-          </Link>
-        </Button>
-      </div>
+/** Any path the site does not serve. */
+const NotFound = () => (
+  <main className="seigaiha grid min-h-screen place-items-center px-5">
+    <div className="rounded-xl border border-ink/10 bg-paper px-10 py-12 text-center">
+      <Hanko char="迷" className="mx-auto h-14 text-2xl" />
+      <h1 className="mt-6 font-serif text-3xl font-semibold">Page not found</h1>
+      <p className="mt-3 text-sm text-ink-soft">This path leads nowhere. The dragon is back home.</p>
+      <Link
+        to="/"
+        className="mt-8 inline-flex h-11 items-center rounded-full bg-ink px-6 text-sm font-medium text-paper transition-colors hover:bg-shu"
+      >
+        Back to home
+      </Link>
     </div>
-  );
-};
+  </main>
+);
 
 export default NotFound;

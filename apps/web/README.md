@@ -1,6 +1,6 @@
 # apps/web
 
-Public landing site. Vite, React, TypeScript, Tailwind, shadcn/ui.
+Public landing site. Vite, React, TypeScript, Tailwind 4. Self-hosted fonts, no runtime dependencies beyond React and its router.
 
 ```bash
 just web          # dev server on :5173

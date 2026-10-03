@@ -29,3 +29,7 @@ updates:
     schedule: { interval: weekly }
     groups:
       web: { patterns: ["*"] }
+    # typescript-eslint supports TypeScript below 6.1.
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
