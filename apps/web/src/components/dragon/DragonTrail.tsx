@@ -43,11 +43,11 @@ const measure = (host: HTMLElement): Geometry | null => {
 
 const Fin = ({ mark, scale }: { mark: Mark; scale: number }) => (
   <path
-    d="M -12 4 Q -6 -8 9 -20 Q 3 -6 10 4 Z"
+    d="M -10 3 Q -7 -10 7 -17 Q 2 -6 10 3 Z"
     transform={`translate(${mark.x.toFixed(1)} ${mark.y.toFixed(1)}) rotate(${mark.angle.toFixed(1)}) scale(${scale} ${scale * mark.side})`}
-    fill="var(--color-shu)"
-    stroke="var(--color-kin)"
-    strokeWidth="2.5"
+    fill="var(--color-kin)"
+    stroke="var(--color-shu-deep)"
+    strokeWidth="1.5"
     strokeLinejoin="round"
   />
 );
@@ -59,8 +59,8 @@ const Leg = ({ mark, scale }: { mark: Mark; scale: number }) => (
     <path
       d="M -14 -6 C -16 12 -4 22 -20 36 L -10 40 C 6 26 4 12 8 -4 Z"
       fill="var(--color-shu)"
-      stroke="var(--color-kin)"
-      strokeWidth="2.5"
+      stroke="var(--color-ink)"
+      strokeWidth="2"
       strokeLinejoin="round"
     />
     <path
@@ -140,6 +140,15 @@ const DragonTrail = () => {
       {geo && (
         <svg ref={svg} width={geo.width} height={geo.height} className="absolute left-0 top-0">
           <defs>
+            <pattern id="dragon-scales" width="18" height="12" patternUnits="userSpaceOnUse">
+              <path
+                d="M0 12 a9 9 0 0 1 18 0 M-9 6 a9 9 0 0 1 18 0 M9 6 a9 9 0 0 1 18 0"
+                fill="none"
+                stroke="var(--color-kin)"
+                strokeOpacity=".55"
+                strokeWidth="1.4"
+              />
+            </pattern>
             <mask id="dragon-reveal" maskUnits="userSpaceOnUse" x="0" y="0" width={geo.width} height={geo.height}>
               <path
                 ref={mask}
@@ -161,16 +170,15 @@ const DragonTrail = () => {
             {geo.fins.map((m, i) => (
               <Fin key={`f${i}`} mark={m} scale={geo.body / 44} />
             ))}
-            <path d={geo.d} fill="none" stroke="var(--color-kin)" strokeWidth={geo.body + 6} />
+            <path d={geo.d} fill="none" stroke="var(--color-ink)" strokeWidth={geo.body + 5} />
             <path d={geo.d} fill="none" stroke="var(--color-shu)" strokeWidth={geo.body} />
-            <path d={geo.d} fill="none" stroke="var(--color-kin)" strokeWidth={geo.body * 0.5 + 4} />
-            <path d={geo.d} fill="none" stroke="var(--color-shu-deep)" strokeWidth={geo.body * 0.5} />
+            <path d={geo.d} fill="none" stroke="url(#dragon-scales)" strokeWidth={geo.body - 6} />
             <path
               d={geo.d}
               fill="none"
               stroke="var(--color-kin)"
-              strokeWidth={geo.body * 0.5}
-              strokeDasharray={`2 ${geo.body * 0.55}`}
+              strokeWidth={geo.body * 0.26}
+              strokeDasharray={`${geo.body * 0.3} ${geo.body * 0.08}`}
             />
           </g>
 
