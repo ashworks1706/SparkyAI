@@ -1,150 +1,155 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, BookOpen, Terminal } from "lucide-react";
-import Section from "./Section";
+import { useRef, type ReactNode } from "react";
+import { motion, useMotionValue, useScroll, useTransform, type MotionValue } from "motion/react";
+import { ArrowUpRight, BookOpen, Search, Terminal } from "lucide-react";
+import Heading from "./Heading";
+import { usePinned } from "./motion";
 
-type Step =
-  | { kind: "ask"; text: string }
-  | { kind: "trace"; icon: "read" | "run"; text: string }
-  | { kind: "answer"; text: string; cite: { label: string; href: string } };
+type Step = { label: string; detail: string };
 
-/** One turn as the bot reports it: the steps it took, then the answer and its source. */
-const TURN: Step[] = [
-  { kind: "ask", text: "what are the prerequisites for CSE 485?" },
-  { kind: "trace", icon: "read", text: "read 4 sources from the knowledge base" },
-  { kind: "trace", icon: "run", text: "search_live · ASU Course Catalog · CSE 485" },
-  { kind: "trace", icon: "run", text: "run_sandbox · opened the catalog entry" },
-  {
-    kind: "answer",
-    text: "CSE 485 (Senior Project I) needs CSE 310 and CSE 340, and you have to be a CSE major with senior standing. It carries 3 credit hours and runs as a two-semester sequence with CSE 486.",
-    cite: {
-      label: "ASU Course Catalog",
-      href: "https://catalog.apps.asu.edu/catalog/courses",
-    },
-  },
+/** What happens in one turn, in order, as the reader scrolls. */
+const STEPS: Step[] = [
+  { label: "Asked", detail: "A student asks in plain words, in Discord." },
+  { label: "Read", detail: "It pulls the stored ASU pages that match." },
+  { label: "Searched live", detail: "It queries the source that has to be current." },
+  { label: "Opened the page", detail: "A thin result is not an answer; it reads the page itself." },
+  { label: "Answered", detail: "With the source and the date it was read." },
 ];
 
-const PRINCIPLES = [
-  "A failed search is not an answer; it opens the page instead.",
-  "Nothing is quoted that it was not given this turn.",
-  "Every claim carries the source and the date it was read.",
-];
+const CITE = { label: "ASU Course Catalog", href: "https://catalog.apps.asu.edu/catalog/courses" };
 
-/** Whether the turn is revealed step by step: needs an observer and no reduced-motion preference. */
-const canStagger = () =>
-  typeof IntersectionObserver !== "undefined" &&
-  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** Replays the turn a step at a time once the block is on screen. */
-const useReplay = (count: number) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(() => (canStagger() ? 0 : count));
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || !canStagger()) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setShown(1);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.35 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [count]);
-
-  useEffect(() => {
-    if (shown === 0 || shown >= count) return;
-    const timer = window.setTimeout(() => setShown((n) => n + 1), shown === 1 ? 500 : 750);
-    return () => window.clearTimeout(timer);
-  }, [shown, count]);
-
-  return { ref, shown };
+/** Range of scroll progress over which step i appears. */
+const span = (i: number): [number, number] => {
+  const at = 0.08 + i * 0.17;
+  return [at, at + 0.08];
 };
 
-const Turn = ({ step }: { step: Step }) => {
-  if (step.kind === "ask") {
-    return (
-      <div className="flex justify-end">
-        <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-ink px-4 py-2.5 text-sm text-paper">
-          {step.text}
-        </p>
-      </div>
-    );
-  }
-  if (step.kind === "trace") {
-    const Icon = step.icon === "read" ? BookOpen : Terminal;
-    return (
-      <p className="flex items-center gap-2 text-xs text-ink-soft">
-        <Icon className="h-3.5 w-3.5 shrink-0 text-shu" aria-hidden />
-        <span className="font-mono">{step.text}</span>
-      </p>
-    );
-  }
+/** A block that fades and rises in over its step's range of scroll progress. */
+const Appear = ({ progress, i, children }: { progress: MotionValue<number>; i: number; children: ReactNode }) => {
+  const range = span(i);
+  const opacity = useTransform(progress, range, [0, 1]);
+  const y = useTransform(progress, range, [14, 0]);
+  return <motion.div style={{ opacity, y }}>{children}</motion.div>;
+};
+
+/** One row of the step list, lit while its step is the latest shown. */
+const StepRow = ({ progress, i, step }: { progress: MotionValue<number>; i: number; step: Step }) => {
+  const [start] = span(i);
+  const next = i + 1 < STEPS.length ? span(i + 1)[0] : 1.01;
+  const color = useTransform(progress, [start - 0.01, start, next - 0.01, next], [
+    "rgba(20,18,16,0.3)",
+    "rgba(20,18,16,1)",
+    "rgba(20,18,16,1)",
+    "rgba(20,18,16,0.45)",
+  ]);
+  const dot = useTransform(progress, [start - 0.01, start], [0.25, 1]);
   return (
-    <div className="space-y-3 motion-safe:animate-rise">
-      <p className="max-w-[94%] border-l-2 border-shu pl-4 text-sm leading-6 text-ink">
-        {step.text}
-      </p>
-      <a
-        href={step.cite.href}
-        target="_blank"
-        rel="noreferrer"
-        className="ml-4 inline-flex items-center gap-1.5 rounded-full bg-kin/25 px-3 py-1 text-xs font-medium text-ink transition-colors hover:bg-kin"
-      >
-        {step.cite.label}
-        <ArrowUpRight className="h-3 w-3" aria-hidden />
-      </a>
-    </div>
+    <li className="flex gap-4">
+      <motion.span style={{ opacity: dot }} className="mt-1.5 h-3 w-3 shrink-0 rotate-45 bg-shu" />
+      <motion.div style={{ color }}>
+        <p className="font-serif text-lg font-bold">{step.label}</p>
+        <p className="text-sm leading-6">{step.detail}</p>
+      </motion.div>
+    </li>
   );
 };
 
-/** A replayed Discord turn beside the rules it follows. */
+/** The hanging scroll that holds the turn. */
+const ScrollPaper = ({ progress }: { progress: MotionValue<number> }) => (
+  <div className="relative mx-auto w-full max-w-xl">
+    <div className="relative z-10 mx-auto flex h-5 w-[108%] -translate-x-[3.7%] items-center justify-between rounded-full bg-ink px-1">
+      <span className="h-6 w-6 rounded-full bg-kin" />
+      <span className="h-6 w-6 rounded-full bg-kin" />
+    </div>
+    <div className="relative -mt-1 border-x-[10px] border-shu bg-white px-6 py-7 shadow-[0_30px_60px_-30px_rgba(20,18,16,0.35)] sm:px-8">
+      <p className="mb-5 flex items-center gap-2 border-b border-ink/10 pb-3 font-mono text-xs text-ink-soft">
+        <span className="h-2 w-2 rounded-full bg-shu" /># ask-sparky
+      </p>
+      <div className="space-y-4">
+        <Appear progress={progress} i={0}>
+          <div className="flex justify-end">
+            <p className="rounded-2xl rounded-br-sm bg-ink px-4 py-2.5 text-sm text-paper">
+              what are the prerequisites for CSE 485?
+            </p>
+          </div>
+        </Appear>
+        <Appear progress={progress} i={1}>
+          <Trace icon={<BookOpen className="h-3.5 w-3.5" aria-hidden />} text="read 4 sources from the knowledge base" />
+        </Appear>
+        <Appear progress={progress} i={2}>
+          <Trace icon={<Search className="h-3.5 w-3.5" aria-hidden />} text="search_live · ASU Course Catalog · CSE 485" />
+        </Appear>
+        <Appear progress={progress} i={3}>
+          <Trace icon={<Terminal className="h-3.5 w-3.5" aria-hidden />} text="run_sandbox · opened the catalog entry" />
+        </Appear>
+        <Appear progress={progress} i={4}>
+          <div className="space-y-3">
+            <p className="border-l-4 border-kin pl-4 text-[0.95rem] leading-7">
+              CSE 485 (Senior Project I) needs CSE 310 and CSE 340, and you have to be a CSE major with
+              senior standing. It carries 3 credit hours and runs as a two-semester sequence with CSE 486.
+            </p>
+            <a
+              href={CITE.href}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-5 inline-flex items-center gap-1.5 rounded-full bg-shu px-3 py-1 text-xs font-semibold text-paper"
+            >
+              {CITE.label}
+              <ArrowUpRight className="h-3 w-3" aria-hidden />
+            </a>
+          </div>
+        </Appear>
+      </div>
+    </div>
+    <div className="relative z-10 mx-auto -mt-1 flex h-5 w-[108%] -translate-x-[3.7%] items-center justify-between rounded-full bg-ink px-1">
+      <span className="h-6 w-6 rounded-full bg-kin" />
+      <span className="h-6 w-6 rounded-full bg-kin" />
+    </div>
+  </div>
+);
+
+const Trace = ({ icon, text }: { icon: ReactNode; text: string }) => (
+  <p className="flex items-center gap-2 font-mono text-xs text-ink-soft">
+    <span className="text-shu">{icon}</span>
+    {text}
+  </p>
+);
+
+/** One turn, played back as the reader scrolls, beside the steps it takes. */
 const InAction = () => {
-  const { ref, shown } = useReplay(TURN.length);
-  const done = shown >= TURN.length;
+  const ref = useRef<HTMLElement>(null);
+  const pinned = usePinned();
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
+  const settled = useMotionValue(1);
+  const progress = pinned ? scrollYProgress : settled;
 
   return (
-    <Section
+    <section
       id="in-action"
-      label="Sparky in action"
-      numeral="一"
-      margin="実演"
-      title="It shows its working."
-      lead="Every turn reports what it did: the stored pages it read, the source it fetched live, and the page it opened itself when a search came back thin. The answer arrives with the page behind it, so a student can check it in one click."
+      ref={ref}
+      aria-label="Sparky in action"
+      className={`relative z-10 ${pinned ? "h-[340vh]" : "py-10"}`}
     >
-      <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
-        <ol className="space-y-6">
-          {PRINCIPLES.map((line, i) => (
-            <li key={line} className="flex gap-4">
-              <span className="font-serif text-sm font-semibold text-shu">0{i + 1}</span>
-              <span className="text-pretty leading-7">{line}</span>
-            </li>
-          ))}
-        </ol>
-
-        <div ref={ref} className="rounded-xl border border-ink/15 bg-white">
-          <div className="flex items-center justify-between border-b border-ink/10 px-5 py-3">
-            <span className="font-mono text-xs text-ink-soft">#ask-sparky</span>
-            <span className="flex gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-shu" />
-              <span className="h-2 w-2 rounded-full bg-kin" />
-              <span className="h-2 w-2 rounded-full bg-ink/20" />
-            </span>
-          </div>
-          <div className="min-h-[21rem] space-y-4 p-5 sm:p-6">
-            {TURN.slice(0, shown).map((step, i) => (
-              <Turn key={i} step={step} />
-            ))}
-            {!done && shown > 0 && (
-              <span className="inline-block h-4 w-1.5 bg-shu motion-safe:animate-caret" />
+      <div className={pinned ? "sticky top-0 flex h-screen items-center" : ""}>
+        <div className="mx-auto grid w-full max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <Heading
+              numeral="壱"
+              label="In action"
+              title="It shows its working."
+              lead="Every turn reports what it did and arrives with the page behind it."
+            />
+            {pinned && (
+              <ol className="mt-10 space-y-5">
+                {STEPS.map((step, i) => (
+                  <StepRow key={step.label} progress={progress} i={i} step={step} />
+                ))}
+              </ol>
             )}
           </div>
+          <ScrollPaper progress={progress} />
         </div>
       </div>
-    </Section>
+    </section>
   );
 };
 

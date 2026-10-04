@@ -1,3 +1,5 @@
+import DragonTrail from "@/components/dragon/DragonTrail";
+import Crossing from "@/components/site/Crossing";
 import Footer from "@/components/site/Footer";
 import Hero from "@/components/site/Hero";
 import HowItWorks from "@/components/site/HowItWorks";
@@ -6,15 +8,20 @@ import Nav from "@/components/site/Nav";
 import OpenSource from "@/components/site/OpenSource";
 import Sources from "@/components/site/Sources";
 
-/** The landing page. */
+/** The landing page, with the dragon winding behind every section. */
 const Home = () => (
   <div className="min-h-screen">
     <Nav />
-    <main>
+    <main className="relative">
+      <DragonTrail />
       <Hero />
+      <Crossing />
       <InAction />
+      <Crossing flip />
       <Sources />
+      <Crossing />
       <HowItWorks />
+      <Crossing flip />
       <OpenSource />
     </main>
     <Footer />

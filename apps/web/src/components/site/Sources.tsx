@@ -1,4 +1,7 @@
-import Section from "./Section";
+import { useLayoutEffect, useRef, useState } from "react";
+import { motion, useScroll, useTransform } from "motion/react";
+import Heading from "./Heading";
+import { usePinned } from "./motion";
 
 type Source = { title: string; ask: string; answer: string; source: string };
 
@@ -8,7 +11,7 @@ const SOURCES: Source[] = [
     title: "Courses",
     ask: "what do I need before CSE 310?",
     answer: "The catalog entry, its credit hours and prerequisites, then open sections for the term.",
-    source: "Class Search, Course Catalog",
+    source: "Class Search",
   },
   {
     title: "Scholarships",
@@ -32,7 +35,7 @@ const SOURCES: Source[] = [
     title: "Study rooms",
     ask: "a room for four at 6pm",
     answer: "Bookable slots on the date you name, and the link that books one.",
-    source: "Library study rooms",
+    source: "Library rooms",
   },
   {
     title: "Dining",
@@ -54,32 +57,90 @@ const SOURCES: Source[] = [
   },
 ];
 
-/** The sources Sparky reaches, as a hairline grid of example questions. */
-const Sources = () => (
-  <Section
-    id="sources"
-    label="What students ask"
-    numeral="二"
-    margin="用途"
-    title="One place for the things you would otherwise go digging for."
-    lead="Each is a source Sparky knows how to reach, with the parameters it takes. Ask in plain words; it picks the source and writes the query."
+/** A banner hanging from the rope: red head, paper body, gold tassel. */
+const Banner = ({ item, i }: { item: Source; i: number }) => (
+  <li
+    className="group relative w-64 shrink-0 snap-start origin-top motion-safe:animate-[swing_6s_ease-in-out_infinite] sm:w-72"
+    style={{ animationDelay: `${-i * 0.7}s` }}
   >
-    <ul className="grid gap-px overflow-hidden rounded-xl border border-ink/10 bg-ink/10 sm:grid-cols-2 lg:grid-cols-4">
-      {SOURCES.map((item) => (
-        <li key={item.title} className="group flex flex-col bg-paper p-6 transition-colors hover:bg-white">
-          <h3 className="flex items-center gap-2 font-serif text-lg font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-shu transition-colors group-hover:bg-kin" />
-            {item.title}
-          </h3>
-          <p className="mt-4 font-mono text-xs text-shu">&ldquo;{item.ask}&rdquo;</p>
-          <p className="mt-3 flex-1 text-sm leading-6 text-ink-soft">{item.answer}</p>
-          <p className="mt-5 text-[0.68rem] font-medium uppercase tracking-[0.15em] text-ink/45">
-            {item.source}
-          </p>
-        </li>
-      ))}
-    </ul>
-  </Section>
+    <div className="mx-auto flex w-40 justify-between">
+      <span className="h-8 w-px bg-ink/50" />
+      <span className="h-8 w-px bg-ink/50" />
+    </div>
+    <div className="overflow-hidden rounded-b-md border-2 border-ink bg-white shadow-[0_24px_40px_-24px_rgba(20,18,16,0.4)] transition-transform duration-300 group-hover:-translate-y-1">
+      <div className="flex items-center justify-between bg-shu px-5 py-4 text-paper">
+        <h3 className="font-serif text-xl font-bold">{item.title}</h3>
+        <span className="font-serif text-sm text-kin">{String(i + 1).padStart(2, "0")}</span>
+      </div>
+      <div className="h-1.5 bg-kin" />
+      <div className="flex min-h-56 flex-col p-5">
+        <p className="font-mono text-xs leading-5 text-shu">&ldquo;{item.ask}&rdquo;</p>
+        <p className="mt-4 flex-1 text-sm leading-6 text-ink-soft">{item.answer}</p>
+        <p className="mt-5 border-t border-dashed border-ink/20 pt-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
+          {item.source}
+        </p>
+      </div>
+    </div>
+    <div className="mx-auto h-6 w-px bg-kin" />
+    <div className="mx-auto h-5 w-3 rounded-b-full bg-kin" />
+  </li>
 );
+
+/** The sources Sparky reaches, as banners that slide past while the section is pinned. */
+const Sources = () => {
+  const ref = useRef<HTMLElement>(null);
+  const track = useRef<HTMLUListElement>(null);
+  const pinned = usePinned();
+  const [distance, setDistance] = useState(0);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
+  const x = useTransform(scrollYProgress, [0.05, 0.95], [0, -distance]);
+
+  useLayoutEffect(() => {
+    const el = track.current;
+    if (!el || !pinned) return;
+    const measure = () => setDistance(Math.max(0, el.scrollWidth - window.innerWidth + 64));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [pinned]);
+
+  const list = (
+    <>
+      <div aria-hidden className="absolute inset-x-0 top-0 h-1 rounded-full bg-ink/70" />
+      {SOURCES.map((item, i) => (
+        <Banner key={item.title} item={item} i={i} />
+      ))}
+    </>
+  );
+
+  return (
+    <section
+      id="sources"
+      ref={ref}
+      aria-label="What students ask"
+      className={`relative z-10 ${pinned ? "h-[300vh]" : "py-10"}`}
+    >
+      <div className={pinned ? "sticky top-0 flex h-screen flex-col justify-center overflow-hidden" : ""}>
+        <div className="mx-auto w-full max-w-6xl px-5 sm:px-8">
+          <Heading
+            numeral="弐"
+            label="What students ask"
+            title="Everything you would otherwise go digging for."
+            lead="Each banner is a source Sparky knows how to reach. Ask in plain words; it picks the source and writes the query."
+          />
+        </div>
+        {pinned ? (
+          <motion.ul ref={track} style={{ x }} className="relative mt-12 flex w-max gap-8 pl-[max(1.25rem,calc((100vw-72rem)/2+2rem))] pr-16">
+            {list}
+          </motion.ul>
+        ) : (
+          <ul ref={track} className="relative mt-10 flex snap-x gap-6 overflow-x-auto px-5 pb-6">
+            {list}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+};
 
 export default Sources;
