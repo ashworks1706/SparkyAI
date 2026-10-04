@@ -3,56 +3,48 @@ import { motion, useScroll, useTransform } from "motion/react";
 import Heading from "./Heading";
 import { usePinned } from "./motion";
 
-type Source = { title: string; ask: string; answer: string; source: string };
+type Source = { title: string; ask: string; source: string };
 
 /** What students ask, and the source that answers each one. */
 const SOURCES: Source[] = [
   {
     title: "Courses",
     ask: "what do I need before CSE 310?",
-    answer: "The catalog entry, its credit hours and prerequisites, then open sections for the term.",
     source: "Class Search",
   },
   {
     title: "Scholarships",
     ask: "scholarships for a CS junior",
-    answer: "What is open, who may apply and when it closes, off the scholarship portal itself.",
     source: "Scholarship Search",
   },
   {
     title: "Library hours",
     ask: "when does Hayden close tonight?",
-    answer: "This week's hours for every library, with the day you asked for read off the row.",
     source: "ASU Library",
   },
   {
     title: "Shuttles",
     ask: "next shuttle to Poly",
-    answer: "Live departures from the tracker. Never a stored copy, because a stored copy is wrong.",
     source: "Shuttle Tracker",
   },
   {
     title: "Study rooms",
     ask: "a room for four at 6pm",
-    answer: "Bookable slots on the date you name, and the link that books one.",
     source: "Library rooms",
   },
   {
     title: "Dining",
     ask: "what's open on Tempe right now?",
-    answer: "Hours per venue for the campus you name, off the current term's schedule.",
     source: "Sun Devil Dining",
   },
   {
     title: "Clubs",
     ask: "is there an AI club?",
-    answer: "Organisations on Sun Devil Central, searched by the acronym you wrote.",
     source: "Sun Devil Central",
   },
   {
     title: "Events",
     ask: "anything on this weekend?",
-    answer: "The events calendar, plus registrar dates for drop, add and graduation.",
     source: "Events, Registrar",
   },
 ];
@@ -73,10 +65,9 @@ const Banner = ({ item, i }: { item: Source; i: number }) => (
         <span className="font-serif text-sm text-kin">{String(i + 1).padStart(2, "0")}</span>
       </div>
       <div className="h-1.5 bg-kin" />
-      <div className="flex min-h-56 flex-col p-5">
+      <div className="flex min-h-36 flex-col p-5">
         <p className="font-mono text-xs leading-5 text-shu">&ldquo;{item.ask}&rdquo;</p>
-        <p className="mt-4 flex-1 text-sm leading-6 text-ink-soft">{item.answer}</p>
-        <p className="mt-5 border-t border-dashed border-ink/20 pt-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
+        <p className="mt-auto border-t border-dashed border-ink/20 pt-3 text-[0.68rem] font-semibold uppercase tracking-[0.18em]">
           {item.source}
         </p>
       </div>
@@ -123,8 +114,6 @@ const Sources = () => {
       <div className={pinned ? "sticky top-0 flex h-screen flex-col justify-center overflow-hidden" : ""}>
         <div className="mx-auto w-full max-w-6xl px-5 sm:px-8">
           <Heading
-            numeral="弐"
-            label="What students ask"
             title="Everything you would otherwise go digging for."
           />
         </div>
