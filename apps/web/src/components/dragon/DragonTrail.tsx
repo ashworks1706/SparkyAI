@@ -8,9 +8,10 @@ const LOGO_HEAD = { x: 0.78, y: 0.32 };
 /** Length over which the head fades into the logo at the end, in body widths. */
 const FADE = 3;
 
-const reducedMotion = () =>
+/** True when the dragon is drawn at rest instead of following the scroll: narrow screens and reduced motion. */
+const still = () =>
   typeof window.matchMedia === "function" &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.matchMedia("(max-width: 767px), (prefers-reduced-motion: reduce)").matches;
 
 /** Rect of an element relative to the host. */
 const boxOf = (el: Element, host: DOMRect): Box => {
@@ -106,7 +107,7 @@ const DragonTrail = () => {
     if (!geo || !svg.current || !mask.current || !head.current) return;
     const { track } = geo;
     const view = -svg.current.getBoundingClientRect().top + window.innerHeight * 0.55;
-    const target = reducedMotion() ? geo.endY : Math.min(Math.max(view, geo.startY), geo.endY);
+    const target = still() ? geo.endY : Math.min(Math.max(view, geo.startY), geo.endY);
     const at = lengthAtY(track, target);
 
     mask.current.style.strokeDashoffset = `${track.total - at}`;
@@ -126,6 +127,7 @@ const DragonTrail = () => {
       frame = requestAnimationFrame(update);
     };
     onScroll();
+    if (still()) return () => cancelAnimationFrame(frame);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
