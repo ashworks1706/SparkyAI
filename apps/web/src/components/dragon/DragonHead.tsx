@@ -1,6 +1,6 @@
 /** Head edge after the logo: crest, brow, snout, open jaw and throat, with the neck at the origin. */
 const EDGE =
-  "M -30 -22 C 4 -24 20 -36 30 -52 L 44 -46 C 60 -44 78 -40 92 -32 C 100 -28 104 -24 108 -18 L 150 4 C 156 8 154 14 148 15 L 112 18 L 104 24 L 132 36 C 136 42 130 48 122 45 L 96 52 C 70 58 44 50 28 40 L 20 30 C 4 26 -14 22 -30 22";
+  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 46 -26 72 -22 92 -14 L 132 0 C 137 2 139 4 139 8 L 140 14 L 106 16 L 98 20 L 128 26 L 128 32 C 128 35 126 36 122 36 L 64 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
 
 /** An eastern dragon head with the logo's face, facing right, drawn around its neck at the origin. */
 const DragonHead = ({ className = "" }: { className?: string }) => (
@@ -12,14 +12,14 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
         </clipPath>
       </defs>
       <g fill="var(--color-kin)" stroke="var(--color-shu-deep)" strokeWidth="1.5">
-        <path d="M 20 -44 C 0 -76 -28 -110 -58 -138 C -63 -143 -56 -148 -51 -143 C -20 -116 12 -82 36 -48 Z" />
-        <path d="M 38 -46 C 28 -80 10 -116 -12 -146 C -16 -152 -8 -155 -5 -149 C 18 -120 40 -84 54 -44 Z" />
+        <path d="M 2 -30 C -8 -46 -20 -60 -34 -72 C -39 -77 -32 -81 -27 -76 C -12 -64 4 -50 16 -36 Z" />
+        <path d="M 18 -30 C 14 -48 6 -64 -4 -78 C -7 -84 1 -87 4 -81 C 14 -66 24 -50 30 -28 Z" />
       </g>
-      <path d="M 104 24 L 112 18 L 148 15 L 132 36 Z" fill="var(--color-shu-deep)" />
+      <path d="M 98 20 L 106 16 L 140 14 L 128 26 Z" fill="var(--color-shu-deep)" />
       <g fill="var(--color-paper)">
-        <path d="M 118 18 l 3 6 l 3 -6 Z" />
-        <path d="M 130 17 l 3 6 l 3 -6 Z" />
-        <path d="M 112 27 l 3 -5 l 3 6 Z" />
+        <path d="M 114 15.6 l 2.5 5 l 2.5 -5 Z" />
+        <path d="M 126 15 l 2.5 5 l 2.5 -5 Z" />
+        <path d="M 110 23.5 l 2.5 -4 l 2.5 5 Z" />
       </g>
       <path d={`${EDGE} Z`} fill="var(--color-shu)" />
       <g clipPath="url(#dragon-head-edge)" fill="none">
@@ -28,13 +28,13 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
       </g>
       <path d={EDGE} fill="none" stroke="var(--color-ink)" strokeWidth="1.6" />
       <path
-        d="M 68 -18 C 74 -27 88 -27 96 -18 C 88 -11 74 -11 68 -18 Z"
+        d="M 50 -8 C 56 -15 68 -15 74 -8 C 68 -3 56 -3 50 -8 Z"
         fill="var(--color-kin)"
         stroke="var(--color-ink)"
         strokeWidth="1.4"
       />
-      <circle cx="83" cy="-18" r="3" fill="var(--color-ink)" />
-      <path d="M 140 4 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M 98 20 C 80 22 62 24 44 28" fill="none" stroke="var(--color-kin)" strokeWidth="2" strokeLinecap="round" />
+      <path d="M 128 3 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
     </g>
 
     <g className="dragon-mane" transform="translate(-14 0)">

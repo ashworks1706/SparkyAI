@@ -42,7 +42,7 @@ const Embers = ({ count = 46, className = "" }: { count?: number; className?: st
         const fade = Math.min(1, s.y / (h * 0.6));
         if (s.y < -10 || fade <= 0) sparks[i] = spawn(false);
         ctx.beginPath();
-        ctx.fillStyle = s.gold ? `rgba(242,183,5,${0.75 * fade})` : `rgba(181,24,43,${0.6 * fade})`;
+        ctx.fillStyle = s.gold ? `rgba(242,183,5,${0.75 * fade})` : `rgba(120,28,53,${0.6 * fade})`;
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();
       }
