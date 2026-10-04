@@ -54,7 +54,7 @@ const Hero = () => (
             href={RUN}
             target="_blank"
             rel="noreferrer"
-            className="group inline-flex h-13 items-center gap-2 rounded-full bg-shu px-8 text-sm font-semibold text-paper shadow-[0_0_0_2px_var(--color-paper),0_0_0_4px_var(--color-kin),0_14px_30px_-10px_rgba(181,24,43,0.6)] transition-transform hover:-translate-y-0.5"
+            className="group inline-flex h-13 items-center gap-2 rounded-full bg-shu px-8 text-sm font-semibold text-paper shadow-[0_0_0_2px_var(--color-paper),0_0_0_4px_var(--color-kin),0_14px_30px_-10px_rgba(120,28,53,0.6)] transition-transform hover:-translate-y-0.5"
           >
             Run Sparky
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
