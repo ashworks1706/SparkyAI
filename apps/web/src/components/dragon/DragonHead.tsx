@@ -1,6 +1,6 @@
-/** Head edge after the logo: crest, brow, snout, open jaw and throat, with the neck at the origin. */
+/** Head edge after the logo: crest, brow, snout, closed jaw and throat, with the neck at the origin. */
 const EDGE =
-  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 44.5 -26 64 -22 79 -14 L 109 0 C 112.8 2 114.2 4 114.2 8 L 115 14 L 89.5 16 L 83.5 20 L 106 26 L 106 32 C 106 35 104.5 36 101.5 36 L 58 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
+  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 44.5 -26 64 -22 79 -14 L 109 0 C 112.8 2 114.2 4 114.2 8 L 115 22 C 114 31 109 36 101.5 36 L 58 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
 
 /** An eastern dragon head with the logo's face, facing right, drawn around its neck at the origin. */
 const DragonHead = ({ className = "" }: { className?: string }) => (
@@ -15,12 +15,6 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
         <path d="M 2 -30 C -8 -46 -20 -60 -34 -72 C -39 -77 -32 -81 -27 -76 C -12 -64 4 -50 16 -36 Z" />
         <path d="M 18 -30 C 14 -48 6 -64 -4 -78 C -7 -84 1 -87 4 -81 C 14 -66 24 -50 30 -28 Z" />
       </g>
-      <path d="M 83.5 20 L 89.5 16 L 115 14 L 106 26 Z" fill="var(--color-shu-deep)" />
-      <g fill="var(--color-paper)">
-        <path d="M 95.5 15.6 l 2.5 5 l 2.5 -5 Z" />
-        <path d="M 104.5 15 l 2.5 5 l 2.5 -5 Z" />
-        <path d="M 92.5 23.5 l 2.5 -4 l 2.5 5 Z" />
-      </g>
       <path d={`${EDGE} Z`} fill="var(--color-shu)" />
       <g clipPath="url(#dragon-head-edge)" fill="none">
         <path d={EDGE} stroke="var(--color-kin)" strokeWidth="9" />
@@ -28,6 +22,14 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
       </g>
       <path d={EDGE} fill="none" stroke="var(--color-ink)" strokeWidth="1.6" />
       <path d="M 45 -8 C 51 -15 63 -15 69 -8 C 63 -3 51 -3 45 -8 Z" fill="none" stroke="var(--color-kin)" strokeWidth="2" />
+      <path
+        d="M 111 20 C 96 19 80 16 66 13 C 72 20 80 27 88 33"
+        fill="none"
+        stroke="var(--color-kin)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path d="M 106 3 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
     </g>
 
