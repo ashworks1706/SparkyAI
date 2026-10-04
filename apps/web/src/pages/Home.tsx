@@ -7,25 +7,29 @@ import InAction from "@/components/site/InAction";
 import Nav from "@/components/site/Nav";
 import OpenSource from "@/components/site/OpenSource";
 import Sources from "@/components/site/Sources";
+import { useSmoothScroll } from "@/components/site/motion";
 
 /** The landing page, with the dragon winding behind every section. */
-const Home = () => (
-  <div className="min-h-screen">
-    <Nav />
-    <main className="relative">
-      <DragonTrail />
-      <Hero />
-      <Crossing />
-      <InAction />
-      <Crossing flip />
-      <Sources />
-      <Crossing />
-      <HowItWorks />
-      <Crossing flip />
-      <OpenSource />
-    </main>
-    <Footer />
-  </div>
-);
+const Home = () => {
+  useSmoothScroll();
+  return (
+    <div className="min-h-screen">
+      <Nav />
+      <main className="relative">
+        <DragonTrail />
+        <Hero />
+        <Crossing />
+        <InAction />
+        <Crossing flip />
+        <Sources />
+        <Crossing />
+        <HowItWorks />
+        <Crossing flip />
+        <OpenSource />
+      </main>
+      <Footer />
+    </div>
+  );
+};
 
 export default Home;
