@@ -1,9 +1,6 @@
 /** A point in page coordinates. */
 export type Point = { x: number; y: number };
 
-/** A dorsal fin or leg placed along the body: where it sits, its heading, and which side it is on. */
-export type Mark = { x: number; y: number; angle: number; side: 1 | -1 };
-
 /** The body flattened into points with their running length, for lookups without the SVG API. */
 export type Track = { lengths: Float64Array; xs: Float64Array; ys: Float64Array; total: number };
 
@@ -13,8 +10,6 @@ export type Geometry = {
   height: number;
   d: string;
   track: Track;
-  fins: Mark[];
-  legs: Mark[];
   body: number;
   head: number;
   /** Page y the head sits at before any scroll. */
@@ -76,14 +71,15 @@ export type Layout = {
   height: number;
   hero: Box;
   crossings: number[];
+  /** Point on the logo where the body ends. */
   end: Point;
 };
 
-/** Lays the body out: a coil in the hero, then down the margins, crossing the page at each divider. */
+/** Lays the body out: a coil in the hero, down the margins crossing at each divider, then into the logo. */
 export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): Geometry => {
   const narrow = width < 768;
   const body = narrow ? 22 : 44;
-  const head = narrow ? 0.32 : 0.54;
+  const head = narrow ? 0.375 : 0.75;
   const gutter = narrow ? 10 : Math.max(46, (width - 1152) / 2 - 64);
   const lanes = { right: width - gutter, left: gutter };
   const wiggle = narrow ? 6 : 18;
@@ -127,13 +123,10 @@ export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): 
   const approach = end.y - (narrow ? 120 : 200);
   runLane(approach);
   points.push({ x: lanes[side], y: approach });
-  const toward = side === "right" ? 1 : -1;
-  points.push({ x: end.x + toward * width * 0.22, y: end.y - 20 });
   points.push({ x: end.x, y: end.y });
 
   const { d, track } = smoothPath(points);
-  const { fins, legs } = placeMarks(track, body / 2 - 2, width);
-  return { width, height, d, track, fins, legs, body, head, startY, endY: end.y };
+  return { width, height, d, track, body, head, startY, endY: end.y };
 };
 
 /** First length along the track at which it reaches the given height. */
@@ -159,33 +152,4 @@ export const pose = ({ lengths, xs, ys, total }: Track, s: number) => {
   const dx = xs[hi] - xs[lo];
   const dy = ys[hi] - ys[lo];
   return { x: xs[lo] + dx * f, y: ys[lo] + dy * f, angle: (Math.atan2(dy, dx) * 180) / Math.PI };
-};
-
-/** Which side of the body is its back at a heading: up when running across, outward when running down. */
-const backSide = (x: number, angle: number, width: number): 1 | -1 => {
-  const r = (angle * Math.PI) / 180;
-  const normal = { x: Math.sin(r), y: -Math.cos(r) };
-  if (Math.abs(Math.cos(r)) > 0.35) return normal.y < 0 ? 1 : -1;
-  const outward = x < width / 2 ? -1 : 1;
-  return Math.sign(normal.x) === outward ? 1 : -1;
-};
-
-/** Fins along the back and legs along the belly, spaced by length. */
-export const placeMarks = (track: Track, offset: number, width: number) => {
-  const { total } = track;
-  const fins: Mark[] = [];
-  const legs: Mark[] = [];
-  const at = (s: number, back: boolean): Mark => {
-    const { x, y, angle } = pose(track, s);
-    const r = (angle * Math.PI) / 180;
-    const side = backSide(x, angle, width) * (back ? 1 : -1);
-    const k = offset * side;
-    return { x: x + Math.sin(r) * k, y: y - Math.cos(r) * k, angle, side: side as 1 | -1 };
-  };
-  for (let s = 40; s < total - 40; s += 34) fins.push(at(s, true));
-  for (let s = 520; s < total - 300; s += 1300) {
-    legs.push(at(s, false));
-    legs.push(at(s + 150, false));
-  }
-  return { fins, legs };
 };
