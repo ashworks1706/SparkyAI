@@ -50,4 +50,10 @@ describe("dragon geometry", () => {
     expect(lengthAtY(track, 60)).toBeGreaterThanOrEqual(60);
     expect(lengthAtY(track, 1000)).toBe(track.total);
   });
+
+  it("places fins along the whole body", () => {
+    const geo = buildGeometry(layout);
+    expect(geo.fins.length).toBeGreaterThan(geo.track.total / 40);
+    expect(geo.legs.length).toBeGreaterThan(0);
+  });
 });
