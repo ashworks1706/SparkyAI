@@ -84,7 +84,7 @@ export type Layout = {
 export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): Geometry => {
   const narrow = width < 768;
   const body = narrow ? 22 : 44;
-  const head = narrow ? 0.45 : 0.75;
+  const head = narrow ? 0.32 : 0.54;
   const gutter = narrow ? 10 : Math.max(46, (width - 1152) / 2 - 64);
   const lanes = { right: width - gutter, left: gutter };
   const wiggle = narrow ? 6 : 18;
