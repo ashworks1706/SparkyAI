@@ -1,6 +1,9 @@
+import { motion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
+import Gate from "@/components/dragon/Gate";
+import Lantern from "@/components/dragon/Lantern";
 import GithubMark from "./GithubMark";
-import Section from "./Section";
+import Heading from "./Heading";
 import { ARCHITECTURE, REPO } from "./content";
 
 /** What the repository is made of. */
@@ -19,68 +22,100 @@ const POINTS = [
   { title: "Built by students", body: "For the ACM, AI Society and SoDA communities at ASU." },
 ];
 
-/** Why and how to run it yourself. */
+const Pillar = () => (
+  <div aria-hidden className="relative bg-shu">
+    <div className="absolute inset-x-[-18%] bottom-0 h-6 bg-ink" />
+  </div>
+);
+
+/** The way in: a gate the dragon comes to rest under, with how to run it yourself. */
 const OpenSource = () => (
-  <Section
-    id="open-source"
-    label="Open source"
-    numeral="四"
-    margin="公開"
-    title="Run it for your own campus."
-    lead="Nothing here is a black box. The sources it reads are declared in one file each, and pointing them at another university is editing those files."
-  >
-    <div className="grid gap-12 lg:grid-cols-2 lg:items-start">
-      <div>
-        <dl className="space-y-6">
-          {POINTS.map((point) => (
-            <div key={point.title} className="border-l-2 border-kin pl-5">
-              <dt className="font-serif font-semibold">{point.title}</dt>
-              <dd className="mt-1 text-sm leading-6 text-ink-soft">{point.body}</dd>
-            </div>
-          ))}
-        </dl>
+  <section id="open-source" aria-label="Open source" className="relative z-10 pb-24">
+    <div className="mx-auto max-w-6xl px-2 sm:px-8">
+      <Gate className="w-full" />
+      <div className="grid grid-cols-[2%_4.25%_1fr_4.25%_2%] sm:grid-cols-[16%_4.25%_1fr_4.25%_16%]">
+        <div />
+        <Pillar />
+        <div className="relative px-4 pb-16 sm:px-8">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 hidden justify-between px-3 sm:flex">
+            <Lantern cord={18} size={40} delay={0.4} />
+            <Lantern cord={18} size={40} delay={1.9} />
+          </div>
+          <div data-dragon="end" className="h-44 sm:h-56" />
+          <Heading
+            numeral="肆"
+            label="Open source"
+            title="Run it for your own campus."
+            lead="Nothing here is a black box. The sources it reads are declared in one file each, and pointing them at another university is editing those files."
+            align="center"
+          />
 
-        <div className="mt-10 flex flex-wrap gap-3">
-          <a
-            href={REPO}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-shu px-6 text-sm font-medium text-paper transition-colors hover:bg-shu-deep"
+          <motion.div
+            className="mt-10 flex flex-wrap justify-center gap-3"
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
           >
-            <GithubMark className="h-4 w-4" />
-            View on GitHub
-          </a>
-          <a
-            href={ARCHITECTURE}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-11 items-center gap-2 rounded-full border border-ink/20 px-6 text-sm font-medium transition-colors hover:border-shu hover:text-shu"
-          >
-            Architecture
-            <ArrowUpRight className="h-4 w-4" aria-hidden />
-          </a>
-        </div>
-      </div>
+            <a
+              href={REPO}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-shu px-7 text-sm font-semibold text-paper shadow-[0_0_0_2px_var(--color-paper),0_0_0_4px_var(--color-kin)] transition-transform hover:-translate-y-0.5"
+            >
+              <GithubMark className="h-4 w-4" />
+              View on GitHub
+            </a>
+            <a
+              href={ARCHITECTURE}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-12 items-center gap-2 rounded-full border-2 border-ink px-7 text-sm font-semibold transition-colors hover:bg-ink hover:text-paper"
+            >
+              Architecture
+              <ArrowUpRight className="h-4 w-4" aria-hidden />
+            </a>
+          </motion.div>
 
-      <div className="overflow-hidden rounded-xl border border-ink/15 bg-white">
-        <dl className="divide-y divide-ink/10">
-          {STACK.map((row) => (
-            <div key={row.label} className="flex gap-4 px-5 py-3.5 sm:px-6">
-              <dt className="w-20 shrink-0 font-mono text-xs uppercase tracking-[0.1em] text-shu">
-                {row.label}
-              </dt>
-              <dd className="text-sm text-ink-soft">{row.value}</dd>
+          <dl className="mx-auto mt-14 grid max-w-3xl gap-6 sm:grid-cols-3">
+            {POINTS.map((point, i) => (
+              <motion.div
+                key={point.title}
+                className="border-t-4 border-kin pt-4 text-center"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.12 }}
+              >
+                <dt className="font-serif text-lg font-bold">{point.title}</dt>
+                <dd className="mt-2 text-sm leading-6 text-ink-soft">{point.body}</dd>
+              </motion.div>
+            ))}
+          </dl>
+
+          <div className="mx-auto mt-14 max-w-2xl overflow-hidden rounded-md border-2 border-ink bg-white">
+            <dl className="divide-y divide-ink/10">
+              {STACK.map((row) => (
+                <div key={row.label} className="flex gap-4 px-5 py-3">
+                  <dt className="w-20 shrink-0 font-mono text-xs font-semibold uppercase tracking-[0.1em] text-shu">
+                    {row.label}
+                  </dt>
+                  <dd className="text-sm text-ink-soft">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="bg-ink px-5 py-4 font-mono text-xs text-paper">
+              <span className="select-none text-kin">$ </span>
+              just up
+              <span className="ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 bg-paper motion-safe:animate-caret" />
             </div>
-          ))}
-        </dl>
-        <div className="bg-ink px-5 py-4 font-mono text-xs text-paper sm:px-6">
-          <span className="select-none text-kin">$ </span>
-          just up
-          <span className="ml-1 inline-block h-3.5 w-1.5 translate-y-0.5 bg-paper motion-safe:animate-caret" />
+          </div>
         </div>
+        <Pillar />
+        <div />
       </div>
     </div>
-  </Section>
+  </section>
 );
 
 export default OpenSource;

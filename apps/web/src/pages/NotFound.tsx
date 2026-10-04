@@ -1,16 +1,16 @@
 import { Link } from "react-router-dom";
-import Hanko from "@/components/site/Hanko";
+import Lantern from "@/components/dragon/Lantern";
 
 /** Any path the site does not serve. */
 const NotFound = () => (
   <main className="seigaiha grid min-h-screen place-items-center px-5">
-    <div className="rounded-xl border border-ink/10 bg-paper px-10 py-12 text-center">
-      <Hanko char="迷" className="mx-auto h-14 text-2xl" />
-      <h1 className="mt-6 font-serif text-3xl font-semibold">Page not found</h1>
-      <p className="mt-3 text-sm text-ink-soft">This path leads nowhere. The dragon is back home.</p>
+    <div className="flex flex-col items-center rounded-md border-2 border-ink bg-paper px-10 pb-12 text-center">
+      <Lantern cord={30} size={52} />
+      <h1 className="mt-6 font-serif text-3xl font-bold">Page not found</h1>
+      <p className="mt-3 text-sm text-ink-soft">The dragon went another way.</p>
       <Link
         to="/"
-        className="mt-8 inline-flex h-11 items-center rounded-full bg-ink px-6 text-sm font-medium text-paper transition-colors hover:bg-shu"
+        className="mt-8 inline-flex h-11 items-center rounded-full bg-shu px-6 text-sm font-semibold text-paper transition-transform hover:-translate-y-0.5"
       >
         Back to home
       </Link>
