@@ -1,6 +1,6 @@
 /** Head edge after the logo: crest, brow, snout, open jaw and throat, with the neck at the origin. */
 const EDGE =
-  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 46 -26 72 -22 92 -14 L 132 0 C 137 2 139 4 139 8 L 140 14 L 106 16 L 98 20 L 128 26 L 128 32 C 128 35 126 36 122 36 L 64 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
+  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 44.5 -26 64 -22 79 -14 L 109 0 C 112.8 2 114.2 4 114.2 8 L 115 14 L 89.5 16 L 83.5 20 L 106 26 L 106 32 C 106 35 104.5 36 101.5 36 L 58 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
 
 /** An eastern dragon head with the logo's face, facing right, drawn around its neck at the origin. */
 const DragonHead = ({ className = "" }: { className?: string }) => (
@@ -15,11 +15,11 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
         <path d="M 2 -30 C -8 -46 -20 -60 -34 -72 C -39 -77 -32 -81 -27 -76 C -12 -64 4 -50 16 -36 Z" />
         <path d="M 18 -30 C 14 -48 6 -64 -4 -78 C -7 -84 1 -87 4 -81 C 14 -66 24 -50 30 -28 Z" />
       </g>
-      <path d="M 98 20 L 106 16 L 140 14 L 128 26 Z" fill="var(--color-shu-deep)" />
+      <path d="M 83.5 20 L 89.5 16 L 115 14 L 106 26 Z" fill="var(--color-shu-deep)" />
       <g fill="var(--color-paper)">
-        <path d="M 114 15.6 l 2.5 5 l 2.5 -5 Z" />
-        <path d="M 126 15 l 2.5 5 l 2.5 -5 Z" />
-        <path d="M 110 23.5 l 2.5 -4 l 2.5 5 Z" />
+        <path d="M 95.5 15.6 l 2.5 5 l 2.5 -5 Z" />
+        <path d="M 104.5 15 l 2.5 5 l 2.5 -5 Z" />
+        <path d="M 92.5 23.5 l 2.5 -4 l 2.5 5 Z" />
       </g>
       <path d={`${EDGE} Z`} fill="var(--color-shu)" />
       <g clipPath="url(#dragon-head-edge)" fill="none">
@@ -27,14 +27,8 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
         <path d={EDGE} stroke="var(--color-shu)" strokeWidth="5" />
       </g>
       <path d={EDGE} fill="none" stroke="var(--color-ink)" strokeWidth="1.6" />
-      <path
-        d="M 50 -8 C 56 -15 68 -15 74 -8 C 68 -3 56 -3 50 -8 Z"
-        fill="var(--color-kin)"
-        stroke="var(--color-ink)"
-        strokeWidth="1.4"
-      />
-      <path d="M 98 20 C 80 22 62 24 44 28" fill="none" stroke="var(--color-kin)" strokeWidth="2" strokeLinecap="round" />
-      <path d="M 128 3 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M 45 -8 C 51 -15 63 -15 69 -8 C 63 -3 51 -3 45 -8 Z" fill="none" stroke="var(--color-kin)" strokeWidth="2" />
+      <path d="M 106 3 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
     </g>
 
     <g className="dragon-mane" transform="translate(-14 0)">
