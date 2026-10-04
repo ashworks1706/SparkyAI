@@ -132,8 +132,6 @@ const InAction = () => {
         <div className="mx-auto grid w-full max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div>
             <Heading
-              numeral="壱"
-              label="In action"
               title="It shows its working."
             />
             {pinned && (

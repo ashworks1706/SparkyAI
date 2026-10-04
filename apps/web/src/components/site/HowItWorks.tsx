@@ -3,30 +3,14 @@ import { ArrowUpRight } from "lucide-react";
 import Heading from "./Heading";
 import { ARCHITECTURE } from "./content";
 
-type Stage = { numeral: string; title: string; body: string };
+type Stage = { numeral: string; title: string };
 
 /** The four things a turn does, in order. */
 const STAGES: Stage[] = [
-  {
-    numeral: "一",
-    title: "Read what is stored",
-    body: "Dated copies of ASU pages, searched by meaning and keyword.",
-  },
-  {
-    numeral: "二",
-    title: "Fetch what must be current",
-    body: "Hours, seats and shuttles are fetched when you ask.",
-  },
-  {
-    numeral: "三",
-    title: "Open the page itself",
-    body: "When a search comes back thin, it reads the page itself.",
-  },
-  {
-    numeral: "四",
-    title: "Answer with the source",
-    body: "Every claim links the page and the date it was read.",
-  },
+  { numeral: "一", title: "Read what is stored" },
+  { numeral: "二", title: "Fetch what must be current" },
+  { numeral: "三", title: "Open the page itself" },
+  { numeral: "四", title: "Answer with the source" },
 ];
 
 /** A round seal: red disc, gold rings, numeral in the middle. */
@@ -55,8 +39,6 @@ const HowItWorks = () => (
   <section id="how-it-works" aria-label="How it works" className="relative z-10 py-10">
     <div className="mx-auto max-w-6xl px-5 sm:px-8">
       <Heading
-        numeral="参"
-        label="How it works"
         title="Grounded by construction, not by asking nicely."
         align="center"
       />
@@ -89,7 +71,6 @@ const HowItWorks = () => (
                 <Medallion numeral={stage.numeral} />
               </motion.div>
               <h3 className="mt-6 font-serif text-xl font-bold">{stage.title}</h3>
-              <p className="mt-3 max-w-xs text-sm leading-6 text-ink-soft">{stage.body}</p>
             </motion.li>
           ))}
         </ol>

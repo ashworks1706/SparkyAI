@@ -41,10 +41,7 @@ const OpenSource = () => (
             />
           </div>
           <Heading
-            numeral="肆"
-            label="Open source"
             title="Run it for your own campus."
-            lead="Open source and self-hosted. Each source is one file to edit."
             align="center"
           />
 
