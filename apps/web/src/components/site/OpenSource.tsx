@@ -1,7 +1,6 @@
 import { motion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
 import Gate from "@/components/dragon/Gate";
-import Lantern from "@/components/dragon/Lantern";
 import GithubMark from "./GithubMark";
 import Heading from "./Heading";
 import { ARCHITECTURE, REPO } from "./content";
@@ -16,14 +15,13 @@ const STACK = [
   { label: "Traces", value: "Phoenix over OTLP, every turn as a tree" },
 ];
 
-
 const Pillar = () => (
   <div aria-hidden className="relative bg-shu">
     <div className="absolute inset-x-[-18%] bottom-0 h-6 bg-ink" />
   </div>
 );
 
-/** The way in: a gate the dragon comes to rest under, with how to run it yourself. */
+/** The way in: a gate with the logo the dragon comes to rest at, with how to run it yourself. */
 const OpenSource = () => (
   <section id="open-source" aria-label="Open source" className="relative z-10 pb-24">
     <div className="mx-auto max-w-6xl px-2 sm:px-8">
@@ -32,11 +30,16 @@ const OpenSource = () => (
         <div />
         <Pillar />
         <div className="relative px-4 pb-16 sm:px-8">
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 hidden justify-between px-3 sm:flex">
-            <Lantern cord={18} size={40} delay={0.4} />
-            <Lantern cord={18} size={40} delay={1.9} />
+          <div className="flex justify-center pt-10 sm:pt-14">
+            <img
+              data-dragon="end"
+              src="/brand/sparkyai-logo.png"
+              alt=""
+              width={717}
+              height={779}
+              className="h-32 w-auto sm:h-44"
+            />
           </div>
-          <div data-dragon="end" className="h-44 sm:h-56" />
           <Heading
             numeral="肆"
             label="Open source"

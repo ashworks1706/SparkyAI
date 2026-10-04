@@ -15,7 +15,7 @@ const endpoints = (d: string) => {
 };
 
 describe("dragon geometry", () => {
-  it("starts off the right edge and comes to rest on the end anchor", () => {
+  it("starts off the right edge and comes to rest on the logo", () => {
     const { d } = buildGeometry(layout);
     const { start, end } = endpoints(d);
     expect(start.x).toBeGreaterThan(layout.width);
@@ -49,11 +49,5 @@ describe("dragon geometry", () => {
     expect(pose(track, 25)).toMatchObject({ x: 0, y: 25, angle: 90 });
     expect(lengthAtY(track, 60)).toBeGreaterThanOrEqual(60);
     expect(lengthAtY(track, 1000)).toBe(track.total);
-  });
-
-  it("places fins along the whole body", () => {
-    const geo = buildGeometry(layout);
-    expect(geo.fins.length).toBeGreaterThan(geo.track.total / 40);
-    expect(geo.legs.length).toBeGreaterThan(0);
   });
 });

@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import Lantern from "@/components/dragon/Lantern";
 
 /** Any path the site does not serve. */
 const NotFound = () => (
   <main className="seigaiha grid min-h-screen place-items-center px-5">
-    <div className="flex flex-col items-center rounded-md border-2 border-ink bg-paper px-10 pb-12 text-center">
-      <Lantern cord={30} size={52} />
+    <div className="flex flex-col items-center rounded-md border-2 border-ink bg-paper px-10 py-12 text-center">
+      <img src="/brand/sparkyai-logo.png" alt="" width={717} height={779} className="h-20 w-auto" />
       <h1 className="mt-6 font-serif text-3xl font-bold">Page not found</h1>
       <p className="mt-3 text-sm text-ink-soft">The dragon went another way.</p>
       <Link

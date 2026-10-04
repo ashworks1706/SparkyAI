@@ -1,34 +1,14 @@
 import { ArrowRight } from "lucide-react";
 import Embers from "@/components/dragon/Embers";
-import Lantern from "@/components/dragon/Lantern";
 import GithubMark from "./GithubMark";
 import { REPO, RUN } from "./content";
 
 const WORDS = ["Your", "university", "copilot."];
 
-/** Lanterns strung across the top: left offset in percent, cord length, size. */
-const LANTERNS = [
-  { left: 3, cord: 26, size: 40 },
-  { left: 14, cord: 54, size: 50 },
-  { left: 27, cord: 20, size: 34 },
-  { left: 39, cord: 44, size: 44 },
-];
-
 /** Opening screen: the promise, the two ways in, and the dragon coiled beside them. */
 const Hero = () => (
   <section aria-label="Introduction" className="relative isolate min-h-[100svh] overflow-hidden">
     <Embers className="absolute inset-0 -z-10 h-full w-full" />
-
-    <div className="absolute inset-x-0 top-16 -z-10 hidden h-48 lg:block">
-      <svg aria-hidden className="absolute inset-x-0 top-0 h-10 w-full" preserveAspectRatio="none" viewBox="0 0 100 10">
-        <path d="M0 1 Q 25 9 50 2" fill="none" stroke="var(--color-ink)" strokeOpacity=".5" strokeWidth=".15" />
-      </svg>
-      {LANTERNS.map((l, i) => (
-        <div key={l.left} className="absolute top-1" style={{ left: `${l.left}%` }}>
-          <Lantern cord={l.cord} size={l.size} delay={i * 1.3} />
-        </div>
-      ))}
-    </div>
 
     <div className="mx-auto grid max-w-6xl items-center gap-6 px-5 pt-28 sm:px-8 lg:min-h-[100svh] lg:grid-cols-[1.05fr_0.95fr] lg:pt-16">
       <div className="lg:pt-24">
