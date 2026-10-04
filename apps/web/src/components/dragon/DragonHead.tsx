@@ -1,6 +1,6 @@
 /** Head edge after the logo: crest, brow, snout, closed jaw and throat, with the neck at the origin. */
 const EDGE =
-  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 44.5 -26 64 -22 79 -14 L 109 0 C 112.8 2 114.2 4 114.2 8 L 115 22 C 114 31 109 36 101.5 36 L 58 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
+  "M -30 -22 C -6 -24 6 -30 14 -40 L 22 -26 C 44.5 -26 64 -22 79 -14 L 109 0 C 112.8 2 114.2 4 114.2 8 L 115 17 L 88 20 L 113 23 C 113 31 108 36 101.5 36 L 58 38 L 32 32 L 24 26 C 6 23 -12 22 -30 22";
 
 /** An eastern dragon head with the logo's face, facing right, drawn around its neck at the origin. */
 const DragonHead = ({ className = "" }: { className?: string }) => (
@@ -22,14 +22,6 @@ const DragonHead = ({ className = "" }: { className?: string }) => (
       </g>
       <path d={EDGE} fill="none" stroke="var(--color-ink)" strokeWidth="1.6" />
       <path d="M 45 -8 C 51 -15 63 -15 69 -8 C 63 -3 51 -3 45 -8 Z" fill="none" stroke="var(--color-kin)" strokeWidth="2" />
-      <path
-        d="M 111 20 C 96 19 80 16 66 13 C 72 20 80 27 88 33"
-        fill="none"
-        stroke="var(--color-kin)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
       <path d="M 106 3 c 3 -2 6 1 4 4" fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round" />
     </g>
 
