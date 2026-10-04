@@ -16,11 +16,6 @@ const STACK = [
   { label: "Traces", value: "Phoenix over OTLP, every turn as a tree" },
 ];
 
-const POINTS = [
-  { title: "Open source", body: "Read the loop, the prompt and the policy that gates every write." },
-  { title: "Self-hosted", body: "Compose brings up the stack. Your data stays on your machine." },
-  { title: "Built by students", body: "For the ACM, AI Society and SoDA communities at ASU." },
-];
 
 const Pillar = () => (
   <div aria-hidden className="relative bg-shu">
@@ -46,7 +41,7 @@ const OpenSource = () => (
             numeral="肆"
             label="Open source"
             title="Run it for your own campus."
-            lead="Nothing here is a black box. The sources it reads are declared in one file each, and pointing them at another university is editing those files."
+            lead="Open source and self-hosted. Each source is one file to edit."
             align="center"
           />
 
@@ -77,21 +72,6 @@ const OpenSource = () => (
             </a>
           </motion.div>
 
-          <dl className="mx-auto mt-14 grid max-w-3xl gap-6 sm:grid-cols-3">
-            {POINTS.map((point, i) => (
-              <motion.div
-                key={point.title}
-                className="border-t-4 border-kin pt-4 text-center"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: i * 0.12 }}
-              >
-                <dt className="font-serif text-lg font-bold">{point.title}</dt>
-                <dd className="mt-2 text-sm leading-6 text-ink-soft">{point.body}</dd>
-              </motion.div>
-            ))}
-          </dl>
 
           <div className="mx-auto mt-14 max-w-2xl overflow-hidden rounded-md border-2 border-ink bg-white">
             <dl className="divide-y divide-ink/10">

@@ -1,5 +1,4 @@
-import { motion } from "motion/react";
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Embers from "@/components/dragon/Embers";
 import Lantern from "@/components/dragon/Lantern";
 import GithubMark from "./GithubMark";
@@ -32,67 +31,44 @@ const Hero = () => (
     </div>
 
     <div className="mx-auto grid max-w-6xl items-center gap-6 px-5 pt-28 sm:px-8 lg:min-h-[100svh] lg:grid-cols-[1.05fr_0.95fr] lg:pt-16">
-      <div className="lg:pt-44">
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 rounded-full border border-kin bg-paper/80 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-shu"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-shu" />
-          The ASU student copilot
-        </motion.p>
-
-        <h1 className="mt-7 font-serif text-[clamp(3.1rem,8vw,6.5rem)] font-black leading-[0.95] tracking-[-0.035em]">
+      <div className="lg:pt-24">
+        <h1 className="font-serif text-[clamp(3.1rem,8vw,6.5rem)] font-black leading-[0.95] tracking-[-0.035em]">
           {WORDS.map((word, i) => (
             <span key={word} className="block overflow-hidden pb-2">
-              <motion.span
-                className={`inline-block ${i === 2 ? "text-shu" : ""}`}
-                initial={{ y: "110%" }}
-                animate={{ y: 0 }}
-                transition={{ duration: 0.9, delay: 0.15 + i * 0.12, ease: [0.22, 1, 0.36, 1] }}
+              <span
+                className={`inline-block motion-safe:animate-lift ${i === 2 ? "text-shu" : ""}`}
+                style={{ animationDelay: `${i * 0.1}s` }}
               >
                 {word}
-              </motion.span>{" "}
+              </span>{" "}
             </span>
           ))}
         </h1>
-        <motion.svg
-          aria-hidden
-          viewBox="0 0 300 14"
-          className="-mt-1 h-4 w-64 sm:w-80"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-        >
-          <motion.path
+        <svg aria-hidden viewBox="0 0 300 14" className="-mt-1 h-4 w-64 sm:w-80">
+          <path
             d="M4 9 C 60 2 120 12 180 6 S 270 4 296 8"
+            pathLength={1}
+            strokeDasharray="1 1"
             fill="none"
             stroke="var(--color-kin)"
             strokeWidth="6"
             strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 0.9, delay: 0.8, ease: "easeOut" }}
+            className="motion-safe:animate-draw"
+            style={{ animationDelay: "0.35s" }}
           />
-        </motion.svg>
+        </svg>
 
-        <motion.p
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.6 }}
-          className="mt-7 max-w-lg text-pretty text-lg leading-8 text-ink-soft"
+        <p
+          className="mt-7 max-w-lg text-pretty text-lg leading-8 text-ink-soft motion-safe:animate-rise"
+          style={{ animationDelay: "0.3s" }}
         >
           Ask about a course, a scholarship, tonight&rsquo;s library hours or the next shuttle.
-          Sparky reads the real ASU pages, opens the ones a search only pointed at, and answers
-          with the date it read them.
-        </motion.p>
+          Sparky reads the real ASU pages and answers with the source.
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.75 }}
-          className="mt-10 flex flex-wrap items-center gap-3"
+        <div
+          className="mt-10 flex flex-wrap items-center gap-3 motion-safe:animate-rise"
+          style={{ animationDelay: "0.4s" }}
         >
           <a
             href={RUN}
@@ -110,21 +86,13 @@ const Hero = () => (
             className="inline-flex h-13 items-center gap-2 rounded-full border-2 border-ink px-7 text-sm font-semibold transition-colors hover:bg-ink hover:text-paper"
           >
             <GithubMark className="h-4 w-4" />
-            Read the source
+            GitHub
           </a>
-        </motion.div>
+        </div>
       </div>
 
       <div data-dragon="hero" className="h-[46svh] lg:h-[80svh]" />
     </div>
-
-    <a
-      href="#in-action"
-      className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-ink-soft lg:flex"
-    >
-      Scroll to wake the dragon
-      <ArrowDown className="h-4 w-4 text-shu motion-safe:animate-bounce" aria-hidden />
-    </a>
   </section>
 );
 
