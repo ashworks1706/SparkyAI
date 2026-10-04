@@ -8,7 +8,7 @@ const Footer = () => (
       <div className="flex items-center gap-2.5">
         <img src="/brand/sparkyai-logo.png" alt="" className="h-5 w-auto" />
         <span className="font-serif font-semibold text-ink">SparkyAI</span>
-        <span>Not affiliated with Arizona State University.</span>
+        <span>Unofficial student project. Not affiliated with Arizona State University.</span>
       </div>
       <div className="flex items-center gap-6">
         <a

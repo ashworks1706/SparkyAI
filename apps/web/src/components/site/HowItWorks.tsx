@@ -10,22 +10,22 @@ const STAGES: Stage[] = [
   {
     numeral: "一",
     title: "Read what is stored",
-    body: "A scraper keeps dated copies of ASU pages. Retrieval pulls the passages that match, by meaning and by keyword, before the model is asked anything.",
+    body: "Dated copies of ASU pages, searched by meaning and keyword.",
   },
   {
     numeral: "二",
     title: "Fetch what must be current",
-    body: "Hours today, open seats and the next shuttle are fetched as the question is asked, and cached only long enough that a hundred students cost one fetch.",
+    body: "Hours, seats and shuttles are fetched when you ask.",
   },
   {
     numeral: "三",
     title: "Open the page itself",
-    body: "When a search comes back thin or a tool fails, an isolated container fetches the page and reads it, rather than telling a student to go and look.",
+    body: "When a search comes back thin, it reads the page itself.",
   },
   {
     numeral: "四",
     title: "Answer with the source",
-    body: "Citations are built from the pages it read, never parsed out of what the model wrote, and carry when the page was fetched.",
+    body: "Every claim links the page and the date it was read.",
   },
 ];
 
@@ -58,7 +58,6 @@ const HowItWorks = () => (
         numeral="参"
         label="How it works"
         title="Grounded by construction, not by asking nicely."
-        lead="The loop is written here rather than handed to a framework, so what the answer rests on is something you can read."
         align="center"
       />
 

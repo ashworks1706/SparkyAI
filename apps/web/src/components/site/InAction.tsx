@@ -4,15 +4,15 @@ import { ArrowUpRight, BookOpen, Search, Terminal } from "lucide-react";
 import Heading from "./Heading";
 import { usePinned } from "./motion";
 
-type Step = { label: string; detail: string };
+type Step = { label: string };
 
 /** What happens in one turn, in order, as the reader scrolls. */
 const STEPS: Step[] = [
-  { label: "Asked", detail: "A student asks in plain words, in Discord." },
-  { label: "Read", detail: "It pulls the stored ASU pages that match." },
-  { label: "Searched live", detail: "It queries the source that has to be current." },
-  { label: "Opened the page", detail: "A thin result is not an answer; it reads the page itself." },
-  { label: "Answered", detail: "With the source and the date it was read." },
+  { label: "Asked" },
+  { label: "Read stored pages" },
+  { label: "Searched live" },
+  { label: "Opened the page" },
+  { label: "Answered with the source" },
 ];
 
 const CITE = { label: "ASU Course Catalog", href: "https://catalog.apps.asu.edu/catalog/courses" };
@@ -47,7 +47,6 @@ const StepRow = ({ progress, i, step }: { progress: MotionValue<number>; i: numb
       <motion.span style={{ opacity: dot }} className="mt-1.5 h-3 w-3 shrink-0 rotate-45 bg-shu" />
       <motion.div style={{ color }}>
         <p className="font-serif text-lg font-bold">{step.label}</p>
-        <p className="text-sm leading-6">{step.detail}</p>
       </motion.div>
     </li>
   );
@@ -136,7 +135,6 @@ const InAction = () => {
               numeral="壱"
               label="In action"
               title="It shows its working."
-              lead="Every turn reports what it did and arrives with the page behind it."
             />
             {pinned && (
               <ol className="mt-10 space-y-5">

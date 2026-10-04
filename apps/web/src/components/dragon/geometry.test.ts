@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildGeometry, smoothPath } from "./geometry";
+import { buildGeometry, lengthAtY, pose, smoothPath } from "./geometry";
 
 const layout = {
   width: 1440,
@@ -37,6 +37,23 @@ describe("dragon geometry", () => {
   });
 
   it("draws nothing for fewer than two points", () => {
-    expect(smoothPath([{ x: 0, y: 0 }])).toBe("");
+    expect(smoothPath([{ x: 0, y: 0 }]).d).toBe("");
+  });
+
+  it("measures a straight run exactly and finds points along it", () => {
+    const { track } = smoothPath([
+      { x: 0, y: 0 },
+      { x: 0, y: 100 },
+    ]);
+    expect(track.total).toBeCloseTo(100, 5);
+    expect(pose(track, 25)).toMatchObject({ x: 0, y: 25, angle: 90 });
+    expect(lengthAtY(track, 60)).toBeGreaterThanOrEqual(60);
+    expect(lengthAtY(track, 1000)).toBe(track.total);
+  });
+
+  it("places fins along the whole body", () => {
+    const geo = buildGeometry(layout);
+    expect(geo.fins.length).toBeGreaterThan(geo.track.total / 40);
+    expect(geo.legs.length).toBeGreaterThan(0);
   });
 });

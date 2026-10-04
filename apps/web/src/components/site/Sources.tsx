@@ -126,7 +126,6 @@ const Sources = () => {
             numeral="弐"
             label="What students ask"
             title="Everything you would otherwise go digging for."
-            lead="Each banner is a source Sparky knows how to reach. Ask in plain words; it picks the source and writes the query."
           />
         </div>
         {pinned ? (

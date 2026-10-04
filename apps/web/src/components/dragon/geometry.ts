@@ -4,11 +4,17 @@ export type Point = { x: number; y: number };
 /** A dorsal fin or leg placed along the body: where it sits, its heading, and which side it is on. */
 export type Mark = { x: number; y: number; angle: number; side: 1 | -1 };
 
+/** The body flattened into points with their running length, for lookups without the SVG API. */
+export type Track = { lengths: Float64Array; xs: Float64Array; ys: Float64Array; total: number };
+
 /** Everything the trail needs to draw, measured from the page layout. */
 export type Geometry = {
   width: number;
   height: number;
   d: string;
+  track: Track;
+  fins: Mark[];
+  legs: Mark[];
   body: number;
   head: number;
   /** Page y the head sits at before any scroll. */
@@ -17,23 +23,48 @@ export type Geometry = {
   endY: number;
 };
 
-/** Converts a Catmull-Rom spline through the points into a cubic Bezier path. */
-export const smoothPath = (points: Point[]): string => {
-  if (points.length < 2) return "";
+/** Steps each Bezier segment is flattened into. */
+const STEPS = 24;
+
+/** Converts a Catmull-Rom spline through the points into a cubic Bezier path and its flattened track. */
+export const smoothPath = (points: Point[]): { d: string; track: Track } => {
+  const empty = { d: "", track: { lengths: new Float64Array(), xs: new Float64Array(), ys: new Float64Array(), total: 0 } };
+  if (points.length < 2) return empty;
+  const segments = points.length - 1;
+  const n = segments * STEPS + 1;
+  const lengths = new Float64Array(n);
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
   const [first] = points;
+  xs[0] = first.x;
+  ys[0] = first.y;
   let d = `M ${first.x.toFixed(1)} ${first.y.toFixed(1)}`;
-  for (let i = 0; i < points.length - 1; i++) {
+  let k = 1;
+  for (let i = 0; i < segments; i++) {
     const p0 = points[i - 1] ?? points[i];
     const p1 = points[i];
     const p2 = points[i + 1];
     const p3 = points[i + 2] ?? p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    const c1x = +(p1.x + (p2.x - p0.x) / 6).toFixed(1);
+    const c1y = +(p1.y + (p2.y - p0.y) / 6).toFixed(1);
+    const c2x = +(p2.x - (p3.x - p1.x) / 6).toFixed(1);
+    const c2y = +(p2.y - (p3.y - p1.y) / 6).toFixed(1);
+    const ax = +p1.x.toFixed(1);
+    const ay = +p1.y.toFixed(1);
+    const bx = +p2.x.toFixed(1);
+    const by = +p2.y.toFixed(1);
+    d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${bx.toFixed(1)} ${by.toFixed(1)}`;
+    for (let j = 1; j <= STEPS; j++, k++) {
+      const t = j / STEPS;
+      const u = 1 - t;
+      const x = u * u * u * ax + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * bx;
+      const y = u * u * u * ay + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * by;
+      xs[k] = x;
+      ys[k] = y;
+      lengths[k] = lengths[k - 1] + Math.hypot(x - xs[k - 1], y - ys[k - 1]);
+    }
   }
-  return d;
+  return { d, track: { lengths, xs, ys, total: lengths[n - 1] } };
 };
 
 /** Rect of an element relative to the host element. */
@@ -100,47 +131,34 @@ export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): 
   points.push({ x: end.x + toward * width * 0.22, y: end.y - 20 });
   points.push({ x: end.x, y: end.y });
 
-  return {
-    width,
-    height,
-    d: smoothPath(points),
-    body,
-    head,
-    startY,
-    endY: end.y,
-  };
+  const { d, track } = smoothPath(points);
+  const { fins, legs } = placeMarks(track, body / 2 - 2, width);
+  return { width, height, d, track, fins, legs, body, head, startY, endY: end.y };
 };
 
-/** Samples along a path element, used for placing marks and mapping height to length. */
-export type Samples = { lengths: number[]; ys: number[]; total: number };
-
-/** Measures the path every few pixels. */
-export const samplePath = (path: SVGPathElement, step = 6): Samples => {
-  const total = path.getTotalLength();
-  const lengths: number[] = [];
-  const ys: number[] = [];
-  for (let s = 0; s <= total; s += step) {
-    lengths.push(s);
-    ys.push(path.getPointAtLength(s).y);
-  }
-  return { lengths, ys, total };
-};
-
-/** First length along the path at which it reaches the given height. */
-export const lengthAtY = ({ lengths, ys, total }: Samples, y: number): number => {
+/** First length along the track at which it reaches the given height. */
+export const lengthAtY = ({ lengths, ys, total }: Track, y: number): number => {
   for (let i = 0; i < ys.length; i++) {
     if (ys[i] >= y) return lengths[i];
   }
   return total;
 };
 
-/** Position and heading in degrees at a length along the path. */
-export const pose = (path: SVGPathElement, s: number, total: number) => {
+/** Position and heading in degrees at a length along the track. */
+export const pose = ({ lengths, xs, ys, total }: Track, s: number) => {
   const at = Math.min(Math.max(s, 0), total);
-  const a = path.getPointAtLength(Math.max(at - 2, 0));
-  const b = path.getPointAtLength(Math.min(at + 2, total));
-  const p = path.getPointAtLength(at);
-  return { x: p.x, y: p.y, angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI };
+  let lo = 0;
+  let hi = lengths.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (lengths[mid] <= at) lo = mid;
+    else hi = mid;
+  }
+  const span = lengths[hi] - lengths[lo] || 1;
+  const f = (at - lengths[lo]) / span;
+  const dx = xs[hi] - xs[lo];
+  const dy = ys[hi] - ys[lo];
+  return { x: xs[lo] + dx * f, y: ys[lo] + dy * f, angle: (Math.atan2(dy, dx) * 180) / Math.PI };
 };
 
 /** Which side of the body is its back at a heading: up when running across, outward when running down. */
@@ -153,11 +171,12 @@ const backSide = (x: number, angle: number, width: number): 1 | -1 => {
 };
 
 /** Fins along the back and legs along the belly, spaced by length. */
-export const placeMarks = (path: SVGPathElement, total: number, offset: number, width: number) => {
+export const placeMarks = (track: Track, offset: number, width: number) => {
+  const { total } = track;
   const fins: Mark[] = [];
   const legs: Mark[] = [];
   const at = (s: number, back: boolean): Mark => {
-    const { x, y, angle } = pose(path, s, total);
+    const { x, y, angle } = pose(track, s);
     const r = (angle * Math.PI) / 180;
     const side = backSide(x, angle, width) * (back ? 1 : -1);
     const k = offset * side;

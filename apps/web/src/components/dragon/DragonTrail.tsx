@@ -1,17 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import DragonHead from "./DragonHead";
 import Pearl from "./Pearl";
-import {
-  buildGeometry,
-  lengthAtY,
-  placeMarks,
-  pose,
-  samplePath,
-  type Box,
-  type Geometry,
-  type Mark,
-  type Samples,
-} from "./geometry";
+import { buildGeometry, lengthAtY, pose, type Box, type Geometry, type Mark } from "./geometry";
 
 /** Space kept between the head and the pearl it chases, in body widths. */
 const PEARL_LEAD = 3.4;
@@ -86,13 +76,11 @@ const Leg = ({ mark, scale }: { mark: Mark; scale: number }) => (
  */
 const DragonTrail = () => {
   const host = useRef<HTMLDivElement>(null);
-  const path = useRef<SVGPathElement>(null);
+  const svg = useRef<SVGSVGElement>(null);
   const mask = useRef<SVGPathElement>(null);
   const head = useRef<SVGGElement>(null);
   const pearl = useRef<SVGGElement>(null);
-  const samples = useRef<Samples | null>(null);
   const [geo, setGeo] = useState<Geometry | null>(null);
-  const [marks, setMarks] = useState<{ fins: Mark[]; legs: Mark[] }>({ fins: [], legs: [] });
 
   useLayoutEffect(() => {
     const node = host.current;
@@ -113,32 +101,22 @@ const DragonTrail = () => {
     };
   }, []);
 
-  useLayoutEffect(() => {
-    const p = path.current;
-    if (!geo || !p || typeof p.getTotalLength !== "function") return;
-    samples.current = samplePath(p);
-    setMarks(placeMarks(p, samples.current.total, geo.body / 2 - 2, geo.width));
-  }, [geo]);
-
   const update = useCallback(() => {
-    const p = path.current;
-    const s = samples.current;
-    if (!geo || !p || !s || !mask.current || !head.current || !pearl.current) return;
+    if (!geo || !svg.current || !mask.current || !head.current || !pearl.current) return;
+    const { track } = geo;
     const lead = geo.body * PEARL_LEAD;
-    const host = path.current.ownerSVGElement?.getBoundingClientRect();
-    const view = host ? -host.top + window.innerHeight * 0.55 : geo.endY;
+    const view = -svg.current.getBoundingClientRect().top + window.innerHeight * 0.55;
     const target = reducedMotion() ? geo.endY : Math.min(Math.max(view, geo.startY), geo.endY);
-    const at = Math.min(lengthAtY(s, target), s.total - lead);
+    const at = Math.min(lengthAtY(track, target), track.total - lead);
 
-    mask.current.style.strokeDasharray = `${s.total} ${s.total}`;
-    mask.current.style.strokeDashoffset = `${s.total - at}`;
-    const h = pose(p, at, s.total);
+    mask.current.style.strokeDashoffset = `${track.total - at}`;
+    const h = pose(track, at);
     const flip = Math.cos((h.angle * Math.PI) / 180) < 0 ? -1 : 1;
     head.current.setAttribute(
       "transform",
       `translate(${h.x.toFixed(1)} ${h.y.toFixed(1)}) rotate(${h.angle.toFixed(1)}) scale(${geo.head} ${geo.head * flip})`,
     );
-    const ahead = pose(p, at + lead, s.total);
+    const ahead = pose(track, at + lead);
     pearl.current.setAttribute("transform", `translate(${ahead.x.toFixed(1)} ${ahead.y.toFixed(1)})`);
   }, [geo]);
 
@@ -154,12 +132,12 @@ const DragonTrail = () => {
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [update, marks]);
+  }, [update]);
 
   return (
     <div ref={host} aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       {geo && (
-        <svg width={geo.width} height={geo.height} className="absolute left-0 top-0">
+        <svg ref={svg} width={geo.width} height={geo.height} className="absolute left-0 top-0">
           <defs>
             <pattern id="dragon-scales" width="18" height="12" patternUnits="userSpaceOnUse">
               <path
@@ -177,19 +155,21 @@ const DragonTrail = () => {
                 fill="none"
                 stroke="white"
                 strokeWidth={geo.body * 3}
-                style={{ strokeDasharray: 1e6, strokeDashoffset: 1e6 }}
+                pathLength={geo.track.total}
+                strokeDasharray={`${geo.track.total} ${geo.track.total}`}
+                style={{ strokeDashoffset: geo.track.total }}
               />
             </mask>
           </defs>
 
           <g mask="url(#dragon-reveal)">
-            {marks.legs.map((m, i) => (
+            {geo.legs.map((m, i) => (
               <Leg key={`l${i}`} mark={m} scale={geo.body / 44} />
             ))}
-            {marks.fins.map((m, i) => (
+            {geo.fins.map((m, i) => (
               <Fin key={`f${i}`} mark={m} scale={geo.body / 44} />
             ))}
-            <path ref={path} d={geo.d} fill="none" stroke="var(--color-ink)" strokeWidth={geo.body + 5} />
+            <path d={geo.d} fill="none" stroke="var(--color-ink)" strokeWidth={geo.body + 5} />
             <path d={geo.d} fill="none" stroke="var(--color-shu)" strokeWidth={geo.body} />
             <path d={geo.d} fill="none" stroke="url(#dragon-scales)" strokeWidth={geo.body - 6} />
             <path

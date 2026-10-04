@@ -11,7 +11,7 @@
   <a href="docs/blog/sparkyai-v1.md">v1 write-up</a>
 </p>
 
-SparkyAI is an open-source assistant for Arizona State University students. It lives in Discord, answers from official ASU sources with links to them, and runs on open models on infrastructure we operate.
+SparkyAI is an unofficial, open-source assistant for Arizona State University students, not affiliated with the university. It lives in Discord, answers from official ASU sources with links to them, and runs on open models on infrastructure we operate.
 
 ## Vision
 
