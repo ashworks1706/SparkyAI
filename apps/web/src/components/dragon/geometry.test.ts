@@ -36,6 +36,16 @@ describe("dragon geometry", () => {
     }
   });
 
+  it("runs straight down the middle below the hero instead of swinging between margins", () => {
+    const { track } = buildGeometry(layout);
+    const below = layout.hero.y + layout.hero.h + 200;
+    for (let i = 0; i < track.ys.length; i++) {
+      if (track.ys[i] > below && track.ys[i] < layout.end.y - 200) {
+        expect(Math.abs(track.xs[i] - layout.width / 2)).toBeLessThan(40);
+      }
+    }
+  });
+
   it("draws nothing for fewer than two points", () => {
     expect(smoothPath([{ x: 0, y: 0 }]).d).toBe("");
   });
