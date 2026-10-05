@@ -28,12 +28,20 @@ describe("website routes", () => {
     }
   });
 
-  it("names a source under the answer it shows", async () => {
+  it("plays the recorded Discord demo in the in action section", () => {
+    const { container } = render(<App />);
+
+    const action = screen.getByRole("region", { name: /sparky in action/i });
+    expect(within(action).getByLabelText(/discord thread/i)).toHaveAttribute("src", "/demo/sparky-demo.mp4");
+    expect(container.querySelector("video")?.getAttribute("poster")).toBe("/demo/sparky-demo.webp");
+  });
+
+  it("shows each source as a Discord thread with the steps and a link to the page", () => {
     render(<App />);
 
-    const action = within(screen.getByRole("region", { name: /sparky in action/i }));
-    const cite = await action.findByRole("link", { name: /asu course catalog/i }, { timeout: 6000 });
-    expect(cite).toHaveAttribute("href", expect.stringContaining("catalog.apps.asu.edu"));
+    const sources = within(screen.getByRole("region", { name: /what students ask/i }));
+    expect(sources.getByRole("link", { name: /asu library hours/i })).toHaveAttribute("href", "https://lib.asu.edu/hours");
+    expect(sources.getAllByText(/live result from/i).length).toBeGreaterThan(0);
   });
 
   it("links the navigation to each section and the repository", () => {

@@ -36,7 +36,7 @@ const Medallion = ({ numeral }: { numeral: string }) => (
 
 /** The turn, stage by stage, strung on a cord that draws itself in. */
 const HowItWorks = () => (
-  <section id="how-it-works" aria-label="How it works" className="relative z-10 py-10">
+  <section id="how-it-works" aria-label="How it works" className="relative z-10 bg-paper py-20">
     <div className="mx-auto max-w-6xl px-5 sm:px-8">
       <Heading
         title="Grounded by construction, not by asking nicely."

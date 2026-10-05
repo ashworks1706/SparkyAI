@@ -80,14 +80,13 @@ export type Layout = {
   end: Point;
 };
 
-/** Lays the body out: a coil in the hero, then down the margins, crossing the page at each divider, into the logo. */
+/** Lays the body out: a coil in the hero, then straight down the middle of the page into the logo. */
 export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): Geometry => {
   const narrow = width < 768;
   const body = narrow ? 22 : 44;
   const head = narrow ? 0.32 : 0.54;
-  const gutter = narrow ? 10 : Math.max(46, (width - 1152) / 2 - 64);
-  const lanes = { right: width - gutter, left: gutter };
-  const wiggle = narrow ? 6 : 18;
+  const wiggle = narrow ? 6 : 14;
+  const lane = width / 2;
 
   const { x, y, w, h } = hero;
   const points: Point[] = [
@@ -97,37 +96,22 @@ export const buildGeometry = ({ width, height, hero, crossings, end }: Layout): 
     { x: x + w * 0.12, y: y + h * 0.42 },
     { x: x + w * 0.5, y: y + h * 0.56 },
     { x: x + w * 0.86, y: y + h * 0.7 },
+    { x: x + w * 0.5, y: y + h * 0.9 },
+    { x: lane, y: y + h + (narrow ? 60 : 120) },
   ];
   const startY = y + h * 0.56;
 
-  let side: "left" | "right" = "right";
-  let cursor = y + h * 0.95;
-  points.push({ x: lanes.right, y: cursor });
-
-  const runLane = (to: number) => {
-    const steps = Math.max(1, Math.round((to - cursor) / 260));
+  const stops = [...crossings, end.y - (narrow ? 120 : 200)].filter((c) => c > points[points.length - 1].y);
+  let cursor = points[points.length - 1].y;
+  stops.forEach((to, i) => {
+    const steps = Math.max(1, Math.round((to - cursor) / 320));
     const span = (to - cursor) / steps;
-    for (let i = 1; i < steps; i++) {
-      const sway = i % 2 === 0 ? wiggle : -wiggle;
-      points.push({ x: lanes[side] + (side === "right" ? sway : -sway), y: cursor + span * i });
+    for (let k = 1; k <= steps; k++) {
+      const sway = (i + k) % 2 === 0 ? wiggle : -wiggle;
+      points.push({ x: lane + (k === steps ? 0 : sway), y: cursor + span * k });
     }
     cursor = to;
-  };
-
-  for (const c of crossings) {
-    const reach = narrow ? 90 : 150;
-    runLane(c - reach);
-    points.push({ x: lanes[side], y: c - reach });
-    const next = side === "right" ? "left" : "right";
-    points.push({ x: width / 2, y: c });
-    points.push({ x: lanes[next], y: c + reach });
-    side = next;
-    cursor = c + reach;
-  }
-
-  const approach = end.y - (narrow ? 120 : 200);
-  runLane(approach);
-  points.push({ x: lanes[side], y: approach });
+  });
   points.push({ x: end.x, y: end.y });
 
   const { d, track } = smoothPath(points);
