@@ -287,7 +287,7 @@ fn telemetry_exports_nothing_until_phoenix_is_set() {
 
     let cfg = ok("");
     assert!(cfg.telemetry.phoenix_url.is_none());
-    assert!(cfg.telemetry.phoenix_api_key.expose_secret().is_empty());
+    assert_eq!(cfg.telemetry.phoenix_api_key.expose_secret().len(), 0);
     assert_eq!(cfg.telemetry.project_name, "sparky");
     assert_eq!(cfg.telemetry.provider_name, "llama.cpp");
 }

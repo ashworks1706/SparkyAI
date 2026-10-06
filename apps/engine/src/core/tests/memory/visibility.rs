@@ -31,7 +31,7 @@ async fn recalls(visibility: Visibility, recall_in_public: bool) -> (usize, usiz
 async fn a_public_request_recalls_no_memory_and_no_profile() {
     let (memory, profile, memories) = recalls(Visibility::Public, false).await;
     assert_eq!((memory, profile), (0, 0));
-    assert!(memories.is_empty());
+    assert_eq!(memories.len(), 0);
 }
 
 #[tokio::test]
@@ -52,7 +52,7 @@ async fn a_private_request_recalls_memory_and_profile_and_reports_them() {
 async fn the_setting_lets_a_public_request_recall_but_never_name_what_it_recalled() {
     let (memory, profile, memories) = recalls(Visibility::Public, true).await;
     assert_eq!((memory, profile), (1, 1));
-    assert!(memories.is_empty());
+    assert_eq!(memories.len(), 0);
 }
 
 #[test]

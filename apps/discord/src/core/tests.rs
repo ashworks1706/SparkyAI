@@ -445,7 +445,7 @@ fn sse_frames_come_out_whole_even_when_the_bytes_arrive_split() {
 
     // A frame split across two reads yields nothing until it is complete.
     buf.push_str("event: progress\ndata: {\"text\":\"sear");
-    assert!(drain_frames(&mut buf).is_empty());
+    assert_eq!(drain_frames(&mut buf).len(), 0);
 
     buf.push_str("ching ASU pages\"}\n\nevent: done\ndata: {}\n\n");
     let frames = drain_frames(&mut buf);
@@ -1139,7 +1139,7 @@ fn a_character_split_across_two_network_chunks_arrives_whole() {
         !frames[0].1.contains('\u{fffd}'),
         "no replacement characters"
     );
-    assert!(pending.is_empty());
+    assert_eq!(pending.len(), 0);
 }
 
 #[test]
@@ -1297,7 +1297,7 @@ fn no_more_than_max_images_of_one_message_are_sent() {
         .collect();
 
     assert_eq!(images(many.clone(), 4).len(), 4);
-    assert!(images(many, 0).is_empty());
+    assert_eq!(images(many, 0).len(), 0);
 }
 
 #[test]
@@ -1368,5 +1368,8 @@ fn files_that_are_not_images_are_sent_to_the_engine_within_the_cap() {
         "an image goes as an image, and a file over the cap is left out"
     );
     assert_eq!(sent[0].media_type, "application/pdf");
-    assert!(files([("https://cdn/a.pdf", "a.pdf", None, 1)], 0, 2_000_000).is_empty());
+    assert_eq!(
+        files([("https://cdn/a.pdf", "a.pdf", None, 1)], 0, 2_000_000).len(),
+        0
+    );
 }

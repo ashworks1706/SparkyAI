@@ -296,7 +296,7 @@ fn a_choice_the_query_names_is_taken_and_one_inside_a_word_is_not() {
         named("undergraduate courses", &["graduate"]).is_empty(),
         "a choice a longer word starts with is not a match"
     );
-    assert!(named("nothing here", sports).is_empty());
+    assert_eq!(named("nothing here", sports).len(), 0);
 }
 
 #[test]
@@ -754,7 +754,7 @@ async fn an_empty_index_answers_with_what_to_do_next() {
         unreachable!("an empty index is not a failure, got {out:?}")
     };
     assert_eq!(output.content, NOTHING_STORED);
-    assert!(output.sources.is_empty());
+    assert_eq!(output.sources.len(), 0);
     assert!(
         output.content.contains("search_live"),
         "it names the way on"

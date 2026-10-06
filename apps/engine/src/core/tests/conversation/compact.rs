@@ -63,7 +63,7 @@ async fn a_compacted_turn_carries_its_own_role() {
     // The summary has the summary role and no tool calls.
     assert_eq!(summary.role, Role::Summary);
     assert!(summary.content.contains("Hayden"));
-    assert!(summary.tool_calls.is_empty());
+    assert_eq!(summary.tool_calls.len(), 0);
 }
 
 #[tokio::test]

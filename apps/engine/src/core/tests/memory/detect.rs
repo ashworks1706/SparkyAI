@@ -103,7 +103,7 @@ fn the_rules_come_from_configuration() {
         !rules.subjects.is_empty(),
         "an empty list falls back to the built-in one"
     );
-    assert!(!rules.cues.is_empty());
+    assert_ne!(rules.cues.len(), 0);
 
     // A deployment can narrow the gate to what it cares about.
     let narrow = RuleDetector::new(Rules {

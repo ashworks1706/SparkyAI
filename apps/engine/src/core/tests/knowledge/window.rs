@@ -98,7 +98,7 @@ fn the_same_ordinal_on_two_pages_does_not_merge() {
 
 #[test]
 fn no_hits_read_back_nothing() {
-    assert!(spans(&[], 2).is_empty());
+    assert_eq!(spans(&[], 2).len(), 0);
 }
 
 #[test]

@@ -98,7 +98,7 @@ async fn an_answer_without_tools_cites_nothing() {
     let Ok(answer) = a.run(&ctx(), "hi").await else {
         unreachable!("the run answered")
     };
-    assert!(answer.citations().is_empty());
+    assert_eq!(answer.citations().len(), 0);
 }
 
 #[test]

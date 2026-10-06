@@ -56,7 +56,7 @@ fn a_capability_that_needs_approval_says_so() {
 #[test]
 fn nothing_offered_writes_no_section() {
     // No capabilities render as an empty string.
-    assert!(render(&[]).is_empty());
+    assert_eq!(render(&[]).len(), 0);
 }
 
 #[test]

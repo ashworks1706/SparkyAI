@@ -451,7 +451,7 @@ fn a_session_idle_past_its_budget_is_swept_and_a_fresh_one_is_not() {
         "warm",
         true,
     );
-    assert!(fresh.idle_sessions().is_empty());
+    assert_eq!(fresh.idle_sessions().len(), 0);
 }
 
 /// Live check that the image carries what the tool description promises.
@@ -661,7 +661,7 @@ async fn killing_a_container_the_engine_does_not_hold_is_refused_rather_than_run
         matches!(refused, Err(SandboxError::Refused(_))),
         "a name the engine never started is not handed to the runtime: {refused:?}"
     );
-    assert!(sandbox.sessions().is_empty());
+    assert_eq!(sandbox.sessions().len(), 0);
 }
 
 #[test]
