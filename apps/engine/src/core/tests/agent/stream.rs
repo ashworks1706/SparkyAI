@@ -138,7 +138,7 @@ fn inline_thinking_never_shows_as_answer_text() {
 fn a_withheld_draft_releases_nothing_more() {
     let mut draft = Draft::new(160);
     draft.withhold();
-    assert!(pushed(&mut draft, &words("Anything at all. ")).is_empty());
+    assert_eq!(pushed(&mut draft, &words("Anything at all. ")).len(), 0);
     assert!(!draft.shown());
 }
 

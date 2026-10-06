@@ -311,7 +311,7 @@ fn anything_unreadable_withdraws_nothing() {
         );
     }
     // An index outside the list is dropped.
-    assert!(parse_indices("9", 3).is_empty());
+    assert_eq!(parse_indices("9", 3).len(), 0);
     assert_eq!(parse_indices("0, 2", 3), vec![1], "numbering starts at one");
 }
 

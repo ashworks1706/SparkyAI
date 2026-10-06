@@ -161,7 +161,7 @@ fn the_default_rules_come_from_configuration() {
     let r = Rules::default();
     assert_eq!(r.max_answer_chars, cfg.max_answer_chars);
     assert_eq!(r.replacement, cfg.replacement);
-    assert!(r.denied_phrases.is_empty());
+    assert_eq!(r.denied_phrases.len(), 0);
 }
 
 #[tokio::test]

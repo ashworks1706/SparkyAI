@@ -260,7 +260,11 @@ fn a_command_is_written_once_as_it_starts_and_once_with_how_it_went() {
     for c in &second {
         shown.insert(c.id, c.ended());
     }
-    assert!(unwritten(&done, &shown).is_empty());
+    assert_eq!(
+        unwritten(&done, &shown).len(),
+        0,
+        "nothing is written twice"
+    );
 }
 
 #[test]

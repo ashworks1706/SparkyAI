@@ -114,5 +114,5 @@ fn a_pin_the_server_does_not_list_is_reported() {
     ]);
     let offered = vec!["list_events".to_owned()];
     assert_eq!(unoffered(&risks, &offered), vec!["create_event".to_owned()]);
-    assert!(unoffered(&BTreeMap::new(), &offered).is_empty());
+    assert_eq!(unoffered(&BTreeMap::new(), &offered).len(), 0);
 }

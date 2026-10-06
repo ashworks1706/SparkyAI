@@ -221,7 +221,7 @@ fn thinking_the_model_wrote_inline_is_lifted_out_of_the_answer() {
     // A step that ran out of room mid-thought still reported a thought.
     let (cut, visible) = split("", "<think>I should search for");
     assert_eq!(cut.as_deref(), Some("I should search for"));
-    assert!(visible.is_empty());
+    assert_eq!(visible.len(), 0);
 
     // Reasoning the provider returned in a field of its own wins over the text.
     let (given, visible) = split("provider reasoning", "<think>inline</think>answer");
