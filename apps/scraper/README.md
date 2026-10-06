@@ -12,7 +12,7 @@ just scraper login                  # capture the admin ASU session (MyASU and D
 just migrate                        # apply migrations/
 ```
 
-`serve` and `run` require the admin session and sign in first when run at a terminal.
+With `auth.enabled` set, `serve` and `run` require the admin session and sign in first when run at a terminal. It is off by default, which leaves `clubs` and the Sun Devil Central half of `events` unserved.
 
 | Module | Holds |
 |---|---|
@@ -23,7 +23,8 @@ just migrate                        # apply migrations/
 | `ingest/embed.py` | llama-server embed endpoint |
 | `ingest/tree.py` | the hierarchical index: cluster, summarize on the chat endpoint, embed, recurse |
 | `ingest/pipeline.py` | fetch, hash, snapshot, extract, chunk, embed, index, tree |
-| `ingest/pace.py` | spaces fetches to one host `scraper.host_gap_secs` apart |
+| `ingest/pace.py` | spaces fetches to one host: `scraper.host_gap_secs` for scheduled runs, `scraper.live_host_gap_secs` across the live lanes |
+| `ingest/robots.py` | the robots.txt check every page fetch passes |
 | `jobs.py` | `scraper serve`: the live and background lanes over the `jobs` queue, and the timer that queues due sources |
 | `query/registry.py` | the live query sources the engine may call, published by `scraper serve` |
 | `query/run.py` | one live query: checks, fetch, the text handed back |

@@ -21,7 +21,7 @@ A student should not have to dig through a dozen ASU sites to find a deadline, a
 
 - Answers questions about courses, open seats, prerequisites, clubs, events, dining and library hours, shuttles, scholarships, jobs, news and sports.
 - Searches a stored index of ASU pages and 17 live sources, sending several phrasings of a query at once and searching again until it has the answer.
-- Reads login-gated pages such as Sun Devil Central clubs and events through one operator ASU session.
+- Can read login-gated pages such as Sun Devil Central clubs and events through one operator ASU session. Off by default; see [Data and etiquette](#data-and-etiquette).
 - Reads files a student attaches (PDF, Word, Excel, CSV, scanned pages) and works through long results in a sandboxed Linux container.
 - Remembers what a student tells it in private conversations, and forgets on request.
 - Holds any consequential action until the student approves it.
@@ -50,11 +50,22 @@ flowchart LR
 
 ```
 just bootstrap          # tools, .env, deps, infra, migrations
-just scraper login      # the operator ASU session the scraper requires
 just cli                # developer console for every unit
 ```
 
 `just up` starts the full compose stack. Setup details are in [deploy/README.md](deploy/README.md), and [AGENTS.md](AGENTS.md) lists every recipe.
+
+## Data and etiquette
+
+SparkyAI is an unofficial student project, not affiliated with Arizona State University. The scraper reads the same public pages a browser does, and:
+
+- identifies itself as `SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)`;
+- checks each site's robots.txt before fetching a page, and skips what it disallows;
+- waits `scraper.host_gap_secs` (5 s) between scheduled fetches to one site, and `scraper.live_host_gap_secs` (1 s) between live ones;
+- refetches a scheduled page only on its interval, hours apart, and caches live results in Redis;
+- answers from stored copies and cites the original page with a link.
+
+Pages behind a login are off unless `auth.enabled` is set in `sparky.toml`. Turn it on only with permission to read those pages through a signed-in account. To have a site excluded, open an issue or contact the maintainer through GitHub.
 
 ## Status
 

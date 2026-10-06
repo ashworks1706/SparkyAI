@@ -437,6 +437,8 @@ keep_versions = 5                  # versions kept per source with their snapsho
 schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
 job_lease_secs = 1800.0            # a background job running longer is queued again
 host_gap_secs = 5.0                # shortest gap between scheduled fetches to one host
+live_host_gap_secs = 1.0           # shortest gap between live fetches to one host, across every live lane
+robots_cache_secs = 3600.0         # how long a site's robots.txt is kept before it is read again
 query_max_chars = 30000            # longest live result sent to the engine
 # Past this many queued live_index jobs a live result is answered but not indexed.
 index_backlog_limit = 500
@@ -466,7 +468,10 @@ wait_for_ms = 5000             # wait after page load
 only_main_content = true
 
 # Admin browser session for login-gated sources, captured by just scraper login. Only cookies are saved.
+# Off by default: clubs is not offered and events reads only the public calendar. Turn it on only
+# with permission to read those pages through a signed-in account.
 [auth]
+enabled = false
 storage_state_path = "../../.sparky/auth/admin_state.json"   # relative to apps/scraper
 login_url = "https://my.asu.edu/"
 service_login_url = "https://sundevilcentral.eoss.asu.edu/webapp/auth/login"

@@ -309,3 +309,24 @@ def test_a_web_search_with_no_results_says_which_engines_did_not_answer():
 
     with pytest.raises(QueryError, match="duckduckgo"):
         render("x", {"results": [], "unresponsive_engines": [["duckduckgo", "CAPTCHA"]]}, 8, 300)
+
+
+def test_a_page_source_waits_on_the_pacer_before_it_fetches(monkeypatch):
+    from scraper.core.types import Fetched
+    from scraper.query import registry
+
+    order: list[str] = []
+
+    class Pacer:
+        def wait(self, url: str) -> None:
+            order.append(f"wait {url}")
+
+    def fetched(url: str, **_kw) -> Fetched:
+        order.append(f"fetch {url}")
+        return Fetched(
+            url=url, status=200, body=b"Open 7am", content_type="text/plain", text="Open 7am"
+        )
+
+    monkeypatch.setattr(registry.fetch, "fetch", fetched)
+    url, _text = registry.run(QUERY_SOURCES["library_hours"], {}, Pacer())
+    assert order == [f"wait {url}", f"fetch {url}"]

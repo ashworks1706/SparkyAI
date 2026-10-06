@@ -14,7 +14,7 @@ from scraper.core.types import Job, QueryError
 from scraper.ingest import pipeline
 from scraper.ingest.pace import HostPacer
 from scraper.query import index
-from scraper.query.registry import QUERY_SOURCES
+from scraper.query.registry import QUERY_SOURCES, offered
 from scraper.query.run import for_caller, run_job, should_index, source_of
 from scraper.sources import SOURCES
 from scraper.store import object as objects
@@ -59,7 +59,7 @@ def handle(conn: psycopg.Connection, job: Job, pacer: HostPacer | None = None) -
     """Does one job and returns its result. Raises QueryError for a job the caller can correct."""
     cfg = settings().scraper
     if job.kind == QUERY:
-        result = run_job(job)
+        result = run_job(job, pacer)
         if should_index(QUERY_SOURCES[result.source], cfg.index_live_results):
             # A live result is not queued for indexing past index_backlog_limit.
             if postgres.backlog_at_least(conn, INDEX, cfg.index_backlog_limit):
@@ -143,10 +143,11 @@ def enqueue_due(now: datetime) -> int:
     return queued
 
 
-def _lane(name: str, kinds: Sequence[str], stop: threading.Event, listen: bool) -> None:
+def _lane(
+    name: str, kinds: Sequence[str], stop: threading.Event, listen: bool, pacer: HostPacer
+) -> None:
     """Claims jobs of kinds until stop is set. A listening lane also wakes on notification."""
     cfg = settings()
-    pacer = HostPacer(cfg.scraper.host_gap_secs)
     listener = None
     if listen:
         listener = psycopg.connect(cfg.postgres.url.get_secret_value(), autocommit=True)
@@ -173,15 +174,19 @@ def serve() -> None:
     """Publishes the query registry, starts the live and background lanes, and schedules runs."""
     cfg = settings().scraper
     with postgres.connection() as conn:
-        count = postgres.upsert_query_sources(conn, list(QUERY_SOURCES.values()))
+        count = postgres.upsert_query_sources(
+            conn, [s for s in QUERY_SOURCES.values() if offered(s)]
+        )
         conn.commit()
     log.info("registry published", sources=count)
     stop = threading.Event()
-    lanes = [(f"live-{i}", LIVE_KINDS, True) for i in range(1, cfg.live_workers + 1)]
-    lanes.append(("background", BACKGROUND_KINDS, False))
-    for name, kinds, listen in lanes:
+    # Every live lane shares one pacer, so concurrent queries to one host take turns.
+    live = HostPacer(cfg.live_host_gap_secs)
+    lanes = [(f"live-{i}", LIVE_KINDS, True, live) for i in range(1, cfg.live_workers + 1)]
+    lanes.append(("background", BACKGROUND_KINDS, False, HostPacer(cfg.host_gap_secs)))
+    for name, kinds, listen, pacer in lanes:
         threading.Thread(
-            target=_lane, args=(name, kinds, stop, listen), name=name, daemon=True
+            target=_lane, args=(name, kinds, stop, listen, pacer), name=name, daemon=True
         ).start()
     log.info("serving", live=LIVE_KINDS, live_workers=cfg.live_workers, background=BACKGROUND_KINDS)
     try:

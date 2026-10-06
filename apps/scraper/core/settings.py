@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -71,6 +71,9 @@ class Firecrawl(BaseModel):
 
 class Auth(BaseModel):
     """Admin authenticated browser session for login-gated ASU sources. Not per-user MyASU."""
+
+    # Login-gated sources and the admin session they read through. Off, neither is used.
+    enabled: bool = False
 
     # Where the captured storage state is read from and written to.
     storage_state_path: str = "../../.sparky/auth/admin_state.json"
@@ -151,6 +154,10 @@ class Scraper(BaseModel):
     job_lease_secs: float = 1800.0
     # Shortest gap between two scheduled fetches to the same host. Zero fetches back to back.
     host_gap_secs: float = 5.0
+    # Shortest gap between two live fetches to the same host, shared by every live lane.
+    live_host_gap_secs: float = 1.0
+    # How long a site's robots.txt is kept before it is read again. Must be above zero.
+    robots_cache_secs: float = Field(default=3600.0, gt=0)
     # Queued live_index jobs past which a live result is answered but not indexed.
     index_backlog_limit: int = 500
     # How long a finished job is kept before it is removed. Zero keeps every job forever.

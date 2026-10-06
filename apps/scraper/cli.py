@@ -154,7 +154,10 @@ def _session_ok() -> bool:
 
 
 def require_session() -> None:
-    """Exits unless the admin session works, signing in first when at a terminal."""
+    """Exits unless the admin session works, signing in first when at a terminal. Off, it passes."""
+    if not settings().auth.enabled:
+        typer.echo("login-gated sources off (auth.enabled is false); no admin session needed")
+        return
     if _session_ok():
         typer.echo(f"admin session ok ({admin.state_path()})")
         return
