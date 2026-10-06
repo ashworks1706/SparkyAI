@@ -23,8 +23,14 @@ const Hash = ({ className = "h-5 w-5" }: { className?: string }) => (
 /** Channels in the sidebar; the active one is highlighted. */
 const CHANNELS = ["welcome", "general", "ask-sparky", "cs-majors", "housing"];
 
+/** A Discord server: its name and the badge on its icon. */
+export type Server = { name: string; badge: string; className: string };
+
+/** The server the landing page demo runs in. */
+const STUDENTS: Server = { name: "Sun Devil Students", badge: "ASU", className: "bg-shu text-kin" };
+
 /** The server rail, channel list, and user panel of a Discord client. */
-const Chrome = ({ channel, me }: { channel: string; me: Author }) => (
+const Chrome = ({ channel, me, server }: { channel: string; me: Author; server: Server }) => (
   <>
     <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 bg-[#1e1f22] pt-3">
       <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#5865f2] text-white">
@@ -33,15 +39,15 @@ const Chrome = ({ channel, me }: { channel: string; me: Author }) => (
         </svg>
       </span>
       <span className="h-0.5 w-8 rounded bg-[#35363c]" />
-      <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-shu font-serif text-sm font-bold text-kin">
+      <span className={`relative flex h-12 w-12 items-center justify-center rounded-2xl font-serif text-sm font-bold ${server.className}`}>
         <span className="absolute -left-3 h-10 w-1 rounded-r bg-white" />
-        ASU
+        {server.badge}
       </span>
       <span className="h-12 w-12 rounded-full bg-[#313338]" />
       <span className="h-12 w-12 rounded-full bg-[#313338]" />
     </nav>
     <aside className="flex w-[240px] shrink-0 flex-col bg-[#2b2d31]">
-      <p className="flex h-12 items-center border-b border-[#1f2023] px-4 font-semibold text-[#f2f3f5]">Sun Devil Students</p>
+      <p className="flex h-12 items-center border-b border-[#1f2023] px-4 font-semibold text-[#f2f3f5]">{server.name}</p>
       <div className="flex-1 px-2 pt-4">
         <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">Text channels</p>
         {CHANNELS.map((c) => (
@@ -85,7 +91,9 @@ const Window = ({
   messages,
   composer,
   thread,
+  server = STUDENTS,
 }: {
+  server?: Server;
   channel: string;
   topic: string;
   me: Author;
@@ -94,7 +102,7 @@ const Window = ({
   thread?: { name: string; body: ReactNode; width: number };
 }) => (
   <div className="flex h-full w-full overflow-hidden rounded-xl bg-[#313338] font-sans text-base text-[#dbdee1] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.6)] ring-1 ring-black/40">
-    <Chrome channel={channel} me={me} />
+    <Chrome channel={channel} me={me} server={server} />
     <main className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-4">
         <Hash className="h-6 w-6 text-[#80848e]" />

@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
 import Gate from "@/components/dragon/Gate";
+import DemoVideo from "./DemoVideo";
 import GithubMark from "./GithubMark";
 import Heading from "./Heading";
 import { ARCHITECTURE, REPO } from "./content";
@@ -93,6 +94,15 @@ const OpenSource = () => (
         </div>
         <Pillar />
         <div />
+      </div>
+      <div className="mx-auto mt-24 max-w-5xl px-3 sm:px-0">
+        <Heading title="From clone to your campus Discord." align="center" />
+        <div className="mt-12">
+          <DemoVideo
+            name="sparky-setup"
+            label="A developer cloning SparkyAI, adding a campus page and settings, and Sparky answering on their Discord"
+          />
+        </div>
       </div>
     </div>
   </section>
