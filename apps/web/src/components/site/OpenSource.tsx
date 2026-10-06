@@ -100,7 +100,7 @@ const OpenSource = () => (
         <div className="mt-12">
           <DemoVideo
             name="sparky-setup"
-            label="A developer cloning SparkyAI, adding a campus page and settings, and Sparky answering on their Discord"
+            label="A developer cloning SparkyAI, adding a campus page, a live source, Canvas and an MCP server, starting it from the sparky console, and Sparky answering on their Discord"
           />
         </div>
       </div>
