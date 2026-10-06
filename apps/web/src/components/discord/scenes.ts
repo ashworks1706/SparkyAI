@@ -1,4 +1,4 @@
-import { liveResult, sourceLabel, thoughtStep, toolDone, toolStarted, type Args } from "./format";
+import { liveResult, sourceLabel, thoughtStep, toolDone, type Args } from "./format";
 import type { Author, LinkButton } from "./people";
 
 /** One live source the bot reaches, as the engine names it. */
@@ -19,9 +19,6 @@ export type Call = { source: Live; query: string; text: string };
 
 /** The arguments of a search_live call. */
 export const argsOf = (call: Call): Args => ({ query: call.query, source: call.source.key });
-
-/** The progress line of a search_live call while it runs. */
-export const started = (call: Call) => toolStarted("search_live", argsOf(call));
 
 /** The progress line of a search_live call once it returned. */
 export const done = (call: Call, age = "under an hour ago") =>
@@ -102,18 +99,3 @@ export const EXAMPLES: Example[] = [
 
 /** The steps a finished example shows: the thought, then each call that returned. */
 export const stepsOf = (example: Example) => [thoughtStep(example.thought), ...example.calls.map((c) => done(c))];
-
-/** The turn the demo video plays, asking about two sources at once. */
-export const DEMO = {
-  asker: PEOPLE.maya,
-  question: "is Hayden open tonight, and is there a study room for 4 at 6pm?",
-  thought:
-    "Two live questions: today's Hayden Library hours and study rooms for four at 6 PM. Search both sources at once.",
-  calls: [
-    { source: LIVE.libraryHours, query: "Hayden Library hours today", text: "Hayden Library. Today 7:00am to 12:00am." },
-    { source: LIVE.studyRooms, query: "Hayden Library study room 4 people today 6pm", text: "Hayden Library group study rooms, capacity 4. Available 6:00pm: 2 rooms." },
-  ] satisfies Call[],
-  wrapUp: "Both answers are in; give the hours and the rooms with the booking page.",
-  answer:
-    "Hayden Library is open until **midnight** tonight.\n\nFor 6 PM, **two group rooms** for four are free. Book one from the study room page before they go.",
-};
