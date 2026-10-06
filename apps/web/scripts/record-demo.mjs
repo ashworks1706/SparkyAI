@@ -9,9 +9,9 @@ import { createServer } from "vite";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const out = `${root}public/demo`;
 const FPS = 30;
-const VIDEOS = { ask: { file: "sparky-demo", length: 18 }, setup: { file: "sparky-setup", length: 30 } };
+const FILES = { ask: "sparky-demo", setup: "sparky-setup" };
 const name = process.argv[2] ?? "ask";
-const { file, length: LENGTH } = VIDEOS[name];
+const file = FILES[name];
 const SIZE = { width: 1600, height: 1000 };
 
 const server = await createServer({ root, server: { host: "127.0.0.1", port: 5181 }, logLevel: "error" });
@@ -21,6 +21,7 @@ const page = await browser.newPage({ viewport: SIZE });
 await page.goto(`http://127.0.0.1:5181/demo.html?video=${name}`, { waitUntil: "networkidle" });
 await page.waitForFunction(() => typeof window.seekDemo === "function");
 await page.evaluate(() => document.fonts.ready);
+const LENGTH = await page.evaluate(() => window.demoLength);
 
 const encode = (args) => spawn("ffmpeg", ["-y", "-loglevel", "error", ...args], { stdio: ["pipe", "inherit", "inherit"] });
 const video = encode([
