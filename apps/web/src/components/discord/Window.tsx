@@ -29,37 +29,69 @@ export type Server = { name: string; badge: string; className: string };
 /** The server the landing page demo runs in. */
 const STUDENTS: Server = { name: "Sun Devil Students", badge: "ASU", className: "bg-shu text-kin" };
 
-/** The server rail, channel list, and user panel of a Discord client. */
-const Chrome = ({ channel, me, server }: { channel: string; me: Author; server: Server }) => (
+/** Friends listed above the bot in the direct message list. */
+const FRIENDS: Author[] = [
+  { name: "devon", color: "#23a55a" },
+  { name: "sam", color: "#00a8fc" },
+];
+
+/** The direct message list, with the open conversation highlighted. */
+const DirectMessages = ({ open }: { open: Author }) => (
+  <>
+    <p className="flex h-12 items-center border-b border-[#1f2023] px-4">
+      <span className="w-full rounded bg-[#1e1f22] px-2 py-1 text-sm text-[#949ba4]">Find or start a conversation</span>
+    </p>
+    <div className="flex-1 px-2 pt-4">
+      <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">Direct messages</p>
+      {[open, ...FRIENDS].map((a) => (
+        <p key={a.name} className={`flex h-11 items-center gap-3 rounded px-2 ${a === open ? "bg-[#404249] text-white" : "text-[#949ba4]"}`}>
+          <Avatar author={a} size={32} />
+          <span className="font-medium">{a.name}</span>
+          {a.bot && <span className="rounded-[3px] bg-[#5865f2] px-1 text-[0.625rem] font-semibold leading-[0.95rem] text-white">APP</span>}
+        </p>
+      ))}
+    </div>
+  </>
+);
+
+/** The server rail, channel list or direct messages, and user panel of a Discord client. */
+const Chrome = ({ channel, me, server, dm }: { channel: string; me: Author; server: Server; dm?: Author }) => (
   <>
     <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 bg-[#1e1f22] pt-3">
-      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#5865f2] text-white">
+      <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#5865f2] text-white">
+        {dm && <span className="absolute -left-3 h-10 w-1 rounded-r bg-white" />}
         <svg aria-hidden viewBox="0 0 24 24" className="h-7 w-7" fill="currentColor">
           <path d="M19.73 4.87a18.2 18.2 0 0 0-4.6-1.44c-.2.36-.43.85-.59 1.23a16.9 16.9 0 0 0-5.08 0c-.16-.38-.4-.87-.6-1.23-1.6.27-3.14.75-4.6 1.44A19.08 19.08 0 0 0 .96 17.7a18.43 18.43 0 0 0 5.63 2.87c.46-.62.86-1.28 1.2-1.98-.66-.25-1.29-.55-1.88-.9.16-.12.31-.24.46-.36a13.1 13.1 0 0 0 11.26 0l.46.36c-.6.35-1.23.65-1.88.9.35.7.75 1.36 1.2 1.98 2.03-.63 3.94-1.6 5.64-2.87a19 19 0 0 0-3.32-12.83ZM8.3 15.12c-1.1 0-2-1.02-2-2.27 0-1.24.88-2.26 2-2.26s2.02 1.02 2 2.26c0 1.25-.89 2.27-2 2.27Zm7.4 0c-1.1 0-2-1.02-2-2.27 0-1.24.88-2.26 2-2.26s2.02 1.02 2 2.26c0 1.25-.88 2.27-2 2.27Z" />
         </svg>
       </span>
       <span className="h-0.5 w-8 rounded bg-[#35363c]" />
       <span className={`relative flex h-12 w-12 items-center justify-center rounded-2xl font-serif text-sm font-bold ${server.className}`}>
-        <span className="absolute -left-3 h-10 w-1 rounded-r bg-white" />
+        {!dm && <span className="absolute -left-3 h-10 w-1 rounded-r bg-white" />}
         {server.badge}
       </span>
       <span className="h-12 w-12 rounded-full bg-[#313338]" />
       <span className="h-12 w-12 rounded-full bg-[#313338]" />
     </nav>
     <aside className="flex w-[240px] shrink-0 flex-col bg-[#2b2d31]">
-      <p className="flex h-12 items-center border-b border-[#1f2023] px-4 font-semibold text-[#f2f3f5]">{server.name}</p>
-      <div className="flex-1 px-2 pt-4">
-        <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">Text channels</p>
-        {CHANNELS.map((c) => (
-          <p
-            key={c}
-            className={`flex h-8 items-center gap-1.5 rounded px-2 ${c === channel ? "bg-[#404249] text-white" : "text-[#949ba4]"}`}
-          >
-            <Hash className="h-5 w-5 opacity-70" />
-            {c}
-          </p>
-        ))}
-      </div>
+      {dm ? (
+        <DirectMessages open={dm} />
+      ) : (
+        <>
+          <p className="flex h-12 items-center border-b border-[#1f2023] px-4 font-semibold text-[#f2f3f5]">{server.name}</p>
+          <div className="flex-1 px-2 pt-4">
+            <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-[#949ba4]">Text channels</p>
+            {CHANNELS.map((c) => (
+              <p
+                key={c}
+                className={`flex h-8 items-center gap-1.5 rounded px-2 ${c === channel ? "bg-[#404249] text-white" : "text-[#949ba4]"}`}
+              >
+                <Hash className="h-5 w-5 opacity-70" />
+                {c}
+              </p>
+            ))}
+          </div>
+        </>
+      )}
       <div className="flex h-[52px] items-center gap-2 bg-[#232428] px-2">
         <Avatar author={me} size={32} />
         <div className="leading-tight">
@@ -83,7 +115,7 @@ export const Composer = ({ placeholder, children }: { placeholder: string; child
   </div>
 );
 
-/** A Discord client on one channel, with an optional thread open beside it. */
+/** A Discord client on one channel or direct message, with an optional thread open beside it. */
 const Window = ({
   channel,
   topic,
@@ -92,8 +124,10 @@ const Window = ({
   composer,
   thread,
   server = STUDENTS,
+  dm,
 }: {
   server?: Server;
+  dm?: Author;
   channel: string;
   topic: string;
   me: Author;
@@ -102,10 +136,10 @@ const Window = ({
   thread?: { name: string; body: ReactNode; width: number };
 }) => (
   <div className="flex h-full w-full overflow-hidden rounded-xl bg-[#313338] font-sans text-base text-[#dbdee1] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.6)] ring-1 ring-black/40">
-    <Chrome channel={channel} me={me} server={server} />
+    <Chrome channel={channel} me={me} server={server} dm={dm} />
     <main className="flex min-w-0 flex-1 flex-col">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1f2023] px-4">
-        <Hash className="h-6 w-6 text-[#80848e]" />
+        {dm ? <span className="text-2xl leading-none text-[#80848e]">@</span> : <Hash className="h-6 w-6 text-[#80848e]" />}
         <span className="shrink-0 whitespace-nowrap font-semibold text-[#f2f3f5]">{channel}</span>
         <span className="mx-2 h-6 w-px bg-[#3f4147]" />
         <span className="truncate text-sm text-[#949ba4]">{topic}</span>

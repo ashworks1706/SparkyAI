@@ -59,18 +59,29 @@ const Message = ({
       {children}
       {buttons.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {buttons.map((b, i) => (
-            <a
-              key={b.label}
-              href={b.href}
-              target="_blank"
-              rel="noreferrer"
-              className={`inline-flex h-8 items-center gap-2 rounded-[8px] px-4 text-sm font-medium text-white ${i === hovered ? "bg-[#6d6f78]" : "bg-[#4e5058]"}`}
-            >
-              {b.label}
-              <External />
-            </a>
-          ))}
+          {buttons.map((b, i) =>
+            b.href ? (
+              <a
+                key={b.label}
+                href={b.href}
+                target="_blank"
+                rel="noreferrer"
+                className={`inline-flex h-8 items-center gap-2 rounded-[8px] px-4 text-sm font-medium text-white ${i === hovered ? "bg-[#6d6f78]" : "bg-[#4e5058]"}`}
+              >
+                {b.label}
+                <External />
+              </a>
+            ) : (
+              <span
+                key={b.label}
+                className={`inline-flex h-8 items-center rounded-[8px] px-4 text-sm font-medium text-white ${
+                  b.style === "danger" ? (i === hovered ? "bg-[#a12d2f]" : "bg-[#da373c]") : i === hovered ? "bg-[#6d6f78]" : "bg-[#4e5058]"
+                }`}
+              >
+                {b.label}
+              </span>
+            ),
+          )}
         </div>
       )}
     </div>

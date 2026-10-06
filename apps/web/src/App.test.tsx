@@ -32,7 +32,7 @@ describe("website routes", () => {
     const { container } = render(<App />);
 
     const action = screen.getByRole("region", { name: /sparky in action/i });
-    expect(within(action).getByLabelText(/discord thread/i)).toHaveAttribute("src", "/demo/sparky-demo.mp4");
+    expect(within(action).getByLabelText(/student's day with sparky/i)).toHaveAttribute("src", "/demo/sparky-demo.mp4");
     expect(container.querySelector("video")?.getAttribute("poster")).toBe("/demo/sparky-demo.webp");
   });
 
