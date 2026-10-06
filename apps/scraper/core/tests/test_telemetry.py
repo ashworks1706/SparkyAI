@@ -1,4 +1,5 @@
 from pydantic import SecretStr
+from scraper.core import telemetry
 from scraper.core.settings import Telemetry
 from scraper.core.telemetry import PROJECT_NAME, exporter, phoenix_target, resource
 
@@ -22,15 +23,20 @@ def test_an_api_key_becomes_a_bearer_header() -> None:
     assert target.headers == {"Authorization": "Bearer px_x"}
 
 
-def test_exporter_uses_target_endpoint_and_headers() -> None:
+def test_exporter_uses_target_endpoint_and_headers(monkeypatch) -> None:
     cfg = Telemetry(phoenix_url="http://phoenix:6006", phoenix_api_key=SecretStr("px_x"))
     target = phoenix_target(cfg)
     assert target is not None
+    built: dict = {}
+    monkeypatch.setattr(telemetry, "OTLPSpanExporter", lambda **kw: built.update(kw))
 
-    exp = exporter(target)
+    exporter(target)
 
-    assert exp._endpoint == "http://phoenix:6006/v1/traces"
-    assert exp._headers["Authorization"] == "Bearer px_x"
+    assert built == {
+        "endpoint": "http://phoenix:6006/v1/traces",
+        "headers": {"Authorization": "Bearer px_x"},
+        "timeout": target.timeout_secs,
+    }
 
 
 def test_an_empty_phoenix_url_disables_export() -> None:
