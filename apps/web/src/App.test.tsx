@@ -36,6 +36,13 @@ describe("website routes", () => {
     expect(container.querySelector("video")?.getAttribute("poster")).toBe("/demo/sparky-demo.webp");
   });
 
+  it("plays the setup walkthrough in the open source section", () => {
+    render(<App />);
+
+    const open = within(screen.getByRole("region", { name: /open source/i }));
+    expect(open.getByLabelText(/developer cloning sparkyai/i)).toHaveAttribute("src", "/demo/sparky-setup.mp4");
+  });
+
   it("shows each source as a Discord thread with the steps and a link to the page", () => {
     render(<App />);
 

@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import Demo from "./Demo";
+import Player from "./Player";
 import "../index.css";
 
-createRoot(document.getElementById("root") as HTMLElement).render(<Demo />);
+createRoot(document.getElementById("root") as HTMLElement).render(<Player />);
