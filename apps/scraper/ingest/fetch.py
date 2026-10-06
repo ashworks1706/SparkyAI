@@ -8,7 +8,8 @@ import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from scraper.core.settings import settings
-from scraper.core.types import Fetched, FetchError, FetchRejected
+from scraper.core.types import AuthError, Fetched, FetchError, FetchRejected
+from scraper.ingest import robots
 from scraper.ingest.drivers import admin, public
 
 
@@ -105,7 +106,11 @@ def fetch_firecrawl(url: str) -> Fetched:
 
 
 def fetch(url: str, *, needs_js: bool = False, auth: bool = False) -> Fetched:
-    """Fetches via the configured fetcher; needs_js applies only to the plain HTTP path."""
+    """Fetches a page robots.txt allows; needs_js applies only to the plain HTTP path."""
+    if auth and not settings().auth.enabled:
+        raise AuthError(f"login-gated sources are off (auth.enabled is false): {url}")
+    if not robots.allowed(url):
+        raise FetchRejected(f"robots.txt disallows {url} for {settings().scraper.user_agent}")
     if auth:
         return admin.fetch_authenticated(url)
     if settings().scraper.fetcher == "firecrawl":

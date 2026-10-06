@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from scraper.core.settings import settings
 from scraper.core.types import QueryError, QuerySource
 from scraper.ingest import extract, fetch
+from scraper.ingest.pace import HostPacer
 from scraper.query.sources import (
     campus_map,
     clubs,
@@ -79,12 +81,23 @@ def url_for(source: QuerySource, params: dict[str, str]) -> str:
     return source.to_url(params)
 
 
-def run(source: QuerySource, params: dict[str, str]) -> tuple[str, str]:
+def offered(source: QuerySource) -> bool:
+    """Whether source is served: one read only through the admin session needs auth.enabled."""
+    return settings().auth.enabled or not (source.auth and source.answer is None)
+
+
+def run(
+    source: QuerySource, params: dict[str, str], pacer: HostPacer | None = None
+) -> tuple[str, str]:
     """Checks the parameters and fetches the source. Returns the URL to cite and the text."""
+    if not offered(source):
+        raise QueryError(f"{source.key} is off: it reads through a login and auth.enabled is false")
     if source.answer is not None:
         check(source, params)
         return source.answer(params)
     url = url_for(source, params)
+    if pacer is not None:
+        pacer.wait(url)
     fetched = fetch.fetch(url, needs_js=source.needs_js, auth=source.auth)
     text = source.extractor(fetched) if source.extractor else extract.page_text(fetched)
     return url, text

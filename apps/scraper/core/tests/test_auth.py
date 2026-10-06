@@ -60,6 +60,7 @@ def test_fetch_routes_authenticated_sources_to_the_admin_driver(
     def public_forbidden(url: str) -> Fetched:
         raise AssertionError("an authenticated fetch reached the public driver")
 
+    monkeypatch.setattr(settings().auth, "enabled", True)
     monkeypatch.setattr(admin, "fetch_authenticated", fake)
     monkeypatch.setattr(public, "fetch_rendered", public_forbidden)
     fetch.fetch("https://sundevilcentral.eoss.asu.edu/club_signup", needs_js=True, auth=True)
@@ -304,3 +305,27 @@ def test_a_page_past_the_size_cap_is_refused(monkeypatch: pytest.MonkeyPatch) ->
         fetch.fetch_http.__wrapped__("https://x.test/big")
     monkeypatch.setattr(settings().scraper, "max_page_bytes", 10_000)
     assert len(fetch.fetch_http.__wrapped__("https://x.test/big").body) == 5_000
+
+
+def test_login_gated_sources_are_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scraper.query.registry import offered, run
+
+    assert settings().auth.enabled is False
+    monkeypatch.setattr(
+        admin, "fetch_authenticated", lambda _url: pytest.fail("read through the admin session")
+    )
+    with pytest.raises(AuthError, match="auth.enabled"):
+        fetch.fetch("https://sundevilcentral.eoss.asu.edu/events", auth=True)
+    assert not offered(clubs.QUERY), "clubs reads only through the login"
+    assert offered(events.QUERY), "events still has the public calendar"
+    with pytest.raises(Exception, match="clubs is off"):
+        run(clubs.QUERY, {"keywords": "robotics"})
+
+
+def test_events_answers_from_the_public_calendar_when_logins_are_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(events, "_public", lambda _k: ("https://asuevents.asu.edu/home", "Fair"))
+    url, text = events.answer({"keywords": "career"})
+    assert url == "https://asuevents.asu.edu/home"
+    assert "Fair" in text and "Sun Devil Central" not in text

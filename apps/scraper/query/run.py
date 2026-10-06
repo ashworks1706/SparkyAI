@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scraper.core import telemetry
 from scraper.core.types import Job, QueryError, QueryResult, QuerySource
+from scraper.ingest.pace import HostPacer
 from scraper.query.registry import QUERY_SOURCES, run
 
 
@@ -16,7 +17,7 @@ def source_of(job: Job) -> QuerySource:
     return source
 
 
-def run_job(job: Job) -> QueryResult:
+def run_job(job: Job, pacer: HostPacer | None = None) -> QueryResult:
     """Fetches one live query, with the whole text it produced. Raises QueryError on a bad input."""
     source = source_of(job)
     raw = job.input.get("params")
@@ -30,7 +31,7 @@ def run_job(job: Job) -> QueryResult:
         "scrape.query",
         attributes={"sparky.source": source.key},
     ) as span:
-        url, text = run(source, params)
+        url, text = run(source, params, pacer)
         span.set_attribute("sparky.input", url)
         text = text.strip()
         if not text:

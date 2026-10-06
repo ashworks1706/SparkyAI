@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from urllib.parse import urlparse
 
 
 class HostPacer:
-    """Holds each fetch until gap_secs have passed since the last fetch to the same host."""
+    """Holds each fetch until gap_secs have passed since the last fetch to the same host.
+
+    One pacer may be shared by several threads; each caller reserves its slot before it sleeps.
+    """
 
     def __init__(
         self,
@@ -21,13 +25,15 @@ class HostPacer:
         self._clock = clock
         self._sleep = sleep
         self._last: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     def wait(self, url: str) -> None:
-        """Sleeps until url's host may be fetched again, then records the fetch."""
+        """Reserves the next free slot for url's host, then sleeps until it comes."""
         host = urlparse(url).hostname or ""
-        last = self._last.get(host)
-        if self._gap > 0 and last is not None:
-            remaining = self._gap - (self._clock() - last)
-            if remaining > 0:
-                self._sleep(remaining)
-        self._last[host] = self._clock()
+        with self._lock:
+            now = self._clock()
+            last = self._last.get(host)
+            slot = now if self._gap <= 0 or last is None else max(now, last + self._gap)
+            self._last[host] = slot
+        if slot > now:
+            self._sleep(slot - now)

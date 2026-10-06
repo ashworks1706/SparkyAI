@@ -36,3 +36,14 @@ def test_hosts_are_paced_apart_and_a_zero_gap_never_waits() -> None:
     off.wait("https://a.asu.edu/")
     off.wait("https://a.asu.edu/")
     assert clock.slept == []
+
+
+def test_concurrent_callers_to_one_host_take_turns_a_gap_apart() -> None:
+    clock = Clock()
+    slept: list[float] = []
+    pacer = HostPacer(5.0, clock=clock.time, sleep=slept.append)
+
+    for _ in range(3):
+        pacer.wait("https://lib.asu.edu/hours")
+
+    assert slept == [5.0, 10.0], "each caller reserves its slot before it sleeps"

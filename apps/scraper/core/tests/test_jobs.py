@@ -40,7 +40,9 @@ def answered(monkeypatch, source: str, text: str) -> None:
     monkeypatch.setattr(
         jobs,
         "run_job",
-        lambda _job: QueryResult(source=source, url=f"https://x.test/{source}", text=text),
+        lambda _job, _pacer=None: QueryResult(
+            source=source, url=f"https://x.test/{source}", text=text
+        ),
     )
 
 
@@ -48,6 +50,19 @@ def test_live_queries_outrank_indexing_which_outranks_scheduled_runs():
     assert 0 > jobs.INDEX_PRIORITY > jobs.RUN_PRIORITY, "the engine queues at the default of 0"
     assert jobs.LIVE_KINDS == (jobs.QUERY,)
     assert set(jobs.BACKGROUND_KINDS) == {jobs.INDEX, jobs.RUN}
+
+
+def test_a_live_query_fetches_through_the_pacer_its_lane_shares(monkeypatch, recorder):
+    seen = []
+
+    def run(_job, pacer=None):
+        seen.append(pacer)
+        return QueryResult(source="news", url="https://x.test/news", text="x")
+
+    monkeypatch.setattr(jobs, "run_job", run)
+    shared = object()
+    jobs.handle(recorder, job(jobs.QUERY, source="news", params={}), shared)
+    assert seen == [shared]
 
 
 def test_a_live_answer_queues_the_indexing_of_its_whole_page(monkeypatch, recorder):
