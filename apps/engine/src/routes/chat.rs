@@ -11,7 +11,7 @@ use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use futures::{StreamExt, stream};
 use opentelemetry::trace::{SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 use serde::Serialize;
 use serde_json::json;
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -23,14 +23,15 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::core::traits::conversation::ConversationStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
+use crate::core::types::agent::Answer;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::agent::{AgentError, Answer};
 use crate::core::types::conversation::file::FileAttachment;
 use crate::core::types::conversation::image::Attachment;
-use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest, ErrorBody};
-use crate::core::types::model::ModelError;
+use crate::core::types::http::chat::{ChatRequest, ChatResponse, ConfirmRequest};
 use crate::core::types::store::StoreError;
 use crate::core::types::trace::progress::Progress;
+use crate::routes::auth::{authorized, too_many};
+use crate::routes::failure::{Failure, NO_SUCH_CONVERSATION};
 use crate::routes::rate_limit::RateLimiter;
 use crate::runtime::harness::agent::Agent;
 use uuid::Uuid;
@@ -64,19 +65,6 @@ pub struct ChatState {
     pub service_token: SecretString,
     /// Per-user request limit.
     pub rate_limit: RateLimiter,
-}
-
-/// What a caller hears about a conversation that is not theirs, whether or not it exists.
-pub const NO_SUCH_CONVERSATION: &str = "no such conversation";
-
-/// The 429 returned when a caller is over the limit.
-pub fn too_many(user: &str) -> Response {
-    tracing::warn!(user, "rate limited");
-    (
-        StatusCode::TOO_MANY_REQUESTS,
-        "too many requests; wait a minute and ask again",
-    )
-        .into_response()
 }
 
 /// Parses a W3C traceparent header into a remote parent context.
@@ -153,7 +141,7 @@ fn record_outcome(span: &tracing::Span, outcome: &Result<ChatResponse, Failure>)
         }
         Err(failure) => {
             span.record("otel.status_code", "ERROR");
-            span.record("otel.status_message", failure.body.error.as_str());
+            span.record("otel.status_message", failure.body().error.as_str());
         }
     }
 }
@@ -212,7 +200,7 @@ pub async fn stream(
     let tail = stream::once(async move {
         match answer_rx.await {
             Ok(Ok(answer)) => sse("answer", &answer),
-            Ok(Err(failure)) => sse("error", &failure.body),
+            Ok(Err(failure)) => sse("error", failure.body()),
             Err(e) => {
                 tracing::error!(error = %e, "the turn ended without an answer");
                 sse("error", &json!({ "error": e.to_string() }))
@@ -290,33 +278,12 @@ async fn run_turn(
         ctx = ctx.listening_to(tx);
     }
     let id = ctx.request_id;
-    match state.agent.run(&ctx, &req.message).await {
-        Ok(answer) => Ok(chat_response(id, ctx.conversation_id, answer)),
-        Err(AgentError::Model(ModelError::Busy)) => {
-            tracing::warn!(request_id = %id, "model at capacity");
-            Err(Failure::new(
-                StatusCode::SERVICE_UNAVAILABLE,
-                id,
-                "the model is at capacity",
-            ))
-        }
-        Err(AgentError::Model(e)) => {
-            tracing::error!(error = %e, request_id = %id, "model failed");
-            Err(Failure::new(
-                StatusCode::BAD_GATEWAY,
-                id,
-                "the model is unavailable",
-            ))
-        }
-        Err(AgentError::Store(e)) => {
-            tracing::error!(error = %e, request_id = %id, "store failed");
-            Err(Failure::new(
-                StatusCode::SERVICE_UNAVAILABLE,
-                id,
-                "a store is unavailable",
-            ))
-        }
-    }
+    state
+        .agent
+        .run(&ctx, &req.message)
+        .await
+        .map(|answer| chat_response(id, ctx.conversation_id, answer))
+        .map_err(|error| Failure::from_agent(id, error))
 }
 
 /// Picks the conversation a turn continues, checked for ownership; falls back to open, then new.
@@ -445,72 +412,6 @@ pub async fn confirm(
         Ok(answer) => {
             Json(chat_response(ctx.request_id, ctx.conversation_id, answer)).into_response()
         }
-        Err(AgentError::Model(e)) => {
-            tracing::error!(error = %e, "model failed after approval");
-            Failure::new(
-                StatusCode::BAD_GATEWAY,
-                ctx.request_id,
-                "the model is unavailable",
-            )
-            .into_response()
-        }
-        Err(AgentError::Store(e)) => {
-            tracing::error!(error = %e, "store failed after approval");
-            Failure::new(
-                StatusCode::SERVICE_UNAVAILABLE,
-                ctx.request_id,
-                "a store is unavailable",
-            )
-            .into_response()
-        }
+        Err(error) => Failure::from_agent(ctx.request_id, error).into_response(),
     }
-}
-
-/// A turn that could not produce an answer.
-pub(crate) struct Failure {
-    status: StatusCode,
-    body: ErrorBody,
-}
-
-impl Failure {
-    /// A failure with this status and message for the request.
-    pub(crate) fn new(status: StatusCode, request_id: Uuid, error: &str) -> Self {
-        Self {
-            status,
-            body: ErrorBody {
-                request_id,
-                error: error.to_owned(),
-                status: Some(status.as_u16()),
-            },
-        }
-    }
-}
-
-impl IntoResponse for Failure {
-    fn into_response(self) -> Response {
-        (self.status, Json(self.body)).into_response()
-    }
-}
-
-/// Whether the headers carry the service bearer token.
-pub(crate) fn authorized(headers: &HeaderMap, token: &SecretString) -> bool {
-    headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|presented| {
-            same_secret(presented.as_bytes(), token.expose_secret().as_bytes())
-        })
-}
-
-/// Whether two secrets are equal, in time that depends only on their lengths.
-pub(crate) fn same_secret(presented: &[u8], expected: &[u8]) -> bool {
-    if presented.len() != expected.len() {
-        return false;
-    }
-    presented
-        .iter()
-        .zip(expected)
-        .fold(0u8, |diff, (a, b)| diff | (a ^ b))
-        == 0
 }

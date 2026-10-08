@@ -10,17 +10,18 @@ use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+use crate::core::types::agent::Answer;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::agent::{AgentError, Answer};
 use crate::core::types::conversation::Visibility;
 use crate::core::types::http::openai::{
     ChatMessage, Choice, CompletionRequest, CompletionResponse, CompletionUsage, ModelCard,
     ModelList,
 };
-use crate::core::types::model::ModelError;
 use crate::core::types::store::StoreError;
 use crate::core::types::trace::RunStatus;
-use crate::routes::chat::{ChatState, NO_SUCH_CONVERSATION, authorized, too_many};
+use crate::routes::auth::{authorized, too_many};
+use crate::routes::chat::ChatState;
+use crate::routes::failure::{Failure, NO_SUCH_CONVERSATION};
 
 /// The name the engine answers as. It names the agent, not any one model.
 pub const MODEL: &str = "sparky";
@@ -174,17 +175,7 @@ pub async fn completions(
 
     let answer = match state.agent.run(&ctx, &input).await {
         Ok(answer) => answer,
-        Err(AgentError::Model(ModelError::Busy)) => {
-            return (StatusCode::SERVICE_UNAVAILABLE, "the model is at capacity").into_response();
-        }
-        Err(AgentError::Model(e)) => {
-            tracing::error!(error = %e, "model failed");
-            return (StatusCode::BAD_GATEWAY, "the model is unavailable").into_response();
-        }
-        Err(AgentError::Store(e)) => {
-            tracing::error!(error = %e, "store failed");
-            return (StatusCode::SERVICE_UNAVAILABLE, "a store is unavailable").into_response();
-        }
+        Err(error) => return Failure::from_agent(ctx.request_id, error).into_text(),
     };
 
     let content = transcript(&answer);

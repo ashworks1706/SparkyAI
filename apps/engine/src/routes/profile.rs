@@ -15,7 +15,7 @@ use crate::core::types::memory::profile::{
     ForgetRequest, ForgetResponse, ListRequest, ListResponse, ListedNode, ListedRelation,
     ProfileError,
 };
-use crate::routes::chat::{authorized, too_many};
+use crate::routes::auth::{authorized, too_many};
 use crate::routes::rate_limit::RateLimiter;
 
 /// What the profile routes need.
