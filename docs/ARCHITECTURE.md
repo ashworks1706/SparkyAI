@@ -25,7 +25,7 @@ This document describes the current shape of the system and its rules. Order of 
 | Observability | OpenTelemetry spans to Phoenix, product events as spans, JSONL traces and logs under `.sparky/` | profiles `phoenix`, `metrics` |
 | Config | `sparky.toml`, then `SPARKY_*` env vars | `sparky.toml`, `.env.example` |
 | Build, gate | `just` recipes, pre-commit hook, CI | `justfile`, `.githooks`, `.github/workflows` |
-| Deploy | Docker Compose, prod pulls GHCR images | `deploy/` |
+| Deploy | Docker Compose, prod pulls GHCR images; one RunPod GPU pod under supervisord, without run_sandbox | `deploy/` |
 
 ## Rules
 
@@ -72,7 +72,7 @@ apps/
     migrations/     the schema
   evals/          Python. Evals with a baseline gate.
   web/            Vite and React frontend and admin UI
-deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search
+deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search, runpod
 docs/             ROADMAP.md, this file
 .sparky/          ignored local state: traces, logs, eval reports
 ```
@@ -774,7 +774,7 @@ A default belongs to exactly one settings struct; adapters declare no defaults o
 
 ## Deployment
 
-Two service images: `sparkyai-rust` (engine and discord, selected by entrypoint) and `sparkyai-scraper` (runs `serve`). `sparkyai-sandbox` and `sparkyai-sandbox-proxy` are the images the engine starts for `run_sandbox`. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose. `llama-server` runs as the compose services `chat` and `embed` under the `model` profile, configured in `deploy/inference`. Details are in `deploy/README.md`.
+Two service images: `sparkyai-rust` (engine and discord, selected by entrypoint) and `sparkyai-scraper` (runs `serve`). `sparkyai-sandbox` and `sparkyai-sandbox-proxy` are the images the engine starts for `run_sandbox`. `sparkyai-runpod` holds every service and both models for one RunPod GPU pod, where containers cannot start, so `run_sandbox` is off there. CD rebuilds only the images whose inputs changed. Datastores run beside them in Compose. `llama-server` runs as the compose services `chat` and `embed` under the `model` profile, configured in `deploy/inference`. Details are in `deploy/README.md`.
 
 ## Open decisions
 
