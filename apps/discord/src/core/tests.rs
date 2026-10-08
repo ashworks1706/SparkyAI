@@ -3,7 +3,8 @@
 use uuid::Uuid;
 
 use crate::access::roles::can_write;
-use crate::core::types::{ChatResponse, Citation};
+use crate::core::types::ChatResponse;
+use crate::core::types::chat::Citation;
 use crate::render::reply::{MAX_MESSAGE, chunk};
 use serenity::all::Permissions;
 
@@ -305,7 +306,7 @@ fn an_oversized_card_folds_steps_then_trims_footers_then_continues() {
 
 #[test]
 fn an_accepted_approval_keeps_the_steps_and_replaces_prompt_and_footers() {
-    use crate::core::types::Confirmation;
+    use crate::core::types::chat::Confirmation;
     use crate::render::card::{answer, failed, resumed, steps_of};
     use crate::render::components::rows_for;
 
@@ -343,7 +344,7 @@ fn an_accepted_approval_keeps_the_steps_and_replaces_prompt_and_footers() {
 
 #[test]
 fn a_resumed_card_at_the_discord_limit_folds_and_stays_within_it() {
-    use crate::core::types::Confirmation;
+    use crate::core::types::chat::Confirmation;
     use crate::render::card::{answer, resumed, steps_of};
 
     let steps: Vec<String> = (0..60)
@@ -499,7 +500,7 @@ fn a_component_id_survives_the_round_trip_and_rejects_anything_else() {
 fn a_confirmation_offers_the_two_answers_and_a_plain_answer_offers_none() {
     use uuid::Uuid;
 
-    use crate::core::types::Confirmation;
+    use crate::core::types::chat::Confirmation;
     use crate::render::components::rows_for;
 
     let resp = response("", vec![], "awaiting_confirmation");
@@ -737,7 +738,8 @@ fn each_place_sets_visibility_and_continuation() {
 
 #[test]
 fn memory_renders_things_and_relations_or_says_it_is_empty() {
-    use crate::core::types::{EngineError, ProfileList, ProfileNode, ProfileRelation};
+    use crate::core::types::profile::{ProfileNode, ProfileRelation};
+    use crate::core::types::{EngineError, ProfileList};
     use crate::render::reply::{NOTHING_REMEMBERED, forgot, memory_failure, render_profile};
 
     assert_eq!(
