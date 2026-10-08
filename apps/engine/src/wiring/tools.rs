@@ -29,6 +29,12 @@ use crate::runtime::tools::{gcal, outlook, papers, transit, wiki};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::postgres::PgSourceQueries;
 
+/// Builds the tools of one integration, or says why it could not.
+type Build<'a> = Box<dyn FnOnce() -> Result<Vec<Arc<dyn Tool>>, String> + 'a>;
+
+/// One integration: its name, whether it is enabled, and how its tools are built.
+type Integration<'a> = (&'static str, bool, Build<'a>);
+
 /// Every tool the model may call, with tools.disabled removed at registration.
 pub(super) async fn build_tools(
     cfg: &Config,
@@ -90,38 +96,76 @@ pub(super) async fn build_tools(
             "mcp tools registered"
         );
     }
-    if cfg.canvas.enabled {
-        let canvas_oauth = oauth_providers.get("canvas").cloned();
-        let built = canvas::tools(&cfg.canvas, oauth_store.clone(), canvas_oauth)
-            .map_err(|e| anyhow::anyhow!("canvas: {e}"))?;
-        tools = register(tools, built, &disabled, "canvas");
-    }
-    if cfg.outlook.enabled {
-        let microsoft_oauth = oauth_providers.get("microsoft").cloned();
-        let built = outlook::tools(&cfg.outlook, oauth_store.clone(), microsoft_oauth)
-            .map_err(|e| anyhow::anyhow!("outlook: {e}"))?;
-        tools = register(tools, built, &disabled, "outlook");
-    }
-    if cfg.gcal.enabled {
-        let google_oauth = oauth_providers.get("google").cloned();
-        let built = gcal::tools(&cfg.gcal, oauth_store.clone(), google_oauth)
-            .map_err(|e| anyhow::anyhow!("gcal: {e}"))?;
-        tools = register(tools, built, &disabled, "gcal");
-    }
-    if cfg.papers.enabled {
-        let built = papers::tools(&cfg.papers).map_err(|e| anyhow::anyhow!("papers: {e}"))?;
-        tools = register(tools, built, &disabled, "papers");
-    }
-    if cfg.wikipedia.enabled {
-        let built = wiki::tools(&cfg.wikipedia).map_err(|e| anyhow::anyhow!("wikipedia: {e}"))?;
-        tools = register(tools, built, &disabled, "wikipedia");
-    }
-    if cfg.transit.enabled {
-        let built = transit::tools(&cfg.transit).map_err(|e| anyhow::anyhow!("transit: {e}"))?;
-        tools = register(tools, built, &disabled, "transit");
+    for (integration, enabled, build) in integrations(cfg, &oauth_store, &oauth_providers) {
+        if !enabled {
+            continue;
+        }
+        let built = build().map_err(|e| anyhow::anyhow!("{integration}: {e}"))?;
+        tools = register(tools, built, &disabled, integration);
     }
     tracing::info!(tools = ?tools, "tool set");
     Ok((tools, mcp_names))
+}
+
+/// Every integration that adds tools, in registration order.
+fn integrations<'a>(
+    cfg: &'a Config,
+    oauth_store: &'a Arc<dyn OAuthStore>,
+    oauth_providers: &'a HashMap<String, Arc<WebOAuthClient>>,
+) -> [Integration<'a>; 6] {
+    [
+        (
+            "canvas",
+            cfg.canvas.enabled,
+            Box::new(move || {
+                canvas::tools(
+                    &cfg.canvas,
+                    oauth_store.clone(),
+                    oauth_providers.get("canvas").cloned(),
+                )
+                .map_err(|e| e.to_string())
+            }),
+        ),
+        (
+            "outlook",
+            cfg.outlook.enabled,
+            Box::new(move || {
+                outlook::tools(
+                    &cfg.outlook,
+                    oauth_store.clone(),
+                    oauth_providers.get("microsoft").cloned(),
+                )
+                .map_err(|e| e.to_string())
+            }),
+        ),
+        (
+            "gcal",
+            cfg.gcal.enabled,
+            Box::new(move || {
+                gcal::tools(
+                    &cfg.gcal,
+                    oauth_store.clone(),
+                    oauth_providers.get("google").cloned(),
+                )
+                .map_err(|e| e.to_string())
+            }),
+        ),
+        (
+            "papers",
+            cfg.papers.enabled,
+            Box::new(move || papers::tools(&cfg.papers)),
+        ),
+        (
+            "wikipedia",
+            cfg.wikipedia.enabled,
+            Box::new(move || wiki::tools(&cfg.wikipedia)),
+        ),
+        (
+            "transit",
+            cfg.transit.enabled,
+            Box::new(move || transit::tools(&cfg.transit)),
+        ),
+    ]
 }
 
 /// Adds each built tool that is not disabled to the set, logging how many an integration added.

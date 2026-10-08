@@ -9,6 +9,7 @@ use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::traits::tools::sandbox::Sandbox;
+use crate::core::types::tools::oauth::OAuthError;
 use crate::routes::Limits;
 use crate::routes::chat::ChatState;
 use crate::routes::health::HealthState;
@@ -79,6 +80,9 @@ pub(super) type OAuthWiring = (
     OAuthState,
 );
 
+/// Builds the web OAuth client of one provider.
+type OAuthBuild<'a> = Box<dyn FnOnce() -> Result<WebOAuthClient, OAuthError> + 'a>;
+
 /// Builds the grant store, the per-provider OAuth clients, and the OAuth route state.
 pub(super) fn oauth_wiring(
     cfg: &Config,
@@ -86,20 +90,29 @@ pub(super) fn oauth_wiring(
 ) -> anyhow::Result<OAuthWiring> {
     let store: Arc<dyn OAuthStore> = Arc::new(PgOAuth::new(pool.clone()));
     let mut providers: HashMap<String, Arc<WebOAuthClient>> = HashMap::new();
-    if cfg.oauth.canvas.enabled {
-        let client = WebOAuthClient::canvas(&cfg.oauth.canvas)
-            .map_err(|e| anyhow::anyhow!("oauth.canvas: {e}"))?;
-        providers.insert("canvas".to_owned(), Arc::new(client));
-    }
-    if cfg.oauth.microsoft.enabled {
-        let client = WebOAuthClient::microsoft(&cfg.oauth.microsoft)
-            .map_err(|e| anyhow::anyhow!("oauth.microsoft: {e}"))?;
-        providers.insert("microsoft".to_owned(), Arc::new(client));
-    }
-    if cfg.oauth.google.enabled {
-        let client = WebOAuthClient::google(&cfg.oauth.google)
-            .map_err(|e| anyhow::anyhow!("oauth.google: {e}"))?;
-        providers.insert("google".to_owned(), Arc::new(client));
+    let clients: [(&str, bool, OAuthBuild<'_>); 3] = [
+        (
+            "canvas",
+            cfg.oauth.canvas.enabled,
+            Box::new(|| WebOAuthClient::canvas(&cfg.oauth.canvas)),
+        ),
+        (
+            "microsoft",
+            cfg.oauth.microsoft.enabled,
+            Box::new(|| WebOAuthClient::microsoft(&cfg.oauth.microsoft)),
+        ),
+        (
+            "google",
+            cfg.oauth.google.enabled,
+            Box::new(|| WebOAuthClient::google(&cfg.oauth.google)),
+        ),
+    ];
+    for (provider, enabled, build) in clients {
+        if !enabled {
+            continue;
+        }
+        let client = build().map_err(|e| anyhow::anyhow!("oauth.{provider}: {e}"))?;
+        providers.insert(provider.to_owned(), Arc::new(client));
     }
     let state = OAuthState {
         store: store.clone(),
