@@ -1,6 +1,6 @@
 //! Books, articles, journals and media in the ASU Library.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU Library catalog.
 pub struct LibraryCatalog;

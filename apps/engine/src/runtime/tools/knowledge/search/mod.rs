@@ -1,24 +1,8 @@
 //! ReadPublic: two search tools over the ASU sources, one over the stored index and one live.
 
-pub mod campus_map;
-pub mod clubs;
-pub mod course_catalog;
-pub mod courses;
-pub mod dining;
-pub mod events;
-pub mod jobs;
-pub mod library_catalog;
-pub mod library_hours;
 pub mod live;
-pub mod news;
-pub mod scholarships;
-pub mod shuttles;
-pub mod social_media;
-pub mod sports;
-pub mod sports_news;
+pub mod sources;
 pub mod stored;
-pub mod study_rooms;
-pub mod web;
 
 use std::fmt::Write as _;
 
@@ -52,23 +36,23 @@ impl Freshness {
 /// Every live source the engine offers, in the order the model sees them.
 pub fn catalog() -> Vec<Box<dyn LiveSource>> {
     vec![
-        Box::new(courses::Courses),
-        Box::new(course_catalog::CourseCatalog),
-        Box::new(scholarships::Scholarships),
-        Box::new(events::Events),
-        Box::new(clubs::Clubs),
-        Box::new(news::News),
-        Box::new(library_catalog::LibraryCatalog),
-        Box::new(library_hours::LibraryHours),
-        Box::new(study_rooms::StudyRooms),
-        Box::new(sports::Sports),
-        Box::new(sports_news::SportsNews),
-        Box::new(shuttles::Shuttles),
-        Box::new(campus_map::CampusMap),
-        Box::new(social_media::SocialMedia),
-        Box::new(dining::Dining),
-        Box::new(jobs::Jobs),
-        Box::new(web::Web),
+        Box::new(sources::courses::Courses),
+        Box::new(sources::course_catalog::CourseCatalog),
+        Box::new(sources::scholarships::Scholarships),
+        Box::new(sources::events::Events),
+        Box::new(sources::clubs::Clubs),
+        Box::new(sources::news::News),
+        Box::new(sources::library_catalog::LibraryCatalog),
+        Box::new(sources::library_hours::LibraryHours),
+        Box::new(sources::study_rooms::StudyRooms),
+        Box::new(sources::sports::Sports),
+        Box::new(sources::sports_news::SportsNews),
+        Box::new(sources::shuttles::Shuttles),
+        Box::new(sources::campus_map::CampusMap),
+        Box::new(sources::social_media::SocialMedia),
+        Box::new(sources::dining::Dining),
+        Box::new(sources::jobs::Jobs),
+        Box::new(sources::web::Web),
     ]
 }
 

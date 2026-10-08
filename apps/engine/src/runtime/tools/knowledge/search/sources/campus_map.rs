@@ -1,6 +1,6 @@
 //! A building or place on the ASU campus map, with a map link.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU campus map.
 pub struct CampusMap;

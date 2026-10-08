@@ -1,6 +1,6 @@
 //! This week's opening hours at every ASU library.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU Library hours page.
 pub struct LibraryHours;

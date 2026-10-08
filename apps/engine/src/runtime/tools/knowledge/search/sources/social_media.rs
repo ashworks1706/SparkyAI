@@ -1,6 +1,6 @@
 //! Latest posts on the official ASU and Sun Devil Athletics channels.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The official ASU YouTube channels.
 pub struct SocialMedia;

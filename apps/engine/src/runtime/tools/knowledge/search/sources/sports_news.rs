@@ -1,6 +1,6 @@
 //! Sun Devil Athletics news and outside coverage, for one sport or all.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// Sun Devil Athletics news feeds.
 pub struct SportsNews;

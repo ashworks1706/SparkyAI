@@ -3,7 +3,7 @@
 use chrono::NaiveDate;
 
 use super::courses::code_in;
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU course catalog.
 pub struct CourseCatalog;

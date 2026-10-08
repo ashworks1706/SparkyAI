@@ -3,7 +3,7 @@
 use chrono::{Datelike, NaiveDate};
 use serde_json::{Map, Value};
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU class search.
 pub struct Courses;

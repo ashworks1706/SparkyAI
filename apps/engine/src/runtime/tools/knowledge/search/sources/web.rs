@@ -1,6 +1,6 @@
 //! Web results from Google, Brave and Bing through self-hosted SearXNG.
 
-use super::{Freshness, LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{Freshness, LiveSource, Param};
 
 /// Web search.
 pub struct Web;

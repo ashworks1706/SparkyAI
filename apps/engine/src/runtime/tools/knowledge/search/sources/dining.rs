@@ -1,6 +1,6 @@
 //! Dining hall and campus restaurant hours for one campus.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The Sun Devil Hospitality hours of one campus.
 pub struct Dining;

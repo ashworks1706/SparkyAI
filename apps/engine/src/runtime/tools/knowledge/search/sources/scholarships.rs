@@ -1,6 +1,6 @@
 //! ASU scholarships by keyword, citizenship, year of study and field.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU scholarship search.
 pub struct Scholarships;

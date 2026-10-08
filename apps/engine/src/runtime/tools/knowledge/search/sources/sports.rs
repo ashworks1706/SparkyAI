@@ -1,6 +1,6 @@
 //! The Sun Devil schedule and recent results for one sport.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// Sun Devil Athletics schedules.
 pub struct Sports;

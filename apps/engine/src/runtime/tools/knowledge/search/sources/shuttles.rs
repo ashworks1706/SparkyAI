@@ -1,6 +1,6 @@
 //! Live next-bus times at every stop of the ASU intercampus shuttles.
 
-use super::{Freshness, LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{Freshness, LiveSource, Param};
 
 /// The ASU shuttle tracker.
 pub struct Shuttles;

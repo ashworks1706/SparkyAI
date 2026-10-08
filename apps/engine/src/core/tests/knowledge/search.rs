@@ -17,18 +17,20 @@ use crate::core::types::model::tokens::estimate;
 use crate::core::types::tools::SEARCH_LIVE;
 use crate::core::types::tools::{RiskClass, ToolError};
 use crate::runtime::harness::tools::ToolSet;
-use crate::runtime::tools::knowledge::search::course_catalog::CourseCatalog;
-use crate::runtime::tools::knowledge::search::courses::{Courses, code_in, term_for, term_in};
-use crate::runtime::tools::knowledge::search::dining::Dining;
-use crate::runtime::tools::knowledge::search::library_hours::LibraryHours;
 use crate::runtime::tools::knowledge::search::live::{
     LiveSearch, Wording as LiveWording, local_date,
 };
-use crate::runtime::tools::knowledge::search::shuttles::Shuttles;
-use crate::runtime::tools::knowledge::search::sports::Sports;
+use crate::runtime::tools::knowledge::search::sources::course_catalog::CourseCatalog;
+use crate::runtime::tools::knowledge::search::sources::courses::{
+    Courses, code_in, term_for, term_in,
+};
+use crate::runtime::tools::knowledge::search::sources::dining::Dining;
+use crate::runtime::tools::knowledge::search::sources::library_hours::LibraryHours;
+use crate::runtime::tools::knowledge::search::sources::shuttles::Shuttles;
+use crate::runtime::tools::knowledge::search::sources::sports::Sports;
+use crate::runtime::tools::knowledge::search::sources::study_rooms::StudyRooms;
+use crate::runtime::tools::knowledge::search::sources::web::Web;
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
-use crate::runtime::tools::knowledge::search::study_rooms::StudyRooms;
-use crate::runtime::tools::knowledge::search::web::Web;
 use crate::runtime::tools::knowledge::search::{
     Accepts, Freshness, LiveSource, Param, arguments, catalog, conforms, dated, named, params_for,
     source_help, source_keys,

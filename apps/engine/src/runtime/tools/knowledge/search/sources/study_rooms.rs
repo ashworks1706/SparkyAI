@@ -1,6 +1,6 @@
 //! Bookable study room slots at one ASU library on one date.
 
-use super::{Freshness, LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{Freshness, LiveSource, Param};
 
 /// LibCal study room availability.
 pub struct StudyRooms;

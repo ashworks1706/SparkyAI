@@ -1,6 +1,6 @@
 //! ASU student employment listings and how to apply.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU student employment page.
 pub struct Jobs;

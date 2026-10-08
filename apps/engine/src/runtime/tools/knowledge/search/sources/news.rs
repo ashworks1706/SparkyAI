@@ -1,6 +1,6 @@
 //! Recent stories on ASU News.
 
-use super::{LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{LiveSource, Param};
 
 /// The ASU News search.
 pub struct News;

@@ -1,6 +1,6 @@
 //! Upcoming events on the ASU events calendar.
 
-use super::{Freshness, LiveSource, Param};
+use crate::runtime::tools::knowledge::search::{Freshness, LiveSource, Param};
 
 /// The ASU events calendar.
 pub struct Events;
