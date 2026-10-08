@@ -1,6 +1,9 @@
 //! TraceEvent, RunStatus, TraceRecord.
 
 pub mod progress;
+pub mod status;
+
+pub use self::status::RunStatus;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -11,8 +14,6 @@ use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
-use crate::core::types::tools::{SEARCH_KNOWLEDGE, SEARCH_LIVE};
-use crate::core::types::trace::progress::ProgressStyle;
 
 /// One thing that happened during a request. Never carries secrets or raw credentials.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -239,102 +240,6 @@ impl TraceEvent {
         }
     }
 
-    /// What to show someone waiting on this run, or None when the event is bookkeeping.
-    pub fn progress(&self, style: ProgressStyle) -> Option<String> {
-        let detail = style.detail_chars;
-        match self {
-            Self::ModelStarted { .. } => Some("\u{1f914} thinking".to_owned()),
-            Self::ModelReasoning { text, .. } => {
-                let so_far = tail(&one_line(text), style.thought_chars);
-                (!so_far.is_empty()).then(|| format!("\u{1f914} {so_far}"))
-            }
-            Self::ModelThought { text, .. } => {
-                let thought = clip(&one_line(text), style.thought_chars);
-                (!thought.is_empty()).then(|| format!("\u{1f4ad} {thought}"))
-            }
-            Self::AnswerDraft { text, .. } => {
-                let draft = text.trim();
-                (!draft.is_empty()).then(|| draft.to_owned())
-            }
-            Self::ToolStarted {
-                tool, arguments, ..
-            } => Some(format!(
-                "\u{1f527} `{}`{} \u{2014} {}",
-                tool,
-                call_arguments(arguments, detail),
-                running(tool)
-            )),
-            Self::ToolCall {
-                tool,
-                arguments,
-                result,
-                ..
-            } => {
-                let head = format!("`{}`{}", tool, call_arguments(arguments, detail));
-                Some(match result {
-                    Ok(output) => {
-                        let shown = clip(&one_line(output), detail);
-                        if shown.is_empty() {
-                            format!("\u{2705} {head} \u{2014} nothing came back")
-                        } else {
-                            format!("\u{2705} {head} \u{2192} {shown}")
-                        }
-                    }
-                    Err(error) => format!(
-                        "\u{274c} {head} \u{2014} {}",
-                        clip(&one_line(error), detail)
-                    ),
-                })
-            }
-            Self::MemoryRecalled { count: 0 } => None,
-            Self::MemoryRecalled { count } => Some(format!(
-                "\u{1f9e0} remembering {count} {} about you",
-                plural(*count, "thing", "things")
-            )),
-            Self::GuardrailBlocked { stage, .. } => {
-                Some(format!("\u{1f6d1} the {} was not allowed", stage.as_str()))
-            }
-            Self::Compaction { turns } => Some(format!(
-                "\u{1f5dc}\u{fe0f} summarising {turns} earlier messages"
-            )),
-            Self::FileAttached {
-                name, error: None, ..
-            } => Some(format!("\u{1f4ce} opened `{name}`")),
-            Self::FileAttached {
-                name,
-                error: Some(_),
-                ..
-            } => Some(format!("\u{1f4ce} could not open `{name}`")),
-            Self::QueryCache {
-                source,
-                outcome: CacheOutcome::Hit | CacheOutcome::Coalesced,
-            } => Some(format!(
-                "\u{267b}\u{fe0f} reused a recent `{source}` result"
-            )),
-            Self::QueryRefused { source, .. } => {
-                Some(format!("\u{1f6a6} `{source}` is busy right now"))
-            }
-            Self::PolicyDecision { tool, decision, .. } => match decision {
-                Decision::Deny { .. } => Some(format!("\u{1f6ab} `{tool}` was not allowed")),
-                Decision::Confirm(_) => Some(format!("\u{270b} `{tool}` needs your approval")),
-                Decision::Allow => None,
-            },
-            Self::ModelError { retried: true, .. } => {
-                Some("\u{1f504} the model stumbled, retrying".to_owned())
-            }
-            Self::GuardrailRedacted { .. }
-            | Self::ToolResultStored { .. }
-            | Self::QueryCache { .. }
-            | Self::RequestStarted { .. }
-            | Self::ContextAssembled { .. }
-            | Self::ModelCall { .. }
-            | Self::ModelAnswered { .. }
-            | Self::AnswerDraftCleared { .. }
-            | Self::ModelError { .. }
-            | Self::Completed { .. } => None,
-        }
-    }
-
     /// Whether this event removes the line of its slot instead of writing one.
     pub fn clears_slot(&self) -> bool {
         matches!(
@@ -379,103 +284,8 @@ impl TraceEvent {
     }
 }
 
-/// A compact rendering of the arguments a call was made with. Empty when there are none.
-fn call_arguments(arguments: &Value, limit: usize) -> String {
-    let Some(fields) = arguments.as_object() else {
-        return String::new();
-    };
-    let shown: Vec<String> = fields
-        .iter()
-        .map(|(key, value)| match value {
-            Value::String(text) => format!("{key}: {text}"),
-            other => format!("{key}: {other}"),
-        })
-        .collect();
-    if shown.is_empty() {
-        return String::new();
-    }
-    format!(" ({})", clip(&one_line(&shown.join(", ")), limit))
-}
-
 /// The slot the answer draft is written to.
 pub const ANSWER_SLOT: &str = "answer";
-
-/// The last limit characters of text, with an ellipsis in front when it was cut.
-fn tail(text: &str, limit: usize) -> String {
-    let count = text.chars().count();
-    if count <= limit {
-        return text.to_owned();
-    }
-    let kept: String = text.chars().skip(count - limit.saturating_sub(1)).collect();
-    format!("\u{2026}{}", kept.trim_start())
-}
-
-/// Text as one line, with runs of whitespace collapsed.
-fn one_line(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// Text held to limit characters, with an ellipsis when it was cut.
-fn clip(text: &str, limit: usize) -> String {
-    if text.chars().count() <= limit {
-        return text.to_owned();
-    }
-    let kept: String = text.chars().take(limit.saturating_sub(1)).collect();
-    format!("{}\u{2026}", kept.trim_end())
-}
-
-/// What a tool is shown as while it runs. A search tool names what it searches.
-pub fn running(tool: &str) -> String {
-    match tool {
-        SEARCH_KNOWLEDGE => "searching the knowledge base".to_owned(),
-        SEARCH_LIVE => "searching live".to_owned(),
-        _ => "running".to_owned(),
-    }
-}
-
-/// The singular form for a count of one, the plural otherwise.
-fn plural(count: usize, one: &'static str, many: &'static str) -> &'static str {
-    if count == 1 { one } else { many }
-}
-
-/// How a run ended.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunStatus {
-    /// A final answer was produced.
-    Answered,
-    /// Stopped to ask the user to confirm an action.
-    AwaitingConfirmation,
-    /// Hit the step limit.
-    StepLimit,
-    /// Kept repeating the same tool calls without answering.
-    Stalled,
-    /// Hit the deadline.
-    Deadline,
-    /// Cancelled by the caller.
-    Cancelled,
-    /// The guardrail refused the response.
-    Blocked,
-    /// Failed with an error.
-    Error,
-}
-
-impl RunStatus {
-    /// What to tell the caller when the loop stopped with no answer. None for Answered and Blocked.
-    pub fn explain(&self) -> Option<&'static str> {
-        match self {
-            Self::Answered | Self::Blocked => None,
-            Self::AwaitingConfirmation => Some("I stopped to ask you first."),
-            Self::StepLimit => Some("I could not finish within the allowed number of steps."),
-            Self::Stalled => {
-                Some("I kept repeating myself without getting further; try rephrasing.")
-            }
-            Self::Deadline => Some("That took too long, so I stopped."),
-            Self::Cancelled => Some("Cancelled."),
-            Self::Error => Some("Something went wrong before I could answer."),
-        }
-    }
-}
 
 /// A trace event with its envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
