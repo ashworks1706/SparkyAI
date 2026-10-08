@@ -2,6 +2,7 @@
 
 pub mod harness;
 pub mod http;
+pub mod integrations;
 pub mod services;
 
 use figment::Figment;
@@ -14,6 +15,7 @@ use crate::core::types::agent::assemble::Budget;
 
 pub use self::harness::*;
 pub use self::http::*;
+pub use self::integrations::*;
 pub use self::services::*;
 
 /// TOML layer read when SPARKY_CONFIG_FILE is unset. Missing is not an error.
