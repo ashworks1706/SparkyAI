@@ -63,6 +63,8 @@ COPY deploy/runpod/start.sh /usr/local/bin/sparky-start
 COPY deploy/runpod/backup.sh /usr/local/bin/sparky-backup
 
 # Addresses inside the pod. Secrets come from the pod environment.
+# llama-server links its shared libraries from /app.
+ENV LD_LIBRARY_PATH=/app:${LD_LIBRARY_PATH}
 ENV SPARKY_CONFIG_FILE=/etc/sparky/sparky.toml \
     SPARKY_DATA_DIR=/workspace \
     LLAMA_CACHE=/workspace/models \
