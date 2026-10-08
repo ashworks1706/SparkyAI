@@ -15,13 +15,13 @@ export const LIVE = {
 } satisfies Record<string, Live>;
 
 /** One search_live call: its arguments, and the page text it brought back. */
-export type Call = { source: Live; query: string; text: string };
+export type LiveCall = { source: Live; query: string; text: string };
 
 /** The arguments of a search_live call. */
-const argsOf = (call: Call): Args => ({ query: call.query, source: call.source.key });
+const argsOf = (call: LiveCall): Args => ({ query: call.query, source: call.source.key });
 
 /** The progress line of a search_live call once it returned. */
-export const done = (call: Call, age = "under an hour ago") =>
+export const done = (call: LiveCall, age = "under an hour ago") =>
   toolDone("search_live", argsOf(call), liveResult(call.source.label, call.source.url, age, call.text));
 
 /** The link button a cited source puts under the answer. */
@@ -33,7 +33,7 @@ export type Example = {
   asker: Author;
   question: string;
   thought: string;
-  calls: Call[];
+  calls: LiveCall[];
   answer: string;
 };
 

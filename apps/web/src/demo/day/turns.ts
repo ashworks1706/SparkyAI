@@ -1,5 +1,5 @@
 import { liveResult } from "@/components/discord/format";
-import { LIVE } from "@/components/discord/scenes";
+import { LIVE } from "@/components/discord/examples";
 import type { Turn } from "./turn";
 
 /** Morning: what is due this week, from Canvas. */

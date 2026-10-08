@@ -1,5 +1,5 @@
 import Thread from "@/components/discord/Thread";
-import { EXAMPLES } from "@/components/discord/scenes";
+import { EXAMPLES } from "@/components/discord/examples";
 import Heading from "./Heading";
 
 /** The sources Sparky reaches, each shown as the thread a question opens on Discord. */

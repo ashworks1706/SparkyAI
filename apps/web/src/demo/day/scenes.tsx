@@ -1,7 +1,7 @@
 import { threadName } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
 import { SPARKY, type Author, type LinkButton } from "@/components/discord/people";
-import { LIVE, button } from "@/components/discord/scenes";
+import { LIVE, button } from "@/components/discord/examples";
 import Window, { Composer } from "@/components/discord/Window";
 import type { Scene } from "../setup/kit";
 import { ThreadChip } from "../Stage";
