@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { ThreadIcon } from "@/components/discord/Window";
 import { STAGE, type Shot } from "./timeline";
 
 /** The backdrop and the camera: children sit on the stage and the camera centres shot. */
@@ -38,15 +37,6 @@ export const Pointer = ({ x, y, pressed }: { x: number; y: number; pressed: numb
     <svg viewBox="0 0 24 24" width="30" height="30" style={{ transform: `scale(${pressed > 0 && pressed < 0.5 ? 0.85 : 1})` }}>
       <path d="M5 2.5v17.2l4.6-4.4 2.9 6.6 3-1.3-2.9-6.5h6.4L5 2.5Z" fill="#0b0b0c" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
     </svg>
-  </div>
-);
-
-/** The box under a message that opened a thread. */
-export const ThreadChip = ({ name, count }: { name: string; count: string }) => (
-  <div className="mt-1.5 flex max-w-md items-center gap-2 rounded-lg bg-[#2b2d31] px-3 py-2 text-sm">
-    <ThreadIcon className="h-4 w-4 shrink-0 text-[#b5bac1]" />
-    <span className="truncate font-semibold text-[#f2f3f5]">{name}</span>
-    <span className="shrink-0 font-semibold text-[#00a8fc]">{count} &rsaquo;</span>
   </div>
 );
 

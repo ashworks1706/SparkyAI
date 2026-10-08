@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { typed } from "../timeline";
+import { typed, type Scene } from "../timeline";
 import { CAMPUS, MCP } from "./campus";
-import { Caret, MacWindow, Prompt, type Scene } from "./kit";
+import { Caret, MacWindow, Prompt } from "./kit";
 
 /**
  * The sparky developer console, drawn as apps/cli/src/app/ui.rs draws it:

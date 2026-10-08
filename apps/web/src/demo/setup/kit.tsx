@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { typed, type Shot } from "../timeline";
+import { typed } from "../timeline";
 import type { Code, Tone } from "./text";
 
 /** A macOS window: traffic lights, a title, and its body. */
@@ -135,24 +135,3 @@ export const Editor = ({
     </div>
   </MacWindow>
 );
-
-/** A keystroke badge: the keys, and when they show in scene time. */
-type Keystroke = { keys: string[]; t: number };
-
-/** One scene of the setup video. Every time in it is seconds from the scene's start. */
-export type Scene = {
-  /** The chapter title shown while the scene plays. */
-  title: string;
-  /** How long the scene runs. */
-  length: number;
-  /** Camera stops. */
-  shots: Shot[];
-  /** Pointer stops. */
-  pointer: Shot[];
-  /** Pointer presses. */
-  clicks: number[];
-  /** Keystroke badges. */
-  keys: Keystroke[];
-  /** The window the scene shows at scene time t. */
-  view: (t: number) => ReactNode;
-};

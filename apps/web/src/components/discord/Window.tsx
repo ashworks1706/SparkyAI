@@ -10,6 +10,15 @@ export const ThreadIcon = ({ className = "h-5 w-5" }: { className?: string }) =>
   </svg>
 );
 
+/** The box under a message that opened a thread. */
+export const ThreadChip = ({ name, count }: { name: string; count: string }) => (
+  <div className="mt-1.5 flex max-w-md items-center gap-2 rounded-lg bg-[#2b2d31] px-3 py-2 text-sm">
+    <ThreadIcon className="h-4 w-4 shrink-0 text-[#b5bac1]" />
+    <span className="truncate font-semibold text-[#f2f3f5]">{name}</span>
+    <span className="shrink-0 font-semibold text-[#00a8fc]">{count} &rsaquo;</span>
+  </div>
+);
+
 /** The hash glyph of a text channel. */
 const Hash = ({ className = "h-5 w-5" }: { className?: string }) => (
   <svg aria-hidden viewBox="0 0 24 24" className={className} fill="currentColor">

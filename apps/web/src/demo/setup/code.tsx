@@ -1,6 +1,6 @@
-import { typed } from "../timeline";
+import { typed, type Scene } from "../timeline";
 import { CAMPUS, MCP } from "./campus";
-import { Editor, MacWindow, Terminal, type Line, type Scene } from "./kit";
+import { Editor, MacWindow, Terminal, type Line } from "./kit";
 import { charCount, code, firstChars, type Code } from "./text";
 
 /** The repository tree the explorer shows. */

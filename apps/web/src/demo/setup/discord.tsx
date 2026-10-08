@@ -13,11 +13,9 @@ import {
 } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
 import { SPARKY, type Author } from "@/components/discord/people";
-import Window, { Composer, type Server } from "@/components/discord/Window";
-import { progress } from "../timeline";
-import { ThreadChip } from "../Stage";
+import Window, { Composer, ThreadChip, type Server } from "@/components/discord/Window";
+import { progress, type Scene } from "../timeline";
 import { CAMPUS, MCP } from "./campus";
-import type { Scene } from "./kit";
 
 /** The campus Discord the bot answers in once deployed. */
 const SERVER: Server = { name: CAMPUS.name, badge: "EU", className: "bg-[#1d3557] text-white" };

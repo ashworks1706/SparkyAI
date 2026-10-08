@@ -2,10 +2,8 @@ import { threadName } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
 import { SPARKY, type Author, type LinkButton } from "@/components/discord/people";
 import { LIVE, button } from "@/components/discord/examples";
-import Window, { Composer } from "@/components/discord/Window";
-import type { Scene } from "../setup/kit";
-import { ThreadChip } from "../Stage";
-import { progress, typed, type Shot } from "../timeline";
+import Window, { Composer, ThreadChip } from "@/components/discord/Window";
+import { progress, typed, type Scene, type Shot } from "../timeline";
 import { approved, cardAt, finished, FINISH, type Turn } from "./turn";
 import { BETWEEN, BOOK, DUE, GRADE, INBOX, WEEK } from "./turns";
 
