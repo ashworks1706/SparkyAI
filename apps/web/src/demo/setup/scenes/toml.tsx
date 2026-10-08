@@ -51,6 +51,7 @@ const tomlFile = (t: number): { lines: Code[]; added: number[] } => {
   return { lines, added };
 };
 
+/** Scene: set the time zone and campus name, turn on Canvas, and add an MCP server in sparky.toml. */
 export const toml: Scene = {
   title: "Turn on tools and add an MCP server",
   length: 10.4,

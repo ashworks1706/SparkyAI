@@ -4,14 +4,10 @@ import { AT, COLORS, GROUPS, HINTS, LOGS, TASK, type Status } from "../console-d
 import { MacWindow, Prompt } from "../kit";
 import { Pane } from "../Pane";
 
-/**
- * The sparky developer console, drawn as apps/cli/src/app/ui.rs draws it:
- * status bar, unit list by group, the selected unit's log pane, and the command line.
- */
-
 /** Seconds per keypress while the selection climbs to the engine. */
 const STEP = 0.07;
 
+/** The glyph and colour each unit status shows in the unit list. */
 const GLYPH: Record<Status, [string, string]> = {
   stopped: ["○", COLORS.dim],
   starting: ["◐", COLORS.yellow],
@@ -39,7 +35,10 @@ const selectedAt = (t: number): string => {
 /** The wall clock the log pane prints, counting from the scene start. */
 const clock = (at: number) => `09:02:${String(10 + Math.floor(at)).padStart(2, "0")}`;
 
-/** The console at scene time t. */
+/**
+ * The sparky developer console at scene time t, drawn as apps/cli/src/app/ui.rs draws it:
+ * status bar, unit list by group, the selected unit's log pane, and the command line.
+ */
 const consoleAt = (t: number) => {
   const selected = selectedAt(t);
   const unit = ORDER.find((u) => u.id === selected) ?? ORDER[0];
@@ -152,6 +151,7 @@ const shellAt = (t: number) => (
   </div>
 );
 
+/** Scene: start the console, run a scraper task, then start the engine, the bot and the scraper. */
 export const sparkyConsole: Scene = {
   title: "Run it all from the sparky console",
   length: 13.6,

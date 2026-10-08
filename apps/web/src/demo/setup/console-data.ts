@@ -27,11 +27,13 @@ export const AT = {
 /** The task the developer runs from the command line. */
 export const TASK = "scraper run --category calendar";
 
+/** The state of a unit in the console. */
 export type Status = "stopped" | "starting" | "running" | "done";
 
 /** A row of the unit list: its id, port, hint, and status at time t. */
 type Unit = { id: string; port?: string; hint: string; status?: (t: number) => Status };
 
+/** A status that is stopped before start, starting until up, then running. */
 const upFrom = (start: number, up: number) => (t: number): Status => (t < start ? "stopped" : t < up ? "starting" : "running");
 
 /** The catalog of apps/cli/src/units/mod.rs, with what bootstrap and this scene start. */
@@ -128,6 +130,7 @@ export const LOGS: Record<string, Log[]> = {
   ],
 };
 
+/** The key hints along the bottom line: each key and what it does. */
 export const HINTS: [string, string][] = [
   ["j/k", "move"],
   ["⏎", "start/stop"],

@@ -29,7 +29,7 @@ const REC_PY: Code[] = [
   code(")"),
 ];
 
-/** The engine side: the key, the label its button carries, and its parameters. */
+/** One method of the LiveSource impl: its signature, a body line, and the closing brace. */
 const method = (name: string, ret: string, body: Code): Code[] => [
   code("    ", ["fn", "kw"], " ", [name, "fn"], "(&", ["self", "kw"], ") -> ", [ret, "ty"], " {"),
   [{ text: "        " }, ...body],
@@ -37,6 +37,7 @@ const method = (name: string, ret: string, body: Code): Code[] => [
   [],
 ];
 
+/** The engine side: the key, the label its button carries, and its parameters. */
 const REC_RS: Code[] = [
   code(["//! This week's hours at the Example University rec center and pool.", "com"]),
   [],
@@ -101,6 +102,7 @@ const catalog = (t: number): { lines: Code[]; added: number[] } => {
 /** When each file of the live source is on screen. */
 const STEPS = { py: 0, registry: 2.7, rs: 4.1, catalog: 6.8 };
 
+/** Scene: write a live source, register it with the scraper, then with the engine. */
 export const source: Scene = {
   title: "Write a live source of your own",
   length: 8.8,

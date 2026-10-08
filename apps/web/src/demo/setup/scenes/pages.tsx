@@ -24,6 +24,7 @@ const pagesFile = (t: number): Code[] => {
   ];
 };
 
+/** Scene: paste the URL into pages.py as a new static page. */
 export const pages: Scene = {
   title: "Index it as a static page",
   length: 3.6,

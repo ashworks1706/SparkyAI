@@ -45,6 +45,7 @@ const browserAt = (selected: boolean) => (
   </MacWindow>
 );
 
+/** Scene: copy the URL of the academic calendar from the campus site. */
 export const browse: Scene = {
   title: "Pick a page from your campus site",
   length: 3.8,

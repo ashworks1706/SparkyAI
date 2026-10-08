@@ -20,7 +20,7 @@ export const withFile = (rows: string[], after: string, file: string) => {
   return [...rows.slice(0, i + 1), file, ...rows.slice(i + 1)];
 };
 
-/** Where the window sits, so camera stops can name lines of code. */
+/** Where the first line of code sits on the stage, and the height of a line and width of a character. */
 const CODE = { x: 420, y: 178, line: 25, char: 9.6 };
 
 /** The stage point of column col on line i of the editor. */

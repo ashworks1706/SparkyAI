@@ -21,6 +21,7 @@ const CLONE: Line[] = [
   { at: 5.3, text: "  hosted: set SPARKY_MODEL__BASE_URL and SPARKY_MODEL__API_KEY in .env", tone: "dim" },
 ];
 
+/** Scene: clone the repository and bootstrap it in a terminal. */
 export const clone: Scene = {
   title: "Clone and bootstrap",
   length: 5.8,

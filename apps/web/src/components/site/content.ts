@@ -1,4 +1,4 @@
-/** Where the source lives. One place, so every link on the page agrees. */
+/** The repository every source link on the site points to. */
 export const REPO = "https://github.com/ashworks1706/SparkyAI";
 
 /** How to run it, in the README. */

@@ -14,6 +14,7 @@ const envFile = (t: number): { lines: Code[]; added: number[] } => ({
   added: t >= 1.2 ? [2] : [],
 });
 
+/** Scene: add the Discord and Canvas secrets to .env. */
 export const env: Scene = {
   title: "Add the secrets",
   length: 3.4,

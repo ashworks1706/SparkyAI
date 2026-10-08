@@ -22,7 +22,9 @@ const SERVER: Server = { name: CAMPUS.name, badge: "EU", className: "bg-[#1d3557
 /** The first student to ask the newly deployed bot. */
 const ASKER: Author = PEOPLE.jordan;
 
+/** The timestamp on the question and the reply. */
 const TIME = "Today at 9:14 AM";
+/** What the student asks. */
 const QUESTION = "is the rec center open over spring break, and what's for dinner at the commons tonight?";
 
 /** The three calls: the indexed calendar page, the new live source, and the MCP server. */
@@ -44,10 +46,13 @@ const CALLS: ToolCall[] = [
   },
 ];
 
+/** The first thought line of the card. */
 const THOUGHT = thoughtStep(
   "Three parts: spring break dates from the calendar, rec center hours from its live page, and tonight's dinner from the dining menu.",
 );
+/** The thought line after the calls returned. */
 const WRAP = thoughtStep("I have the dates, the rec hours for that week, and the Commons menu.");
+/** The finished answer. */
 const ANSWER =
   "Yes. Over spring break (**March 8 to 14**) the rec center is open **8 AM to 6 PM**, and the pool is closed that week.\n\nDinner at the Commons tonight runs **5 to 8 PM**: herb roast chicken, black bean burgers, and the pasta bar.";
 
@@ -100,6 +105,7 @@ const discordAt = (t: number) => {
   );
 };
 
+/** Scene: a student mentions the deployed bot and it answers in a thread. */
 export const discord: Scene = {
   title: "Live on your campus Discord",
   length: 11.6,
