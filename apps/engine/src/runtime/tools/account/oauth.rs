@@ -30,6 +30,10 @@ struct ErrorResponse {
 }
 
 /// A Google OAuth web client for per-user grants with offline access.
+#[allow(
+    dead_code,
+    reason = "called by the per-user session routes of roadmap phase 8"
+)]
 pub struct GoogleOAuthClient {
     http: reqwest::Client,
     client_id: String,
@@ -40,6 +44,10 @@ pub struct GoogleOAuthClient {
     token_url: Url,
 }
 
+#[allow(
+    dead_code,
+    reason = "called by the per-user session routes of roadmap phase 8"
+)]
 impl GoogleOAuthClient {
     /// Builds the client from its settings.
     pub fn new(cfg: &GoogleOAuth) -> Result<Self, OAuthError> {
