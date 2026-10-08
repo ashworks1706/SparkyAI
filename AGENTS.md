@@ -53,7 +53,7 @@ apps/discord/     Rust bin: serenity bot, HTTP client of engine, never links it.
 apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
 apps/scraper/     Python: fetch, chunk, embed, write the index. scraper serve runs the jobs queue: live search_live jobs, indexing of their results, scheduled source runs. Owns migrations. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
-apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, runner, suites, cases.
+apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, cli, runner, suites, cases.
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```

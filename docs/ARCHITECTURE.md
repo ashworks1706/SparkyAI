@@ -64,13 +64,18 @@ apps/
   scraper/        Python. Scheduled ingestion and the worker for live query jobs.
     core/           settings, types, telemetry, tests
     ingest/         fetch, extract, chunk, embed, tree, pipeline, pace, drivers
-    sources/        scheduled sources: one module per source with an extractor, pages.py for static pages
-    query/          live query registry, parameter checks, runner, indexing of live results
+    sources/        scheduled sources: one module per source with an extractor, pages.py for static pages, SOURCES in __init__.py
+    query/          registry.py (QUERY_SOURCES), params.py (parameter checks), run.py (runner), index.py (indexing of live results)
     query/sources/  live query sources, one module each
     jobs.py         the job queue: handlers, lanes, scheduling
-    store/          postgres and object storage, the only place a connection opens
+    store/          postgres/ (pool, migrate, index, jobs) and object storage, the only place a connection opens
     migrations/     the schema
   evals/          Python. Evals with a baseline gate.
+    core/           settings, types, tests
+    cli.py          eval run, baseline, compare
+    runner.py       loads cases and runs them against the engine /chat
+    suites/         one scorer per suite, SUITES in __init__.py
+    cases/          golden cases, one JSON object per line
   web/            Vite and React frontend and admin UI
 deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search, runpod
 docs/             ROADMAP.md, this file
