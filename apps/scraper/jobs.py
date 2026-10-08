@@ -14,8 +14,8 @@ from scraper.core.types import Job, QueryError
 from scraper.ingest import pipeline
 from scraper.ingest.pace import HostPacer
 from scraper.query import index
-from scraper.query.registry import QUERY_SOURCES, offered
-from scraper.query.run import for_caller, run_job, should_index, source_of
+from scraper.query.registry import QUERY_SOURCES
+from scraper.query.run import for_caller, offered, run_job, should_index, source_of
 from scraper.sources import SOURCES
 from scraper.store import object as objects
 from scraper.store import postgres

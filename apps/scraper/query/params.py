@@ -1,14 +1,38 @@
-"""Maps model-supplied parameters to search URL values, after registry.check has validated them."""
+"""Checks model-supplied parameters against a source and maps them to search URL values."""
 
 from __future__ import annotations
 
 import urllib.parse
 from collections.abc import Iterable
 
-from scraper.core.types import QueryError
+from scraper.core.types import QueryError, QuerySource
 
 # ASU term codes are 2 plus the two-digit calendar year plus the session digit; Fall 2026 is 2267.
 _TERM_DIGIT = {"spring": "1", "summer": "4", "fall": "7"}
+
+
+def check(source: QuerySource, params: dict[str, str]) -> None:
+    """Raises QueryError when a required parameter is missing, unknown, or not among its choices."""
+    missing = [p.name for p in source.params if p.required and not params.get(p.name, "").strip()]
+    if missing:
+        raise QueryError(f"{source.key} needs: {', '.join(missing)}")
+    unknown = set(params) - {p.name for p in source.params}
+    if unknown:
+        taken = ", ".join(p.name for p in source.params) or "nothing"
+        raise QueryError(
+            f"{source.key} has no parameter {', '.join(sorted(unknown))}; it takes: {taken}"
+        )
+    for p in source.params:
+        value = params.get(p.name, "").strip()
+        if not p.choices or not value:
+            continue
+        values = [v.strip() for v in value.split(",") if v.strip()] if p.many else [value]
+        if not p.many and "," in value:
+            raise QueryError(f"{p.name} takes one value, got {value!r}")
+        allowed = {c.lower() for c in p.choices}
+        for v in values:
+            if v.lower() not in allowed:
+                raise QueryError(f"{p.name} {v!r} is not one of: {', '.join(p.choices)}")
 
 
 def term_code(term: str) -> str:

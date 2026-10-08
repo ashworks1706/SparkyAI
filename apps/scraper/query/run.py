@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from scraper.core import telemetry
+from scraper.core.settings import settings
 from scraper.core.types import Job, QueryError, QueryResult, QuerySource
+from scraper.ingest import extract, fetch
 from scraper.ingest.pace import HostPacer
-from scraper.query.registry import QUERY_SOURCES, run
+from scraper.query.params import check
+from scraper.query.registry import QUERY_SOURCES
 
 
 def source_of(job: Job) -> QuerySource:
@@ -15,6 +18,36 @@ def source_of(job: Job) -> QuerySource:
     if source is None:
         raise QueryError(f"unknown source {key!r}; known: {', '.join(sorted(QUERY_SOURCES))}")
     return source
+
+
+def url_for(source: QuerySource, params: dict[str, str]) -> str:
+    """Checks the parameters, then builds the URL of a page source."""
+    check(source, params)
+    if source.to_url is None:
+        raise QueryError(f"{source.key} is not fetched from one page")
+    return source.to_url(params)
+
+
+def offered(source: QuerySource) -> bool:
+    """Whether source is served: one read only through the admin session needs auth.enabled."""
+    return settings().auth.enabled or not (source.auth and source.answer is None)
+
+
+def run(
+    source: QuerySource, params: dict[str, str], pacer: HostPacer | None = None
+) -> tuple[str, str]:
+    """Checks the parameters and fetches the source. Returns the URL to cite and the text."""
+    if not offered(source):
+        raise QueryError(f"{source.key} is off: it reads through a login and auth.enabled is false")
+    if source.answer is not None:
+        check(source, params)
+        return source.answer(params)
+    url = url_for(source, params)
+    if pacer is not None:
+        pacer.wait(url)
+    fetched = fetch.fetch(url, needs_js=source.needs_js, auth=source.auth)
+    text = source.extractor(fetched) if source.extractor else extract.page_text(fetched)
+    return url, text
 
 
 def run_job(job: Job, pacer: HostPacer | None = None) -> QueryResult:

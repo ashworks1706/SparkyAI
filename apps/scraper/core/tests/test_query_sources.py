@@ -8,8 +8,8 @@ import pytest
 from scraper.core.types import Job, QueryError
 from scraper.ingest.extract import extract_text, form_page_text
 from scraper.query.params import term_code
-from scraper.query.registry import QUERY_SOURCES, url_for
-from scraper.query.run import run_job
+from scraper.query.registry import QUERY_SOURCES
+from scraper.query.run import run_job, url_for
 
 
 def test_term_codes_are_derived_rather_than_tabulated():
@@ -187,7 +187,7 @@ def test_a_source_sets_exactly_one_way_to_be_fetched():
 
 
 def test_choices_are_checked_without_case_before_anything_is_fetched():
-    from scraper.query.registry import check
+    from scraper.query.params import check
 
     check(QUERY_SOURCES["courses"], {"term": "Fall 2026", "days": "Monday, WEDNESDAY"})
     with pytest.raises(QueryError, match="is not one of"):
@@ -313,7 +313,7 @@ def test_a_web_search_with_no_results_says_which_engines_did_not_answer():
 
 def test_a_page_source_waits_on_the_pacer_before_it_fetches(monkeypatch):
     from scraper.core.types import Fetched
-    from scraper.query import registry
+    from scraper.query import run as query_run
 
     order: list[str] = []
 
@@ -327,6 +327,6 @@ def test_a_page_source_waits_on_the_pacer_before_it_fetches(monkeypatch):
             url=url, status=200, body=b"Open 7am", content_type="text/plain", text="Open 7am"
         )
 
-    monkeypatch.setattr(registry.fetch, "fetch", fetched)
-    url, _text = registry.run(QUERY_SOURCES["library_hours"], {}, Pacer())
+    monkeypatch.setattr(query_run.fetch, "fetch", fetched)
+    url, _text = query_run.run(QUERY_SOURCES["library_hours"], {}, Pacer())
     assert order == [f"wait {url}", f"fetch {url}"]
