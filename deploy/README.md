@@ -75,11 +75,33 @@ The live deploy is one always-on community RTX 3070 pod named `sparky` at $0.13/
 | Change a secret | Edit the pod environment in the RunPod console. The pod restarts with the new values. |
 | Read logs | Pod logs in the console. Every service writes to the container log; supervisord prefixes its own state changes. |
 | Restart | Restart the pod. `start.sh` reruns, supervisord starts every service, and `scraper migrate` applies new migrations. |
-| Check the GPU | Override the start command with `nvidia-smi; exec /usr/local/bin/sparky-start`. The console GPU memory reading is not reliable. |
+| Run a one-off command | Set the container start command to `bash -c "<command>; exec /usr/local/bin/sparky-start"`, restart, read the output at the top of the logs, then clear the start command. The pod has no SSH key registered, so this is the way in. |
+| Check the GPU | Run `nvidia-smi` as above. The console GPU memory reading is not reliable. |
 
 State lives on the host disk under `/workspace`: Postgres, Redis, MinIO, the GGUF cache, and the daily `pg_dump` in `backups/` (the newest `SPARKY_BACKUP_KEEP`, default 7). Community pods cannot attach network volumes, so if the host fails, the pod and its backups are lost together. To recover, create a new pod as above. The first boot initializes an empty database and downloads the models again; the scraper's scheduled sources rebuild the index.
 
 To move to a new host with the data, stop the bot, copy the newest dump out with `runpodctl send` from a pod terminal (SSH or the console web terminal), create the new pod, and restore with `pg_restore --clean --if-exists -d postgres://sparky:sparky@127.0.0.1:5432/sparky`.
+
+### Troubleshooting
+
+Start with the pod logs. Search for `exited:`, `gave up` and `FATAL` to find the failing program; supervisord names it (`chat`, `embed`, `engine`, `discord`, `scraper`, `migrate`, `postgres`, `redis`, `minio`, `searxng`, `backup`), and the lines just before carry its own error.
+
+| Symptom in the logs or Discord | Cause | Fix |
+|---|---|---|
+| Bot shows offline; `discord` exits at boot | Bad or rotated `SPARKY_DISCORD__TOKEN`, or wrong `SPARKY_DISCORD__GUILD_ID` | Correct the pod env. A healthy start logs `connected` with the guild id, then `commands registered`. |
+| Bot is online but never answers | `chat` or `embed` is not running | Find their exit reason below. The engine logs `could not read the chat server context` once at boot while the models load; that alone is harmless. |
+| `chat`/`embed` exit 127, `libllama-server-impl.so: cannot open shared object file` | `/app` is not on the library path | Use an image built after PR #62, or add `LD_LIBRARY_PATH=/app` to the pod env. |
+| `chat`/`embed` log `GET failed (429)` from the Hub | No `HF_TOKEN`; the community host shares a rate-limited IP | Set `HF_TOKEN` to a read token. Downloads land in `/workspace/models` and are reused after that. |
+| `chat`/`embed` log `out of memory` or a CUDA allocation error | The models do not fit in 8 GB | Lower `SPARKY_CHAT_CTX`, pick a smaller GGUF, or move to a larger GPU (see Current deployment). |
+| Answers are very slow; `nvidia-smi` shows no `llama-server` processes | The models run on the CPU | Recreate the pod with a host CUDA of 12.8 or newer. |
+| `engine` exits status 1 at boot | `Config::validate` rejected the configuration | The line before the exit names the field. Fix the pod env or `sparky.toml` and ship a new image. |
+| `scraper` logs `relation ... does not exist` | It started before `migrate` finished | Harmless if it stops after `migrate` logs `exited: migrate (exit status 0; expected)`. Otherwise read the `migrate` lines. |
+| Scraper jobs fail with `Connection refused` | `embed` is down | Fix `embed` first. |
+| Pod is gone, or the console says the machine is unavailable | The community host left | Create a new pod (see Operating the pod). The database starts empty. |
+| Pod stuck pulling the image, or `unauthorized` | The GHCR package is private, or the tag does not exist | Make `sparkyai-runpod` public in the GitHub package settings; check the tag in the CD run. |
+| CD `image (runpod)` job fails | A build input moved upstream (MinIO stopped publishing binaries in 2026, for example) | Read the failing step in the Actions log and pin or replace that input in `runpod.Dockerfile`. |
+
+These lines appear on every healthy boot and need no action: SearXNG `ahmia` and `torch` engine registration errors, the Redis memory overcommit warning, the MinIO default credentials warning, one Postgres `the database system is starting up`, the llama.cpp `control-looking token` warning, and `phoenix url is unset`.
 
 ## Models
 
