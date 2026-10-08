@@ -47,9 +47,9 @@ apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
     src/core/       config (services, integrations, http, harness by domain), telemetry, types, traits, tests
     src/runtime/    harness (loop, prompt, uploads, knowledge, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (knowledge/search with sources/, account for per-user Canvas, Outlook, Gcal and OAuth, papers, wiki, transit, files, mcp, sandbox, shared http)
-    src/stores/     postgres adapters: conversation, confirmation, oauth grants, knowledge (retrieval, window, query jobs, redis cache), memory (memories, profile graph)
+    src/stores/     standalone/ (feature standalone): postgres, conversation, confirmation, oauth grants, health, knowledge (retrieval, window, query jobs, redis cache), memory (memories, profile graph); platform/: client, conversation, confirmation, memory, profile, retrieval, query, accounts, health over the platform HTTP API
     src/routes/     chat (JSON and SSE), confirm, conversation, profile, openai (/v1), oauth, sandbox, health, rate limit, auth, failure
-    src/wiring/     builds every dependency from config and serves: tools, agent, http, boot checks, system prompt
+    src/wiring/     builds every dependency from config and serves: standalone and platform (one per store mode), tools, agent, http, boot checks, system prompt
   discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
     src/core/       config, telemetry, types, tests
     src/bot/        client, addressed messages, turn destinations, memory and login commands, approvals, replies, the streamed turn
@@ -139,7 +139,7 @@ flowchart TD
     HARNESS["runtime::harness<br/>agent: run, step, inputs, execute, conclude, task, uploads<br/>agent/call: thinking, relay, draft, thought, retry, spans<br/>agent/prompt: assemble, capability<br/>knowledge: admit, cache<br/>memory: detect, profile<br/>safety: guardrail, policy<br/>compact, tools, trace"]
     MODEL["runtime::model<br/>rig_openai: chat, embed, convert<br/>limit, props"]
     TOOLS["runtime::tools<br/>knowledge/search: live, stored, sources/ one file per source<br/>account: canvas, outlook, gcal, oauth, grant<br/>papers, wiki, transit, files, mcp, http<br/>sandbox: container, session, egress, output"]
-    STORES["stores<br/>postgres, conversation, confirmation, oauth<br/>knowledge: retrieval, window, query, cache<br/>memory: memories, profile"]
+    STORES["stores<br/>standalone: postgres, conversation, confirmation, oauth, health<br/>standalone/knowledge: retrieval, window, query, cache<br/>standalone/memory: memories, profile<br/>platform: client, conversation, confirmation, memory, profile, retrieval, query, accounts, health"]
     CORE["core<br/>config, telemetry, types, traits, tests"]
 
     ROUTES --> HARNESS
@@ -158,6 +158,22 @@ flowchart TD
 Folders nest by domain, and the same domain names repeat across `core/types`, `core/traits`, `core/tests`, `runtime`, and `stores`: agent, conversation, http, knowledge, memory, model, safety, tools, trace. A domain with one file at a level keeps that file flat. Data lives in `core/types`, interfaces in `core/traits`, and stateful objects beside their implementations.
 
 `runtime::model::limit` wraps the chat client in a semaphore of `agent.model_slots` permits, matching `llama-server --parallel`. A call waits up to `agent.model_queue_wait_secs` for a slot, then fails as busy.
+
+## Store modes
+
+The engine runs in one of two modes, chosen by `platform.enabled` and known only to `wiring`. `wiring/mod.rs` builds a `Stores` value of trait objects from `wiring/standalone.rs` or `wiring/platform.rs`; the harness, tools, routes, and `core` see the traits alone.
+
+| Store | Standalone (`platform.enabled = false`) | Platform (`platform.enabled = true`) |
+|---|---|---|
+| `ConversationStore`, `MemoryStore`, `ProfileGraph`, `ConfirmationStore` | PostgreSQL tables | `/api/agents/members/{user_id}/...` |
+| `Retriever` | hybrid search over `chunks` | `POST /api/knowledge/search`, with the query vector from the engine `Embedder` when `retrieval.dense` is on |
+| `SourceQueries` | the `jobs` queue the scraper serves, behind the Redis cache and cap | `GET /api/asu/queries`, `POST /api/asu/query`, run while the call waits, bounded by the request deadline |
+| `OAuthStore` | `oauth_grants` and `oauth_states`, the engine consent routes | `/api/accounts/members/{user_id}/{provider}/token` and `/login`; the platform runs the login and refreshes tokens |
+| readiness `Probe` | `select 1` on the pool | `GET /health` on the platform |
+
+In platform mode the engine opens no PostgreSQL or Redis connection; it needs the chat and embedding servers and the platform. The platform takes the organization from the machine token (`Authorization: Bearer plat_...`), so `tenant_id` is not sent, and the member is `user_id`, which the platform requires to be a numeric Discord user id. One engine serves one guild, and its token belongs to the platform organization of that guild. The token needs the scopes `agents:read`, `agents:write`, `knowledge:read`, `accounts:link`, and `accounts:token`.
+
+The self-hosted adapters sit under `stores/standalone/` behind the cargo feature `standalone`, on by default. `cargo build -p engine --no-default-features` builds a platform-only engine without them or `sqlx` and `redis`; `Config::validate` then refuses `platform.enabled = false`. `just check-rust` lints and tests both builds.
 
 ## Inside scraper
 
@@ -273,7 +289,7 @@ pub trait TraceSink {
 }
 ```
 
-The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `ProfileGraph`, `FactDetector`, `QueryCache`, `Sandbox`.
+The rest follow the same pattern: `Compactor`, `ConfirmationStore`, `ProfileGraph`, `FactDetector`, `QueryCache`, `Sandbox`, `OAuthStore`, `Probe`. An `OAuthStore` that runs the login itself answers `hosts_login` with true and hands out `login_link`; the OAuth routes then return that link and skip the consent state.
 
 ## Request lifecycle
 
@@ -487,7 +503,7 @@ The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` an
 
 ## Per-user OAuth and integrations
 
-Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::account::oauth::WebOAuthClient` serves Canvas, Microsoft, and Google (Google adds `access_type=offline` and `prompt=consent` so a refresh token is issued); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::account::grant` resolves a caller's token for a provider and refreshes an expired grant.
+Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::account::oauth::WebOAuthClient` serves Canvas, Microsoft, and Google (Google adds `access_type=offline` and `prompt=consent` so a refresh token is issued); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. In platform mode `oauth.*` stays off: authorize returns the platform login link, logout removes the platform grant, and the callback is unused. `Credentials` in `runtime::tools::account::grant` resolves a caller's token for a provider and refreshes an expired grant.
 
 `runtime/tools/account/outlook` offers read-only Outlook tools over Microsoft Graph, off until `[outlook] enabled` with an `oauth.microsoft` grant: `outlook_calendar` and `outlook_mail`, both `ReadAuthenticated` and direct-message only, keyed to the `microsoft` provider. Turning it on needs an Azure app registration (`[oauth.microsoft]`), and reading ASU accounts needs ASU admin consent.
 
@@ -681,6 +697,8 @@ A conversation belongs to one tenant, user, channel, and visibility. The bot hol
 | live query cache and leases | Redis, shared across engine replicas |
 | local traces, console logs, eval reports | `.sparky/`, ignored |
 
+The table describes standalone mode. In platform mode conversations, memories, the profile graph, confirmations, knowledge, live query registry, and account grants live on the platform, and the engine keeps only local traces.
+
 ```mermaid
 erDiagram
     users ||--o{ conversations : opens
@@ -771,9 +789,9 @@ Two layers, lowest first: `sparky.toml`, then `SPARKY_<SECTION>__<KEY>` environm
 
 Rust reads the file with figment, Python with tomllib through pydantic-settings. `SPARKY_CONFIG_FILE` points at a different file, such as an eval profile. A missing file is not an error.
 
-Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `scraper`, `search`, `firecrawl`, `auth`, `oauth` (with `oauth.google`, `oauth.canvas`, and `oauth.microsoft`), `canvas`, `outlook`, `papers`, `wikipedia`, `transit`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
+Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `platform`, `scraper`, `search`, `firecrawl`, `auth`, `oauth` (with `oauth.google`, `oauth.canvas`, and `oauth.microsoft`), `canvas`, `outlook`, `papers`, `wikipedia`, `transit`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
-A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, or a zero query poll interval. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
+A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, a zero query poll interval, standalone without `SPARKY_POSTGRES__URL`, or platform mode without its URL and token, with `oauth.*` on, or with `retrieval.top_k`, `retrieval.window`, or `agent.confirmation_ttl_secs` past what the platform accepts. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 
 `prompt` holds the wording the harness writes around every section. `system_file` takes precedence over `system`, which takes precedence over the built-in prompt.
 

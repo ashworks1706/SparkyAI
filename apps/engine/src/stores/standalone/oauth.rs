@@ -11,7 +11,7 @@ use sqlx::postgres::PgPool;
 use crate::core::traits::oauth::OAuthStore;
 use crate::core::types::store::StoreError;
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
-use crate::stores::postgres::db;
+use crate::stores::standalone::postgres::db;
 
 /// Per-user OAuth grants and login states, in oauth_grants and oauth_states.
 pub struct PgOAuth {

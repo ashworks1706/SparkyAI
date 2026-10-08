@@ -1,4 +1,4 @@
-//! Per-user OAuth login: authorize mints a consent URL and callback exchanges the code.
+//! Per-user OAuth login: authorize mints a consent URL or the store's own link; callback exchanges the code.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -42,12 +42,18 @@ pub async fn authorize(
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
     }
+    if state.store.hosts_login() {
+        return match state.store.login_link(&req.user, &provider).await {
+            Ok(Some(url)) => Json(AuthorizeResponse { url }).into_response(),
+            Ok(None) => not_enabled(),
+            Err(error) => {
+                tracing::error!(%error, %provider, "could not start a login");
+                (StatusCode::INTERNAL_SERVER_ERROR, "could not start login").into_response()
+            }
+        };
+    }
     let Some(client) = state.providers.get(&provider) else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            "login is not enabled for this provider",
-        )
-            .into_response();
+        return not_enabled();
     };
     let token = Uuid::new_v4().to_string();
     if let Err(error) = state
@@ -121,7 +127,7 @@ pub async fn disconnect(
     if !authorized(&headers, &state.service_token) {
         return (StatusCode::UNAUTHORIZED, "missing or wrong bearer token").into_response();
     }
-    if !state.providers.contains_key(&provider) {
+    if !state.store.hosts_login() && !state.providers.contains_key(&provider) {
         return (StatusCode::NOT_FOUND, "unknown provider").into_response();
     }
     match state
@@ -135,6 +141,15 @@ pub async fn disconnect(
             (StatusCode::INTERNAL_SERVER_ERROR, "could not disconnect").into_response()
         }
     }
+}
+
+/// The answer when no login is offered for a provider.
+fn not_enabled() -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        "login is not enabled for this provider",
+    )
+        .into_response()
 }
 
 /// A minimal HTML page carrying one line to the user's browser.

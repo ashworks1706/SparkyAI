@@ -14,7 +14,7 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::profile::{
     ProfileEntity, ProfileError, ProfileFact, ProfileNode, ProfileRelation,
 };
-use crate::stores::postgres::{row_limit, vector_literal};
+use crate::stores::standalone::postgres::{row_limit, vector_literal};
 
 /// Maps a sqlx error to a ProfileError.
 #[allow(clippy::needless_pass_by_value)]

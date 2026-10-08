@@ -12,7 +12,7 @@ use crate::core::traits::safety::confirmation::ConfirmationStore;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::safety::policy::PendingAction;
 use crate::core::types::store::StoreError;
-use crate::stores::postgres::db;
+use crate::stores::standalone::postgres::db;
 
 /// Actions waiting on caller approval, in confirmations.
 pub struct PgConfirmations {

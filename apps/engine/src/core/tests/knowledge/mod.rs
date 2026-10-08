@@ -3,4 +3,5 @@
 mod admit;
 mod cache;
 mod search;
+#[cfg(feature = "standalone")]
 mod window;

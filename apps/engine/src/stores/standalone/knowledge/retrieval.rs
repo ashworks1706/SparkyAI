@@ -13,8 +13,8 @@ use crate::core::traits::knowledge::retrieval::{Embedder, Retriever};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::knowledge::evidence::Evidence;
 use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
-use crate::stores::knowledge::window::{Span, Take, collapse, rrf, spans, takes};
-use crate::stores::postgres::{quote_literal, vector_literal};
+use crate::stores::standalone::knowledge::window::{Span, Take, collapse, rrf, spans, takes};
+use crate::stores::standalone::postgres::{quote_literal, vector_literal};
 
 /// How the two retrieval legs run and fuse. Built from the retrieval section; there is no Default.
 #[derive(Debug, Clone)]

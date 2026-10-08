@@ -59,7 +59,9 @@ clean:
 check-rust:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy -p engine --no-default-features --all-targets -- -D warnings
     cargo test --workspace
+    cargo test -p engine --no-default-features
     ./scripts/check-deps.sh
 
 # Run the engine

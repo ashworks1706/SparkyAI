@@ -32,7 +32,8 @@ pub struct Config {
     pub discord: Discord,
     /// Chat model endpoint.
     pub model: Model,
-    /// PostgreSQL, the source of truth and the retrieval index.
+    /// PostgreSQL, the source of truth and the retrieval index when platform is off.
+    #[serde(default)]
     pub postgres: Postgres,
     /// Redis, the shared cache in front of live queries. Absent turns query.cache off.
     #[serde(default)]
@@ -102,6 +103,9 @@ pub struct Config {
     /// Valley Metro transit. Off by default.
     #[serde(default)]
     pub transit: Transit,
+    /// The platform that replaces every self-hosted store when enabled. Off by default.
+    #[serde(default)]
+    pub platform: Platform,
 }
 
 /// Default budgets. Every field comes from the agent section.
@@ -247,7 +251,7 @@ impl Config {
         validate_oauth(&self.oauth)?;
         validate_canvas(&self.canvas)?;
         validate_integrations(self)?;
-        validate_query_cache(self)?;
+        validate_platform(self)?;
         if self.retrieval.candidates < 1 {
             return invalid("retrieval.candidates must be at least 1".into());
         }
@@ -316,6 +320,85 @@ impl Config {
             .unwrap_or(fallback)
             .to_owned())
     }
+}
+
+/// Largest top_k the platform search accepts.
+const PLATFORM_MAX_TOP_K: usize = 50;
+/// Largest neighbor window the platform search accepts.
+const PLATFORM_MAX_WINDOW: i32 = 5;
+/// Longest query text the platform search accepts.
+const PLATFORM_MAX_QUERY_CHARS: usize = 1000;
+/// Longest hold the platform keeps a pending action, in seconds.
+const PLATFORM_MAX_TTL_SECS: u64 = 86_400;
+
+/// Rejects a mode this build cannot run, standalone stores it cannot reach, or a bad platform section.
+fn validate_platform(cfg: &Config) -> Result<(), ConfigError> {
+    let invalid = |m: String| Err(ConfigError::Invalid(m));
+    let platform = &cfg.platform;
+    if !platform.enabled {
+        if !cfg!(feature = "standalone") {
+            return invalid(
+                "this engine is built without the standalone feature; set platform.enabled = true"
+                    .into(),
+            );
+        }
+        if cfg
+            .postgres
+            .url
+            .as_ref()
+            .is_none_or(|u| u.expose_secret().trim().is_empty())
+        {
+            return invalid("set SPARKY_POSTGRES__URL, or turn on platform.enabled".into());
+        }
+        return validate_query_cache(cfg);
+    }
+    let url = platform.url.as_deref().map(str::trim).unwrap_or_default();
+    if url::Url::parse(url).is_err() || !(url.starts_with("https://") || url.starts_with("http://"))
+    {
+        return invalid("platform.enabled needs SPARKY_PLATFORM__URL, an http or https URL".into());
+    }
+    if platform
+        .token
+        .as_ref()
+        .is_none_or(|t| t.expose_secret().trim().is_empty())
+    {
+        return invalid("platform.enabled needs SPARKY_PLATFORM__TOKEN".into());
+    }
+    if platform.timeout_secs == 0 {
+        return invalid("platform.timeout_secs must be at least 1".into());
+    }
+    if !(1..=PLATFORM_MAX_QUERY_CHARS).contains(&platform.max_query_chars) {
+        return invalid(format!(
+            "platform.max_query_chars must be from 1 to {PLATFORM_MAX_QUERY_CHARS}"
+        ));
+    }
+    if !(1..=PLATFORM_MAX_TOP_K).contains(&cfg.retrieval.top_k) {
+        return invalid(format!(
+            "retrieval.top_k must be from 1 to {PLATFORM_MAX_TOP_K} with platform.enabled"
+        ));
+    }
+    if cfg.retrieval.window > PLATFORM_MAX_WINDOW {
+        return invalid(format!(
+            "retrieval.window must be at most {PLATFORM_MAX_WINDOW} with platform.enabled"
+        ));
+    }
+    if !(1..=PLATFORM_MAX_TTL_SECS).contains(&cfg.agent.confirmation_ttl_secs) {
+        return invalid(format!(
+            "agent.confirmation_ttl_secs must be from 1 to {PLATFORM_MAX_TTL_SECS} with platform.enabled"
+        ));
+    }
+    for (name, on) in [
+        ("canvas", cfg.oauth.canvas.enabled),
+        ("google", cfg.oauth.google.enabled),
+        ("microsoft", cfg.oauth.microsoft.enabled),
+    ] {
+        if on {
+            return invalid(format!(
+                "oauth.{name}.enabled is on, but with platform.enabled the platform runs the login; turn it off"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Rejects search wording the model would read as an empty string, and a missing fallback source.
@@ -527,12 +610,14 @@ fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
     if !(cfg.tools.search && cache.enabled) {
         return Ok(());
     }
+    #[cfg_attr(not(feature = "standalone"), allow(unused_variables))]
     let Some(redis) = &cfg.redis else {
         return invalid(
             "query.cache.enabled needs a redis section; set SPARKY_REDIS__URL or turn it off"
                 .into(),
         );
     };
+    #[cfg(feature = "standalone")]
     if let Err(error) = redis::Client::open(redis.url.expose_secret()) {
         return invalid(format!(
             "SPARKY_REDIS__URL is not a Redis URL ({error}); it takes the form \

@@ -1,18 +1,21 @@
 //! Liveness and readiness.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use sqlx::postgres::PgPool;
 
+use crate::core::traits::health::Probe;
 use crate::core::types::http::health::Readiness;
 
 /// What readiness checks.
 #[derive(Clone)]
 pub struct HealthState {
-    /// The store every request needs.
-    pub pool: PgPool,
+    /// The stores every request needs.
+    pub probes: Vec<Arc<dyn Probe>>,
     /// Chat model base URL, ending in /v1.
     pub model_base_url: String,
 }
@@ -22,15 +25,16 @@ pub async fn live() -> StatusCode {
     StatusCode::OK
 }
 
-/// Returns 200 when Postgres and the model endpoint both answer, 503 with the report otherwise.
+/// Returns 200 when every store probe and the model endpoint answer, 503 with the report otherwise.
 pub async fn ready(State(state): State<HealthState>) -> Response {
-    let postgres = match sqlx::query("select 1").execute(&state.pool).await {
-        Ok(_) => true,
-        Err(error) => {
-            tracing::warn!(%error, "readiness: postgres did not answer");
-            false
+    let mut stores = BTreeMap::new();
+    for probe in &state.probes {
+        let up = probe.ready().await;
+        if !up {
+            tracing::warn!(store = probe.name(), "readiness: store did not answer");
         }
-    };
+        stores.insert(probe.name(), up);
+    }
     let model = match reqwest::Client::new()
         .get(format!(
             "{}/models",
@@ -50,8 +54,9 @@ pub async fn ready(State(state): State<HealthState>) -> Response {
             false
         }
     };
-    let report = Readiness { postgres, model };
-    let status = if postgres && model {
+    let healthy = model && stores.values().all(|up| *up);
+    let report = Readiness { stores, model };
+    let status = if healthy {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
