@@ -12,7 +12,7 @@ import {
   type Args,
 } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
-import { SPARKY, type Author } from "@/components/discord/people";
+import { PEOPLE, SPARKY, type Author } from "@/components/discord/people";
 import Window, { Composer, ThreadChip, type Server } from "@/components/discord/Window";
 import { progress, type Scene } from "../timeline";
 import { CAMPUS, MCP } from "./campus";
@@ -21,7 +21,7 @@ import { CAMPUS, MCP } from "./campus";
 const SERVER: Server = { name: CAMPUS.name, badge: "EU", className: "bg-[#1d3557] text-white" };
 
 /** The first student to ask the newly deployed bot. */
-const ASKER: Author = { name: "jordan", color: "#f0b232" };
+const ASKER: Author = PEOPLE.jordan;
 
 const TIME = "Today at 9:14 AM";
 const QUESTION = "is the rec center open over spring break, and what's for dinner at the commons tonight?";

@@ -1,5 +1,5 @@
 import { liveResult, sourceLabel, thoughtStep, toolDone, type Args } from "./format";
-import type { Author, LinkButton } from "./people";
+import { PEOPLE, type Author, type LinkButton } from "./people";
 
 /** One live source the bot reaches, as the engine names it. */
 type Live = { key: string; label: string; url: string };
@@ -37,19 +37,11 @@ export type Example = {
   answer: string;
 };
 
-/** Students who ask in the examples. */
-const PEOPLE: Record<string, Author> = {
-  maya: { name: "maya", color: "#f0b232" },
-  dev: { name: "devon", color: "#23a55a" },
-  ren: { name: "ren", color: "#eb459e" },
-  sam: { name: "sam", color: "#00a8fc" },
-};
-
 /** The examples the Sources section shows, one per source. */
 export const EXAMPLES: Example[] = [
   {
     title: "Courses",
-    asker: PEOPLE.dev,
+    asker: PEOPLE.devon,
     question: "any open seats left in CSE 310 this fall?",
     thought: "Open seats change by the hour, so this needs a live class search for CSE 310 in Fall 2026.",
     calls: [{ source: LIVE.courses, query: "CSE 310 Fall 2026 open seats", text: "CSE 310 Data Structures and Algorithms. Tempe, in person. 3 sections, 41 open seats." }],
@@ -81,7 +73,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     title: "Study rooms",
-    asker: PEOPLE.dev,
+    asker: PEOPLE.devon,
     question: "is there a study room for 4 at 6pm today?",
     thought: "Room availability is live, so check library study room bookings for four people at 6 PM today.",
     calls: [{ source: LIVE.studyRooms, query: "study room 4 people today 6pm", text: "Hayden Library group study rooms, capacity 4. Available 6:00pm: 2 rooms." }],

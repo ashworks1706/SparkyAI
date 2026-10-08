@@ -1,6 +1,6 @@
 import { threadName } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
-import { SPARKY, type Author, type LinkButton } from "@/components/discord/people";
+import { PEOPLE, SPARKY, type Author, type LinkButton } from "@/components/discord/people";
 import { LIVE, button } from "@/components/discord/examples";
 import Window, { Composer, ThreadChip } from "@/components/discord/Window";
 import { Caret } from "../Caret";
@@ -9,7 +9,7 @@ import { approved, cardAt, finished, FINISH, type Turn } from "./turn";
 import { BETWEEN, BOOK, DUE, GRADE, INBOX, WEEK } from "./turns";
 
 /** The student whose day the video follows. */
-const ME: Author = { name: "maya", color: "#f0b232" };
+const ME: Author = PEOPLE.maya;
 
 /** When each beat of a turn happens, in seconds from the start of its scene. */
 const beats = (turn: Turn) => {
@@ -106,8 +106,8 @@ const dmScene = ({ title, turn, time, past, focus }: { title: string; turn: Turn
 
 /** Other students in the channel before the question. */
 const CHATTER: { author: Author; text: string }[] = [
-  { author: { name: "devon", color: "#23a55a" }, text: "anyone know if the MU starbucks line is still insane" },
-  { author: { name: "sam", color: "#00a8fc" }, text: "it's always insane lol" },
+  { author: PEOPLE.devon, text: "anyone know if the MU starbucks line is still insane" },
+  { author: PEOPLE.sam, text: "it's always insane lol" },
 ];
 
 /** Width of the thread panel once open. */
