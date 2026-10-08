@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -27,7 +27,7 @@ def _toml_files() -> tuple[Path, ...]:
 class Postgres(BaseModel):
     url: SecretStr = SecretStr("postgres://sparky:sparky@localhost:5432/sparky")
     # Pooled connections the scraper holds at most; covers every serve lane plus the scheduler.
-    scraper_pool_max: int = 8
+    scraper_pool_max: int = Field(default=8, ge=1)
 
 
 class ObjectStore(BaseModel):
@@ -143,7 +143,7 @@ class Scraper(BaseModel):
     # Playwright resource types the browser drivers never load, comma-separated.
     browser_skip: str = "image,media,font"
     # Chromium browsers open at once across every lane. A fetch past it waits for one to close.
-    max_browsers: int = 2
+    max_browsers: int = Field(default=2, ge=1)
     # Largest page body a plain HTTP fetch reads, in bytes. A larger page is refused.
     max_page_bytes: int = 10_000_000
     # Versions kept per source, newest first, with their snapshots. 0 keeps every version.
@@ -165,8 +165,9 @@ class Scraper(BaseModel):
     # Finished jobs removed per scheduling cycle.
     job_prune_batch: int = 5000
     # Characters per leaf chunk; retrieval.window reads the neighbours back with a hit.
-    chunk_chars: int = 300
-    chunk_overlap_chars: int = 0
+    chunk_chars: int = Field(default=300, ge=1)
+    # Characters a chunk repeats from the end of the one before. At most half of chunk_chars.
+    chunk_overlap_chars: int = Field(default=0, ge=0)
     parser_version: str = "bs4-text-v1"
     # A run whose text is below this fraction of the last indexed version is refused.
     quality_floor_ratio: float = 0.5
@@ -180,6 +181,16 @@ class Scraper(BaseModel):
     tree_cluster_size: int = 5
     # A source with fewer leaves than this gets no tree.
     tree_min_chunks: int = 12
+
+    @model_validator(mode="after")
+    def _overlap_fits(self) -> Scraper:
+        """Rejects a chunk overlap above half the chunk size."""
+        if self.chunk_overlap_chars > self.chunk_chars // 2:
+            raise ValueError(
+                f"scraper.chunk_overlap_chars {self.chunk_overlap_chars} exceeds half of "
+                f"scraper.chunk_chars {self.chunk_chars}"
+            )
+        return self
 
     def chunker_version(self) -> str:
         """Records the settings the chunks were cut with."""

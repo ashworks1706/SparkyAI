@@ -16,7 +16,7 @@ from scraper.core.types import Fetched, FetchError, FetchRejected, Loaded
 @lru_cache(maxsize=1)
 def _browsers() -> threading.BoundedSemaphore:
     """One permit per Chromium allowed open at once, shared by every lane of the process."""
-    return threading.BoundedSemaphore(max(1, settings().scraper.max_browsers))
+    return threading.BoundedSemaphore(settings().scraper.max_browsers)
 
 
 @contextmanager

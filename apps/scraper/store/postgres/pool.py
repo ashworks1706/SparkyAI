@@ -21,7 +21,7 @@ def pool() -> ConnectionPool:
         _pool = ConnectionPool(
             settings().postgres.url.get_secret_value(),
             min_size=1,
-            max_size=max(1, settings().postgres.scraper_pool_max),
+            max_size=settings().postgres.scraper_pool_max,
             kwargs={"row_factory": dict_row},
             open=True,
         )
