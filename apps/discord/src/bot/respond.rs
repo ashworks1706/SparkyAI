@@ -1,9 +1,10 @@
-//! Private replies to a slash command: an immediate line, a deferral, and its fill.
+//! Replies to an interaction: an immediate private line, a deferral, and its fill.
 
 use serenity::all::{
-    CommandInteraction, Context, CreateInteractionResponse, CreateInteractionResponseFollowup,
-    CreateInteractionResponseMessage, EditInteractionResponse,
+    CommandInteraction, Context, CreateActionRow, CreateInteractionResponse,
+    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EditInteractionResponse,
 };
+use serenity::builder::Builder;
 
 /// Answers a command at once with a line only the caller sees.
 pub(super) async fn tell(ctx: &Context, cmd: &CommandInteraction, text: impl Into<String>) {
@@ -31,19 +32,31 @@ pub(super) async fn defer_private(ctx: &Context, cmd: &CommandInteraction) -> bo
 
 /// Fills a deferred private response: first message in place, rest as private followups.
 pub(super) async fn finish(ctx: &Context, cmd: &CommandInteraction, messages: Vec<String>) {
+    fill(ctx, &cmd.token, messages, None, true).await;
+}
+
+/// Fills the deferred response of the interaction with token: the first message edits it,
+/// with components when given, and the rest follow up.
+pub(super) async fn fill(
+    ctx: &Context,
+    token: &str,
+    messages: Vec<String>,
+    components: Option<Vec<CreateActionRow>>,
+    ephemeral: bool,
+) {
     let mut messages = messages.into_iter();
-    let first = messages.next().unwrap_or_default();
-    if let Err(e) = cmd
-        .edit_response(&ctx.http, EditInteractionResponse::new().content(first))
-        .await
-    {
+    let mut edit = EditInteractionResponse::new().content(messages.next().unwrap_or_default());
+    if let Some(rows) = components {
+        edit = edit.components(rows);
+    }
+    if let Err(e) = edit.execute(&ctx.http, token).await {
         tracing::warn!(error = %e, "response edit failed");
     }
     for more in messages {
         let followup = CreateInteractionResponseFollowup::new()
             .content(more)
-            .ephemeral(true);
-        if let Err(e) = cmd.create_followup(&ctx.http, followup).await {
+            .ephemeral(ephemeral);
+        if let Err(e) = followup.execute(&ctx.http, (None, token)).await {
             tracing::warn!(error = %e, "followup failed");
         }
     }

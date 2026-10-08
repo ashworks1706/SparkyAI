@@ -1,12 +1,11 @@
 //! The approval buttons on a turn message.
 
-use serenity::all::{
-    ComponentInteraction, Context, CreateInteractionResponseFollowup, EditInteractionResponse,
-};
+use serenity::all::{ComponentInteraction, Context, CreateInteractionResponseFollowup};
 use tracing::Instrument;
 use tracing::field::Empty;
 use uuid::Uuid;
 
+use super::respond::fill;
 use super::{Handler, error_kind, event};
 use crate::access::route;
 use crate::core::types::ConfirmRequest;
@@ -95,23 +94,8 @@ impl Handler {
             &resp,
             self.max_message_chars,
         );
-        let rows = components::rows_for(&resp);
-        let mut messages = messages.into_iter();
-        let first = messages.next().unwrap_or_default();
-        let edit = EditInteractionResponse::new()
-            .content(first)
-            .components(components::to_action_rows(&rows));
-        if let Err(e) = press.edit_response(&ctx.http, edit).await {
-            tracing::warn!(error = %e, "could not show the resumed answer");
-        }
-        for more in messages {
-            let followup = CreateInteractionResponseFollowup::new()
-                .content(more)
-                .ephemeral(ephemeral);
-            if let Err(e) = press.create_followup(&ctx.http, followup).await {
-                tracing::warn!(error = %e, "continuation followup failed");
-            }
-        }
+        let rows = components::to_action_rows(&components::rows_for(&resp));
+        fill(ctx, &press.token, messages, Some(rows), ephemeral).await;
     }
 
     /// Sends the presser a line only they see.
