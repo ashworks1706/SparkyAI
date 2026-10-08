@@ -31,6 +31,22 @@ just prod-logs engine
 
 Create the pod with the image, a volume at `/workspace` (database, object store, model cache, admin session, daily `pg_dump` in `backups/`), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SEARXNG_SECRET`, `SPARKY_APP__ENV=production`, and `HF_TOKEN` (a read token; community hosts share an IP that the Hugging Face Hub rate-limits without one). Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`.
 
+### Operating the pod
+
+The live deploy is one always-on community RTX 3070 pod named `sparky` at $0.13/hr (about $95 a month). It runs whether or not anyone talks to the bot, because the bot holds a Discord gateway connection. Billing stops only when the pod is stopped or terminated.
+
+| Task | How |
+|---|---|
+| Deploy a change | Merge to `main`; CD publishes `sparkyai-runpod:<sha>` when its inputs change. Set the pod image to that tag. Changing the image restarts the pod. |
+| Change a secret | Edit the pod environment in the RunPod console. The pod restarts with the new values. |
+| Read logs | Pod logs in the console. Every service writes to the container log; supervisord prefixes its own state changes. |
+| Restart | Restart the pod. `start.sh` reruns, supervisord starts every service, and `scraper migrate` applies new migrations. |
+| Check the GPU | Override the start command with `nvidia-smi; exec /usr/local/bin/sparky-start`. The console GPU memory reading is not reliable. |
+
+State lives on the host disk under `/workspace`: Postgres, Redis, MinIO, the GGUF cache, and the daily `pg_dump` in `backups/` (the newest `SPARKY_BACKUP_KEEP`, default 7). Community pods cannot attach network volumes, so if the host fails, the pod and its backups are lost together. To recover, create a new pod as above. The first boot initializes an empty database and downloads the models again; the scraper's scheduled sources rebuild the index.
+
+To move to a new host with the data, stop the bot, copy the newest dump out with `runpodctl send` from a pod terminal (SSH or the console web terminal), create the new pod, and restore with `pg_restore --clean --if-exists -d postgres://sparky:sparky@127.0.0.1:5432/sparky`.
+
 ## Models
 
 Two `llama-server` containers: chat `:8000` and embeddings `:8001`. `just model` uses the CUDA image and reserves an NVIDIA device, so it needs a GPU and the container toolkit. Without one:
