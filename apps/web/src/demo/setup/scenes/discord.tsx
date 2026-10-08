@@ -12,9 +12,9 @@ import {
 } from "@/components/discord/format";
 import { PEOPLE, type Author } from "@/components/discord/people";
 import { Composer, type Server } from "@/components/discord/Window";
-import MentionThread from "../MentionThread";
-import { progress, type Scene } from "../timeline";
-import { CAMPUS, MCP } from "./campus";
+import MentionThread from "../../MentionThread";
+import { progress, type Scene } from "../../timeline";
+import { CAMPUS, MCP } from "../campus";
 
 /** The campus Discord the bot answers in once deployed. */
 const SERVER: Server = { name: CAMPUS.name, badge: "EU", className: "bg-[#1d3557] text-white" };
