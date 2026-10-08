@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 from pathlib import Path
-from types import ModuleType
 
 import typer
 from rich import print as rprint
@@ -14,26 +12,19 @@ from rich.table import Table
 from evals import runner
 from evals.core.settings import settings
 from evals.core.types import CaseResult, EvalReport, RunnerError, SuiteReport
+from evals.suites import SUITES
 
 app = typer.Typer(no_args_is_help=True)
 
-SUITES = [
-    "tool_selection",
-    "tool_args",
-    "grounding",
-    "voice",
-    "memory",
-    "permissions",
-    "clarification",
-    "refusal",
-    "latency",
-]
 
-
-def _suite(name: str) -> ModuleType:
-    if name not in SUITES:
-        raise typer.BadParameter(f"unknown suite {name}; known: {', '.join(SUITES)}")
-    return importlib.import_module(f"evals.suites.{name}")
+def _wanted(suite: list[str] | None) -> set[str]:
+    """The suites to run, all when none are named. Rejects a name that is not registered."""
+    unknown = sorted(set(suite or ()) - set(SUITES))
+    if unknown:
+        raise typer.BadParameter(
+            f"unknown suite {', '.join(unknown)}; known: {', '.join(SUITES)}", param_hint="--suite"
+        )
+    return set(suite or SUITES)
 
 
 def _report(results: list[CaseResult], engine_url: str, case_count: int) -> EvalReport:
@@ -73,8 +64,12 @@ def run_cmd(
 ) -> None:
     """Run the golden cases against a live engine and score them."""
     out = out or settings().evals.eval_report_path
-    wanted = set(suite or SUITES)
-    cases = [c for c in runner.load_cases() if wanted & set(c.suites)]
+    wanted = _wanted(suite)
+    try:
+        cases = [c for c in runner.load_cases() if wanted & set(c.suites)]
+    except RunnerError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1) from e
     results: list[CaseResult] = []
     for case in cases:
         try:
@@ -85,7 +80,7 @@ def run_cmd(
         for name in case.suites:
             if name not in wanted:
                 continue
-            score = _suite(name).score(case, turns)
+            score = SUITES[name](case, turns)
             if score is None:
                 continue
             results.append(

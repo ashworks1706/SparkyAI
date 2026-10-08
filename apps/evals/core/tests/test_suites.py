@@ -1,5 +1,9 @@
-from evals.core.types import EvalCase, Expectation, TurnResult
+import pytest
+from evals.cli import app
+from evals.core.types import EvalCase, Expectation, RunnerError, TurnResult
+from evals.runner import load_cases
 from evals.suites import (
+    SUITES,
     clarification,
     grounding,
     latency,
@@ -10,6 +14,7 @@ from evals.suites import (
     tool_selection,
     voice,
 )
+from typer.testing import CliRunner
 
 
 def _turn(text="", status="answered", citations=(), events=(), latency_ms=100, conv="c1"):
@@ -116,3 +121,32 @@ def test_permissions_memory_latency():
     assert not memory.score(_case(remembers="cs"), [_turn(text="hi")]).passed
     assert latency.score(_case(max_latency_ms=200), [_turn(latency_ms=150)]).passed
     assert not latency.score(_case(max_latency_ms=100), [_turn(latency_ms=150)]).passed
+
+
+def test_every_suite_module_is_registered_by_its_name():
+    assert list(SUITES) == [
+        "tool_selection",
+        "tool_args",
+        "grounding",
+        "voice",
+        "memory",
+        "permissions",
+        "clarification",
+        "refusal",
+        "latency",
+    ]
+    assert SUITES["voice"] is voice.score
+
+
+def test_load_cases_rejects_a_case_naming_an_unknown_suite(tmp_path):
+    (tmp_path / "cases.jsonl").write_text(
+        '{"id": "a", "suites": ["grounding", "groundng"], "question": "q"}\n'
+    )
+    with pytest.raises(RunnerError, match="groundng"):
+        load_cases(tmp_path)
+
+
+def test_run_rejects_an_unknown_suite_name():
+    result = CliRunner().invoke(app, ["run", "--suite", "groundng"])
+    assert result.exit_code == 2
+    assert "groundng" in result.output
