@@ -114,6 +114,7 @@ fn media_type(kind: &str) -> Option<ImageMediaType> {
     }
 }
 
+/// Maps a core tool definition to the Rig tool shape.
 pub(super) fn tool_to_rig(t: &ToolDefinition) -> RigTool {
     RigTool {
         name: t.name.clone(),

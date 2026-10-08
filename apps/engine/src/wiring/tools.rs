@@ -169,7 +169,7 @@ fn integrations<'a>(
 }
 
 /// Adds each built tool that is not disabled to the set, logging how many an integration added.
-pub(super) fn register(
+fn register(
     mut tools: ToolSet,
     built: Vec<Arc<dyn Tool>>,
     disabled: &dyn Fn(&str) -> bool,
@@ -188,7 +188,7 @@ pub(super) fn register(
 }
 
 /// The stored and live search tools, after checking the catalog against the published registry.
-pub(super) async fn search_tools(
+async fn search_tools(
     cfg: &Config,
     queries: Arc<dyn SourceQueries>,
     retriever: Arc<dyn Retriever>,
@@ -306,7 +306,7 @@ pub(super) async fn source_queries(
 }
 
 /// How long each source's answers are reused: the per-source setting, else the one for its kind.
-pub(super) fn cache_rules(cfg: &Config) -> CacheRules {
+fn cache_rules(cfg: &Config) -> CacheRules {
     let settings = &cfg.query.cache;
     let mut ttl = std::collections::HashMap::new();
     for source in search::catalog() {

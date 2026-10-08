@@ -200,7 +200,7 @@ fn two_search_schemas_cost_a_fraction_of_the_prompt_budget() {
     tools = tools.with(Arc::new(live_tool(FakeQueries::new(Vec::new()))) as Arc<dyn Tool>);
     tools = tools.with(Arc::new(stored_tool(Arc::new(Stored::empty()))) as Arc<dyn Tool>);
     let both = tools.estimated_tokens(4);
-    // Half of agent.prompt_budget_tokens is the limit wiring::fits_the_prompt enforces.
+    // Half of agent.prompt_budget_tokens is the limit wiring::boot::fits_the_prompt enforces.
     assert!(both < 900, "the two search schemas need {both} tokens");
 }
 
