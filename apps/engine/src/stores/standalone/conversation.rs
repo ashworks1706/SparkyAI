@@ -10,7 +10,7 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Stored;
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::store::StoreError;
-use crate::stores::postgres::{db, row_limit};
+use crate::stores::standalone::postgres::{db, row_limit};
 
 /// Conversations and messages tables.
 pub struct PgConversations {

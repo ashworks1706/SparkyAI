@@ -263,3 +263,51 @@ impl QueryCache for FakeCache {
         Ok(())
     }
 }
+
+/// An Embedder double: one fixed vector per text, or a failure, and the texts it was asked.
+pub struct FixedEmbedder {
+    vector: Option<Vec<f32>>,
+    asked: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl FixedEmbedder {
+    /// Embeds every text as vector.
+    pub fn returning(vector: Vec<f32>) -> Self {
+        Self {
+            vector: Some(vector),
+            asked: std::sync::Arc::default(),
+        }
+    }
+
+    /// Fails every call, as an embedding server that is down.
+    pub fn failing() -> Self {
+        Self {
+            vector: None,
+            asked: std::sync::Arc::default(),
+        }
+    }
+
+    /// The texts this double is asked, readable after it moves.
+    pub fn asked(&self) -> std::sync::Arc<std::sync::Mutex<Vec<String>>> {
+        std::sync::Arc::clone(&self.asked)
+    }
+}
+
+#[async_trait]
+impl crate::core::traits::knowledge::retrieval::Embedder for FixedEmbedder {
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, RetrievalError> {
+        if let Ok(mut asked) = self.asked.lock() {
+            asked.extend(texts.iter().cloned());
+        }
+        match &self.vector {
+            Some(vector) => Ok(texts.iter().map(|_| vector.clone()).collect()),
+            None => Err(RetrievalError::Embedding(
+                "the embedding server is down".into(),
+            )),
+        }
+    }
+
+    fn dim(&self) -> usize {
+        self.vector.as_ref().map_or(0, Vec::len)
+    }
+}

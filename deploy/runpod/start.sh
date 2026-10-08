@@ -1,8 +1,26 @@
 #!/usr/bin/env bash
 # Prepares the data directories and the database on first boot, then runs supervisord.
+# With SPARKY_PLATFORM__ENABLED=true the stores live on Platform, so the datastores, scraper
+# and search are not started and no database is created.
 set -euo pipefail
 
 data="${SPARKY_DATA_DIR:-/workspace}"
+
+if [ -n "${SPARKY_MODELS_API_KEY:-}" ]; then
+    export SPARKY_MODELS_HOST=0.0.0.0
+    export SPARKY_MODEL__API_KEY="$SPARKY_MODELS_API_KEY" SPARKY_SUMMARY__API_KEY="$SPARKY_MODELS_API_KEY" \
+        SPARKY_EMBEDDING__API_KEY="$SPARKY_MODELS_API_KEY"
+else
+    export SPARKY_MODELS_HOST=127.0.0.1
+fi
+
+if [ "${SPARKY_PLATFORM__ENABLED:-false}" = "true" ]; then
+    export SPARKY_STANDALONE_SERVICES=false
+    mkdir -p "$data/models"
+    exec /usr/bin/supervisord -c /etc/sparky/supervisord.conf
+fi
+export SPARKY_STANDALONE_SERVICES=true
+
 pgbin=/usr/lib/postgresql/16/bin
 mkdir -p "$data"/{postgres,redis,minio,models,auth,backups}
 chown postgres:postgres "$data/postgres" "$data/backups"

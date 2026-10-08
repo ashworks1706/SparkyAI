@@ -31,6 +31,12 @@ just prod-logs engine
 
 Create the pod with the image, a volume at `/workspace` (database, object store, model cache, admin session, daily `pg_dump` in `backups/`), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SEARXNG_SECRET`, `SPARKY_APP__ENV=production`, and `HF_TOKEN` (a read token; community hosts share an IP that the Hugging Face Hub rate-limits without one). Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`.
 
+### Platform mode
+
+With `SPARKY_PLATFORM__ENABLED=true`, `SPARKY_PLATFORM__URL` and `SPARKY_PLATFORM__TOKEN` in the pod environment, the stores, knowledge search, live queries and linked accounts live on Platform. `start.sh` then starts only the two model servers, the engine and the bot; Postgres, Redis, MinIO, SearXNG, the scraper and backups stay off and no database is created. The same image runs both modes. The volume then holds only the model cache.
+
+`SPARKY_MODELS_API_KEY` makes both model servers listen on every interface and require that key. Expose `8000/http` (chat) and `8001/http` (embed) on the pod to let other apps use them: Platform's `EMBEDDINGS_URL` for indexing, so its vectors match Sparky's queries, and Hermes or another agent for chat. The engine uses the same key.
+
 ### Current deployment
 
 As of 2026-10-08.

@@ -220,11 +220,12 @@ async fn a_reused_answer_takes_no_slot_and_touches_no_database() {
     );
 }
 
+#[cfg(feature = "standalone")]
 /// Live check against Redis: cargo test -p engine -- --ignored redis
 #[tokio::test]
 #[ignore = "needs a redis server"]
 async fn a_real_redis_caps_slots_and_drops_holders_that_never_left() {
-    use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission};
+    use crate::stores::standalone::knowledge::cache::{self as redis_cache, RedisAdmission};
 
     let url =
         std::env::var("SPARKY_REDIS__URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned());

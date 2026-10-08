@@ -5,16 +5,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::core::config::Config;
-use crate::core::traits::knowledge::admission::Admission;
-use crate::core::traits::knowledge::cache::QueryCache;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
-use crate::core::traits::trace::TraceSink;
 use crate::core::types::tools::sandbox::Limits as SandboxLimits;
-use crate::runtime::harness::knowledge::admit::AdmittedQueries;
-use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 use crate::runtime::harness::tools::ToolSet;
 use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::account::{canvas, gcal, outlook};
@@ -26,8 +21,6 @@ use crate::runtime::tools::sandbox::{
     ContainerSandbox, SandboxTool, Wording as SandboxWording, reap_sessions,
 };
 use crate::runtime::tools::{papers, transit, wiki};
-use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
-use crate::stores::postgres::PgSourceQueries;
 
 /// Builds the tools of one integration, or says why it could not.
 type Build<'a> = Box<dyn FnOnce() -> Result<Vec<Arc<dyn Tool>>, String> + 'a>;
@@ -250,90 +243,6 @@ async fn search_tools(
     ));
     tracing::info!(fallback, "search tools registered");
     Ok(vec![stored, live])
-}
-
-/// The registry and queue the scraper serves, behind the shared cache when one is configured.
-pub(super) async fn source_queries(
-    cfg: &Config,
-    pool: &sqlx::PgPool,
-    trace: Arc<dyn TraceSink>,
-) -> anyhow::Result<Arc<dyn SourceQueries>> {
-    let mut queries: Arc<dyn SourceQueries> = Arc::new(PgSourceQueries::new(
-        pool.clone(),
-        Duration::from_millis(cfg.query.poll_ms),
-        Duration::from_millis(cfg.query.poll_max_ms),
-        Duration::from_secs(cfg.query.claim_secs),
-    ));
-    let caching = cfg.tools.search && cfg.query.cache.enabled;
-    let capping = cfg.tools.search && cfg.query.max_in_flight > 0;
-    if !(caching || capping) {
-        tracing::info!("the live query cache and cap are off; every query is fetched");
-        return Ok(queries);
-    }
-    // Config::validate rejects either of them without a redis section.
-    let Some(redis) = &cfg.redis else {
-        return Ok(queries);
-    };
-    let conn = redis_cache::connect(&redis.url, Duration::from_secs(redis.connect_timeout_secs))
-        .await
-        .map_err(|e| anyhow::anyhow!("redis: {e}"))?;
-    let call_budget = Duration::from_millis(cfg.query.cache.timeout_ms);
-
-    // The cap wraps first and the cache sits above it, so a cache hit takes no slot.
-    if capping {
-        let admission: Arc<dyn Admission> = Arc::new(RedisAdmission::new(
-            conn.clone(),
-            call_budget,
-            "sparky:query:v1:in-flight",
-            cfg.query.max_in_flight,
-            Duration::from_secs(cfg.query.cache.lease_secs),
-        ));
-        tracing::info!(limit = cfg.query.max_in_flight, "live query cap registered");
-        queries = Arc::new(AdmittedQueries::new(queries, admission, Arc::clone(&trace)));
-    }
-    if caching {
-        let cache: Arc<dyn QueryCache> = Arc::new(RedisQueryCache::new(conn, call_budget));
-        let rules = cache_rules(cfg);
-        let reused = rules.ttl.values().filter(|ttl| !ttl.is_zero()).count();
-        tracing::info!(
-            sources = rules.ttl.len(),
-            reused,
-            "live query cache registered"
-        );
-        queries = Arc::new(CachedQueries::new(queries, cache, trace, rules));
-    }
-    Ok(queries)
-}
-
-/// How long each source's answers are reused: the per-source setting, else the one for its kind.
-fn cache_rules(cfg: &Config) -> CacheRules {
-    let settings = &cfg.query.cache;
-    let mut ttl = std::collections::HashMap::new();
-    for source in search::catalog() {
-        let default = if source.freshness().indexed() {
-            settings.default_ttl_secs
-        } else {
-            settings.live_ttl_secs
-        };
-        let secs = settings
-            .ttl_secs
-            .get(source.key())
-            .copied()
-            .unwrap_or(default);
-        ttl.insert(source.key().to_owned(), Duration::from_secs(secs));
-    }
-    CacheRules {
-        ttl,
-        handoff: Duration::from_secs(settings.handoff_secs),
-        lease: Duration::from_secs(settings.lease_secs),
-        poll: Duration::from_millis(settings.poll_ms),
-        ignore_words: settings
-            .ignore_words
-            .iter()
-            .map(|word| word.to_lowercase())
-            .collect(),
-        keep_words: settings.keep_words.iter().cloned().collect(),
-    }
 }
 
 /// The sandbox, when it is enabled and its runtime answers. Starts the session sweeper.

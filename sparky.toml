@@ -418,6 +418,17 @@ max_connections = 10
 acquire_timeout_secs = 5
 scraper_pool_max = 8           # scraper pool; covers scraper.live_workers, the background lane and the scheduler
 
+# ---------------------------------------------------------------- platform
+# On: conversations, memories, the profile graph, confirmations, knowledge search, live queries and
+# linked accounts come from the platform HTTP API, and the engine opens no PostgreSQL or Redis.
+# url and token live in .env. The token needs agents:read, agents:write, knowledge:read,
+# accounts:link and accounts:token. A build without the standalone feature requires it on.
+[platform]
+enabled = false
+timeout_secs = 10              # one platform call; a live query uses what is left of the request
+embedding_model = ""           # sent with each query vector; empty sends embedding.name
+max_query_chars = 1000         # longest search query sent; the platform refuses longer
+
 # ---------------------------------------------------------------- the scraper
 [scraper]
 tenant_id = "public"           # public ASU content, readable by every guild

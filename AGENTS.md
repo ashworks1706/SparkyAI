@@ -58,7 +58,7 @@ deploy/           compose, one Dockerfile per image, inference/ (model serving c
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
-Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-server; scraper to Firecrawl, SearXNG, PostgreSQL, llama-server embed; every app to Phoenix for spans and events. The scraper never serves a request. It and the engine meet only in the database; live `search_live` jobs reach the scraper through the `jobs` table. Redis is the engine's alone: the live query cache and its leases. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-server, or with `platform.enabled` to llama-server and the platform HTTP API alone (see Store modes in ARCHITECTURE.md); scraper to Firecrawl, SearXNG, PostgreSQL, llama-server embed; every app to Phoenix for spans and events. The scraper never serves a request. It and the engine meet only in the database; live `search_live` jobs reach the scraper through the `jobs` table. Redis is the engine's alone: the live query cache and its leases. `apps/scraper/migrations` is the contract.
 
 ## Dependencies we build on
 

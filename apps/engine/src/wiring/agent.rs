@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use crate::core::config::Config;
 use crate::core::traits::conversation::compaction::Compactor;
-use crate::core::traits::knowledge::retrieval::Embedder;
 use crate::core::traits::memory::detector::FactDetector;
 use crate::core::traits::memory::profile::ProfileGraph;
 use crate::core::traits::model::ModelProvider;
@@ -18,8 +17,6 @@ use crate::runtime::harness::memory::detect::{RuleDetector, Rules as DetectorRul
 use crate::runtime::harness::memory::profile::{self, GraphAgent, ProfileWriter, Reconciler};
 use crate::runtime::harness::safety::guardrail::{RuleGuardrail, Rules};
 use crate::runtime::harness::trace::{JsonlSink, NullSink};
-use crate::runtime::model::rig_openai::RigEmbedder;
-use crate::stores::memory::profile::PgProfileGraph;
 
 /// The loop limits and budgets, gathered from the sections that own them.
 pub(super) fn agent_config(cfg: &Config) -> AgentConfig {
@@ -90,20 +87,6 @@ pub(super) fn compactor(
         },
     );
     Some(Arc::new(ChatCompactor::new(task)))
-}
-
-/// The profile graph, when profile recording is on.
-pub(super) fn profile_graph(
-    cfg: &Config,
-    pool: &sqlx::PgPool,
-    embedder: &Arc<RigEmbedder>,
-) -> Option<Arc<dyn ProfileGraph>> {
-    cfg.profile.enabled.then(|| {
-        Arc::new(PgProfileGraph::new(
-            pool.clone(),
-            Arc::clone(embedder) as Arc<dyn Embedder>,
-        )) as Arc<dyn ProfileGraph>
-    })
 }
 
 /// The classifier and the graph agent, when profile recording is on.

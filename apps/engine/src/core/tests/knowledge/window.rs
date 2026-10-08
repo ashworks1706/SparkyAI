@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::stores::knowledge::window::{Span, locate, spans};
+use crate::stores::standalone::knowledge::window::{Span, locate, spans};
 
 #[test]
 fn a_hit_reads_back_with_its_neighbours() {
@@ -180,7 +180,7 @@ fn a_row_no_span_covers_is_not_found() {
 
 #[test]
 fn a_span_two_hits_landed_in_is_handed_back_once() {
-    use crate::stores::knowledge::window::{Take, takes};
+    use crate::stores::standalone::knowledge::window::{Take, takes};
 
     let page = Uuid::new_v4();
     let built = spans(&[(page, 2), (page, 4)], 2);
@@ -190,7 +190,7 @@ fn a_span_two_hits_landed_in_is_handed_back_once() {
 
 #[test]
 fn two_spans_of_one_page_are_both_handed_back() {
-    use crate::stores::knowledge::window::{Take, takes};
+    use crate::stores::standalone::knowledge::window::{Take, takes};
 
     let page = Uuid::new_v4();
     let built = spans(&[(page, 2), (page, 40)], 2);
@@ -201,7 +201,7 @@ fn two_spans_of_one_page_are_both_handed_back() {
 
 #[test]
 fn a_summary_keeps_its_own_text() {
-    use crate::stores::knowledge::window::{Take, takes};
+    use crate::stores::standalone::knowledge::window::{Take, takes};
 
     let page = Uuid::new_v4();
     let built = spans(&[(page, 9)], 2);
@@ -213,7 +213,7 @@ fn a_summary_keeps_its_own_text() {
 
 #[test]
 fn a_chunk_no_span_covers_keeps_its_own_text() {
-    use crate::stores::knowledge::window::{Take, takes};
+    use crate::stores::standalone::knowledge::window::{Take, takes};
 
     let page = Uuid::new_v4();
     let rows = [(0, page, 2)];

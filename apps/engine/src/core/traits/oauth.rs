@@ -1,4 +1,4 @@
-//! OAuthStore trait: per-user grants and the short-lived consent state of a login.
+//! OAuthStore trait: per-user grants, the consent state of a login, or a login another service runs.
 
 use std::time::Duration;
 
@@ -47,4 +47,14 @@ pub trait OAuthStore: Send + Sync {
 
     /// Claims a pending consent by state; one use, gone once taken or expired.
     async fn take_consent(&self, state: &str) -> Result<Option<Consent>, StoreError>;
+
+    /// Whether the store runs the provider login itself, so login_link replaces the consent routes.
+    fn hosts_login(&self) -> bool {
+        false
+    }
+
+    /// The link that starts a login the store runs, or None when it offers no login for provider.
+    async fn login_link(&self, _user: &str, _provider: &str) -> Result<Option<String>, StoreError> {
+        Ok(None)
+    }
 }

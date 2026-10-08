@@ -332,12 +332,13 @@ async fn an_entry_survives_a_round_trip_through_its_stored_form() {
     assert_eq!(back, entry);
 }
 
+#[cfg(feature = "standalone")]
 /// Live check against Redis: cargo test -p engine -- --ignored redis
 #[tokio::test]
 #[ignore = "needs a redis server"]
 async fn a_real_redis_holds_a_lease_and_an_answer() {
     use crate::core::types::knowledge::query::QueryOutcome;
-    use crate::stores::knowledge::cache::{self, RedisQueryCache};
+    use crate::stores::standalone::knowledge::cache::{self, RedisQueryCache};
 
     let url =
         std::env::var("SPARKY_REDIS__URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_owned());

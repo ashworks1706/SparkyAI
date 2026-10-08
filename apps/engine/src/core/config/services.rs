@@ -163,14 +163,56 @@ impl Model {
 /// PostgreSQL connection.
 #[derive(Debug, Deserialize)]
 pub struct Postgres {
-    /// libpq connection URL.
-    pub url: SecretString,
+    /// libpq connection URL. Required unless platform.enabled is set.
+    #[serde(default)]
+    pub url: Option<SecretString>,
     /// Maximum pooled connections.
     #[serde(default = "default_max_connections")]
     pub max_connections: u32,
     /// How long a caller waits for a pooled connection.
     #[serde(default = "default_acquire_timeout_secs")]
     pub acquire_timeout_secs: u64,
+}
+
+impl Default for Postgres {
+    fn default() -> Self {
+        Self {
+            url: None,
+            max_connections: default_max_connections(),
+            acquire_timeout_secs: default_acquire_timeout_secs(),
+        }
+    }
+}
+
+/// The platform that holds conversations, memories, the profile, confirmations, knowledge and accounts.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Platform {
+    /// On replaces every self-hosted store with the platform's HTTP API.
+    pub enabled: bool,
+    /// Platform root URL, for example https://platform.example.org. Routes sit under /api.
+    pub url: Option<String>,
+    /// Machine token, plat_ followed by the secret. The platform takes the organization from it.
+    pub token: Option<SecretString>,
+    /// Budget for one platform call. A live query uses what is left of the request instead.
+    pub timeout_secs: u64,
+    /// Embedding model name sent with each query vector. Empty sends embedding.name.
+    pub embedding_model: String,
+    /// Longest knowledge search query sent; longer text is cut to this many characters.
+    pub max_query_chars: usize,
+}
+
+impl Default for Platform {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: None,
+            token: None,
+            timeout_secs: 10,
+            embedding_model: String::new(),
+            max_query_chars: 1000,
+        }
+    }
 }
 
 /// Redis connection, shared by every engine replica that caches live queries.

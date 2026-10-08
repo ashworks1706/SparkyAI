@@ -10,7 +10,7 @@ use crate::core::traits::memory::MemoryStore;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::memory::{Memory, MemoryKind, MemoryQuery};
 use crate::core::types::store::StoreError;
-use crate::stores::postgres::{db, row_limit};
+use crate::stores::standalone::postgres::{db, row_limit};
 
 /// Memories table. Every query is scoped by tenant and user.
 pub struct PgMemory {

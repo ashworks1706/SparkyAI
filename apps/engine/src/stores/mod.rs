@@ -1,8 +1,7 @@
-//! Store adapters. The only place a database connection is opened; imports only core.
+//! Store adapters. The only place a database connection or a platform client is opened.
+//!
+//! Imports only core. standalone holds the self-hosted adapters; platform holds the HTTP ones.
 
-pub mod confirmation;
-pub mod conversation;
-pub mod knowledge;
-pub mod memory;
-pub mod oauth;
-pub mod postgres;
+pub mod platform;
+#[cfg(feature = "standalone")]
+pub mod standalone;

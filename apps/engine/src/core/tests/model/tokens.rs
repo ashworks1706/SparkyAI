@@ -1,11 +1,14 @@
 //! The prompt token estimator, and the settings the harness types are built from.
 
-use crate::core::config::{Agent, Retrieval};
+use crate::core::config::Agent;
+#[cfg(feature = "standalone")]
+use crate::core::config::Retrieval;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::model::tokens::estimate;
-use crate::stores::postgres::RetrievalTuning;
+#[cfg(feature = "standalone")]
+use crate::stores::standalone::postgres::RetrievalTuning;
 
 #[test]
 fn assembly_and_a_message_price_the_same_text_the_same_way() {
@@ -66,6 +69,7 @@ fn the_prompt_budget_carries_the_agent_settings_unchanged() {
     assert_eq!(budget.chars_per_token, settings.chars_per_token);
 }
 
+#[cfg(feature = "standalone")]
 #[test]
 fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
     // Candidate count and RRF k come from configuration.

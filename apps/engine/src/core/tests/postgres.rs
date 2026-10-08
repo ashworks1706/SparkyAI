@@ -2,8 +2,8 @@
 
 use uuid::Uuid;
 
-use crate::stores::knowledge::window::rrf;
-use crate::stores::postgres::vector_literal;
+use crate::stores::standalone::knowledge::window::rrf;
+use crate::stores::standalone::postgres::vector_literal;
 
 #[test]
 fn vector_literal_matches_pgvector_input() {
@@ -23,7 +23,7 @@ fn rrf_prefers_items_ranked_by_both_lists() {
 fn a_chunk_its_own_summary_already_covers_is_dropped() {
     use uuid::Uuid;
 
-    use crate::stores::knowledge::window::collapse;
+    use crate::stores::standalone::knowledge::window::collapse;
 
     let parent = Uuid::new_v4();
     let child = Uuid::new_v4();
@@ -38,7 +38,7 @@ fn a_chunk_its_own_summary_already_covers_is_dropped() {
 fn a_chunk_that_outranks_its_summary_keeps_them_both() {
     use uuid::Uuid;
 
-    use crate::stores::knowledge::window::collapse;
+    use crate::stores::standalone::knowledge::window::collapse;
 
     let parent = Uuid::new_v4();
     let child = Uuid::new_v4();
@@ -52,7 +52,7 @@ fn a_chunk_that_outranks_its_summary_keeps_them_both() {
 fn a_flat_index_is_left_alone() {
     use uuid::Uuid;
 
-    use crate::stores::knowledge::window::collapse;
+    use crate::stores::standalone::knowledge::window::collapse;
 
     // Rows with no parent are all kept.
     let rows: Vec<(Uuid, Option<Uuid>)> = (0..5).map(|_| (Uuid::new_v4(), None)).collect();
@@ -61,7 +61,7 @@ fn a_flat_index_is_left_alone() {
 
 #[test]
 fn a_query_deadline_with_nanoseconds_is_kept_to_microseconds() {
-    use crate::stores::knowledge::query::deadline_interval;
+    use crate::stores::standalone::knowledge::query::deadline_interval;
 
     let remaining = std::time::Duration::from_nanos(88_100_127_552);
     let Ok(interval) = deadline_interval(remaining) else {
@@ -75,7 +75,7 @@ fn a_query_deadline_with_nanoseconds_is_kept_to_microseconds() {
 fn the_wait_between_looks_at_a_queued_job_doubles_up_to_its_cap() {
     use std::time::Duration;
 
-    use crate::stores::knowledge::query::backoff;
+    use crate::stores::standalone::knowledge::query::backoff;
 
     let most = Duration::from_secs(1);
     let mut wait = Duration::from_millis(100);

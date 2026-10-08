@@ -7,11 +7,11 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 
 use crate::core::types::store::StoreError;
 
-pub use crate::stores::confirmation::PgConfirmations;
-pub use crate::stores::conversation::PgConversations;
-pub use crate::stores::knowledge::query::PgSourceQueries;
-pub use crate::stores::knowledge::retrieval::{PgRetriever, RetrievalTuning};
-pub use crate::stores::memory::PgMemory;
+pub use crate::stores::standalone::confirmation::PgConfirmations;
+pub use crate::stores::standalone::conversation::PgConversations;
+pub use crate::stores::standalone::knowledge::query::PgSourceQueries;
+pub use crate::stores::standalone::knowledge::retrieval::{PgRetriever, RetrievalTuning};
+pub use crate::stores::standalone::memory::PgMemory;
 
 /// Opens the pool. Fails fast if the database is unreachable.
 pub async fn connect(
