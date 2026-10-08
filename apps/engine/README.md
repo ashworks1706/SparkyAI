@@ -29,10 +29,10 @@ Every route except health and `/v1/models` requires the bearer `SPARKY_ENGINE__S
 ```
 src/core/       config, telemetry, types, traits, tests. Imports nothing else in the crate.
 src/runtime/    harness (loop, prompt assembly, memory, safety, compaction, tracing),
-                model (Rig client, slot limit), tools (search, mcp, sandbox)
+                model (Rig client, slot limit), tools (search, account, mcp, sandbox)
 src/stores/     postgres and redis: conversations, memory, the retrieval index, the job queue
 src/routes/     axum handlers
-src/wiring.rs   builds every adapter from config and composes them; the boot checks live here
+src/wiring/     builds every adapter from config and composes them; the boot checks live here
 ```
 
 `runtime::harness`, `runtime::model`, `runtime::tools` and `stores` each import only `core`.
@@ -47,4 +47,4 @@ Details: Request lifecycle, Agent loop, Capabilities, and Live source queries in
 
 ## Configuration
 
-`sparky.toml` sections `agent`, `prompt`, `model`, `retrieval`, `tools`, `policy`, `sandbox`, `guardrail`, `compaction`, `profile`, `query`, `mcp`, `trace`, and `http`. `.env` holds only secrets and per-machine URLs. `Config::validate` rejects a bad combination at boot. `wiring.rs` adds the checks that need a live dependency: the prompt against one model slot, the capabilities against their budget, the sources against what the scraper publishes, and the container runtime behind `run_sandbox`.
+`sparky.toml` sections `agent`, `prompt`, `model`, `retrieval`, `tools`, `policy`, `sandbox`, `guardrail`, `compaction`, `profile`, `query`, `mcp`, `trace`, and `http`. `.env` holds only secrets and per-machine URLs. `Config::validate` rejects a bad combination at boot. `wiring/` adds the checks that need a live dependency: the prompt against one model slot, the capabilities against their budget, the sources against what the scraper publishes, and the container runtime behind `run_sandbox`.
