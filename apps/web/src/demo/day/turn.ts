@@ -4,7 +4,7 @@ import { finishedCard, runningCard, thinkingStep, thoughtStep, toolDone, toolSta
 export type Call = { tool: string; args: Args; output: string };
 
 /** A held action: the tool, its arguments as the engine prints them, and the answer once approved. */
-export type Held = { tool: string; args: string; done: string };
+type Held = { tool: string; args: string; done: string };
 
 /** One question and how Sparky answers it. */
 export type Turn = {
@@ -17,7 +17,7 @@ export type Turn = {
 };
 
 /** Seconds between edits of the card, as bot.edit_every_ms. */
-export const EDIT = 1.5;
+const EDIT = 1.5;
 
 /** Seconds from the first post of the card to the finished turn. */
 export const FINISH = 3 * EDIT;

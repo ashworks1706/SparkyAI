@@ -18,7 +18,7 @@ export const LIVE = {
 export type Call = { source: Live; query: string; text: string };
 
 /** The arguments of a search_live call. */
-export const argsOf = (call: Call): Args => ({ query: call.query, source: call.source.key });
+const argsOf = (call: Call): Args => ({ query: call.query, source: call.source.key });
 
 /** The progress line of a search_live call once it returned. */
 export const done = (call: Call, age = "under an hour ago") =>

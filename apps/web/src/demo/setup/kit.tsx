@@ -137,7 +137,7 @@ export const Editor = ({
 );
 
 /** A keystroke badge: the keys, and when they show in scene time. */
-export type Keystroke = { keys: string[]; t: number };
+type Keystroke = { keys: string[]; t: number };
 
 /** One scene of the setup video. Every time in it is seconds from the scene's start. */
 export type Scene = {
