@@ -70,7 +70,7 @@ fn platform_on_boots_without_postgres_or_redis() {
     assert!(cfg.redis.is_none());
     assert_eq!(cfg.platform.timeout_secs, 10);
     assert_eq!(cfg.platform.max_query_chars, 1000);
-    assert!(cfg.platform.embedding_model.is_empty());
+    assert_eq!(cfg.platform.embedding_model, "");
 }
 
 #[test]
