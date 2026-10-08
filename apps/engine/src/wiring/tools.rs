@@ -16,16 +16,16 @@ use crate::core::types::tools::sandbox::Limits as SandboxLimits;
 use crate::runtime::harness::knowledge::admit::AdmittedQueries;
 use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 use crate::runtime::harness::tools::ToolSet;
-use crate::runtime::tools::canvas;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
+use crate::runtime::tools::account::{canvas, gcal, outlook};
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
 use crate::runtime::tools::mcp::{self, McpLimits};
-use crate::runtime::tools::oauth::WebOAuthClient;
 use crate::runtime::tools::sandbox::{
     ContainerSandbox, SandboxTool, Wording as SandboxWording, reap_sessions,
 };
-use crate::runtime::tools::{gcal, outlook, papers, transit, wiki};
+use crate::runtime::tools::{papers, transit, wiki};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};
 use crate::stores::postgres::PgSourceQueries;
 

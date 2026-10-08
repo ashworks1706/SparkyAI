@@ -18,13 +18,13 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::canvas::CanvasError;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::tools::canvas::client::HttpCanvas;
-use crate::runtime::tools::canvas::render::{
+use crate::runtime::tools::account::canvas::client::HttpCanvas;
+use crate::runtime::tools::account::canvas::render::{
     announcements_output, assignment_grades_output, assignments_output, calendar_output,
     courses_output, grades_output,
 };
-use crate::runtime::tools::grant::Credentials;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::runtime::tools::account::grant::Credentials;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// The provider key Canvas grants are stored under.
 const PROVIDER: &str = "canvas";

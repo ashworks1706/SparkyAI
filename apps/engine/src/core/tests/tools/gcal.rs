@@ -16,8 +16,8 @@ use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
 use crate::core::types::tools::gcal::{GCalError, GCalEvent};
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
-use crate::runtime::tools::gcal::{GcalTool, tools};
-use crate::runtime::tools::grant::Credentials;
+use crate::runtime::tools::account::gcal::{GcalTool, tools};
+use crate::runtime::tools::account::grant::Credentials;
 
 /// A calendar double with canned events.
 #[derive(Default)]

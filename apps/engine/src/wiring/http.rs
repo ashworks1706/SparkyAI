@@ -17,7 +17,7 @@ use crate::routes::oauth::OAuthState;
 use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
 use crate::runtime::harness::agent::Agent;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::sandbox::ContainerSandbox;
 use crate::stores::oauth::PgOAuth;
 use crate::stores::postgres::PgConversations;

@@ -17,7 +17,7 @@ use crate::core::types::http::oauth::{
 };
 use crate::core::types::tools::oauth::USER_SCOPE;
 use crate::routes::auth::authorized;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// What the OAuth routes read.
 #[derive(Clone)]

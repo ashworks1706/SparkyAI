@@ -6,7 +6,7 @@ use tokio::sync::oneshot;
 
 use crate::core::config::{CanvasOAuth, GoogleOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
-use crate::runtime::tools::oauth::{GoogleOAuthClient, WebOAuthClient};
+use crate::runtime::tools::account::oauth::{GoogleOAuthClient, WebOAuthClient};
 
 /// Serves one response and hands back the request it answered.
 async fn serve(status: &'static str, body: &'static str) -> (String, oneshot::Receiver<String>) {

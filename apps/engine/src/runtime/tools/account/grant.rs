@@ -8,7 +8,7 @@ use crate::core::traits::oauth::OAuthStore;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::ToolError;
 use crate::core::types::tools::oauth::USER_SCOPE;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// Resolves a provider token for a caller: their own per-user grant, else the shared fallback.
 pub struct Credentials {

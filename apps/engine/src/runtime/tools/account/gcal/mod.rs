@@ -18,10 +18,10 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::gcal::GCalError;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::tools::gcal::client::GCalClient;
-use crate::runtime::tools::gcal::render::output;
-use crate::runtime::tools::grant::Credentials;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::runtime::tools::account::gcal::client::GCalClient;
+use crate::runtime::tools::account::gcal::render::output;
+use crate::runtime::tools::account::grant::Credentials;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// The provider key Google grants are stored under.
 const PROVIDER: &str = "google";

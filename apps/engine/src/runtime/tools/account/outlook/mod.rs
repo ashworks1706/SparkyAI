@@ -18,10 +18,10 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::outlook::OutlookError;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::tools::grant::Credentials;
-use crate::runtime::tools::oauth::WebOAuthClient;
-use crate::runtime::tools::outlook::client::GraphClient;
-use crate::runtime::tools::outlook::render::{calendar_output, mail_output};
+use crate::runtime::tools::account::grant::Credentials;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
+use crate::runtime::tools::account::outlook::client::GraphClient;
+use crate::runtime::tools::account::outlook::render::{calendar_output, mail_output};
 
 /// The provider key Outlook grants are stored under.
 const PROVIDER: &str = "microsoft";
