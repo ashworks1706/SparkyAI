@@ -10,17 +10,7 @@ use serde::Deserialize;
 
 use crate::core::traits::tools::gcal::GoogleCalendar;
 use crate::core::types::tools::gcal::{GCalError, GCalEvent};
-
-/// Names a reqwest failure without repeating the URL or the token.
-fn kind_of(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
-    }
-}
+use crate::runtime::tools::http;
 
 /// A Google Calendar endpoint reached over HTTPS.
 pub struct GCalClient {
@@ -61,10 +51,8 @@ struct RawStart {
 impl GCalClient {
     /// Builds the client over the Calendar base URL, request budget, and page size.
     pub fn new(base_url: &str, timeout: Duration, page_size: usize) -> Result<Self, GCalError> {
-        let http = Client::builder()
-            .timeout(timeout)
-            .build()
-            .map_err(|e| GCalError::Unreachable(kind_of(&e)))?;
+        let http = http::client(timeout)
+            .map_err(|e| GCalError::Unreachable(http::failure(&e).to_owned()))?;
         Ok(Self {
             http,
             base_url: base_url.trim_end_matches('/').to_owned(),
@@ -92,7 +80,7 @@ impl GoogleCalendar for GCalClient {
             .bearer_auth(token.expose_secret())
             .send()
             .await
-            .map_err(|e| GCalError::Unreachable(kind_of(&e)))?;
+            .map_err(|e| GCalError::Unreachable(http::failure(&e).to_owned()))?;
         let status = response.status();
         if !status.is_success() {
             return Err(GCalError::Refused(status.as_u16()));
@@ -100,7 +88,7 @@ impl GoogleCalendar for GCalClient {
         let list: EventsResponse = response
             .json()
             .await
-            .map_err(|e| GCalError::Malformed(kind_of(&e)))?;
+            .map_err(|e| GCalError::Malformed(http::failure(&e).to_owned()))?;
         Ok(list
             .items
             .into_iter()

@@ -12,6 +12,7 @@ use crate::core::config::Papers as PapersConfig;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::runtime::tools::http;
 use crate::runtime::tools::structured;
 
 /// Name of the query parameter.
@@ -101,7 +102,10 @@ impl Tool for PapersTool {
         )
         .map_err(|e| ToolError::Failed(e.to_string()))?;
         let response = self.http.get(url).send().await.map_err(|e| {
-            ToolError::Failed(format!("semantic scholar unreachable: {}", kind(&e)))
+            ToolError::Failed(format!(
+                "semantic scholar unreachable: {}",
+                http::failure(&e)
+            ))
         })?;
         if !response.status().is_success() {
             return Err(ToolError::Failed(format!(
@@ -110,7 +114,10 @@ impl Tool for PapersTool {
             )));
         }
         let body = response.text().await.map_err(|e| {
-            ToolError::Failed(format!("semantic scholar unreachable: {}", kind(&e)))
+            ToolError::Failed(format!(
+                "semantic scholar unreachable: {}",
+                http::failure(&e)
+            ))
         })?;
         from_json(&query, &body, self.max_items).map_err(ToolError::Failed)
     }
@@ -121,17 +128,6 @@ pub(crate) fn from_json(query: &str, body: &str, max: usize) -> Result<ToolOutpu
     let found: SearchResponse = serde_json::from_str(body)
         .map_err(|e| format!("semantic scholar sent an odd reply: {e}"))?;
     Ok(render(query, found.data, max))
-}
-
-/// Names a reqwest failure without repeating the URL.
-fn kind(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
-    }
 }
 
 /// One abstract held to ABSTRACT_CHARS.
@@ -189,10 +185,7 @@ fn render(query: &str, papers: Vec<RawPaper>, max: usize) -> ToolOutput {
 
 /// The paper search tool, when it is enabled.
 pub fn tools(cfg: &PapersConfig) -> Result<Vec<Arc<dyn Tool>>, String> {
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(cfg.timeout_secs))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let http = http::client(Duration::from_secs(cfg.timeout_secs)).map_err(|e| e.to_string())?;
     let tool: Arc<dyn Tool> = Arc::new(PapersTool {
         http,
         base_url: cfg.base_url.trim_end_matches('/').to_owned(),

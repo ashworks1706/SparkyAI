@@ -4,6 +4,7 @@ pub mod canvas;
 pub mod files;
 pub mod gcal;
 pub mod grant;
+pub mod http;
 pub mod knowledge;
 pub mod mcp;
 #[allow(

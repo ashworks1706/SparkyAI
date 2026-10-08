@@ -9,6 +9,7 @@ use url::Url;
 
 use crate::core::config::{CanvasOAuth, GoogleOAuth, MicrosoftOAuth};
 use crate::core::types::tools::oauth::{OAuthError, OAuthTokens};
+use crate::runtime::tools::http;
 
 /// Longest OAuth error code repeated from a response.
 const MAX_CODE_CHARS: usize = 64;
@@ -43,9 +44,7 @@ impl GoogleOAuthClient {
     /// Builds the client from its settings.
     pub fn new(cfg: &GoogleOAuth) -> Result<Self, OAuthError> {
         let parse = |s: &str| Url::parse(s).map_err(|e| OAuthError::NotConfigured(e.to_string()));
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(cfg.timeout_secs))
-            .build()
+        let http = http::client(Duration::from_secs(cfg.timeout_secs))
             .map_err(|e| OAuthError::NotConfigured(e.to_string()))?;
         Ok(Self {
             http,
@@ -186,9 +185,7 @@ impl WebOAuthClient {
         timeout_secs: u64,
     ) -> Result<Self, OAuthError> {
         let parse = |s: &str| Url::parse(s).map_err(|e| OAuthError::NotConfigured(e.to_string()));
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(timeout_secs))
-            .build()
+        let http = http::client(Duration::from_secs(timeout_secs))
             .map_err(|e| OAuthError::NotConfigured(e.to_string()))?;
         Ok(Self {
             http,
@@ -286,12 +283,12 @@ async fn post_token(
         .body(encoded)
         .send()
         .await
-        .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
+        .map_err(|e| OAuthError::Unreachable(http::failure(&e).to_owned()))?;
     let status = response.status();
     let text = response
         .text()
         .await
-        .map_err(|e| OAuthError::Unreachable(kind_of(&e)))?;
+        .map_err(|e| OAuthError::Unreachable(http::failure(&e).to_owned()))?;
     if !status.is_success() {
         return Err(OAuthError::Refused {
             status: status.as_u16(),
@@ -299,17 +296,6 @@ async fn post_token(
         });
     }
     serde_json::from_str(&text).map_err(|_| OAuthError::Malformed("not a token object".into()))
-}
-
-/// A transport failure named by its kind, never by its URL or body.
-fn kind_of(e: &reqwest::Error) -> String {
-    if e.is_timeout() {
-        "timeout".into()
-    } else if e.is_connect() {
-        "connect".into()
-    } else {
-        "request".into()
-    }
 }
 
 /// The OAuth error code of a body when it is a short identifier, else empty.

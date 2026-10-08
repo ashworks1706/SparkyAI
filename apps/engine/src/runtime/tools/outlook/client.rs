@@ -10,17 +10,7 @@ use serde::Deserialize;
 
 use crate::core::traits::tools::outlook::Outlook;
 use crate::core::types::tools::outlook::{OutlookError, OutlookEvent, OutlookMessage};
-
-/// Names a reqwest failure without repeating the URL or the token.
-fn kind_of(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
-    }
-}
+use crate::runtime::tools::http;
 
 /// A Microsoft Graph endpoint reached over HTTPS.
 pub struct GraphClient {
@@ -97,10 +87,8 @@ struct RawAddress {
 impl GraphClient {
     /// Builds the client over the Graph base URL, request budget, and page size.
     pub fn new(base_url: &str, timeout: Duration, page_size: usize) -> Result<Self, OutlookError> {
-        let http = Client::builder()
-            .timeout(timeout)
-            .build()
-            .map_err(|e| OutlookError::Unreachable(kind_of(&e)))?;
+        let http = http::client(timeout)
+            .map_err(|e| OutlookError::Unreachable(http::failure(&e).to_owned()))?;
         Ok(Self {
             http,
             base_url: base_url.trim_end_matches('/').to_owned(),
@@ -128,7 +116,7 @@ impl GraphClient {
             .header("Prefer", "outlook.timezone=\"UTC\"")
             .send()
             .await
-            .map_err(|e| OutlookError::Unreachable(kind_of(&e)))?;
+            .map_err(|e| OutlookError::Unreachable(http::failure(&e).to_owned()))?;
         let status = response.status();
         if !status.is_success() {
             return Err(OutlookError::Refused(status.as_u16()));
@@ -136,7 +124,7 @@ impl GraphClient {
         let list: GraphList<T> = response
             .json()
             .await
-            .map_err(|e| OutlookError::Malformed(kind_of(&e)))?;
+            .map_err(|e| OutlookError::Malformed(http::failure(&e).to_owned()))?;
         Ok(list.value)
     }
 }

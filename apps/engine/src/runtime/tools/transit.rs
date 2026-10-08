@@ -15,6 +15,7 @@ use crate::core::config::Transit as TransitConfig;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::runtime::tools::http;
 use crate::runtime::tools::structured;
 
 /// Reports active Valley Metro vehicles from a realtime feed.
@@ -87,17 +88,18 @@ impl Tool for TransitTool {
             .get(self.feed_url.expose_secret())
             .send()
             .await
-            .map_err(|e| ToolError::Failed(format!("transit feed unreachable: {}", kind(&e))))?;
+            .map_err(|e| {
+                ToolError::Failed(format!("transit feed unreachable: {}", http::failure(&e)))
+            })?;
         if !response.status().is_success() {
             return Err(ToolError::Failed(format!(
                 "transit feed returned {}",
                 response.status().as_u16()
             )));
         }
-        let body = response
-            .text()
-            .await
-            .map_err(|e| ToolError::Failed(format!("transit feed unreachable: {}", kind(&e))))?;
+        let body = response.text().await.map_err(|e| {
+            ToolError::Failed(format!("transit feed unreachable: {}", http::failure(&e)))
+        })?;
         let feed: FeedMessage = serde_json::from_str(&body)
             .map_err(|e| ToolError::Failed(format!("transit feed sent an odd reply: {e}")))?;
         let names = self
@@ -134,24 +136,13 @@ pub(crate) fn from_json_with_routes(
     Ok(render(&feed, route, max, &parse_routes_csv(routes_csv)))
 }
 
-/// Names a reqwest failure without repeating the URL or its key.
-fn kind(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
-    }
-}
-
 /// Fetches routes.txt and maps route id to name. Any failure leaves the map empty; ids stand.
 async fn fetch_routes(http: &reqwest::Client, url: &str) -> HashMap<String, String> {
     match http.get(url).send().await {
         Ok(response) if response.status().is_success() => match response.text().await {
             Ok(text) => parse_routes_csv(&text),
             Err(error) => {
-                tracing::warn!(error = %kind(&error), "transit routes body unreadable");
+                tracing::warn!(error = %http::failure(&error), "transit routes body unreadable");
                 HashMap::new()
             }
         },
@@ -163,7 +154,7 @@ async fn fetch_routes(http: &reqwest::Client, url: &str) -> HashMap<String, Stri
             HashMap::new()
         }
         Err(error) => {
-            tracing::warn!(error = %kind(&error), "transit routes unreachable");
+            tracing::warn!(error = %http::failure(&error), "transit routes unreachable");
             HashMap::new()
         }
     }
@@ -290,10 +281,7 @@ fn render(
 
 /// The Valley Metro tool, when it is enabled and has a feed URL.
 pub fn tools(cfg: &TransitConfig) -> Result<Vec<Arc<dyn Tool>>, String> {
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(cfg.timeout_secs))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let http = http::client(Duration::from_secs(cfg.timeout_secs)).map_err(|e| e.to_string())?;
     let routes_url = Some(cfg.routes_url.trim().to_owned()).filter(|u| !u.is_empty());
     let tool: Arc<dyn Tool> = Arc::new(TransitTool {
         http,

@@ -13,6 +13,7 @@ use crate::core::traits::tools::canvas::Canvas;
 use crate::core::types::tools::canvas::{
     Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
 };
+use crate::runtime::tools::http;
 
 /// Longest announcement body kept, in characters.
 const BODY_CHARS: usize = 240;
@@ -39,17 +40,6 @@ fn plain(text: &str) -> String {
         trimmed.chars().take(BODY_CHARS).collect::<String>() + "..."
     } else {
         trimmed.to_owned()
-    }
-}
-
-/// Names a reqwest failure without repeating the URL or the token.
-fn kind_of(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
     }
 }
 
@@ -156,10 +146,8 @@ struct RawSubmission {
 impl HttpCanvas {
     /// Builds the client over the instance base URL, request budget, and page size.
     pub fn new(base_url: &str, timeout: Duration, page_size: usize) -> Result<Self, CanvasError> {
-        let http = Client::builder()
-            .timeout(timeout)
-            .build()
-            .map_err(|e| CanvasError::Unreachable(kind_of(&e)))?;
+        let http = http::client(timeout)
+            .map_err(|e| CanvasError::Unreachable(http::failure(&e).to_owned()))?;
         Ok(Self {
             http,
             base_url: base_url.trim_end_matches('/').to_owned(),
@@ -185,7 +173,7 @@ impl HttpCanvas {
             .bearer_auth(token.expose_secret())
             .send()
             .await
-            .map_err(|e| CanvasError::Unreachable(kind_of(&e)))?;
+            .map_err(|e| CanvasError::Unreachable(http::failure(&e).to_owned()))?;
         let status = response.status();
         if !status.is_success() {
             return Err(CanvasError::Refused(status.as_u16()));
@@ -193,7 +181,7 @@ impl HttpCanvas {
         response
             .json::<T>()
             .await
-            .map_err(|e| CanvasError::Malformed(kind_of(&e)))
+            .map_err(|e| CanvasError::Malformed(http::failure(&e).to_owned()))
     }
 }
 
