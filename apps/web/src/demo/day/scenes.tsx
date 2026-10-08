@@ -1,9 +1,9 @@
-import { threadName } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
 import { PEOPLE, SPARKY, type Author, type LinkButton } from "@/components/discord/people";
 import { LIVE, button } from "@/components/discord/examples";
-import Window, { Composer, ThreadChip } from "@/components/discord/Window";
+import Window, { Composer } from "@/components/discord/Window";
 import { Caret } from "../Caret";
+import MentionThread from "../MentionThread";
 import { progress, typed, type Scene, type Shot } from "../timeline";
 import { approved, cardAt, finished, FINISH, type Turn } from "./turn";
 import { BETWEEN, BOOK, DUE, GRADE, INBOX, WEEK } from "./turns";
@@ -110,48 +110,25 @@ const CHATTER: { author: Author; text: string }[] = [
   { author: PEOPLE.sam, text: "it's always insane lol" },
 ];
 
-/** Width of the thread panel once open. */
-const THREAD_W = 600;
-
 /** A mention in the server channel, answered in a thread. */
 const serverScene = ({ title, turn, time, sources }: { title: string; turn: Turn; time: string; sources: LinkButton[] }): Scene => {
   const b = beats(turn);
-  const name = threadName(turn.question);
   const view = (t: number) => {
     const card = cardAt(turn, t - b.post);
-    const opening = progress(t, b.post - 0.4, 0.4);
     return (
-      <Window
-        channel="ask-sparky"
+      <MentionThread
         topic="Ask Sparky about classes, hours, shuttles and more. Mention it to start a thread."
-        me={ME}
-        messages={
-          <>
-            {CHATTER.map((m) => (
-              <Message key={m.text} author={m.author} time="Today at 12:14 PM" text={m.text} />
-            ))}
-            {t >= b.send && (
-              <Message author={ME} time={time} text={`@Sparky ${turn.question}`}>
-                {t >= b.send + 0.2 && <ThreadChip name={name} count={card ? "1 Message" : "See Thread"} />}
-              </Message>
-            )}
-          </>
-        }
+        asker={ME}
+        time={time}
+        question={turn.question}
+        earlier={CHATTER.map((m) => (
+          <Message key={m.text} author={m.author} time="Today at 12:14 PM" text={m.text} />
+        ))}
         composer={typing("Message #ask-sparky", turn.question, t, b.type, b.typedAt, true)}
-        thread={
-          opening > 0
-            ? {
-                name,
-                width: THREAD_W * opening,
-                body: (
-                  <div style={{ width: THREAD_W }}>
-                    <Message author={ME} time={time} text={`@Sparky ${turn.question}`} />
-                    {card && <Message author={SPARKY} time={time} text={card} buttons={t >= b.done ? sources : []} />}
-                  </div>
-                ),
-              }
-            : undefined
-        }
+        asked={t >= b.send}
+        chip={t >= b.send + 0.2}
+        opening={progress(t, b.post - 0.4, 0.4)}
+        reply={card ? { text: card, buttons: t >= b.done ? sources : [] } : null}
       />
     );
   };

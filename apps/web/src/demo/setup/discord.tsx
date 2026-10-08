@@ -6,14 +6,13 @@ import {
   storedResult,
   thinkingStep,
   thoughtStep,
-  threadName,
   toolDone,
   toolStarted,
-  type Args,
+  type ToolCall,
 } from "@/components/discord/format";
-import Message from "@/components/discord/Message";
-import { PEOPLE, SPARKY, type Author } from "@/components/discord/people";
-import Window, { Composer, ThreadChip, type Server } from "@/components/discord/Window";
+import { PEOPLE, type Author } from "@/components/discord/people";
+import { Composer, type Server } from "@/components/discord/Window";
+import MentionThread from "../MentionThread";
 import { progress, type Scene } from "../timeline";
 import { CAMPUS, MCP } from "./campus";
 
@@ -26,11 +25,8 @@ const ASKER: Author = PEOPLE.jordan;
 const TIME = "Today at 9:14 AM";
 const QUESTION = "is the rec center open over spring break, and what's for dinner at the commons tonight?";
 
-/** One call of the turn: the tool, its arguments, and what came back. */
-type Call = { tool: string; args: Args; output: string };
-
 /** The three calls: the indexed calendar page, the new live source, and the MCP server. */
-const CALLS: Call[] = [
+const CALLS: ToolCall[] = [
   {
     tool: "search_knowledge",
     args: { query: "spring break 2027 dates" },
@@ -71,55 +67,34 @@ const card = (t: number) => {
   return null;
 };
 
-const THREAD_W = 600;
-
 /** The deployed bot answering in the campus server. */
 const discordAt = (t: number) => {
   const reply = card(t);
-  const name = threadName(QUESTION);
-  const opening = progress(t, AT.open, 0.4);
   return (
-    <Window
+    <MentionThread
       server={SERVER}
-      channel="ask-sparky"
       topic={`Ask Sparky about ${CAMPUS.name}. Mention it to start a thread.`}
-      me={ASKER}
-      messages={
-        t >= AT.asked && (
-          <Message author={ASKER} time={TIME} text={`@Sparky ${QUESTION}`}>
-            {t >= AT.chip && <ThreadChip name={name} count={reply ? "1 Message" : "See Thread"} />}
-          </Message>
-        )
-      }
+      asker={ASKER}
+      time={TIME}
+      question={QUESTION}
       composer={<Composer placeholder="Message #ask-sparky" />}
-      thread={
-        opening > 0
+      asked={t >= AT.asked}
+      chip={t >= AT.chip}
+      opening={progress(t, AT.open, 0.4)}
+      reply={
+        reply
           ? {
-              name,
-              width: THREAD_W * opening,
-              body: (
-                <div style={{ width: THREAD_W }}>
-                  <Message author={ASKER} time={TIME} text={`@Sparky ${QUESTION}`} />
-                  {reply && (
-                    <Message
-                      author={SPARKY}
-                      time={TIME}
-                      text={reply}
-                      buttons={
-                        t >= AT.finished
-                          ? [
-                              { label: "Academic Calendar", href: CAMPUS.page },
-                              { label: sourceLabel(CAMPUS.recLabel), href: CAMPUS.rec },
-                            ]
-                          : []
-                      }
-                      hovered={t >= AT.hover ? 1 : undefined}
-                    />
-                  )}
-                </div>
-              ),
+              text: reply,
+              buttons:
+                t >= AT.finished
+                  ? [
+                      { label: "Academic Calendar", href: CAMPUS.page },
+                      { label: sourceLabel(CAMPUS.recLabel), href: CAMPUS.rec },
+                    ]
+                  : [],
+              hovered: t >= AT.hover ? 1 : undefined,
             }
-          : undefined
+          : null
       }
     />
   );

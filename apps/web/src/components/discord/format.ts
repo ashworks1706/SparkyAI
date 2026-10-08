@@ -21,6 +21,9 @@ const THOUGHT = 600;
 /** Arguments of one tool call, in the key order the engine prints them. */
 export type Args = Record<string, string>;
 
+/** One tool call of a turn: the tool, its arguments, and what came back. */
+export type ToolCall = { tool: string; args: Args; output: string };
+
 /** Text as one line, with runs of whitespace collapsed. */
 const oneLine = (text: string) => text.split(/\s+/).filter(Boolean).join(" ");
 

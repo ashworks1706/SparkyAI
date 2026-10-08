@@ -1,7 +1,4 @@
-import { finishedCard, runningCard, thinkingStep, thoughtStep, toolDone, toolStarted, type Args } from "@/components/discord/format";
-
-/** One tool call of a turn: the tool, its arguments, and what came back. */
-export type Call = { tool: string; args: Args; output: string };
+import { finishedCard, runningCard, thinkingStep, thoughtStep, toolDone, toolStarted, type ToolCall } from "@/components/discord/format";
 
 /** A held action: the tool, its arguments as the engine prints them, and the answer once approved. */
 type Held = { tool: string; args: string; done: string };
@@ -10,7 +7,7 @@ type Held = { tool: string; args: string; done: string };
 export type Turn = {
   question: string;
   thought: string;
-  calls: Call[];
+  calls: ToolCall[];
   wrap: string;
   answer: string;
   held?: Held;
