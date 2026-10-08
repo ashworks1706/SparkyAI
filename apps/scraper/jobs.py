@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 import psycopg
@@ -55,38 +55,56 @@ def is_due(row: dict | None, now: datetime) -> bool:
     return now - last >= row["fetch_every"]
 
 
+def _live_query(conn: psycopg.Connection, job: Job, pacer: HostPacer | None) -> dict:
+    """Answers a live query and queues its page for indexing when the source allows it."""
+    cfg = settings().scraper
+    result = run_job(job, pacer)
+    if should_index(QUERY_SOURCES[result.source], cfg.index_live_results):
+        # A live result is not queued for indexing past index_backlog_limit.
+        if postgres.backlog_at_least(conn, INDEX, cfg.index_backlog_limit):
+            log.warning("index backlog full; live result not queued", source=result.source)
+        else:
+            postgres.enqueue_job(
+                conn,
+                INDEX,
+                {"source": result.source, "url": result.url, "text": result.text},
+                INDEX_PRIORITY,
+            )
+    return {
+        "source": result.source,
+        "url": result.url,
+        "text": for_caller(result.text, cfg.query_max_chars),
+    }
+
+
+def _index_live(_conn: psycopg.Connection, job: Job, _pacer: HostPacer | None) -> dict:
+    """Indexes the page a live query fetched."""
+    query = source_of(job)
+    run = index.index_result(query, str(job.input["url"]), str(job.input["text"]))
+    return {"source": run.source, "changed": run.changed, "chunks": run.chunks}
+
+
+def _run_source(_conn: psycopg.Connection, job: Job, pacer: HostPacer | None) -> dict:
+    """Runs one registered source through the pipeline."""
+    key = str(job.input.get("source", ""))
+    if key not in SOURCES:
+        raise QueryError(f"unknown source {key!r}")
+    run = pipeline.run_source(SOURCES[key], pacer=pacer)
+    return {"source": run.source, "changed": run.changed, "chunks": run.chunks}
+
+
+#: Does one claimed job of one kind and returns its result.
+Handler = Callable[[psycopg.Connection, Job, HostPacer | None], dict]
+
+_HANDLERS: dict[str, Handler] = {QUERY: _live_query, INDEX: _index_live, RUN: _run_source}
+
+
 def handle(conn: psycopg.Connection, job: Job, pacer: HostPacer | None = None) -> dict:
     """Does one job and returns its result. Raises QueryError for a job the caller can correct."""
-    cfg = settings().scraper
-    if job.kind == QUERY:
-        result = run_job(job, pacer)
-        if should_index(QUERY_SOURCES[result.source], cfg.index_live_results):
-            # A live result is not queued for indexing past index_backlog_limit.
-            if postgres.backlog_at_least(conn, INDEX, cfg.index_backlog_limit):
-                log.warning("index backlog full; live result not queued", source=result.source)
-            else:
-                postgres.enqueue_job(
-                    conn,
-                    INDEX,
-                    {"source": result.source, "url": result.url, "text": result.text},
-                    INDEX_PRIORITY,
-                )
-        return {
-            "source": result.source,
-            "url": result.url,
-            "text": for_caller(result.text, cfg.query_max_chars),
-        }
-    if job.kind == INDEX:
-        query = source_of(job)
-        run = index.index_result(query, str(job.input["url"]), str(job.input["text"]))
-        return {"source": run.source, "changed": run.changed, "chunks": run.chunks}
-    if job.kind == RUN:
-        key = str(job.input.get("source", ""))
-        if key not in SOURCES:
-            raise QueryError(f"unknown source {key!r}")
-        run = pipeline.run_source(SOURCES[key], pacer=pacer)
-        return {"source": run.source, "changed": run.changed, "chunks": run.chunks}
-    raise QueryError(f"no handler for job kind {job.kind!r}")
+    handler = _HANDLERS.get(job.kind)
+    if handler is None:
+        raise QueryError(f"no handler for job kind {job.kind!r}")
+    return handler(conn, job, pacer)
 
 
 def poll_once(kinds: Sequence[str], pacer: HostPacer | None = None) -> bool:
@@ -113,13 +131,19 @@ def poll_once(kinds: Sequence[str], pacer: HostPacer | None = None) -> bool:
     return True
 
 
-def enqueue_due(now: datetime) -> int:
-    """Queues a run for every due source; requeues stale jobs and removes finished ones."""
+def maintain(conn: psycopg.Connection) -> tuple[int, int, list[str]]:
+    """Requeues stale jobs, prunes old jobs and versions, and returns counts and snapshot keys."""
     cfg = settings().scraper
+    stale = postgres.requeue_stale(conn, BACKGROUND_KINDS, cfg.job_lease_secs)
+    pruned = postgres.prune_jobs(conn, cfg.job_retention_hours * 3600.0, cfg.job_prune_batch)
+    snapshots = postgres.prune_versions(conn, cfg.keep_versions, cfg.job_prune_batch)
+    return stale, pruned, snapshots
+
+
+def enqueue_due(now: datetime) -> int:
+    """Queues a run for every due source after the queue maintenance in maintain."""
     with postgres.connection() as conn:
-        stale = postgres.requeue_stale(conn, BACKGROUND_KINDS, cfg.job_lease_secs)
-        pruned = postgres.prune_jobs(conn, cfg.job_retention_hours * 3600.0, cfg.job_prune_batch)
-        snapshots = postgres.prune_versions(conn, cfg.keep_versions, cfg.job_prune_batch)
+        stale, pruned, snapshots = maintain(conn)
         rows = {r["key"]: r for r in postgres.status_rows(conn)}
         queued = sum(
             postgres.enqueue_job(conn, RUN, {"source": key}, RUN_PRIORITY)
