@@ -53,7 +53,7 @@ just bootstrap          # tools, .env, deps, infra, migrations
 just cli                # developer console for every unit
 ```
 
-`just up` starts the full compose stack. Setup details are in [deploy/README.md](deploy/README.md), and [AGENTS.md](AGENTS.md) lists every recipe.
+`just up` starts the full compose stack. Setup details are in [deploy/README.md](deploy/README.md), and [AGENTS.md](AGENTS.md) lists every recipe. The live bot runs on one RunPod pod; [deploy/README.md#runpod](deploy/README.md#runpod) covers what runs there, what it costs, how to ship a change, and how to debug it.
 
 ## Data and etiquette
 
