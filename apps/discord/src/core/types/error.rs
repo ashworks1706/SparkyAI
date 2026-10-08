@@ -1,5 +1,8 @@
 //! The engine client error.
 
+/// Longest engine error body kept in an EngineError, in characters.
+pub const ERROR_BODY_CHARS: usize = 300;
+
 /// Engine call failures.
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {

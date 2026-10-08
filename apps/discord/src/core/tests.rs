@@ -475,6 +475,50 @@ fn a_frame_without_an_event_name_still_carries_its_data() {
 }
 
 #[test]
+fn each_frame_decodes_to_its_update_and_unknown_frames_to_none() {
+    use crate::core::types::{ERROR_BODY_CHARS, EngineError, Update};
+    use crate::engine::sse::decode;
+
+    let progress = decode("progress", "{\"text\":\"searching\",\"slot\":\"s1\"}");
+    assert!(
+        matches!(&progress, Some(Update::Progress(p)) if p.text == "searching" && p.slot.as_deref() == Some("s1")),
+        "{progress:?}"
+    );
+    assert!(decode("progress", "not json").is_none());
+
+    let answer = decode(
+        "answer",
+        &format!(
+            "{{\"request_id\":\"{}\",\"conversation_id\":\"{}\",\"text\":\"2am\",\"status\":\"answered\"}}",
+            Uuid::nil(),
+            Uuid::nil()
+        ),
+    );
+    assert!(
+        matches!(&answer, Some(Update::Answer(a)) if a.text == "2am"),
+        "{answer:?}"
+    );
+    assert!(matches!(
+        decode("answer", "{}"),
+        Some(Update::Failed(EngineError::Transport(_)))
+    ));
+
+    let error = decode("error", "{\"error\":\"busy\",\"status\":503}");
+    assert!(
+        matches!(&error, Some(Update::Failed(EngineError::Status { status: 503, body })) if body == "busy"),
+        "{error:?}"
+    );
+    let raw = "x".repeat(ERROR_BODY_CHARS + 50);
+    let unreadable = decode("error", &raw);
+    assert!(
+        matches!(&unreadable, Some(Update::Failed(EngineError::Status { status: 502, body })) if body.chars().count() == ERROR_BODY_CHARS),
+        "{unreadable:?}"
+    );
+
+    assert!(decode("done", "{}").is_none());
+}
+
+#[test]
 fn a_component_id_survives_the_round_trip_and_rejects_anything_else() {
     use uuid::Uuid;
 

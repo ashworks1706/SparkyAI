@@ -13,10 +13,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::core::types::{
     AuthorizeRequest, AuthorizeResponse, ChatRequest, ChatResponse, ConfirmRequest,
-    DisconnectResponse, EngineError, ErrorFrame, ForgetRequest, ForgetResponse, ProfileList,
-    ProfileRequest, Progress, ResetRequest, ResetResponse, Update,
+    DisconnectResponse, ERROR_BODY_CHARS, EngineError, ForgetRequest, ForgetResponse, ProfileList,
+    ProfileRequest, ResetRequest, ResetResponse, Update,
 };
-use crate::engine::sse::{drain_frames, take_complete};
+use crate::engine::sse::{decode, drain_frames, take_complete};
 
 /// HTTP client bound to one engine.
 #[derive(Debug, Clone)]
@@ -85,21 +85,27 @@ impl EngineClient {
         self.post(&format!("/oauth/{provider}/logout"), req).await
     }
 
+    /// A POST of a JSON body to path, with the service token and the current traceparent.
+    fn request<B: Serialize + ?Sized>(&self, path: &str, body: &B) -> reqwest::RequestBuilder {
+        let request = self
+            .http
+            .post(format!("{}{path}", self.base_url))
+            .bearer_auth(self.token.expose_secret())
+            .json(body);
+        match current_traceparent() {
+            Some(traceparent) => request.header("traceparent", traceparent),
+            None => request,
+        }
+    }
+
     /// Posts a JSON body and reads a JSON reply.
     async fn post<B: Serialize, R: DeserializeOwned>(
         &self,
         path: &str,
         body: &B,
     ) -> Result<R, EngineError> {
-        let mut request = self
-            .http
-            .post(format!("{}{path}", self.base_url))
-            .bearer_auth(self.token.expose_secret())
-            .json(body);
-        if let Some(traceparent) = current_traceparent() {
-            request = request.header("traceparent", traceparent);
-        }
-        let response = request
+        let response = self
+            .request(path, body)
             .send()
             .await
             .map_err(|e| EngineError::Transport(e.to_string()))?;
@@ -111,7 +117,7 @@ impl EngineClient {
         if !status.is_success() {
             return Err(EngineError::Status {
                 status: status.as_u16(),
-                body: body.chars().take(300).collect(),
+                body: body.chars().take(ERROR_BODY_CHARS).collect(),
             });
         }
         serde_json::from_str(&body).map_err(|e| EngineError::Transport(format!("bad body: {e}")))
@@ -120,15 +126,7 @@ impl EngineClient {
     /// Runs one chat turn, reporting progress on tx. Sends exactly one Answer or Failed last.
     pub async fn chat_stream(&self, req: &ChatRequest, tx: UnboundedSender<Update>) {
         // A send error means the watcher has dropped the receiver.
-        let mut request = self
-            .http
-            .post(format!("{}/chat/stream", self.base_url))
-            .bearer_auth(self.token.expose_secret())
-            .json(req);
-        if let Some(traceparent) = current_traceparent() {
-            request = request.header("traceparent", traceparent);
-        }
-        let response = match request.send().await {
+        let response = match self.request("/chat/stream", req).send().await {
             Ok(response) => response,
             Err(e) => {
                 let _ = tx.send(Update::Failed(EngineError::Transport(e.to_string())));
@@ -143,7 +141,7 @@ impl EngineClient {
                 .unwrap_or_else(|e| format!("unreadable body: {e}"));
             let _ = tx.send(Update::Failed(EngineError::Status {
                 status: status.as_u16(),
-                body: body.chars().take(300).collect(),
+                body: body.chars().take(ERROR_BODY_CHARS).collect(),
             }));
             return;
         }
@@ -164,39 +162,13 @@ impl EngineClient {
             pending.extend_from_slice(&chunk);
             let mut complete = take_complete(&mut pending);
             for (name, data) in drain_frames(&mut complete) {
-                match name.as_str() {
-                    "progress" => match serde_json::from_str::<Progress>(&data) {
-                        Ok(p) => {
-                            let _ = tx.send(Update::Progress(p));
-                        }
-                        Err(e) => tracing::warn!(error = %e, "unreadable progress frame"),
-                    },
-                    "answer" => match serde_json::from_str::<ChatResponse>(&data) {
-                        Ok(answer) => {
-                            answered = true;
-                            let _ = tx.send(Update::Answer(Box::new(answer)));
-                        }
-                        Err(e) => {
-                            answered = true;
-                            let _ = tx.send(Update::Failed(EngineError::Transport(format!(
-                                "bad body: {e}"
-                            ))));
-                        }
-                    },
-                    "error" => {
-                        answered = true;
-                        // The frame carries the status the JSON route would have used.
-                        let (status, body) = match serde_json::from_str::<ErrorFrame>(&data) {
-                            Ok(f) => (f.status.unwrap_or(502), f.error),
-                            Err(e) => {
-                                tracing::warn!(error = %e, "unreadable error frame");
-                                (502, data.chars().take(300).collect())
-                            }
-                        };
-                        let _ = tx.send(Update::Failed(EngineError::Status { status, body }));
-                    }
-                    _ => {}
+                let Some(update) = decode(&name, &data) else {
+                    continue;
+                };
+                if !matches!(update, Update::Progress(_)) {
+                    answered = true;
                 }
+                let _ = tx.send(update);
             }
         }
         if !answered {

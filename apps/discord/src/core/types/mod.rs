@@ -11,7 +11,7 @@ pub mod stream;
 pub use analytics::AnalyticsEvent;
 pub use chat::{ChatRequest, ChatResponse, ConfirmRequest};
 pub use conversation::{Attachment, FileAttachment, ResetRequest, ResetResponse, Visibility};
-pub use error::EngineError;
+pub use error::{ERROR_BODY_CHARS, EngineError};
 pub use oauth::{AuthorizeRequest, AuthorizeResponse, DisconnectResponse};
 pub use profile::{ForgetRequest, ForgetResponse, ProfileList, ProfileRequest};
 pub use stream::{ErrorFrame, Progress, Update};
