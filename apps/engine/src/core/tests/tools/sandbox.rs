@@ -624,8 +624,9 @@ async fn the_switch_takes_the_tool_off_the_list_and_leaves_the_containers_alone(
     use std::sync::Arc;
 
     use crate::core::types::tools::RiskClass;
+    use crate::core::types::tools::SANDBOX;
     use crate::runtime::harness::tools::ToolSet;
-    use crate::runtime::tools::sandbox::{SANDBOX, SandboxTool, Wording};
+    use crate::runtime::tools::sandbox::{SandboxTool, Wording};
 
     let sandbox = Arc::new(ContainerSandbox::new(Limits::default()));
     let tool = Arc::new(SandboxTool::new(

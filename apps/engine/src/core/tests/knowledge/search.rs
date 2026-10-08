@@ -14,6 +14,7 @@ use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::tools::Tool;
 use crate::core::types::knowledge::query::{QueryParam, QuerySourceInfo};
 use crate::core::types::model::tokens::estimate;
+use crate::core::types::tools::SEARCH_LIVE;
 use crate::core::types::tools::{RiskClass, ToolError};
 use crate::runtime::harness::tools::ToolSet;
 use crate::runtime::tools::knowledge::search::course_catalog::CourseCatalog;
@@ -29,8 +30,8 @@ use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as 
 use crate::runtime::tools::knowledge::search::study_rooms::StudyRooms;
 use crate::runtime::tools::knowledge::search::web::Web;
 use crate::runtime::tools::knowledge::search::{
-    Accepts, Freshness, LIVE, LiveSource, Param, arguments, catalog, conforms, dated, named,
-    params_for, source_help, source_keys,
+    Accepts, Freshness, LiveSource, Param, arguments, catalog, conforms, dated, named, params_for,
+    source_help, source_keys,
 };
 
 /// The registry entry the scraper would publish for source.
@@ -230,7 +231,7 @@ fn a_source_the_scraper_indexes_differently_is_named_at_boot() {
 #[test]
 fn a_call_with_no_query_is_refused_with_what_to_write_instead() {
     let keys = source_keys(&catalog(), false);
-    let refused = |args: Value| match arguments(args, &keys, LIVE) {
+    let refused = |args: Value| match arguments(args, &keys, SEARCH_LIVE) {
         Err(message) => message,
         Ok(parsed) => unreachable!("expected a refusal, got {parsed:?}"),
     };
@@ -250,23 +251,23 @@ fn a_call_with_no_query_is_refused_with_what_to_write_instead() {
 fn a_named_source_is_matched_without_case_and_an_absent_one_leaves_the_search_wide() {
     let keys = source_keys(&catalog(), false);
     assert_eq!(
-        arguments(json!({"query": " hayden hours "}), &keys, LIVE),
+        arguments(json!({"query": " hayden hours "}), &keys, SEARCH_LIVE),
         Ok(("hayden hours".to_owned(), None))
     );
     assert_eq!(
         arguments(
             json!({"query": "x", "source": "Library_Hours"}),
             &keys,
-            LIVE
+            SEARCH_LIVE
         ),
         Ok(("x".to_owned(), Some("library_hours".to_owned())))
     );
     assert_eq!(
-        arguments(json!({"query": "x", "source": null}), &keys, LIVE),
+        arguments(json!({"query": "x", "source": null}), &keys, SEARCH_LIVE),
         Ok(("x".to_owned(), None))
     );
     assert_eq!(
-        arguments(json!({"query": "x", "source": "  "}), &keys, LIVE),
+        arguments(json!({"query": "x", "source": "  "}), &keys, SEARCH_LIVE),
         Ok(("x".to_owned(), None))
     );
 }

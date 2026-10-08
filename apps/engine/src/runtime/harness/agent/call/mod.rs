@@ -19,9 +19,9 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::agent::thinking::{ThinkingChoice, ThinkingReason};
 use crate::core::types::conversation::message::{Message, Role};
 use crate::core::types::model::{FinishReason, ModelError, ModelRequest, ModelResponse};
+use crate::core::types::safety::redact::{json, truncate};
 use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::run::Run;
-use crate::runtime::harness::safety::redact::{json, truncate};
 
 /// Takes the thought out of the content of a response and returns it.
 fn lift_thought(response: &mut ModelResponse) -> Option<String> {

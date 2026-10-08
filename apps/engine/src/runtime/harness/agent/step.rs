@@ -6,11 +6,11 @@ use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::model::{FinishReason, ModelError, ModelResponse};
 use crate::core::types::safety::guardrail::{Stage, Verdict};
+use crate::core::types::safety::redact::truncate;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::execute::HeldError;
 use crate::runtime::harness::agent::prompt::assemble;
 use crate::runtime::harness::agent::run::{Inputs, Run};
-use crate::runtime::harness::safety::redact::truncate;
 
 /// What the guardrail did to a response on a step.
 enum Guarded {

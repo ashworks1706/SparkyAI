@@ -16,16 +16,14 @@ use tokio::process::Command;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::safety::redact::redact_text;
 use crate::core::types::tools::sandbox::{
     SandboxCommand, SandboxError, SandboxOutput, SandboxRequest, SandboxSession, session_name,
     workspace_path,
 };
-use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::harness::safety::redact::redact_text;
+use crate::core::types::tools::{RiskClass, SANDBOX, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::structured;
 
-/// Name of the tool that runs a command in the isolated environment.
-pub const SANDBOX: &str = "run_sandbox";
 /// Directory the workspace is mounted at inside the container.
 pub const WORKSPACE: &str = "/tmp";
 

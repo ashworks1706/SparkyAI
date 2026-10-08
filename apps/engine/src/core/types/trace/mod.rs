@@ -11,6 +11,7 @@ use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
+use crate::core::types::tools::{SEARCH_KNOWLEDGE, SEARCH_LIVE};
 use crate::core::types::trace::progress::ProgressStyle;
 
 /// One thing that happened during a request. Never carries secrets or raw credentials.
@@ -426,8 +427,8 @@ fn clip(text: &str, limit: usize) -> String {
 /// What a tool is shown as while it runs. A search tool names what it searches.
 pub fn running(tool: &str) -> String {
     match tool {
-        "search_knowledge" => "searching the knowledge base".to_owned(),
-        "search_live" => "searching live".to_owned(),
+        SEARCH_KNOWLEDGE => "searching the knowledge base".to_owned(),
+        SEARCH_LIVE => "searching live".to_owned(),
         _ => "running".to_owned(),
     }
 }

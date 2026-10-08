@@ -11,6 +11,15 @@ use serde_json::Value;
 
 use crate::core::types::knowledge::evidence::Citation;
 
+/// Name of the tool that searches the stored index.
+pub const SEARCH_KNOWLEDGE: &str = "search_knowledge";
+
+/// Name of the tool that fetches a source now.
+pub const SEARCH_LIVE: &str = "search_live";
+
+/// Name of the tool that runs a command in the isolated environment.
+pub const SANDBOX: &str = "run_sandbox";
+
 /// What a tool can do to the world. Drives Policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -32,16 +32,16 @@ use crate::core::types::agent::{AgentConfig, AgentError, Answer};
 use crate::core::types::conversation::message::{Message, ToolCall};
 use crate::core::types::model::{ModelError, Usage};
 use crate::core::types::safety::policy::{ConfirmationRequest, PendingAction};
+use crate::core::types::tools::SANDBOX;
 use crate::core::types::tools::ToolRun;
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::{Inputs, Run};
 use crate::runtime::harness::memory::profile::ProfileWriter;
 use crate::runtime::harness::tools::ToolSet;
-use crate::runtime::tools::sandbox::SANDBOX;
 
+use crate::core::types::safety::redact::truncate;
 pub use crate::runtime::harness::agent::prompt::PromptText;
 use crate::runtime::harness::agent::prompt::capability;
-use crate::runtime::harness::safety::redact::truncate;
 
 /// The dependencies the loop drives. Every one is a trait with a test double.
 pub struct AgentDeps {

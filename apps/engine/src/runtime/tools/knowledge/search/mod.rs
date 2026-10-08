@@ -27,12 +27,6 @@ use serde_json::{Map, Value, json};
 
 use crate::core::types::knowledge::query::QuerySourceInfo;
 
-/// Name of the tool that searches the stored index.
-pub const KNOWLEDGE: &str = "search_knowledge";
-
-/// Name of the tool that fetches a source now.
-pub const LIVE: &str = "search_live";
-
 /// Name of the query parameter both tools take.
 pub const QUERY: &str = "query";
 

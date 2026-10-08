@@ -11,9 +11,9 @@ use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::knowledge::evidence::{Citation, age};
 use crate::core::types::knowledge::query::{QueryError, QueryRequest};
-use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::tools::{RiskClass, SEARCH_LIVE, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::knowledge::search::{
-    LIVE, LiveSource, arguments, parameters, params_for, source_help, source_keys,
+    LiveSource, arguments, parameters, params_for, source_help, source_keys,
 };
 use crate::runtime::tools::structured;
 
@@ -55,7 +55,7 @@ impl LiveSearch {
     ) -> Self {
         let keys = source_keys(&sources, false);
         let definition = ToolDefinition {
-            name: LIVE.to_owned(),
+            name: SEARCH_LIVE.to_owned(),
             description: wording.tool.clone(),
             parameters: parameters(
                 &wording.query,
@@ -99,7 +99,7 @@ impl Tool for LiveSearch {
 
     async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
         let (query, named) =
-            arguments(args, &self.keys, LIVE).map_err(ToolError::InvalidArguments)?;
+            arguments(args, &self.keys, SEARCH_LIVE).map_err(ToolError::InvalidArguments)?;
         let source = self.pick(named.as_deref()).ok_or_else(|| {
             ToolError::Failed(format!(
                 "no live source named {:?} is registered",

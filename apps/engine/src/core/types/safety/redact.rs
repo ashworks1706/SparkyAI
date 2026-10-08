@@ -79,7 +79,7 @@ pub(crate) fn redact(value: &Value) -> Value {
 }
 
 /// JSON for a span attribute. A value that will not serialize is recorded as unserializable.
-pub(in crate::runtime::harness) fn json<T: serde::Serialize>(value: &T) -> String {
+pub(crate) fn json<T: serde::Serialize>(value: &T) -> String {
     serde_json::to_string(value)
         .unwrap_or_else(|e| format!("{{\"unserializable\":{:?}}}", e.to_string()))
 }

@@ -14,10 +14,10 @@ use crate::core::types::model::ModelError;
 use crate::core::types::safety::policy::{
     ConfirmationRequest, Decision, PendingAction, ProposedAction,
 };
+use crate::core::types::safety::redact::{redact, redact_text, truncate};
 use crate::core::types::tools::{ToolError, ToolRun};
 use crate::core::types::trace::{RunStatus, TraceEvent};
 use crate::runtime::harness::agent::run::Run;
-use crate::runtime::harness::safety::redact::{redact, redact_text, truncate};
 
 /// The workspace session a conversation's tool results are written to, one per conversation.
 pub(super) fn workspace_session(ctx: &RequestContext) -> String {
