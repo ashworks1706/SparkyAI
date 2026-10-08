@@ -62,7 +62,7 @@ Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-s
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`runtime/model/rig_openai.rs`) and the only inference path. Never `rig::Agent`; the loop is ours.
+- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`runtime/model/rig_openai/`) and the only inference path. Never `rig::Agent`; the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - The rest of the harness (loop, policy, context assembly, memory, tracing, replay) is written here.
 
