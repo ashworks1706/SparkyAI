@@ -16,7 +16,7 @@ from scraper.sources import (
     sports,
 )
 
-# Clubs is login-gated, served live through the admin session, and never scheduled.
+# Clubs is login-gated and served live from query/sundevil_central; no scheduled source exists.
 _MODULES = (
     library_hours,
     events,
