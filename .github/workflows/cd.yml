@@ -45,6 +45,17 @@ jobs:
               - *shared
               - deploy/docker/sandbox-proxy.Dockerfile
               - deploy/sandbox/**
+            runpod:
+              - *shared
+              - apps/engine/**
+              - apps/discord/**
+              - apps/scraper/**
+              - Cargo.toml
+              - Cargo.lock
+              - sparky.toml
+              - deploy/docker/runpod.Dockerfile
+              - deploy/runpod/**
+              - deploy/search/**
       - id: images
         env:
           ALL: ${{ github.event_name == 'workflow_dispatch' }}
@@ -52,12 +63,14 @@ jobs:
           SCRAPER: ${{ steps.filter.outputs.scraper }}
           SANDBOX: ${{ steps.filter.outputs.sandbox }}
           SANDBOX_PROXY: ${{ steps.filter.outputs.sandbox-proxy }}
+          RUNPOD: ${{ steps.filter.outputs.runpod }}
         run: |
           list=()
           { [ "$ALL" = true ] || [ "$RUST" = true ]; } && list+=(rust)
           { [ "$ALL" = true ] || [ "$SCRAPER" = true ]; } && list+=(scraper)
           { [ "$ALL" = true ] || [ "$SANDBOX" = true ]; } && list+=(sandbox)
           { [ "$ALL" = true ] || [ "$SANDBOX_PROXY" = true ]; } && list+=(sandbox-proxy)
+          { [ "$ALL" = true ] || [ "$RUNPOD" = true ]; } && list+=(runpod)
           echo "list=$(printf '%s\n' "${list[@]}" | jq -Rc 'select(length>0)' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   image:

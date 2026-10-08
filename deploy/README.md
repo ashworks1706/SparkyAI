@@ -21,6 +21,16 @@ just prod-logs engine
 
 `deploy/compose.prod.yml` overrides `compose.yml` with prebuilt images and no host ports except engine `:8080`. Phoenix, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of the engine. Settings live in the committed `sparky.toml`.
 
+## RunPod
+
+`deploy/docker/runpod.Dockerfile` builds `ghcr.io/ashworks1706/sparkyai-runpod`: all of Sparky in one GPU pod. A RunPod pod cannot start containers, so supervisord (`deploy/runpod/supervisord.conf`) runs chat and embed `llama-server`, the engine, the bot, `scraper serve`, Postgres 16 with pgvector (the Ubuntu 24.04 package), Redis, MinIO and SearXNG as processes, and runs `scraper migrate` at each boot. It differs from compose in three ways:
+
+- `run_sandbox` is off (`SPARKY_SANDBOX__ENABLED=false`).
+- The scraper uses the `http` fetcher; there is no Firecrawl.
+- Phoenix is not included; export stays off until `SPARKY_TELEMETRY__PHOENIX_URL` points at one.
+
+Create the pod with the image, a volume at `/workspace` (database, object store, model cache, admin session, daily `pg_dump` in `backups/`), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SEARXNG_SECRET`, `SPARKY_APP__ENV=production`. Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`.
+
 ## Models
 
 Two `llama-server` containers: chat `:8000` and embeddings `:8001`. `just model` uses the CUDA image and reserves an NVIDIA device, so it needs a GPU and the container toolkit. Without one:
