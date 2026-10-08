@@ -6,6 +6,7 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when the policy decided as expected; None without a policy expectation."""
     decisions = [
         e["decision"]["decision"] for t in turns for e in t.events if e["kind"] == "policy_decision"
     ]

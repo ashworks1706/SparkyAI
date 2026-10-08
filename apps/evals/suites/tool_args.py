@@ -8,15 +8,11 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when a call of the expected tool carries the expected values; None without them."""
     want = case.expect.tool_args_contain
     if not want:
         return None
-    calls = [
-        e
-        for t in turns
-        for e in t.events
-        if e["kind"] == "tool_call" and e["tool"] == case.expect.tool
-    ]
+    calls = [c for t in turns for c in t.tool_calls() if c["tool"] == case.expect.tool]
     if not calls:
         return Score(passed=False, detail=f"{case.expect.tool} was not called")
     unreadable = 0

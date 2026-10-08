@@ -9,6 +9,7 @@ INTERNALS = ("search_live", "search_knowledge", "run_sandbox", "tool call", "sou
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when the answer names no internal or case-forbidden term."""
     forbidden = list(INTERNALS) + list(case.expect.not_mentions)
     last = turns[-1]
     text = last.text.lower()

@@ -6,9 +6,10 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when the last turn asks a question and no tool ran; None unless clarify is set."""
     last = turns[-1]
     asked = "?" in last.text
-    called = [e["tool"] for t in turns for e in t.events if e["kind"] == "tool_call"]
+    called = [c["tool"] for t in turns for c in t.tool_calls()]
     if case.expect.clarify:
         return Score(
             passed=asked and not called,
