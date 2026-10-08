@@ -4,6 +4,7 @@
 # run_sandbox stays off. State lives under /workspace, the pod volume.
 ARG LLAMA_IMAGE=ghcr.io/ggml-org/llama.cpp:server-cuda
 ARG SEARXNG_REF=d4f00d15d
+ARG MINIO_REF=RELEASE.2025-10-15T17-29-55Z
 
 FROM rust:1.95-bookworm AS chef
 RUN cargo install cargo-chef --locked
@@ -19,6 +20,12 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release -p engine -p discord
 
+# MinIO publishes no binaries or public images; this builds its last release from source.
+FROM golang:1.24-bookworm AS minio
+ARG MINIO_REF
+RUN git clone --depth 1 --branch ${MINIO_REF} https://github.com/minio/minio.git /src \
+    && cd /src && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /minio .
+
 # llama.cpp server image: Ubuntu 24.04 with the CUDA runtime and /app/llama-server.
 FROM ${LLAMA_IMAGE}
 ARG SEARXNG_REF
@@ -28,7 +35,7 @@ RUN apt-get update \
         ca-certificates curl git python3 python3-venv supervisor redis-server \
         postgresql-16 postgresql-16-pgvector \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=quay.io/minio/minio /usr/bin/minio /usr/local/bin/minio
+COPY --from=minio /minio /usr/local/bin/minio
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 
