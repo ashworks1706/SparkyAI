@@ -1,8 +1,8 @@
 //! Google Calendar tool: read the caller's upcoming events, in a direct message only.
 
 pub mod client;
+mod render;
 
-use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,12 +16,12 @@ use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::gcal::GoogleCalendar;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
-use crate::core::types::tools::gcal::{GCalError, GCalEvent};
+use crate::core::types::tools::gcal::GCalError;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::gcal::client::GCalClient;
+use crate::runtime::tools::gcal::render::output;
 use crate::runtime::tools::grant::Credentials;
 use crate::runtime::tools::oauth::WebOAuthClient;
-use crate::runtime::tools::structured;
 
 /// The provider key Google grants are stored under.
 const PROVIDER: &str = "google";
@@ -84,36 +84,6 @@ impl Tool for GcalTool {
         };
         let events = self.client.events(&token).await.map_err(failed)?;
         Ok(output(events, self.max_items))
-    }
-}
-
-/// The calendar reply.
-fn output(events: Vec<GCalEvent>, max: usize) -> ToolOutput {
-    let shown: Vec<GCalEvent> = events.into_iter().take(max).collect();
-    let text = if shown.is_empty() {
-        "No upcoming Google Calendar events.".to_owned()
-    } else {
-        let mut lines = format!("{} upcoming events:", shown.len());
-        for e in &shown {
-            let when = e.start.as_deref().unwrap_or("no start time");
-            let place = e
-                .location
-                .as_deref()
-                .map(|l| format!(" at {l}"))
-                .unwrap_or_default();
-            let link = e
-                .url
-                .as_deref()
-                .map(|u| format!(" {u}"))
-                .unwrap_or_default();
-            let _ = write!(lines, "\n- {} {}{}{}", e.summary, when, place, link);
-        }
-        lines
-    };
-    ToolOutput {
-        content: text,
-        data: structured(&shown),
-        sources: Vec::new(),
     }
 }
 
