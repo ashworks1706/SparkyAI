@@ -20,7 +20,7 @@ use serenity::all::{
 use serenity::async_trait;
 use tokio::sync::Mutex;
 
-use crate::access::route;
+use crate::access::{message, route};
 use crate::analytics::Analytics;
 use crate::core::config::Config;
 use crate::core::types::{AnalyticsEvent, EngineError};
@@ -195,7 +195,7 @@ impl Handler {
 
     /// The builder for a thread opened from a question.
     fn thread_for(&self, question: &str) -> CreateThread<'static> {
-        CreateThread::new(route::thread_name(question)).auto_archive_duration(self.thread_archive)
+        CreateThread::new(message::thread_name(question)).auto_archive_duration(self.thread_archive)
     }
 }
 
@@ -246,7 +246,7 @@ impl EventHandler for Handler {
                     .values()
                     .map(|r| (r.id, r.tags.bot_id))
                     .collect::<Vec<_>>();
-                if let Some(role) = route::bot_role(tagged, ready.user.id)
+                if let Some(role) = message::bot_role(tagged, ready.user.id)
                     && self.role.set(role).is_err()
                 {
                     tracing::debug!("bot role already known");

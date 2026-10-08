@@ -564,7 +564,7 @@ fn forget_ids_carry_the_asker_and_survive_the_round_trip() {
 
 #[test]
 fn mentions_of_the_bot_are_stripped_and_others_kept() {
-    use crate::access::route::strip_mentions;
+    use crate::access::message::strip_mentions;
     use serenity::all::UserId;
 
     let me = UserId::new(42);
@@ -581,7 +581,7 @@ fn mentions_of_the_bot_are_stripped_and_others_kept() {
 
 #[test]
 fn mentions_of_the_bot_role_are_stripped_and_other_roles_kept() {
-    use crate::access::route::strip_mentions;
+    use crate::access::message::strip_mentions;
     use serenity::all::{RoleId, UserId};
 
     let me = UserId::new(42);
@@ -592,7 +592,7 @@ fn mentions_of_the_bot_role_are_stripped_and_other_roles_kept() {
 
 #[test]
 fn the_bot_role_is_the_one_tagged_with_the_bot() {
-    use crate::access::route::{addresses_bot, bot_role};
+    use crate::access::message::{addresses_bot, bot_role};
     use serenity::all::{RoleId, UserId};
 
     let me = UserId::new(42);
@@ -686,7 +686,7 @@ fn an_ephemeral_press_confirms_privately_and_stays_ephemeral() {
 
 #[test]
 fn thread_names_fit_discord_and_are_never_empty() {
-    use crate::access::route::{THREAD_NAME_MAX, thread_name};
+    use crate::access::message::{THREAD_NAME_MAX, thread_name};
 
     assert_eq!(
         thread_name("  when does\n Hayden close? "),
@@ -1250,7 +1250,7 @@ fn the_quoted_message_rides_the_request_and_is_left_out_when_there_is_none() {
 
 #[test]
 fn only_a_reply_to_the_bots_own_words_is_quoted_back() {
-    use crate::access::route::quoted;
+    use crate::access::message::quoted;
     use serenity::all::UserId;
 
     let me = UserId::new(9);
@@ -1269,7 +1269,7 @@ fn only_a_reply_to_the_bots_own_words_is_quoted_back() {
 
 #[test]
 fn only_attachments_discord_calls_an_image_reach_the_model() {
-    use crate::access::route::images;
+    use crate::access::message::images;
 
     let sent = images(
         [
@@ -1292,7 +1292,7 @@ fn only_attachments_discord_calls_an_image_reach_the_model() {
 
 #[test]
 fn no_more_than_max_images_of_one_message_are_sent() {
-    use crate::access::route::images;
+    use crate::access::message::images;
 
     let many: Vec<(&str, Option<&str>)> = (0..10)
         .map(|_| ("https://cdn/x.png", Some("image/png")))
@@ -1304,7 +1304,8 @@ fn no_more_than_max_images_of_one_message_are_sent() {
 
 #[test]
 fn a_message_with_only_an_image_is_still_a_question() {
-    use crate::access::route::{Place, chat_request, images};
+    use crate::access::message::images;
+    use crate::access::route::{Place, chat_request};
     use serenity::all::{ChannelId, GuildId, UserId};
 
     let attached = images([("https://cdn/one.png", Some("image/png"))], 4);
@@ -1336,7 +1337,7 @@ fn a_message_with_only_an_image_is_still_a_question() {
 
 #[test]
 fn files_that_are_not_images_are_sent_to_the_engine_within_the_cap() {
-    use crate::access::route::files;
+    use crate::access::message::files;
 
     let sent = files(
         [
