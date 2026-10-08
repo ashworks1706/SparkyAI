@@ -72,6 +72,21 @@ class AuthError(QueryError):
 
 
 @dataclass(frozen=True)
+class Credentials:
+    """One sign-in attempt. Never logged, never written anywhere."""
+
+    username: str
+    password: str
+
+    def __repr__(self) -> str:
+        return f"Credentials(username={self.username!r}, password=***)"
+
+
+class BadCredentials(AuthError):
+    """CAS refused the username or password."""
+
+
+@dataclass(frozen=True)
 class Job:
     """A claimed jobs row."""
 
@@ -90,6 +105,15 @@ class Fetched:
     content_type: str
     title: str | None = None
     text: str | None = None
+
+
+@dataclass(frozen=True)
+class Loaded:
+    """What one navigation produced: the HTTP status, where it ended, and the rendered DOM."""
+
+    status: int
+    url: str
+    html: str
 
 
 @dataclass(frozen=True)
@@ -120,6 +144,15 @@ class TreeNode:
     content: str
     embedding: Sequence[float]
     children: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class TreeParams:
+    """What bounds the summary tree recursion and how wide one summary reaches."""
+
+    max_level: int
+    cluster_size: int
+    min_chunks: int
 
 
 @dataclass(frozen=True)

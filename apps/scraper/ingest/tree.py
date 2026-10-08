@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 
 import httpx
 import numpy as np
@@ -12,7 +11,7 @@ import structlog
 from sklearn.cluster import KMeans
 
 from scraper.core.settings import Scraper, Summary, settings
-from scraper.core.types import PipelineError, SummaryError, TreeNode
+from scraper.core.types import PipelineError, SummaryError, TreeNode, TreeParams
 from scraper.ingest import embed as embedding
 
 log = structlog.get_logger()
@@ -38,22 +37,13 @@ Summarize = Callable[[Sequence[str]], str]
 Embed = Callable[[Sequence[str]], list[list[float]]]
 
 
-@dataclass(frozen=True)
-class TreeParams:
-    """What bounds the recursion and how wide one summary reaches."""
-
-    max_level: int
-    cluster_size: int
-    min_chunks: int
-
-    @staticmethod
-    def from_settings(cfg: Scraper) -> TreeParams:
-        """The parameters the configured scraper builds trees with."""
-        return TreeParams(
-            max_level=cfg.tree_max_level,
-            cluster_size=cfg.tree_cluster_size,
-            min_chunks=cfg.tree_min_chunks,
-        )
+def tree_params(cfg: Scraper) -> TreeParams:
+    """The parameters the configured scraper builds trees with."""
+    return TreeParams(
+        max_level=cfg.tree_max_level,
+        cluster_size=cfg.tree_cluster_size,
+        min_chunks=cfg.tree_min_chunks,
+    )
 
 
 def cluster_count(rows: int, cluster_size: int) -> int:

@@ -12,14 +12,14 @@ from playwright.sync_api import BrowserContext, Page
 from playwright.sync_api import Error as PlaywrightError
 
 from scraper.core.settings import Auth, settings
-from scraper.core.types import AuthError, Fetched, FetchError
+from scraper.core.types import AuthError, BadCredentials, Credentials, Fetched, FetchError, Loaded
 from scraper.ingest.drivers import asu_sso
-from scraper.ingest.drivers.page import Loaded, browser_slot, load, skip_heavy, to_fetched
+from scraper.ingest.drivers.page import browser_slot, load, skip_heavy, to_fetched
 
 log = structlog.get_logger()
 
 #: Asks the operator for one sign-in attempt. None skips signing in.
-Ask = Callable[[], asu_sso.Credentials | None]
+Ask = Callable[[], Credentials | None]
 #: Relays progress to the operator.
 Notify = Callable[[str], None]
 
@@ -95,7 +95,7 @@ def _sign_in(page: Page, cfg: Auth, ask: Ask, notify: Notify) -> bool:
             return False
         try:
             asu_sso.sign_in(page, creds, _split(cfg.sso_hosts), cfg.duo_timeout_secs, notify)
-        except asu_sso.BadCredentials as e:
+        except BadCredentials as e:
             notify(f"Sign-in refused ({e}). Attempt {attempt} of {cfg.login_attempts}.")
             continue
         return True

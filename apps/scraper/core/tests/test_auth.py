@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 from scraper.core.settings import settings
-from scraper.core.types import AuthError, Fetched, QuerySource
+from scraper.core.types import AuthError, Credentials, Fetched, Loaded, QuerySource
 from scraper.ingest import fetch
 from scraper.ingest.drivers import admin, public
-from scraper.ingest.drivers.asu_sso import Credentials, on_host
-from scraper.ingest.drivers.page import Loaded, to_fetched
+from scraper.ingest.drivers.asu_sso import on_host
+from scraper.ingest.drivers.page import to_fetched
 from scraper.query import sundevil_central
 from scraper.query.registry import QUERY_SOURCES
 from scraper.query.run import url_for

@@ -5,22 +5,12 @@ from __future__ import annotations
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from functools import lru_cache
 
 from playwright.sync_api import BrowserContext, Route
 
 from scraper.core.settings import settings
-from scraper.core.types import Fetched, FetchError, FetchRejected
-
-
-@dataclass(frozen=True)
-class Loaded:
-    """What one navigation produced: the HTTP status, where it ended, and the rendered DOM."""
-
-    status: int
-    url: str
-    html: str
+from scraper.core.types import Fetched, FetchError, FetchRejected, Loaded
 
 
 @lru_cache(maxsize=1)

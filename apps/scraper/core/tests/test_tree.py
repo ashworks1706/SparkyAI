@@ -4,18 +4,18 @@ import httpx
 import numpy as np
 import pytest
 from scraper.core.settings import Scraper
-from scraper.core.types import SummaryError
+from scraper.core.types import SummaryError, TreeParams
 from scraper.ingest.tree import (
     MIN_CLUSTERS,
-    TreeParams,
     build_tree,
     cluster,
     cluster_count,
     summarize_cluster,
+    tree_params,
 )
 
 DIM = 1024
-DEFAULTS = TreeParams.from_settings(Scraper())
+DEFAULTS = tree_params(Scraper())
 
 
 def vector(seed: int, center: int) -> list[float]:

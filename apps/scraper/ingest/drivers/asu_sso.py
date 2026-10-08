@@ -6,7 +6,6 @@ import re
 import tempfile
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -14,7 +13,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from scraper.core.types import AuthError
+from scraper.core.types import AuthError, BadCredentials, Credentials
 
 _USERNAME = "#username"
 _PASSWORD = "#password"
@@ -27,21 +26,6 @@ _DUO_TRUST = "#trust-browser-button"
 _DUO_TRUST_LABEL = re.compile(r"^\s*yes\b", re.IGNORECASE)
 _DUO_HEADING = "h1, h2"
 _POLL_SECS = 0.5
-
-
-@dataclass(frozen=True)
-class Credentials:
-    """One sign-in attempt. Never logged, never written anywhere."""
-
-    username: str
-    password: str
-
-    def __repr__(self) -> str:
-        return f"Credentials(username={self.username!r}, password=***)"
-
-
-class BadCredentials(AuthError):
-    """CAS refused the username or password."""
 
 
 def host_of(url: str) -> str:
