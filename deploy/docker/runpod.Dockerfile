@@ -28,8 +28,7 @@ RUN apt-get update \
         ca-certificates curl git python3 python3-venv supervisor redis-server \
         postgresql-16 postgresql-16-pgvector \
     && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://dl.min.io/server/minio/release/linux-amd64/minio -o /usr/local/bin/minio \
-    && chmod +x /usr/local/bin/minio
+COPY --from=quay.io/minio/minio /usr/bin/minio /usr/local/bin/minio
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never UV_LINK_MODE=copy
 
