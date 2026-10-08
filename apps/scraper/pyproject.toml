@@ -41,6 +41,7 @@ packages = [
     "scraper.query.sources",
     "scraper.sources",
     "scraper.store",
+    "scraper.store.postgres",
 ]
 
 [tool.ruff]

@@ -26,13 +26,11 @@ def job(kind: str, **input: object) -> Job:
 def recorder(monkeypatch) -> Recorder:
     rec = Recorder()
     monkeypatch.setattr(
-        jobs.postgres,
+        postgres,
         "enqueue_job",
         lambda _conn, kind, input, priority: rec.queued.append((kind, input, priority)) or True,
     )
-    monkeypatch.setattr(
-        jobs.postgres, "backlog_at_least", lambda _conn, _kind, _limit: rec.backlog_full
-    )
+    monkeypatch.setattr(postgres, "backlog_at_least", lambda _conn, _kind, _limit: rec.backlog_full)
     return rec
 
 
