@@ -2,13 +2,14 @@
 
 use serenity::all::{
     CommandInteraction, ComponentInteraction, Context, CreateInteractionResponse,
-    CreateInteractionResponseFollowup, CreateInteractionResponseMessage, EditInteractionResponse,
+    CreateInteractionResponseMessage, EditInteractionResponse,
 };
 use tracing::Instrument;
 
 use super::commands;
-use super::{Handler, error_kind, event, option_str, tell};
-use crate::core::types::{AuthorizeRequest, ForgetRequest, ProfileRequest, ResetRequest};
+use super::respond::{defer_private, finish, tell};
+use super::{Handler, error_kind, event, option_str};
+use crate::core::types::{ForgetRequest, ProfileRequest, ResetRequest};
 use crate::render::components::{self, CustomId};
 use crate::render::reply;
 
@@ -163,106 +164,6 @@ impl Handler {
         finish(ctx, cmd, vec![text]).await;
     }
 
-    /// Gives the caller a private link to connect an account (Canvas or Outlook).
-    pub(super) async fn login(&self, ctx: &Context, cmd: &CommandInteraction) {
-        if !defer_private(ctx, cmd).await {
-            return;
-        }
-        let Some((service, provider)) = chosen_service(cmd) else {
-            finish(ctx, cmd, vec!["Choose a service to connect.".to_owned()]).await;
-            return;
-        };
-        let req = AuthorizeRequest {
-            user: cmd.user.id.to_string(),
-        };
-        let span = tracing::info_span!(
-            "discord.login",
-            "discord.command" = "login",
-            "sparky.provider" = provider,
-            "user.id" = %cmd.user.id,
-        );
-        let text = match self
-            .engine
-            .oauth_login(provider, &req)
-            .instrument(span)
-            .await
-        {
-            Ok(resp) => {
-                tracing::info!(user = %cmd.user.id, provider, "login link issued");
-                self.record(
-                    event("discord_login", cmd.user.id, cmd.guild_id, cmd.channel_id)
-                        .with("provider", provider),
-                );
-                format!(
-                    "Connect your {service} with this link (only you can see it):\n{}\n\nYou sign \
-                     in through the provider. Once connected, send me a direct message and ask \
-                     about it.",
-                    resp.url
-                )
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, user = %cmd.user.id, provider, "login failed");
-                self.record(
-                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
-                        .with("stage", "login")
-                        .with("kind", error_kind(&e)),
-                );
-                format!("{service} login is not available right now.")
-            }
-        };
-        finish(ctx, cmd, vec![text]).await;
-    }
-
-    /// Disconnects one of the caller's accounts (Canvas or Outlook).
-    pub(super) async fn logout(&self, ctx: &Context, cmd: &CommandInteraction) {
-        if !defer_private(ctx, cmd).await {
-            return;
-        }
-        let Some((service, provider)) = chosen_service(cmd) else {
-            finish(ctx, cmd, vec!["Choose a service to disconnect.".to_owned()]).await;
-            return;
-        };
-        let req = AuthorizeRequest {
-            user: cmd.user.id.to_string(),
-        };
-        let span = tracing::info_span!(
-            "discord.logout",
-            "discord.command" = "logout",
-            "sparky.provider" = provider,
-            "user.id" = %cmd.user.id,
-        );
-        let text = match self
-            .engine
-            .oauth_logout(provider, &req)
-            .instrument(span)
-            .await
-        {
-            Ok(done) => {
-                tracing::info!(user = %cmd.user.id, provider, removed = done.removed, "disconnected");
-                self.record(
-                    event("discord_logout", cmd.user.id, cmd.guild_id, cmd.channel_id)
-                        .with("provider", provider)
-                        .with("removed", done.removed),
-                );
-                if done.removed {
-                    format!("Your {service} is disconnected.")
-                } else {
-                    format!("You had no {service} connected.")
-                }
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, user = %cmd.user.id, provider, "logout failed");
-                self.record(
-                    event("discord_error", cmd.user.id, cmd.guild_id, cmd.channel_id)
-                        .with("stage", "logout")
-                        .with("kind", error_kind(&e)),
-                );
-                format!("Could not disconnect {service} right now.")
-            }
-        };
-        finish(ctx, cmd, vec![text]).await;
-    }
-
     /// Answers the forget everything prompt. Only the user who asked may press it.
     pub(super) async fn forget_pressed(
         &self,
@@ -339,46 +240,6 @@ impl Handler {
             .components(Vec::new());
         if let Err(e) = press.edit_response(&ctx.http, edit).await {
             tracing::warn!(error = %e, "could not close the forget prompt");
-        }
-    }
-}
-
-/// The service the caller chose, as (display label, engine provider key).
-fn chosen_service(cmd: &CommandInteraction) -> Option<(&'static str, &'static str)> {
-    let value = option_str(cmd, commands::SERVICE)?;
-    commands::SERVICES
-        .iter()
-        .find(|(_, provider)| *provider == value.as_str())
-        .map(|(label, provider)| (*label, *provider))
-}
-
-/// Defers a command so only the caller sees the reply. False when Discord refused.
-async fn defer_private(ctx: &Context, cmd: &CommandInteraction) -> bool {
-    match cmd.defer_ephemeral(&ctx.http).await {
-        Ok(()) => true,
-        Err(e) => {
-            tracing::warn!(error = %e, "defer failed");
-            false
-        }
-    }
-}
-
-/// Fills a deferred private response: first message in place, rest as private followups.
-async fn finish(ctx: &Context, cmd: &CommandInteraction, messages: Vec<String>) {
-    let mut messages = messages.into_iter();
-    let first = messages.next().unwrap_or_default();
-    if let Err(e) = cmd
-        .edit_response(&ctx.http, EditInteractionResponse::new().content(first))
-        .await
-    {
-        tracing::warn!(error = %e, "response edit failed");
-    }
-    for more in messages {
-        let followup = CreateInteractionResponseFollowup::new()
-            .content(more)
-            .ephemeral(true);
-        if let Err(e) = cmd.create_followup(&ctx.http, followup).await {
-            tracing::warn!(error = %e, "followup failed");
         }
     }
 }

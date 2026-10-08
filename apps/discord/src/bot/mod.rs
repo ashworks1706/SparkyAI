@@ -1,10 +1,12 @@
 //! serenity client setup, the guards every question passes, and event dispatch.
 
-mod account;
 mod address;
 mod commands;
 mod confirm;
 mod destination;
+mod login;
+mod memory;
+mod respond;
 mod turn;
 
 use std::collections::HashMap;
@@ -13,9 +15,9 @@ use std::time::{Duration, Instant};
 
 use secrecy::ExposeSecret;
 use serenity::all::{
-    AutoArchiveDuration, ChannelId, Client, Command, CommandInteraction, Context,
-    CreateInteractionResponse, CreateInteractionResponseMessage, CreateThread, EventHandler,
-    GatewayIntents, GuildId, Interaction, Message, Ready, ResolvedValue, RoleId, UserId,
+    AutoArchiveDuration, ChannelId, Client, Command, CommandInteraction, Context, CreateThread,
+    EventHandler, GatewayIntents, GuildId, Interaction, Message, Ready, ResolvedValue, RoleId,
+    UserId,
 };
 use serenity::async_trait;
 use tokio::sync::Mutex;
@@ -196,19 +198,6 @@ impl Handler {
     /// The builder for a thread opened from a question.
     fn thread_for(&self, question: &str) -> CreateThread<'static> {
         CreateThread::new(message::thread_name(question)).auto_archive_duration(self.thread_archive)
-    }
-}
-
-/// Answers a command at once with a line only the caller sees.
-async fn tell(ctx: &Context, cmd: &CommandInteraction, text: impl Into<String>) {
-    let msg = CreateInteractionResponseMessage::new()
-        .content(text)
-        .ephemeral(true);
-    if let Err(e) = cmd
-        .create_response(&ctx.http, CreateInteractionResponse::Message(msg))
-        .await
-    {
-        tracing::warn!(error = %e, "ephemeral response failed");
     }
 }
 
