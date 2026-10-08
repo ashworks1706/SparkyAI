@@ -6,6 +6,7 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when the slowest turn is within the case budget; None without a budget."""
     limit = case.expect.max_latency_ms
     if limit is None:
         return None

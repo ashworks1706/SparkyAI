@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 from scraper.core.settings import settings
-from scraper.core.types import AuthError, Fetched, QuerySource
+from scraper.core.types import AuthError, Credentials, Fetched, Loaded, QuerySource
 from scraper.ingest import fetch
 from scraper.ingest.drivers import admin, public
-from scraper.ingest.drivers.asu_sso import Credentials, on_host
-from scraper.ingest.drivers.page import Loaded, to_fetched
+from scraper.ingest.drivers.asu_sso import on_host
+from scraper.ingest.drivers.page import to_fetched
 from scraper.query import sundevil_central
-from scraper.query.registry import QUERY_SOURCES, url_for
+from scraper.query.registry import QUERY_SOURCES
+from scraper.query.run import url_for
 from scraper.query.sources import clubs, events
 
 
@@ -308,7 +309,7 @@ def test_a_page_past_the_size_cap_is_refused(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_login_gated_sources_are_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    from scraper.query.registry import offered, run
+    from scraper.query.run import offered, run
 
     assert settings().auth.enabled is False
     monkeypatch.setattr(

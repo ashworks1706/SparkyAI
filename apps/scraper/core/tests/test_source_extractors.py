@@ -4,7 +4,6 @@ import pytest
 from scraper.core.types import Fetched
 from scraper.ingest.chunk import chunk_text
 from scraper.sources import SOURCES
-from scraper.sources.clubs import extract_clubs
 from scraper.sources.courses import extract_courses
 from scraper.sources.dining_hours import extract_dining_hours
 from scraper.sources.events import extract_events
@@ -73,21 +72,6 @@ def test_courses_keep_number_title_and_units_together() -> None:
     assert "ACC 494 | Special Topics in Accounting | 1 unit" in text
     assert "Fall 2025" in text
     assert "https://" not in text
-
-
-def test_clubs_keep_name_category_and_description_together() -> None:
-    text = extract_clubs(page("clubs.md"))
-    sda = line_with(text, "Software Developers Association")
-    assert "Academic and Professional" in sda
-    assert "Weekly workshops, hackathon teams" in sda
-    robotics = line_with(text, "Sun Devil Robotics Club")
-    assert "Engineering and Technology" in robotics
-    assert "autonomous robots" in robotics
-    kitchen = line_with(text, "Devils in the Kitchen")
-    assert "Social and Recreational" in kitchen
-    assert "Cooking nights on the Tempe campus" in kitchen
-    assert "https://" not in text
-    assert "](" not in text
 
 
 def test_dining_hours_pair_each_day_with_its_hours() -> None:
@@ -204,7 +188,6 @@ def test_registered_source_carries_its_extractor(key: str) -> None:
         extract_hours,
         extract_events,
         extract_courses,
-        extract_clubs,
         extract_scholarships,
         extract_news,
         extract_shuttles,
@@ -215,7 +198,6 @@ def test_registered_source_carries_its_extractor(key: str) -> None:
         "hours",
         "events",
         "courses",
-        "clubs",
         "scholarships",
         "news",
         "shuttles",

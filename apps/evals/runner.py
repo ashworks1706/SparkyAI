@@ -11,15 +11,24 @@ import httpx
 
 from evals.core.settings import settings
 from evals.core.types import EvalCase, RunnerError, TurnResult
+from evals.suites import SUITES
 
 
 def load_cases(cases_dir: Path | None = None) -> list[EvalCase]:
+    """Every case under cases_dir. Raises RunnerError on none or on an unknown suite name."""
     cases_dir = cases_dir or settings().evals.cases_dir
     cases: list[EvalCase] = []
     for path in sorted(cases_dir.glob("*.jsonl")):
         for line in path.read_text().splitlines():
             if line.strip():
-                cases.append(EvalCase.model_validate_json(line))
+                case = EvalCase.model_validate_json(line)
+                unknown = sorted(set(case.suites) - set(SUITES))
+                if unknown:
+                    raise RunnerError(
+                        f"case {case.id} in {path.name} names unknown suite "
+                        f"{', '.join(unknown)}; known: {', '.join(SUITES)}"
+                    )
+                cases.append(case)
     if not cases:
         raise RunnerError(f"no cases under {cases_dir}")
     return cases

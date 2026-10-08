@@ -8,7 +8,6 @@
 - [ ] Measure whether the tree earns its model calls, once the eval suite exists
 - [ ] Deduplicate across sources, not only against a source's own previous version
 - [ ] Carry provenance a citation can use: section, effective dates, and what supersedes what
-- [ ] First deployment
 
 ## 5 — Memory v0.5
 
@@ -18,9 +17,6 @@
 ## 6 — Public beta v0.6
 
 - [ ] run on existing benchmarks
-- [ ] setup evals
-- [ ] make short tech writeup on readme
-- [ ] add demo video and website update
 - [ ] Staging + prod; canary releases; alerting; inference that scales under load
 
 ## 7 — sparky-model-v0.1

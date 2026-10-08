@@ -1,4 +1,4 @@
-//! Slash commands for memory and conversation state.
+//! Slash command names and their registration: reset, memory, forget, login, logout.
 
 use serenity::all::{CommandOptionType, CreateCommand, CreateCommandOption};
 

@@ -1,11 +1,8 @@
-"""The registry of live query sources, the checks every query passes, and how one is run."""
+"""The registry of live query sources, keyed by the name the engine calls them by."""
 
 from __future__ import annotations
 
-from scraper.core.settings import settings
-from scraper.core.types import QueryError, QuerySource
-from scraper.ingest import extract, fetch
-from scraper.ingest.pace import HostPacer
+from scraper.core.types import QuerySource
 from scraper.query.sources import (
     campus_map,
     clubs,
@@ -47,57 +44,3 @@ _MODULES = (
 )
 
 QUERY_SOURCES: dict[str, QuerySource] = {m.QUERY.key: m.QUERY for m in _MODULES}
-
-
-def check(source: QuerySource, params: dict[str, str]) -> None:
-    """Raises QueryError when a required parameter is missing, unknown, or not among its choices."""
-    missing = [p.name for p in source.params if p.required and not params.get(p.name, "").strip()]
-    if missing:
-        raise QueryError(f"{source.key} needs: {', '.join(missing)}")
-    unknown = set(params) - {p.name for p in source.params}
-    if unknown:
-        taken = ", ".join(p.name for p in source.params) or "nothing"
-        raise QueryError(
-            f"{source.key} has no parameter {', '.join(sorted(unknown))}; it takes: {taken}"
-        )
-    for p in source.params:
-        value = params.get(p.name, "").strip()
-        if not p.choices or not value:
-            continue
-        values = [v.strip() for v in value.split(",") if v.strip()] if p.many else [value]
-        if not p.many and "," in value:
-            raise QueryError(f"{p.name} takes one value, got {value!r}")
-        allowed = {c.lower() for c in p.choices}
-        for v in values:
-            if v.lower() not in allowed:
-                raise QueryError(f"{p.name} {v!r} is not one of: {', '.join(p.choices)}")
-
-
-def url_for(source: QuerySource, params: dict[str, str]) -> str:
-    """Checks the parameters, then builds the URL of a page source."""
-    check(source, params)
-    if source.to_url is None:
-        raise QueryError(f"{source.key} is not fetched from one page")
-    return source.to_url(params)
-
-
-def offered(source: QuerySource) -> bool:
-    """Whether source is served: one read only through the admin session needs auth.enabled."""
-    return settings().auth.enabled or not (source.auth and source.answer is None)
-
-
-def run(
-    source: QuerySource, params: dict[str, str], pacer: HostPacer | None = None
-) -> tuple[str, str]:
-    """Checks the parameters and fetches the source. Returns the URL to cite and the text."""
-    if not offered(source):
-        raise QueryError(f"{source.key} is off: it reads through a login and auth.enabled is false")
-    if source.answer is not None:
-        check(source, params)
-        return source.answer(params)
-    url = url_for(source, params)
-    if pacer is not None:
-        pacer.wait(url)
-    fetched = fetch.fetch(url, needs_js=source.needs_js, auth=source.auth)
-    text = source.extractor(fetched) if source.extractor else extract.page_text(fetched)
-    return url, text

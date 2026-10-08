@@ -55,13 +55,21 @@ class TurnResult(BaseModel):
     latency_ms: int
     events: list[dict[str, Any]]
 
+    def tool_calls(self) -> list[dict[str, Any]]:
+        """The tool_call events of this turn, in order."""
+        return [e for e in self.events if e["kind"] == "tool_call"]
+
 
 class Score(BaseModel):
+    """One suite verdict on one case, with a reason a reader can act on."""
+
     passed: bool
     detail: str
 
 
 class CaseResult(BaseModel):
+    """The score one suite gave one case, tied to the engine request it judged."""
+
     case_id: str
     suite: str
     score: Score
@@ -69,16 +77,21 @@ class CaseResult(BaseModel):
 
 
 class SuiteReport(BaseModel):
+    """How many cases one suite passed out of those it scored."""
+
     suite: str
     passed: int
     total: int
 
     @property
     def rate(self) -> float:
+        """The pass rate, or 0.0 when the suite scored nothing."""
         return self.passed / self.total if self.total else 0.0
 
 
 class EvalReport(BaseModel):
+    """One eval run: the engine it ran against, every result, and the per-suite totals."""
+
     engine_url: str
     cases: int
     results: list[CaseResult]

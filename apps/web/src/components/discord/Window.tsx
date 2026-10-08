@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Avatar } from "./Message";
-import type { Author } from "./people";
+import { PEOPLE, type Author } from "./people";
 
 /** The thread glyph Discord puts beside a thread name. */
 export const ThreadIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
@@ -8,6 +8,15 @@ export const ThreadIcon = ({ className = "h-5 w-5" }: { className?: string }) =>
     <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5v-8Z" />
     <path d="M8.5 8h7M8.5 11.5h4.5" />
   </svg>
+);
+
+/** The box under a message that opened a thread. */
+export const ThreadChip = ({ name, count }: { name: string; count: string }) => (
+  <div className="mt-1.5 flex max-w-md items-center gap-2 rounded-lg bg-[#2b2d31] px-3 py-2 text-sm">
+    <ThreadIcon className="h-4 w-4 shrink-0 text-[#b5bac1]" />
+    <span className="truncate font-semibold text-[#f2f3f5]">{name}</span>
+    <span className="shrink-0 font-semibold text-[#00a8fc]">{count} &rsaquo;</span>
+  </div>
 );
 
 /** The hash glyph of a text channel. */
@@ -30,10 +39,7 @@ export type Server = { name: string; badge: string; className: string };
 const STUDENTS: Server = { name: "Sun Devil Students", badge: "ASU", className: "bg-shu text-kin" };
 
 /** Friends listed above the bot in the direct message list. */
-const FRIENDS: Author[] = [
-  { name: "devon", color: "#23a55a" },
-  { name: "sam", color: "#00a8fc" },
-];
+const FRIENDS: Author[] = [PEOPLE.devon, PEOPLE.sam];
 
 /** The direct message list, with the open conversation highlighted. */
 const DirectMessages = ({ open }: { open: Author }) => (

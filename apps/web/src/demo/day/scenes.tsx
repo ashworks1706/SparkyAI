@@ -1,16 +1,15 @@
-import { threadName } from "@/components/discord/format";
 import Message from "@/components/discord/Message";
-import { SPARKY, type Author, type LinkButton } from "@/components/discord/people";
-import { LIVE, button } from "@/components/discord/scenes";
+import { PEOPLE, SPARKY, type Author, type LinkButton } from "@/components/discord/people";
+import { LIVE, button } from "@/components/discord/examples";
 import Window, { Composer } from "@/components/discord/Window";
-import type { Scene } from "../setup/kit";
-import { ThreadChip } from "../Stage";
-import { progress, typed, type Shot } from "../timeline";
+import { Caret } from "../Caret";
+import MentionThread from "../MentionThread";
+import { progress, typed, type Scene, type Shot } from "../timeline";
 import { approved, cardAt, finished, FINISH, type Turn } from "./turn";
 import { BETWEEN, BOOK, DUE, GRADE, INBOX, WEEK } from "./turns";
 
 /** The student whose day the video follows. */
-const ME: Author = { name: "maya", color: "#f0b232" };
+const ME: Author = PEOPLE.maya;
 
 /** When each beat of a turn happens, in seconds from the start of its scene. */
 const beats = (turn: Turn) => {
@@ -32,7 +31,7 @@ const typing = (placeholder: string, text: string, t: number, from: number, to: 
         {mention && <span className="rounded-[3px] bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">@Sparky</span>}
         {mention && " "}
         {typed(text, t, from, to)}
-        <span className={`ml-px inline-block h-5 w-0.5 translate-y-1 bg-[#dbdee1] ${Math.floor(t * 2.2) % 2 === 0 ? "" : "opacity-0"}`} />
+        <Caret t={t} className="ml-px h-5 w-0.5 translate-y-1 bg-[#dbdee1]" />
       </span>
     )}
   </Composer>
@@ -107,52 +106,29 @@ const dmScene = ({ title, turn, time, past, focus }: { title: string; turn: Turn
 
 /** Other students in the channel before the question. */
 const CHATTER: { author: Author; text: string }[] = [
-  { author: { name: "devon", color: "#23a55a" }, text: "anyone know if the MU starbucks line is still insane" },
-  { author: { name: "sam", color: "#00a8fc" }, text: "it's always insane lol" },
+  { author: PEOPLE.devon, text: "anyone know if the MU starbucks line is still insane" },
+  { author: PEOPLE.sam, text: "it's always insane lol" },
 ];
-
-/** Width of the thread panel once open. */
-const THREAD_W = 600;
 
 /** A mention in the server channel, answered in a thread. */
 const serverScene = ({ title, turn, time, sources }: { title: string; turn: Turn; time: string; sources: LinkButton[] }): Scene => {
   const b = beats(turn);
-  const name = threadName(turn.question);
   const view = (t: number) => {
     const card = cardAt(turn, t - b.post);
-    const opening = progress(t, b.post - 0.4, 0.4);
     return (
-      <Window
-        channel="ask-sparky"
+      <MentionThread
         topic="Ask Sparky about classes, hours, shuttles and more. Mention it to start a thread."
-        me={ME}
-        messages={
-          <>
-            {CHATTER.map((m) => (
-              <Message key={m.text} author={m.author} time="Today at 12:14 PM" text={m.text} />
-            ))}
-            {t >= b.send && (
-              <Message author={ME} time={time} text={`@Sparky ${turn.question}`}>
-                {t >= b.send + 0.2 && <ThreadChip name={name} count={card ? "1 Message" : "See Thread"} />}
-              </Message>
-            )}
-          </>
-        }
+        asker={ME}
+        time={time}
+        question={turn.question}
+        earlier={CHATTER.map((m) => (
+          <Message key={m.text} author={m.author} time="Today at 12:14 PM" text={m.text} />
+        ))}
         composer={typing("Message #ask-sparky", turn.question, t, b.type, b.typedAt, true)}
-        thread={
-          opening > 0
-            ? {
-                name,
-                width: THREAD_W * opening,
-                body: (
-                  <div style={{ width: THREAD_W }}>
-                    <Message author={ME} time={time} text={`@Sparky ${turn.question}`} />
-                    {card && <Message author={SPARKY} time={time} text={card} buttons={t >= b.done ? sources : []} />}
-                  </div>
-                ),
-              }
-            : undefined
-        }
+        asked={t >= b.send}
+        chip={t >= b.send + 0.2}
+        opening={progress(t, b.post - 0.4, 0.4)}
+        reply={card ? { text: card, buttons: t >= b.done ? sources : [] } : null}
       />
     );
   };

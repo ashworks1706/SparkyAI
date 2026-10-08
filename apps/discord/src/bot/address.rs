@@ -7,6 +7,7 @@ use tracing::field::Empty;
 
 use super::destination::Destination;
 use super::{Handler, event};
+use crate::access::message;
 use crate::access::roles::{authorized_roles, member_permissions};
 use crate::access::route::{self, Arrival, Arrived, Place, Trigger};
 use crate::core::types::{Attachment, FileAttachment};
@@ -15,7 +16,7 @@ use crate::render::reply;
 /// The text of the bot message msg replies to, or None when it replies to nothing of the bot's.
 fn replied_to(msg: &Message, me: UserId) -> Option<String> {
     let referenced = msg.referenced_message.as_deref()?;
-    route::quoted(Some(referenced.author.id), &referenced.content, me)
+    message::quoted(Some(referenced.author.id), &referenced.content, me)
 }
 
 /// What a trigger is called on a span and in analytics.
@@ -44,7 +45,7 @@ impl Handler {
         };
         let Some(trigger) = route::trigger(Arrival {
             at,
-            mentions_bot: route::addresses_bot(
+            mentions_bot: message::addresses_bot(
                 msg.mentions_user_id(me),
                 &msg.mention_roles,
                 self.role.get().copied(),
@@ -63,7 +64,7 @@ impl Handler {
             here.say(&ctx.http, self.cooldown_text()).await;
             return;
         }
-        let question = route::strip_mentions(&msg.content, me, self.role.get().copied());
+        let question = message::strip_mentions(&msg.content, me, self.role.get().copied());
         let (images, files) = self.attached(msg);
         if question.is_empty() && images.is_empty() && files.is_empty() {
             here.say(&ctx.http, "Ask me something.").await;
@@ -283,13 +284,13 @@ impl Handler {
 
     /// The images of msg the model is sent, and the other files the engine opens.
     fn attached(&self, msg: &Message) -> (Vec<Attachment>, Vec<FileAttachment>) {
-        let images = route::images(
+        let images = message::images(
             msg.attachments
                 .iter()
                 .map(|a| (a.url.as_str(), a.content_type.as_deref())),
             self.max_images,
         );
-        let files = route::files(
+        let files = message::files(
             msg.attachments.iter().map(|a| {
                 (
                     a.url.as_str(),

@@ -16,8 +16,8 @@ use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
 use crate::core::types::tools::outlook::{OutlookError, OutlookEvent, OutlookMessage};
-use crate::runtime::tools::grant::Credentials;
-use crate::runtime::tools::outlook::{OutlookTool, Query};
+use crate::runtime::tools::account::grant::Credentials;
+use crate::runtime::tools::account::outlook::{OutlookTool, Query};
 
 /// An Outlook double with canned rows.
 #[derive(Default)]

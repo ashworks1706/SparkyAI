@@ -50,10 +50,10 @@ Everything that runs is under `apps/`. Language is never a folder; ASU domain is
 ```
 apps/engine/      Rust bin: the agent and HTTP surface. core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
 apps/discord/     Rust bin: serenity bot, HTTP client of engine, never links it. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. One span per interaction and per product event.
-apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{health,logs,output,runner}, core/{config,types,tests}.
+apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{catalog,health,logs,output,runner,sandbox}, core/{config,types,tests}.
 apps/scraper/     Python: fetch, chunk, embed, write the index. scraper serve runs the jobs queue: live search_live jobs, indexing of their results, scheduled source runs. Owns migrations. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
-apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, runner, suites, cases.
+apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, cli, runner, suites, cases.
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
@@ -62,7 +62,7 @@ Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-s
 
 ## Dependencies we build on
 
-- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`runtime/model/rig_openai.rs`) and the only inference path. Never `rig::Agent`; the loop is ours.
+- **Rig** (`rig-core`, crate name `rig_core`): the OpenAI-compatible client for chat and embeddings (`runtime/model/rig_openai/`) and the only inference path. Never `rig::Agent`; the loop is ours.
 - **rmcp**: MCP. Never hand-roll MCP.
 - The rest of the harness (loop, policy, context assembly, memory, tracing, replay) is written here.
 

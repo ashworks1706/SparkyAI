@@ -11,7 +11,7 @@ use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::model::{ModelError, ModelRequest};
-use crate::runtime::harness::safety::redact::{json, truncate};
+use crate::core::types::safety::redact::{json, truncate};
 
 /// What a task sends with every call.
 #[derive(Debug, Clone)]

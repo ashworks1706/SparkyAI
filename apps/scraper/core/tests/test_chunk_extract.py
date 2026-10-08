@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+from scraper.core.settings import Postgres, Scraper
 from scraper.ingest.chunk import chunk_text
 from scraper.ingest.extract import extract_text, is_divider, plain, table_cells, title_of
 
@@ -69,10 +72,28 @@ def test_overlap_starts_on_a_line_boundary() -> None:
 
 
 def test_chunker_version_records_the_settings_the_chunks_were_cut_with() -> None:
-    from scraper.core.settings import Scraper
-
     # A source is reindexed when this string changes, so both values have to be in it.
     narrow = Scraper(chunk_chars=300, chunk_overlap_chars=0).chunker_version()
     wide = Scraper(chunk_chars=1200, chunk_overlap_chars=200).chunker_version()
     assert narrow != wide
     assert "300" in narrow
+
+
+def test_chunk_text_rejects_an_overlap_wider_than_half_a_chunk() -> None:
+    with pytest.raises(ValueError, match="overlap_chars"):
+        chunk_text("a\nb", max_chars=100, overlap_chars=51)
+
+
+@pytest.mark.parametrize(
+    "model, fields",
+    [
+        (Scraper, {"chunk_chars": 300, "chunk_overlap_chars": 151}),
+        (Scraper, {"chunk_overlap_chars": -1}),
+        (Scraper, {"chunk_chars": 0}),
+        (Scraper, {"max_browsers": 0}),
+        (Postgres, {"scraper_pool_max": 0}),
+    ],
+)
+def test_settings_reject_values_the_scraper_cannot_run_with(model, fields) -> None:
+    with pytest.raises(ValidationError):
+        model(**fields)

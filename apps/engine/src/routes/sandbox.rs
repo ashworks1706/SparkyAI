@@ -7,11 +7,11 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use secrecy::SecretString;
-use serde::{Deserialize, Serialize};
 
 use crate::core::traits::tools::sandbox::Sandbox;
+use crate::core::types::http::sandbox::{Killed, Switch};
 use crate::core::types::tools::sandbox::{SandboxError, SandboxReport};
-use crate::routes::chat::authorized;
+use crate::routes::auth::authorized;
 
 /// What the sandbox routes need.
 #[derive(Clone)]
@@ -20,20 +20,6 @@ pub struct SandboxState {
     pub sandbox: Option<Arc<dyn Sandbox>>,
     /// Bearer token every caller must present.
     pub service_token: SecretString,
-}
-
-/// What POST /sandbox/enabled takes.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Switch {
-    /// Whether the agent is offered the tool.
-    pub enabled: bool,
-}
-
-/// What a kill answers with.
-#[derive(Debug, Serialize)]
-pub struct Killed {
-    /// The container that was removed.
-    pub name: String,
 }
 
 /// The sessions running now and the commands the agent ran.

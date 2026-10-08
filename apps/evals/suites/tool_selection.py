@@ -6,7 +6,8 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
-    called = [e["tool"] for t in turns for e in t.events if e["kind"] == "tool_call"]
+    """Passes when the expected tool ran, or when none ran and none was expected."""
+    called = [c["tool"] for t in turns for c in t.tool_calls()]
     expected = case.expect.tool
     if expected is None:
         return Score(passed=not called, detail=f"expected no tool, called {called}")

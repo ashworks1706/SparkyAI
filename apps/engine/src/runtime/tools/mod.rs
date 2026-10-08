@@ -1,17 +1,10 @@
 //! Built-in tools and MCP-backed tools. Each declares a RiskClass.
 
-pub mod canvas;
+pub mod account;
 pub mod files;
-pub mod gcal;
-pub mod grant;
+pub mod http;
 pub mod knowledge;
 pub mod mcp;
-#[allow(
-    dead_code,
-    reason = "called by the per-user session routes of roadmap phase 8"
-)]
-pub mod oauth;
-pub mod outlook;
 pub mod papers;
 pub mod sandbox;
 pub mod transit;

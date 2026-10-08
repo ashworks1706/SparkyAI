@@ -12,14 +12,17 @@ from playwright.sync_api import BrowserContext, Page
 from playwright.sync_api import Error as PlaywrightError
 
 from scraper.core.settings import Auth, settings
-from scraper.core.types import AuthError, Fetched, FetchError
+from scraper.core.types import AuthError, BadCredentials, Credentials, Fetched, FetchError, Loaded
 from scraper.ingest.drivers import asu_sso
-from scraper.ingest.drivers.page import Loaded, browser_slot, load, skip_heavy, to_fetched
+from scraper.ingest.drivers.page import browser_slot, load, skip_heavy, to_fetched
 
 log = structlog.get_logger()
 
+#: Ends every error that only an operator signing in again can clear.
+_RUN_LOGIN = "an operator must run `just scraper login` to sign in"
+
 #: Asks the operator for one sign-in attempt. None skips signing in.
-Ask = Callable[[], asu_sso.Credentials | None]
+Ask = Callable[[], Credentials | None]
 #: Relays progress to the operator.
 Notify = Callable[[str], None]
 
@@ -95,7 +98,7 @@ def _sign_in(page: Page, cfg: Auth, ask: Ask, notify: Notify) -> bool:
             return False
         try:
             asu_sso.sign_in(page, creds, _split(cfg.sso_hosts), cfg.duo_timeout_secs, notify)
-        except asu_sso.BadCredentials as e:
+        except BadCredentials as e:
             notify(f"Sign-in refused ({e}). Attempt {attempt} of {cfg.login_attempts}.")
             continue
         return True
@@ -113,18 +116,14 @@ def _enter_service(page: Page, cfg: Auth) -> None:
     link.click()
     asu_sso.settle(page)
     if asu_sso.on_cas_form(page):
-        raise AuthError(
-            "the ASU session has expired; an operator must run `just scraper login` to sign in"
-        )
+        raise AuthError(f"the ASU session has expired; {_RUN_LOGIN}")
     try:
         page.wait_for_url(
             lambda u: not asu_sso.on_host(u, _split(cfg.sso_hosts)) and not is_login_url(u),
             timeout=_ms(cfg.nav_timeout_secs),
         )
     except PlaywrightError as e:
-        raise AuthError(
-            "the ASU session has expired; an operator must run `just scraper login` to sign in"
-        ) from e
+        raise AuthError(f"the ASU session has expired; {_RUN_LOGIN}") from e
 
 
 def fetch_authenticated(url: str) -> Fetched:
@@ -132,9 +131,7 @@ def fetch_authenticated(url: str) -> Fetched:
     cfg = settings().auth
     path = state_path()
     if not path.exists():
-        raise AuthError(
-            f"no admin session at {path}; an operator must run `just scraper login` to sign in"
-        )
+        raise AuthError(f"no admin session at {path}; {_RUN_LOGIN}")
     for attempt in range(1, cfg.fetch_attempts + 1):
         try:
             return to_fetched(url, _load_signed_in(url, path, cfg))
@@ -172,9 +169,7 @@ def _resume(context: BrowserContext, url: str, cfg: Auth) -> Loaded:
         page.close()
     loaded = load(context, url, cfg.nav_timeout_secs)
     if is_login_url(loaded.url):
-        raise AuthError(
-            "the admin session has expired; an operator must run `just scraper login` to sign in"
-        )
+        raise AuthError(f"the admin session has expired; {_RUN_LOGIN}")
     _save(context)
     log.info("admin session refreshed through single sign-on")
     return loaded

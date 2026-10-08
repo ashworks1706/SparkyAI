@@ -11,10 +11,9 @@ import typer
 from scraper import jobs
 from scraper.core import telemetry
 from scraper.core.settings import settings
-from scraper.core.types import AuthError, FetchError
+from scraper.core.types import AuthError, Credentials, FetchError
 from scraper.ingest import pipeline
 from scraper.ingest.drivers import admin
-from scraper.ingest.drivers.asu_sso import Credentials
 from scraper.ingest.pace import HostPacer
 from scraper.sources import SOURCES
 from scraper.store import postgres

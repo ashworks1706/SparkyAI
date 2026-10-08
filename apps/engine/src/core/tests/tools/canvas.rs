@@ -19,8 +19,8 @@ use crate::core::types::tools::canvas::{
     Announcement, Assignment, AssignmentGrade, CalendarEvent, CanvasError, Course, CourseGrade,
 };
 use crate::core::types::tools::oauth::{Consent, OAuthTokens};
-use crate::runtime::tools::canvas::{CanvasTool, Query};
-use crate::runtime::tools::grant::Credentials;
+use crate::runtime::tools::account::canvas::{CanvasTool, Query};
+use crate::runtime::tools::account::grant::Credentials;
 
 /// A Canvas double that answers with canned rows, or a set error status.
 #[derive(Default)]

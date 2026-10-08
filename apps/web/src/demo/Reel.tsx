@@ -1,6 +1,5 @@
-import type { Scene } from "./setup/kit";
 import { Keys, Pointer, Stage } from "./Stage";
-import { at, pressAt, progress, type Shot } from "./timeline";
+import { at, pressAt, progress, type Scene, type Shot } from "./timeline";
 
 /** Where every window sits on the stage. */
 const FRAME = { x: 80, y: 70, w: 1440, h: 860 };

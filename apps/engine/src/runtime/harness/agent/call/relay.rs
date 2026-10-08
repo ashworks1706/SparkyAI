@@ -6,9 +6,9 @@ use super::draft::{Draft, Release};
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::model::{ModelError, ModelRequest, ModelResponse};
 use crate::core::types::safety::guardrail::{Stage, Verdict};
+use crate::core::types::safety::redact::truncate;
 use crate::core::types::trace::TraceEvent;
 use crate::runtime::harness::agent::Agent;
-use crate::runtime::harness::safety::redact::truncate;
 
 impl Agent {
     /// Runs one completion. When streaming, output shows live; a draft not kept withdraws.

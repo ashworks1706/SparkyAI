@@ -7,8 +7,10 @@ use axum::routing::{delete, get, post};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
+pub mod auth;
 pub mod chat;
 pub mod conversation;
+pub mod failure;
 pub mod health;
 pub mod oauth;
 pub mod openai;

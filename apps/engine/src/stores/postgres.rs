@@ -11,9 +11,6 @@ pub use crate::stores::confirmation::PgConfirmations;
 pub use crate::stores::conversation::PgConversations;
 pub use crate::stores::knowledge::query::PgSourceQueries;
 pub use crate::stores::knowledge::retrieval::{PgRetriever, RetrievalTuning};
-/// Fusion helpers the core tests exercise directly.
-#[cfg(test)]
-pub(crate) use crate::stores::knowledge::retrieval::{collapse, rrf};
 pub use crate::stores::memory::PgMemory;
 
 /// Opens the pool. Fails fast if the database is unreachable.

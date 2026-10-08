@@ -13,8 +13,8 @@ use crate::core::traits::tools::Tool;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::knowledge::evidence::Citation;
+use crate::core::types::safety::redact::redact_text;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
-use crate::runtime::harness::safety::redact::redact_text;
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))

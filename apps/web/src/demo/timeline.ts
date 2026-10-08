@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /** Stage size the videos are recorded at. */
 export const STAGE = { w: 1600, h: 1000 };
 
@@ -28,3 +30,24 @@ export const typed = (text: string, t: number, start: number, end: number) =>
 /** How far a press that started at one of clicks has played at time t, 0 when none is playing. */
 export const pressAt = (clicks: number[], t: number) =>
   clicks.map((c) => (t >= c && t < c + 0.5 ? (t - c) / 0.5 : 0)).find((p) => p > 0) ?? 0;
+
+/** A keystroke badge: the keys, and when they show in scene time. */
+type Keystroke = { keys: string[]; t: number };
+
+/** One scene of a demo video. Every time in it is seconds from the scene's start. */
+export type Scene = {
+  /** The chapter title shown while the scene plays. */
+  title: string;
+  /** How long the scene runs. */
+  length: number;
+  /** Camera stops. */
+  shots: Shot[];
+  /** Pointer stops. */
+  pointer: Shot[];
+  /** Pointer presses. */
+  clicks: number[];
+  /** Keystroke badges. */
+  keys: Keystroke[];
+  /** The window the scene shows at scene time t. */
+  view: (t: number) => ReactNode;
+};

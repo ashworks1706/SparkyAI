@@ -154,7 +154,7 @@ const backSide = (x: number, angle: number, width: number): 1 | -1 => {
 };
 
 /** Fins along the back and legs along the belly, spaced by length. */
-export const placeMarks = (track: Track, offset: number, width: number) => {
+const placeMarks = (track: Track, offset: number, width: number) => {
   const { total } = track;
   const fins: Mark[] = [];
   const legs: Mark[] = [];

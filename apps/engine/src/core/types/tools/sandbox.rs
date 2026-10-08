@@ -1,6 +1,10 @@
 //! SandboxRequest, SandboxOutput, SandboxError, and the names the workspace accepts.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
+
+use crate::core::config::SandboxSettings;
 
 /// A command to run in an isolated environment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,4 +134,92 @@ pub fn workspace_path(raw: &str) -> Result<String, SandboxError> {
         ));
     }
     Ok(name.to_owned())
+}
+
+/// Port the egress proxy listens on.
+pub const PROXY_PORT: u16 = 3128;
+
+/// The way out of the sandbox when commands may reach the public internet.
+#[derive(Debug, Clone)]
+pub struct Egress {
+    /// Internal network the containers join. It has no route out of its own.
+    pub network: String,
+    /// Image of the proxy that joins the network and the outside.
+    pub proxy_image: String,
+    /// Container name of the proxy, its host name on the network.
+    pub proxy_name: String,
+}
+
+impl Egress {
+    /// The proxy address the containers are handed.
+    pub(crate) fn proxy_url(&self) -> String {
+        format!("http://{}:{PROXY_PORT}", self.proxy_name)
+    }
+}
+
+/// How the sandbox is started and what it may consume.
+#[derive(Debug, Clone)]
+pub struct Limits {
+    /// Container runtime binary.
+    pub runtime: String,
+    /// Image the command runs in.
+    pub image: String,
+    /// Memory ceiling, in the form the runtime accepts.
+    pub memory: String,
+    /// CPU ceiling, in the form the runtime accepts.
+    pub cpus: String,
+    /// Process ceiling.
+    pub pids: u32,
+    /// Wall-clock budget.
+    pub timeout: Duration,
+    /// Longest stdout or stderr handed back.
+    pub max_output_chars: usize,
+    /// How long a session container stays up with nothing running in it.
+    pub session_idle_secs: u64,
+    /// Sessions one caller may hold at once.
+    pub max_sessions: usize,
+    /// Session containers across every caller.
+    pub max_sessions_total: usize,
+    /// Commands running at once across every caller.
+    pub max_running: usize,
+    /// Label value naming this engine's containers apart from another engine's.
+    pub instance: String,
+    /// Size of the writable workspace, in mebibytes.
+    pub workspace_mb: u32,
+    /// Commands kept for the operator view.
+    pub recent_commands: usize,
+    /// The way out to the public internet. None runs with no network.
+    pub egress: Option<Egress>,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self::from(&SandboxSettings::default())
+    }
+}
+
+impl From<&SandboxSettings> for Limits {
+    fn from(cfg: &SandboxSettings) -> Self {
+        Self {
+            runtime: cfg.runtime.clone(),
+            image: cfg.image.clone(),
+            memory: cfg.memory.clone(),
+            cpus: cfg.cpus.clone(),
+            pids: cfg.pids,
+            timeout: Duration::from_secs(cfg.timeout_secs),
+            max_output_chars: cfg.max_output_chars,
+            session_idle_secs: cfg.session_idle_secs,
+            max_sessions: cfg.max_sessions,
+            max_sessions_total: cfg.max_sessions_total,
+            max_running: cfg.max_running,
+            instance: cfg.instance.clone(),
+            workspace_mb: cfg.workspace_mb,
+            recent_commands: cfg.recent_commands,
+            egress: cfg.egress.then(|| Egress {
+                network: cfg.egress_network.clone(),
+                proxy_image: cfg.egress_proxy_image.clone(),
+                proxy_name: cfg.egress_proxy_name.clone(),
+            }),
+        }
+    }
 }

@@ -12,6 +12,7 @@ use crate::core::config::Wikipedia as WikipediaConfig;
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::runtime::tools::http;
 use crate::runtime::tools::papers::{query_arg, query_schema};
 use crate::runtime::tools::structured;
 
@@ -88,17 +89,18 @@ impl Tool for WikiTool {
             )
             .send()
             .await
-            .map_err(|e| ToolError::Failed(format!("wikipedia unreachable: {}", kind(&e))))?;
+            .map_err(|e| {
+                ToolError::Failed(format!("wikipedia unreachable: {}", http::failure(&e)))
+            })?;
         if !response.status().is_success() {
             return Err(ToolError::Failed(format!(
                 "wikipedia returned {}",
                 response.status().as_u16()
             )));
         }
-        let body = response
-            .text()
-            .await
-            .map_err(|e| ToolError::Failed(format!("wikipedia unreachable: {}", kind(&e))))?;
+        let body = response.text().await.map_err(|e| {
+            ToolError::Failed(format!("wikipedia unreachable: {}", http::failure(&e)))
+        })?;
         from_json(&query, &body, self.max_chars).map_err(ToolError::Failed)
     }
 }
@@ -108,17 +110,6 @@ pub(crate) fn from_json(query: &str, body: &str, max_chars: usize) -> Result<Too
     let found: WikiResponse =
         serde_json::from_str(body).map_err(|e| format!("wikipedia sent an odd reply: {e}"))?;
     Ok(render(query, found, max_chars))
-}
-
-/// Names a reqwest failure without repeating the URL.
-fn kind(error: &reqwest::Error) -> String {
-    if error.is_timeout() {
-        "timed out".to_owned()
-    } else if error.is_connect() {
-        "could not connect".to_owned()
-    } else {
-        "request failed".to_owned()
-    }
 }
 
 /// The reply for a lookup: the top page, or a note that none matched.
@@ -151,10 +142,7 @@ fn render(query: &str, found: WikiResponse, max_chars: usize) -> ToolOutput {
 
 /// The Wikipedia lookup tool, when it is enabled.
 pub fn tools(cfg: &WikipediaConfig) -> Result<Vec<Arc<dyn Tool>>, String> {
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(cfg.timeout_secs))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let http = http::client(Duration::from_secs(cfg.timeout_secs)).map_err(|e| e.to_string())?;
     let tool: Arc<dyn Tool> = Arc::new(WikiTool {
         http,
         base_url: cfg.base_url.clone(),

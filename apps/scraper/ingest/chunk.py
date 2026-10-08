@@ -7,7 +7,8 @@ def chunk_text(text: str, *, max_chars: int = 1200, overlap_chars: int = 200) ->
     """Packs paragraphs into chunks up to max_chars, split at sentence or clause breaks."""
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
-    overlap_chars = max(0, min(overlap_chars, max_chars // 2))
+    if not 0 <= overlap_chars <= max_chars // 2:
+        raise ValueError("overlap_chars must be between 0 and half of max_chars")
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
     pieces: list[str] = []
     for p in paragraphs:

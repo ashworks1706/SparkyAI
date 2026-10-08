@@ -4,13 +4,13 @@
  */
 
 /** Header while a turn runs and no answer is being written. */
-export const THINKING = "**Sparky is working on it…**";
+const THINKING = "**Sparky is working on it…**";
 
 /** Header once the answer is being written. */
-export const ANSWERING = "**Sparky is answering…**";
+const ANSWERING = "**Sparky is answering…**";
 
 /** Frames the header spinner cycles through, one per edit. */
-export const SPINNER = ["◐", "◓", "◑", "◒"];
+const SPINNER = ["◐", "◓", "◑", "◒"];
 
 /** Characters of arguments and result on a progress line, progress_detail_chars in sparky.toml. */
 const DETAIL = 160;
@@ -20,6 +20,9 @@ const THOUGHT = 600;
 
 /** Arguments of one tool call, in the key order the engine prints them. */
 export type Args = Record<string, string>;
+
+/** One tool call of a turn: the tool, its arguments, and what came back. */
+export type ToolCall = { tool: string; args: Args; output: string };
 
 /** Text as one line, with runs of whitespace collapsed. */
 const oneLine = (text: string) => text.split(/\s+/).filter(Boolean).join(" ");

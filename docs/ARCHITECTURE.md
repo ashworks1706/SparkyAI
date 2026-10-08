@@ -9,7 +9,7 @@ This document describes the current shape of the system and its rules. Order of 
 | Layer | Choice | Where |
 |---|---|---|
 | Engine, Discord bot, console | tokio, axum, serenity, ratatui, serde, thiserror, figment | `apps/engine`, `apps/discord`, `apps/cli` |
-| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client | `apps/engine/src/runtime/model/rig_openai.rs` |
+| Model and embed clients | Rig (`rig-core`) OpenAI-compatible client | `apps/engine/src/runtime/model/rig_openai/` |
 | MCP | `rmcp` | `apps/engine/src/runtime/tools/mcp.rs` |
 | Scraper | psycopg, httpx, BeautifulSoup, boto3, typer | `apps/scraper` |
 | Page rendering | Firecrawl, self-hosted | `deploy/compose.yml` profile `crawl` |
@@ -45,32 +45,37 @@ This document describes the current shape of the system and its rules. Order of 
 ```
 apps/
   engine/         Rust bin. The agent, its HTTP surface, and the store adapters.
-    src/core/       config (services, http, harness by domain), telemetry, types, traits, tests
-    src/runtime/    harness (loop, prompt, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (search, mcp, sandbox)
-    src/stores/     postgres adapters: conversation, confirmation, knowledge (retrieval, query jobs), memory (memories, profile graph)
-    src/routes/     chat (JSON and SSE), confirm, conversation, profile, openai (/v1), health, rate limit
-    src/wiring.rs   builds every dependency from config and serves
+    src/core/       config (services, integrations, http, harness by domain), telemetry, types, traits, tests
+    src/runtime/    harness (loop, prompt, uploads, knowledge, memory, safety, compaction, trace), model (Rig client, slot limit, server props), tools (knowledge/search with sources/, account for per-user Canvas, Outlook, Gcal and OAuth, papers, wiki, transit, files, mcp, sandbox, shared http)
+    src/stores/     postgres adapters: conversation, confirmation, oauth grants, knowledge (retrieval, window, query jobs, redis cache), memory (memories, profile graph)
+    src/routes/     chat (JSON and SSE), confirm, conversation, profile, openai (/v1), oauth, sandbox, health, rate limit, auth, failure
+    src/wiring/     builds every dependency from config and serves: tools, agent, http, boot checks, system prompt
   discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
     src/core/       config, telemetry, types, tests
-    src/bot/        client, addressed messages, memory commands, approvals, the streamed turn
+    src/bot/        client, addressed messages, turn destinations, memory and login commands, approvals, replies, the streamed turn
     src/engine/     HTTP client of the engine and SSE frame parsing
     src/render/     the turn card, reply text, buttons and their custom ids
-    src/access/     roles, permissions, and where a turn is answered
+    src/access/     roles, permissions, where a turn is answered, and what a message carries
     src/analytics/  product events, one exported span each
   cli/            Rust bin sparky. Developer console: runs just recipes and compose services and tails them.
     src/core/       config, types, tests
     src/app/        console state, key map, control, rendering
-    src/units/      unit catalog, process runner, log buffers, health probes
+    src/units/      unit catalog, process runner, output parsing, log buffers, health probes, engine sandbox
   scraper/        Python. Scheduled ingestion and the worker for live query jobs.
     core/           settings, types, telemetry, tests
     ingest/         fetch, extract, chunk, embed, tree, pipeline, pace, drivers
-    sources/        scheduled sources: one module per source with an extractor, pages.py for static pages
-    query/          live query registry, parameter checks, runner, indexing of live results
+    sources/        scheduled sources: one module per source with an extractor, pages.py for static pages, SOURCES in __init__.py
+    query/          registry.py (QUERY_SOURCES), params.py (parameter checks), run.py (runner), index.py (indexing of live results)
     query/sources/  live query sources, one module each
     jobs.py         the job queue: handlers, lanes, scheduling
-    store/          postgres and object storage, the only place a connection opens
+    store/          postgres/ (pool, migrate, index, jobs) and object storage, the only place a connection opens
     migrations/     the schema
   evals/          Python. Evals with a baseline gate.
+    core/           settings, types, tests
+    cli.py          eval run, baseline, compare
+    runner.py       loads cases and runs them against the engine /chat
+    suites/         one scorer per suite, SUITES in __init__.py
+    cases/          golden cases, one JSON object per line
   web/            Vite and React frontend and admin UI
 deploy/           compose (dev and prod), Dockerfiles, inference, monitoring, search, runpod
 docs/             ROADMAP.md, this file
@@ -131,10 +136,10 @@ The console starts and stops the other units and tails their output. It does not
 ```mermaid
 flowchart TD
     ROUTES["routes and wiring<br/>compose everything, own main"]
-    HARNESS["runtime::harness<br/>agent: run, step, inputs, execute, conclude, task<br/>agent/call: thinking, relay, draft, thought, retry, spans<br/>agent/prompt: assemble, capability<br/>memory: detect, profile<br/>safety: guardrail, policy, redact<br/>compact, tools, trace"]
-    MODEL["runtime::model<br/>rig_openai, limit, props"]
-    TOOLS["runtime::tools<br/>knowledge/search, one file per source<br/>mcp, sandbox"]
-    STORES["stores<br/>postgres, conversation, confirmation<br/>knowledge: retrieval, query<br/>memory: memories, profile"]
+    HARNESS["runtime::harness<br/>agent: run, step, inputs, execute, conclude, task, uploads<br/>agent/call: thinking, relay, draft, thought, retry, spans<br/>agent/prompt: assemble, capability<br/>knowledge: admit, cache<br/>memory: detect, profile<br/>safety: guardrail, policy<br/>compact, tools, trace"]
+    MODEL["runtime::model<br/>rig_openai: chat, embed, convert<br/>limit, props"]
+    TOOLS["runtime::tools<br/>knowledge/search: live, stored, sources/ one file per source<br/>account: canvas, outlook, gcal, oauth, grant<br/>papers, wiki, transit, files, mcp, http<br/>sandbox: container, session, egress, output"]
+    STORES["stores<br/>postgres, conversation, confirmation, oauth<br/>knowledge: retrieval, window, query, cache<br/>memory: memories, profile"]
     CORE["core<br/>config, telemetry, types, traits, tests"]
 
     ROUTES --> HARNESS
@@ -476,17 +481,17 @@ The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` an
 
 ## Canvas
 
-`runtime/tools/canvas` offers read-only Canvas tools, off until `[canvas] enabled` is set: `canvas_courses`, `canvas_assignments`, and `canvas_grades`. Each is `ReadAuthenticated` and refuses outside a direct message, so a user's Canvas data is only ever read in their own channel. The Canvas REST client sits behind the `Canvas` trait in `core/traits/tools/canvas.rs`. Authenticated Canvas content answers the caller and is never indexed, memorized, or traced as evidence.
+`runtime/tools/account/canvas` offers read-only Canvas tools, off until `[canvas] enabled` is set: `canvas_courses`, `canvas_assignments`, and `canvas_grades`. Each is `ReadAuthenticated` and refuses outside a direct message, so a user's Canvas data is only ever read in their own channel. The Canvas REST client sits behind the `Canvas` trait in `core/traits/tools/canvas.rs`. Authenticated Canvas content answers the caller and is never indexed, memorized, or traced as evidence.
 
 `Credentials` resolves the token for a caller: the caller's own per-user grant first, then the shared `canvas.access_token` fallback (which lives in `.env`, for a single-user or test setup). An expired grant is refreshed with the Canvas client and the new tokens are saved. Grants are keyed by the caller and a fixed user scope, not by the guild, since a Canvas account belongs to the person; they are held in `oauth_grants` by `stores::oauth::PgOAuth` behind the `OAuthStore` trait.
 
 ## Per-user OAuth and integrations
 
-Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::oauth::WebOAuthClient` serves Canvas, Microsoft, and Google (Google adds `access_type=offline` and `prompt=consent` so a refresh token is issued); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::grant` resolves a caller's token for a provider and refreshes an expired grant.
+Per-user login is a standard OAuth 2.0 authorization-code flow, generalized over providers. `runtime::tools::account::oauth::WebOAuthClient` serves Canvas, Microsoft, and Google (Google adds `access_type=offline` and `prompt=consent` so a refresh token is issued); each enabled provider is built into a map the OAuth routes read. `/login <service>` in Discord calls `POST /oauth/{provider}/authorize`, which mints a single-use state in `oauth_states` and returns the consent URL the bot shows privately. The user signs in through the provider's own SSO; SparkyAI never sees a password. The provider redirects to `GET /oauth/{provider}/callback` (no service token; the state is the proof), which exchanges the code and saves the grant. `/logout <service>` calls `POST /oauth/{provider}/logout`. `Credentials` in `runtime::tools::account::grant` resolves a caller's token for a provider and refreshes an expired grant.
 
-`runtime/tools/outlook` offers read-only Outlook tools over Microsoft Graph, off until `[outlook] enabled` with an `oauth.microsoft` grant: `outlook_calendar` and `outlook_mail`, both `ReadAuthenticated` and direct-message only, keyed to the `microsoft` provider. Turning it on needs an Azure app registration (`[oauth.microsoft]`), and reading ASU accounts needs ASU admin consent.
+`runtime/tools/account/outlook` offers read-only Outlook tools over Microsoft Graph, off until `[outlook] enabled` with an `oauth.microsoft` grant: `outlook_calendar` and `outlook_mail`, both `ReadAuthenticated` and direct-message only, keyed to the `microsoft` provider. Turning it on needs an Azure app registration (`[oauth.microsoft]`), and reading ASU accounts needs ASU admin consent.
 
-`runtime/tools/gcal` offers a read-only `google_calendar` tool over the Google Calendar API, off until `[gcal] enabled` with an `oauth.google` grant: it lists the caller's upcoming events, is `ReadAuthenticated` and direct-message only, and is keyed to the `google` provider. The Calendar REST client sits behind the `GoogleCalendar` trait in `core/traits/tools/gcal.rs`. Turning it on needs a Google Cloud OAuth client (`[oauth.google]`) requesting `calendar.events.readonly`.
+`runtime/tools/account/gcal` offers a read-only `google_calendar` tool over the Google Calendar API, off until `[gcal] enabled` with an `oauth.google` grant: it lists the caller's upcoming events, is `ReadAuthenticated` and direct-message only, and is keyed to the `google` provider. The Calendar REST client sits behind the `GoogleCalendar` trait in `core/traits/tools/gcal.rs`. Turning it on needs a Google Cloud OAuth client (`[oauth.google]`) requesting `calendar.events.readonly`.
 
 Three public, no-auth tools sit beside the ASU sources: `search_papers` (Semantic Scholar), `wikipedia_lookup` (MediaWiki), and `valley_metro` (a Valley Metro GTFS-realtime JSON feed, off until `[transit] feed_url` is set). They are `ReadPublic` and take a query; their parse functions are tested on canned bodies. `valley_metro` reports active vehicles by route; when `[transit] routes_url` points at the static GTFS `routes.txt`, route ids resolve to route names, fetched once and cached, otherwise the ids stand.
 
@@ -586,7 +591,7 @@ sequenceDiagram
     Note over T,PG: unclaimed after query.claim_secs, the job is cancelled and the tool reports that the source did not answer in time
 ```
 
-A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/<source>.rs`, declares the hint, the citation label, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into parameters and checked there, so a bad call is corrected without queueing a job. The two tools live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns the parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
+A source has two halves, one file each. The engine side, `runtime/tools/knowledge/search/sources/<source>.rs`, declares the hint, the citation label, the chunks category, the parameters, what each accepts (text, one of fixed choices, any of fixed choices, a date, a flag), and any extra check. The query is turned into parameters and checked there, so a bad call is corrected without queueing a job. The two tools live in `live.rs` and `stored.rs`. The scraper side, `apps/scraper/query/sources/<source>.py`, turns the parameters into a fetch: one URL and an extractor, or an `answer` function that reads several endpoints (the shuttle tracker, campus map layers, news and video feeds, SearXNG).
 
 `query_sources` is the registry the scraper publishes when `scraper serve` starts: each key with its parameters and choices. At boot the engine logs a warning when a catalog source and the published one disagree on a parameter name, whether it is required, whether it takes a list, or a choice. A source the scraper has not published is still offered. The scraper checks every query's parameters again before running it.
 

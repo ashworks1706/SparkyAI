@@ -6,6 +6,7 @@ from evals.core.types import EvalCase, Score, TurnResult
 
 
 def score(case: EvalCase, turns: list[TurnResult]) -> Score | None:
+    """Passes when the answer is answered, cites the expected source, and mentions every term."""
     last = turns[-1]
     problems: list[str] = []
     if last.status != "answered":

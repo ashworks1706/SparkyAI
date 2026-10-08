@@ -9,13 +9,15 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, response};
 use secrecy::SecretString;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::core::traits::oauth::OAuthStore;
+use crate::core::types::http::oauth::{
+    AuthorizeRequest, AuthorizeResponse, CallbackQuery, DisconnectResponse,
+};
 use crate::core::types::tools::oauth::USER_SCOPE;
-use crate::routes::chat::authorized;
-use crate::runtime::tools::oauth::WebOAuthClient;
+use crate::routes::auth::authorized;
+use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// What the OAuth routes read.
 #[derive(Clone)]
@@ -28,38 +30,6 @@ pub struct OAuthState {
     pub service_token: SecretString,
     /// How long a pending login stays valid.
     pub state_ttl: Duration,
-}
-
-/// The caller a login belongs to, sent by the bot.
-#[derive(Deserialize)]
-pub struct AuthorizeRequest {
-    /// The caller who started the login.
-    pub user: String,
-}
-
-/// The consent URL the caller opens.
-#[derive(Serialize)]
-pub struct AuthorizeResponse {
-    /// The provider consent URL, carrying the login state.
-    pub url: String,
-}
-
-/// Whether a disconnect removed a stored grant.
-#[derive(Serialize)]
-pub struct DisconnectResponse {
-    /// True when a grant was there and is now gone.
-    pub removed: bool,
-}
-
-/// The query Canvas returns to the callback.
-#[derive(Deserialize)]
-pub struct CallbackQuery {
-    /// The authorization code, present on success.
-    pub code: Option<String>,
-    /// The login state minted by authorize.
-    pub state: Option<String>,
-    /// The error code, present when the user refused or the request was bad.
-    pub error: Option<String>,
 }
 
 /// Mints a consent URL for a caller. Requires the service token.

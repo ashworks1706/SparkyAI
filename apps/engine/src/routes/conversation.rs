@@ -7,7 +7,9 @@ use axum::response::{IntoResponse, Response};
 
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::{ResetRequest, ResetResponse};
-use crate::routes::chat::{ChatState, Failure, authorized, too_many};
+use crate::routes::auth::{authorized, too_many};
+use crate::routes::chat::ChatState;
+use crate::routes::failure::Failure;
 
 /// Ends every open conversation of the caller in the channel, any visibility. Next turn starts new.
 pub async fn reset(

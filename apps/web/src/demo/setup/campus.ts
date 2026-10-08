@@ -1,4 +1,4 @@
-/** The campus in the setup video. example.edu is reserved, so it names no real university. */
+/** The fictional campus the setup video configures, on the reserved example.edu domain. */
 export const CAMPUS = {
   name: "Example University",
   registrar: "registrar.example.edu",

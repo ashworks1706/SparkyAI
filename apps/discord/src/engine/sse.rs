@@ -1,4 +1,37 @@
-//! Server-sent event framing for the engine /chat/stream endpoint.
+//! Server-sent event framing and decoding for the engine /chat/stream endpoint.
+
+use crate::core::types::{
+    ChatResponse, ERROR_BODY_CHARS, EngineError, ErrorFrame, Progress, Update,
+};
+
+/// The update one named frame carries, or None for a frame the bot does not act on.
+pub fn decode(name: &str, data: &str) -> Option<Update> {
+    match name {
+        "progress" => match serde_json::from_str::<Progress>(data) {
+            Ok(p) => Some(Update::Progress(p)),
+            Err(e) => {
+                tracing::warn!(error = %e, "unreadable progress frame");
+                None
+            }
+        },
+        "answer" => Some(match serde_json::from_str::<ChatResponse>(data) {
+            Ok(answer) => Update::Answer(Box::new(answer)),
+            Err(e) => Update::Failed(EngineError::Transport(format!("bad body: {e}"))),
+        }),
+        "error" => {
+            // The frame carries the status the JSON route would have used.
+            let (status, body) = match serde_json::from_str::<ErrorFrame>(data) {
+                Ok(f) => (f.status.unwrap_or(502), f.error),
+                Err(e) => {
+                    tracing::warn!(error = %e, "unreadable error frame");
+                    (502, data.chars().take(ERROR_BODY_CHARS).collect())
+                }
+            };
+            Some(Update::Failed(EngineError::Status { status, body }))
+        }
+        _ => None,
+    }
+}
 
 /// Takes the bytes of every complete frame out of pending as text, leaving a partial frame behind.
 pub fn take_complete(pending: &mut Vec<u8>) -> String {

@@ -3,7 +3,7 @@
 use tracing::Span;
 
 use crate::core::types::model::ModelResponse;
-use crate::runtime::harness::safety::redact::{json, truncate};
+use crate::core::types::safety::redact::{json, truncate};
 
 /// Records the reply, the model that answered and the token counts on a model span.
 pub(in crate::runtime::harness::agent) fn record_reply(

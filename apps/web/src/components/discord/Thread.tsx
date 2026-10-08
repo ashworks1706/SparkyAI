@@ -1,7 +1,7 @@
 import { finishedCard, threadName } from "./format";
 import Message from "./Message";
 import { SPARKY } from "./people";
-import { button, stepsOf, type Example } from "./scenes";
+import { button, stepsOf, type Example } from "./examples";
 import { ThreadIcon } from "./Window";
 
 /** A thread as Discord shows it once Sparky has answered: the question, then the reply. */

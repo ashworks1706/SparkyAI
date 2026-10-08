@@ -186,7 +186,7 @@ def _build_tree(
     cfg = settings()
     if not cfg.scraper.tree_enabled:
         return
-    nodes = tree.build_tree(texts, vectors, params=tree.TreeParams.from_settings(cfg.scraper))
+    nodes = tree.build_tree(texts, vectors, params=tree.tree_params(cfg.scraper))
     if not nodes:
         return
     postgres.insert_tree(

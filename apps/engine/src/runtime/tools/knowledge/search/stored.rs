@@ -13,9 +13,11 @@ use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::knowledge::evidence::{Evidence, age};
 use crate::core::types::knowledge::retrieval::{RetrievalError, RetrievalQuery};
-use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
+use crate::core::types::tools::{
+    RiskClass, SEARCH_KNOWLEDGE, ToolDefinition, ToolError, ToolOutput,
+};
 use crate::runtime::tools::knowledge::search::{
-    KNOWLEDGE, LiveSource, arguments, parameters, source_help, source_keys,
+    LiveSource, arguments, parameters, source_help, source_keys,
 };
 use crate::runtime::tools::structured;
 
@@ -57,7 +59,7 @@ impl StoredSearch {
             .map(|s| (s.key(), s.category()))
             .collect();
         let definition = ToolDefinition {
-            name: KNOWLEDGE.to_owned(),
+            name: SEARCH_KNOWLEDGE.to_owned(),
             description: wording.tool.clone(),
             parameters: parameters(
                 &wording.query,
@@ -127,7 +129,7 @@ impl Tool for StoredSearch {
 
     async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
         let (query, named) =
-            arguments(args, &self.keys, KNOWLEDGE).map_err(ToolError::InvalidArguments)?;
+            arguments(args, &self.keys, SEARCH_KNOWLEDGE).map_err(ToolError::InvalidArguments)?;
         let broad = RetrievalQuery::new(query, self.top_k);
         let category = named
             .as_deref()

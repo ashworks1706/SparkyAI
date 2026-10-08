@@ -19,9 +19,9 @@ use crate::core::tests::support::{
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::model::ModelError;
 use crate::core::types::safety::policy::Decision;
+use crate::core::types::safety::redact::redact;
 use crate::core::types::tools::RiskClass;
 use crate::core::types::trace::{RunStatus, TraceEvent};
-use crate::runtime::harness::safety::redact::redact;
 use crate::runtime::harness::tools::ToolSet;
 
 #[tokio::test]

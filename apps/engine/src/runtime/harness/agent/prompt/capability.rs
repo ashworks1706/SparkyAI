@@ -2,8 +2,8 @@
 
 use std::fmt::Write as _;
 
+use crate::core::types::tools::SANDBOX;
 use crate::core::types::tools::{RiskClass, ToolDefinition};
-use crate::runtime::tools::sandbox::SANDBOX;
 
 /// How a capability is carried out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

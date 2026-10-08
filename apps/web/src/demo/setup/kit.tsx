@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { typed, type Shot } from "../timeline";
+import { Caret } from "../Caret";
+import { typed } from "../timeline";
 import type { Code, Tone } from "./text";
 
 /** A macOS window: traffic lights, a title, and its body. */
@@ -17,11 +18,6 @@ export const MacWindow = ({ title, dark = true, children }: { title: ReactNode; 
     </div>
     <div className="min-h-0 flex-1">{children}</div>
   </div>
-);
-
-/** A blinking block caret. */
-export const Caret = ({ t, className = "h-6 w-2.5 translate-y-1 bg-[#c9d1d9]" }: { t: number; className?: string }) => (
-  <span className={`inline-block ${className} ${Math.floor(t * 2.2) % 2 === 0 ? "" : "opacity-0"}`} />
 );
 
 /** A shell prompt, as zsh shows it in the repository. */
@@ -135,24 +131,3 @@ export const Editor = ({
     </div>
   </MacWindow>
 );
-
-/** A keystroke badge: the keys, and when they show in scene time. */
-export type Keystroke = { keys: string[]; t: number };
-
-/** One scene of the setup video. Every time in it is seconds from the scene's start. */
-export type Scene = {
-  /** The chapter title shown while the scene plays. */
-  title: string;
-  /** How long the scene runs. */
-  length: number;
-  /** Camera stops. */
-  shots: Shot[];
-  /** Pointer stops. */
-  pointer: Shot[];
-  /** Pointer presses. */
-  clicks: number[];
-  /** Keystroke badges. */
-  keys: Keystroke[];
-  /** The window the scene shows at scene time t. */
-  view: (t: number) => ReactNode;
-};
