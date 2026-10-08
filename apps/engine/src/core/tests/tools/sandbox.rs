@@ -7,9 +7,10 @@ use crate::core::config::SandboxSettings;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::sandbox::Sandbox;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::tools::sandbox::Limits;
 use crate::core::types::tools::sandbox::{SandboxError, SandboxOutput, SandboxRequest};
 use crate::core::types::tools::{RiskClass, ToolError};
-use crate::runtime::tools::sandbox::{ContainerSandbox, Limits, SandboxTool, Wording};
+use crate::runtime::tools::sandbox::{ContainerSandbox, SandboxTool, Wording};
 
 fn ctx() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5))
@@ -70,7 +71,7 @@ fn the_workspace_is_writable_but_never_executable_and_is_sized_by_configuration(
 #[test]
 fn a_long_output_keeps_its_head_and_its_tail() {
     use crate::core::types::tools::sandbox::workspace_path;
-    use crate::runtime::tools::sandbox::clip;
+    use crate::runtime::tools::sandbox::output::clip;
 
     // The exit at the end of a long run is kept.
     let long: String = std::iter::repeat_n('x', 100).collect();
@@ -606,7 +607,7 @@ async fn a_call_that_ends_any_way_at_all_leaves_nothing_reported_as_running() {
 
 #[test]
 fn every_container_the_engine_starts_is_labelled_so_it_can_be_found_again() {
-    use crate::runtime::tools::sandbox::LABEL;
+    use crate::runtime::tools::sandbox::container::LABEL;
 
     let sandbox = ContainerSandbox::new(Limits::default());
     for args in [sandbox.seal(), sandbox.args()] {
@@ -682,7 +683,7 @@ fn without_egress_the_container_has_no_network_and_no_proxy() {
 
 #[test]
 fn with_egress_the_container_joins_the_internal_network_and_goes_out_through_the_proxy() {
-    use crate::runtime::tools::sandbox::Egress;
+    use crate::core::types::tools::sandbox::Egress;
 
     let sealed = ContainerSandbox::new(Limits {
         egress: Some(Egress {
@@ -715,7 +716,7 @@ fn with_egress_the_container_joins_the_internal_network_and_goes_out_through_the
 #[tokio::test]
 #[ignore = "needs a container runtime and the sandbox and proxy images"]
 async fn egress_reaches_the_public_web_and_nothing_private() {
-    use crate::runtime::tools::sandbox::Egress;
+    use crate::core::types::tools::sandbox::Egress;
 
     let s = ContainerSandbox::new(Limits {
         timeout: Duration::from_mins(1),

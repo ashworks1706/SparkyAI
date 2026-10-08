@@ -12,6 +12,7 @@ use crate::core::traits::knowledge::retrieval::Retriever;
 use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::trace::TraceSink;
+use crate::core::types::tools::sandbox::Limits as SandboxLimits;
 use crate::runtime::harness::knowledge::admit::AdmittedQueries;
 use crate::runtime::harness::knowledge::cache::{CacheRules, CachedQueries};
 use crate::runtime::harness::tools::ToolSet;
@@ -22,8 +23,7 @@ use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as 
 use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::oauth::WebOAuthClient;
 use crate::runtime::tools::sandbox::{
-    ContainerSandbox, Limits as SandboxLimits, SandboxTool, Wording as SandboxWording,
-    reap_sessions,
+    ContainerSandbox, SandboxTool, Wording as SandboxWording, reap_sessions,
 };
 use crate::runtime::tools::{gcal, outlook, papers, transit, wiki};
 use crate::stores::knowledge::cache::{self as redis_cache, RedisAdmission, RedisQueryCache};

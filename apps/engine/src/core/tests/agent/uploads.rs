@@ -301,8 +301,9 @@ async fn a_link_off_the_allowed_hosts_is_never_fetched() {
 async fn every_document_kind_comes_out_as_text_in_the_real_sandbox() {
     use std::time::Duration;
 
+    use crate::core::types::tools::sandbox::Limits;
     use crate::runtime::harness::agent::uploads::{converted, terms, to_text};
-    use crate::runtime::tools::sandbox::{ContainerSandbox, Limits};
+    use crate::runtime::tools::sandbox::ContainerSandbox;
 
     let s = ContainerSandbox::new(Limits {
         timeout: Duration::from_mins(1),
