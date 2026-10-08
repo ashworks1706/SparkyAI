@@ -52,15 +52,15 @@ apps/
     src/wiring.rs   builds every dependency from config and serves
   discord/        Rust bin. serenity bot and HTTP client of the engine. Never links it.
     src/core/       config, telemetry, types, tests
-    src/bot/        client, addressed messages, memory commands, approvals, the streamed turn
+    src/bot/        client, addressed messages, turn destinations, memory and login commands, approvals, replies, the streamed turn
     src/engine/     HTTP client of the engine and SSE frame parsing
     src/render/     the turn card, reply text, buttons and their custom ids
-    src/access/     roles, permissions, and where a turn is answered
+    src/access/     roles, permissions, where a turn is answered, and what a message carries
     src/analytics/  product events, one exported span each
   cli/            Rust bin sparky. Developer console: runs just recipes and compose services and tails them.
     src/core/       config, types, tests
     src/app/        console state, key map, control, rendering
-    src/units/      unit catalog, process runner, log buffers, health probes
+    src/units/      unit catalog, process runner, output parsing, log buffers, health probes, engine sandbox
   scraper/        Python. Scheduled ingestion and the worker for live query jobs.
     core/           settings, types, telemetry, tests
     ingest/         fetch, extract, chunk, embed, tree, pipeline, pace, drivers
