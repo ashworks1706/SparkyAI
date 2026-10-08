@@ -31,6 +31,40 @@ just prod-logs engine
 
 Create the pod with the image, a volume at `/workspace` (database, object store, model cache, admin session, daily `pg_dump` in `backups/`), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SEARXNG_SECRET`, `SPARKY_APP__ENV=production`, and `HF_TOKEN` (a read token; community hosts share an IP that the Hugging Face Hub rate-limits without one). Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`.
 
+### Current deployment
+
+As of 2026-10-08.
+
+| | |
+|---|---|
+| Pod | `sparky`, id `gdrbqqc1vsw6cv`, community cloud, always on |
+| GPU | 1x NVIDIA GeForce RTX 3070, 7840 MiB VRAM, driver 580.65.06, host CUDA 13.0 |
+| Host | 22 vCPU and 24 GB RAM allocated by RunPod |
+| Disk | 30 GB container disk (wiped on restart), 40 GB persistent volume at `/workspace` |
+| Image | `ghcr.io/ashworks1706/sparkyai-runpod:590f3a1ac7d18a26738c0ecbe3988e9fa113aeb5` |
+| Ports | none exposed; every service binds `127.0.0.1` |
+
+GPU memory, from `nvidia-smi` on the pod:
+
+| Process | Model | Context | VRAM |
+|---|---|---|---|
+| chat | `Qwen/Qwen3-4B-GGUF:Q4_K_M` | 16384, 2 slots of 8192 | 3892 MiB |
+| embed | `Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0` | 4096, 2 slots of 2048 | 1846 MiB |
+| total | | | 5753 of 7840 MiB |
+
+The RTX 3070 was the cheapest community GPU in stock with host CUDA 12.8 or newer that holds both models. The next options were the RTX 3080 and RTX A4000 at $0.17/hr and the RTX 3090 at $0.22/hr. A larger chat model or context needs one of those.
+
+Cost:
+
+| | |
+|---|---|
+| Compute | $0.13/hr: $3.12/day, about $95/month |
+| Storage | 70 GB at RunPod's $0.10/GB-month rate, about $7/month |
+| Credits | about $450 at deploy time, about 4.4 months at this rate |
+| Spend to date | the RunPod console Billing page, or the `list-billing` call of the RunPod MCP server |
+
+Metrics: both `llama-server` processes run with `--metrics` on `127.0.0.1`, but the pod runs no Prometheus, Grafana or Phoenix, so nothing collects them. Read GPU memory with `nvidia-smi` (see below); the console GPU reading showed 0 while 5.7 GB was in use.
+
 ### Operating the pod
 
 The live deploy is one always-on community RTX 3070 pod named `sparky` at $0.13/hr (about $95 a month). It runs whether or not anyone talks to the bot, because the bot holds a Discord gateway connection. Billing stops only when the pod is stopped or terminated.
