@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Caret } from "../Caret";
 import { typed } from "../timeline";
 import type { Code, Tone } from "./text";
 
@@ -17,11 +18,6 @@ export const MacWindow = ({ title, dark = true, children }: { title: ReactNode; 
     </div>
     <div className="min-h-0 flex-1">{children}</div>
   </div>
-);
-
-/** A blinking block caret. */
-export const Caret = ({ t, className = "h-6 w-2.5 translate-y-1 bg-[#c9d1d9]" }: { t: number; className?: string }) => (
-  <span className={`inline-block ${className} ${Math.floor(t * 2.2) % 2 === 0 ? "" : "opacity-0"}`} />
 );
 
 /** A shell prompt, as zsh shows it in the repository. */

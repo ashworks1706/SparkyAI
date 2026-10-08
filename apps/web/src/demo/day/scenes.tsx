@@ -3,6 +3,7 @@ import Message from "@/components/discord/Message";
 import { SPARKY, type Author, type LinkButton } from "@/components/discord/people";
 import { LIVE, button } from "@/components/discord/examples";
 import Window, { Composer, ThreadChip } from "@/components/discord/Window";
+import { Caret } from "../Caret";
 import { progress, typed, type Scene, type Shot } from "../timeline";
 import { approved, cardAt, finished, FINISH, type Turn } from "./turn";
 import { BETWEEN, BOOK, DUE, GRADE, INBOX, WEEK } from "./turns";
@@ -30,7 +31,7 @@ const typing = (placeholder: string, text: string, t: number, from: number, to: 
         {mention && <span className="rounded-[3px] bg-[#5865f2]/30 px-0.5 font-medium text-[#c9cdfb]">@Sparky</span>}
         {mention && " "}
         {typed(text, t, from, to)}
-        <span className={`ml-px inline-block h-5 w-0.5 translate-y-1 bg-[#dbdee1] ${Math.floor(t * 2.2) % 2 === 0 ? "" : "opacity-0"}`} />
+        <Caret t={t} className="ml-px h-5 w-0.5 translate-y-1 bg-[#dbdee1]" />
       </span>
     )}
   </Composer>
