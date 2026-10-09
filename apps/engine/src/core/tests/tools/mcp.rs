@@ -3,7 +3,9 @@
 use serde_json::json;
 
 use crate::core::types::tools::RiskClass;
-use crate::runtime::tools::mcp::{compact_schema, required_only, risk_for};
+use crate::runtime::tools::mcp::{
+    compact_schema, platform_name, platform_risk, required_only, risk_for, take_confirm,
+};
 
 #[test]
 fn reads_and_inspection_run_freely() {
@@ -115,4 +117,49 @@ fn a_pin_the_server_does_not_list_is_reported() {
     let offered = vec!["list_events".to_owned()];
     assert_eq!(unoffered(&risks, &offered), vec!["create_event".to_owned()]);
     assert_eq!(unoffered(&BTreeMap::new(), &offered).len(), 0);
+}
+
+#[test]
+fn platform_tools_get_a_model_safe_name() {
+    assert_eq!(platform_name("org.set_modules"), "platform_org_set_modules");
+    assert_eq!(platform_name("apps.list"), "platform_apps_list");
+}
+
+#[test]
+fn platform_risk_follows_the_annotations() {
+    assert_eq!(
+        platform_risk(Some(true), Some(false)),
+        RiskClass::ReadPublic
+    );
+    assert_eq!(
+        platform_risk(Some(false), Some(true)),
+        RiskClass::Destructive
+    );
+    assert_eq!(
+        platform_risk(Some(false), Some(false)),
+        RiskClass::ExternalWrite
+    );
+    assert_eq!(platform_risk(None, None), RiskClass::ExternalWrite);
+}
+
+#[test]
+fn the_confirm_argument_is_hidden_from_the_model() {
+    let mut schema = json!({
+        "type": "object",
+        "properties": {"key": {"type": "string"}, "confirm": {"type": "boolean"}},
+        "required": ["key", "confirm"]
+    });
+    let Some(map) = schema.as_object_mut() else {
+        unreachable!("schema is an object")
+    };
+    assert!(take_confirm(map));
+    assert_eq!(
+        schema,
+        json!({"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]})
+    );
+    let mut plain = json!({"type": "object", "properties": {}});
+    let Some(map) = plain.as_object_mut() else {
+        unreachable!("schema is an object")
+    };
+    assert!(!take_confirm(map));
 }

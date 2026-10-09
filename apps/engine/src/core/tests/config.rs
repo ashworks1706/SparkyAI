@@ -539,3 +539,22 @@ fn an_enabled_google_oauth_client_needs_its_credentials() {
     );
     assert!(e.contains("https"), "{e}");
 }
+
+#[test]
+fn platform_tools_need_platform_on_and_an_http_url() {
+    let on = "[platform]\nenabled = true\nurl = \"http://127.0.0.1:8000\"\ntoken = \"plat_x\"\n";
+    assert_eq!(ok(on).platform.mcp_endpoint(), None);
+    let with = format!("{on}mcp_url = \" http://127.0.0.1:8001/mcp \"\n");
+    assert_eq!(
+        ok(&with).platform.mcp_endpoint(),
+        Some("http://127.0.0.1:8001/mcp")
+    );
+    let e = err(&format!("{on}mcp_url = \"127.0.0.1:8001\"\n"));
+    assert!(e.contains("platform.mcp_url"), "{e}");
+    assert_eq!(
+        ok("[platform]\nmcp_url = \"http://127.0.0.1:8001/mcp\"\n")
+            .platform
+            .mcp_endpoint(),
+        None
+    );
+}

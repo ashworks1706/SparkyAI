@@ -200,6 +200,10 @@ pub struct Platform {
     pub embedding_model: String,
     /// Longest knowledge search query sent; longer text is cut to this many characters.
     pub max_query_chars: usize,
+    /// Platform MCP endpoint, for example http://127.0.0.1:8001/mcp. Empty registers no platform tools.
+    pub mcp_url: Option<String>,
+    /// Platform tool names to register, such as org.info; empty registers every tool the token allows.
+    pub mcp_tools: Vec<String>,
 }
 
 impl Default for Platform {
@@ -211,7 +215,19 @@ impl Default for Platform {
             timeout_secs: 10,
             embedding_model: String::new(),
             max_query_chars: 1000,
+            mcp_url: None,
+            mcp_tools: Vec::new(),
         }
+    }
+}
+
+impl Platform {
+    /// The MCP endpoint when platform tools are on: platform enabled and mcp_url not empty.
+    pub fn mcp_endpoint(&self) -> Option<&str> {
+        self.mcp_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|u| self.enabled && !u.is_empty())
     }
 }
 
