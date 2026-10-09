@@ -37,9 +37,13 @@ With `SPARKY_PLATFORM__ENABLED=true`, `SPARKY_PLATFORM__URL` and `SPARKY_PLATFOR
 
 `SPARKY_MODELS_API_KEY` makes both model servers listen on every interface and require that key. Expose `8000/http` (chat) and `8001/http` (embed) on the pod to let other apps use them: Platform's `EMBEDDINGS_URL` for indexing, so its vectors match Sparky's queries, and Hermes or another agent for chat. The engine uses the same key.
 
-### Current deployment
+### Models only
 
-As of 2026-10-08.
+With `SPARKY_POD_ROLE=models` the pod runs only the two model servers, and `SPARKY_MODELS_API_KEY` is required. Use it on a GPU pod when the engine and the bot run elsewhere, for example on the Platform pod, which runs them against any OpenAI-compatible API. Point that engine at `https://<pod>-8000.proxy.runpod.net/v1` with the same key, and Platform's embeddings at `https://<pod>-8001.proxy.runpod.net/v1`.
+
+### GPU deployment
+
+This pod was terminated on 2026-10-08. The engine and the bot now run on the Platform pod with a hosted model API ("Agents on the platform pod" in the Platform `docs/operations.md`). This section records the GPU setup for a later GPU pod, with `SPARKY_POD_ROLE=models` or without it.
 
 | | |
 |---|---|
@@ -73,7 +77,7 @@ Metrics: both `llama-server` processes run with `--metrics` on `127.0.0.1`, but 
 
 ### Operating the pod
 
-The live deploy is one always-on community RTX 3070 pod named `sparky` at $0.13/hr (about $95 a month). It runs whether or not anyone talks to the bot, because the bot holds a Discord gateway connection. Billing stops only when the pod is stopped or terminated.
+The GPU deploy was one always-on community RTX 3070 pod named `sparky` at $0.13/hr (about $95 a month). It runs whether or not anyone talks to the bot, because the bot holds a Discord gateway connection. Billing stops only when the pod is stopped or terminated.
 
 | Task | How |
 |---|---|
@@ -98,7 +102,7 @@ Start with the pod logs. Search for `exited:`, `gave up` and `FATAL` to find the
 | Bot is online but never answers | `chat` or `embed` is not running | Find their exit reason below. The engine logs `could not read the chat server context` once at boot while the models load; that alone is harmless. |
 | `chat`/`embed` exit 127, `libllama-server-impl.so: cannot open shared object file` | `/app` is not on the library path | Use an image built after PR #62, or add `LD_LIBRARY_PATH=/app` to the pod env. |
 | `chat`/`embed` log `GET failed (429)` from the Hub | No `HF_TOKEN`; the community host shares a rate-limited IP | Set `HF_TOKEN` to a read token. Downloads land in `/workspace/models` and are reused after that. |
-| `chat`/`embed` log `out of memory` or a CUDA allocation error | The models do not fit in 8 GB | Lower `SPARKY_CHAT_CTX`, pick a smaller GGUF, or move to a larger GPU (see Current deployment). |
+| `chat`/`embed` log `out of memory` or a CUDA allocation error | The models do not fit in 8 GB | Lower `SPARKY_CHAT_CTX`, pick a smaller GGUF, or move to a larger GPU (see GPU deployment). |
 | Answers are very slow; `nvidia-smi` shows no `llama-server` processes | The models run on the CPU | Recreate the pod with a host CUDA of 12.8 or newer. |
 | `engine` exits status 1 at boot | `Config::validate` rejected the configuration | The line before the exit names the field. Fix the pod env or `sparky.toml` and ship a new image. |
 | `scraper` logs `relation ... does not exist` | It started before `migrate` finished | Harmless if it stops after `migrate` logs `exited: migrate (exit status 0; expected)`. Otherwise read the `migrate` lines. |
