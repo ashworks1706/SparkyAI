@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use secrecy::ExposeSecret;
+
 use crate::core::config::Config;
 use crate::core::traits::knowledge::query::SourceQueries;
 use crate::core::traits::knowledge::retrieval::Retriever;
@@ -88,6 +90,26 @@ pub(super) async fn build_tools(
             count = registered,
             "mcp tools registered"
         );
+    }
+    if let (Some(url), Some(token)) = (cfg.platform.mcp_endpoint(), cfg.platform.token.as_ref()) {
+        let remote = mcp::connect_platform(
+            url,
+            token.expose_secret(),
+            &cfg.platform.mcp_tools,
+            &McpLimits::from(&cfg.mcp),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("platform mcp at {url}: {e}"))?;
+        let mut registered = 0;
+        for tool in remote {
+            if disabled(&tool.definition().name) {
+                continue;
+            }
+            mcp_names.push(tool.definition().name);
+            tools = tools.with(tool);
+            registered += 1;
+        }
+        tracing::info!(url = %url, count = registered, "platform mcp tools registered");
     }
     for (integration, enabled, build) in integrations(cfg, &oauth_store, &oauth_providers) {
         if !enabled {

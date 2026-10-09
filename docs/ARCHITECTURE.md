@@ -173,6 +173,8 @@ The engine runs in one of two modes, chosen by `platform.enabled` and known only
 
 In platform mode the engine opens no PostgreSQL or Redis connection; it needs the chat and embedding servers and the platform. The platform takes the organization from the machine token (`Authorization: Bearer plat_...`), so `tenant_id` is not sent, and the member is `user_id`, which the platform requires to be a numeric Discord user id. One engine serves one guild, and its token belongs to the platform organization of that guild. The token needs the scopes `agents:read`, `agents:write`, `knowledge:read`, `accounts:link`, and `accounts:token`.
 
+With `platform.mcp_url` set, the engine also registers the platform's MCP tools with the same token (`runtime/tools/mcp.rs`, `connect_platform`). Each tool is named `platform_<name>` with dots as underscores; `platform.mcp_tools` limits the list, and the token scopes decide which tools the platform offers. The risk comes from the MCP annotations: `readOnlyHint` is `ReadPublic`, `destructiveHint` is `Destructive`, and any other tool is `ExternalWrite`, so `Policy` requires `policy.write_roles` and a confirmation for every write. The platform's `confirm` argument is removed from the schema the model sees; the tool sends `confirm=true` after `Policy` confirmed the call.
+
 The self-hosted adapters sit under `stores/standalone/` behind the cargo feature `standalone`, on by default. `cargo build -p engine --no-default-features` builds a platform-only engine without them or `sqlx` and `redis`; `Config::validate` then refuses `platform.enabled = false`. `just check-rust` lints and tests both builds.
 
 ## Inside scraper

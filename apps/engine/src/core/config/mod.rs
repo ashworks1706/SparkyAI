@@ -367,6 +367,12 @@ fn validate_platform(cfg: &Config) -> Result<(), ConfigError> {
     if platform.timeout_secs == 0 {
         return invalid("platform.timeout_secs must be at least 1".into());
     }
+    if let Some(mcp) = platform.mcp_endpoint()
+        && (url::Url::parse(mcp).is_err()
+            || !(mcp.starts_with("https://") || mcp.starts_with("http://")))
+    {
+        return invalid("platform.mcp_url must be an http or https URL".into());
+    }
     if !(1..=PLATFORM_MAX_QUERY_CHARS).contains(&platform.max_query_chars) {
         return invalid(format!(
             "platform.max_query_chars must be from 1 to {PLATFORM_MAX_QUERY_CHARS}"

@@ -5,10 +5,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rmcp::ServiceExt;
-use rmcp::model::CallToolRequestParams;
+use rmcp::model::{CallToolRequestParams, Tool as RemoteTool};
 use rmcp::service::{Peer, RoleClient};
 use rmcp::transport::StreamableHttpClientTransport;
-use serde_json::Value;
+use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+use serde_json::{Map, Value};
 
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
@@ -101,7 +102,44 @@ pub fn compact_schema(value: Value, max_description: usize) -> Value {
 pub struct McpTool {
     peer: Peer<RoleClient>,
     definition: ToolDefinition,
+    remote: String,
+    confirm_arg: bool,
     max_output_chars: usize,
+}
+
+/// Prefix of the model-facing name of every platform tool.
+pub const PLATFORM_PREFIX: &str = "platform_";
+/// Argument a platform tool that is hard to undo needs before it runs.
+const CONFIRM_ARG: &str = "confirm";
+/// Sentence the platform appends to the description of a tool that takes confirm.
+const CONFIRM_NOTE: &str = " Runs only with confirm=true";
+
+/// Model-facing name of a platform tool: the prefix, then the remote name with dots as underscores.
+pub fn platform_name(remote: &str) -> String {
+    format!("{PLATFORM_PREFIX}{}", remote.replace('.', "_"))
+}
+
+/// Risk of a platform tool from its MCP annotations: read-only reads, destructive deletes, else a write.
+pub fn platform_risk(read_only: Option<bool>, destructive: Option<bool>) -> RiskClass {
+    if read_only == Some(true) {
+        RiskClass::ReadPublic
+    } else if destructive == Some(true) {
+        RiskClass::Destructive
+    } else {
+        RiskClass::ExternalWrite
+    }
+}
+
+/// Removes the confirm property from a schema. True when it was there.
+pub fn take_confirm(schema: &mut Map<String, Value>) -> bool {
+    let removed = schema
+        .get_mut("properties")
+        .and_then(Value::as_object_mut)
+        .is_some_and(|props| props.remove(CONFIRM_ARG).is_some());
+    if let Some(Value::Array(required)) = schema.get_mut("required") {
+        required.retain(|v| v.as_str() != Some(CONFIRM_ARG));
+    }
+    removed
 }
 
 /// Risk by name: reads run, interactions are drafts, anything submitting or unknown needs confirm.
@@ -157,14 +195,11 @@ pub fn unoffered(risks: &BTreeMap<String, RiskClass>, offered: &[String]) -> Vec
         .collect()
 }
 
-/// Connects to a Streamable-HTTP MCP server and wraps its tools.
-pub async fn connect(
-    url: &str,
-    allow: &[String],
-    risks: &BTreeMap<String, RiskClass>,
-    limits: &McpLimits,
-) -> Result<Vec<Arc<dyn Tool>>, String> {
-    let transport = StreamableHttpClientTransport::from_uri(url);
+/// Opens a Streamable-HTTP session and lists the server's tools.
+async fn open(
+    config: StreamableHttpClientTransportConfig,
+) -> Result<(Peer<RoleClient>, Vec<RemoteTool>), String> {
+    let transport = StreamableHttpClientTransport::from_config(config);
     let service = ().serve(transport).await.map_err(|e| e.to_string())?;
     let peer = service.peer().clone();
     tokio::spawn(async move {
@@ -173,6 +208,38 @@ pub async fn connect(
         }
     });
     let remote = peer.list_all_tools().await.map_err(|e| e.to_string())?;
+    Ok((peer, remote))
+}
+
+/// The schema the model sees, trimmed by the limits.
+fn model_schema(schema: Map<String, Value>, limits: &McpLimits) -> Value {
+    let schema = compact_schema(Value::Object(schema), limits.max_schema_description_chars);
+    if limits.required_props_only {
+        required_only(schema)
+    } else {
+        schema
+    }
+}
+
+/// The tool description cut to the limit.
+fn model_description(remote: &RemoteTool, limits: &McpLimits) -> String {
+    remote
+        .description
+        .as_deref()
+        .unwrap_or(&remote.name)
+        .chars()
+        .take(limits.max_tool_description_chars)
+        .collect()
+}
+
+/// Connects to a Streamable-HTTP MCP server and wraps its tools.
+pub async fn connect(
+    url: &str,
+    allow: &[String],
+    risks: &BTreeMap<String, RiskClass>,
+    limits: &McpLimits,
+) -> Result<Vec<Arc<dyn Tool>>, String> {
+    let (peer, remote) = open(StreamableHttpClientTransportConfig::with_uri(url)).await?;
     let offered: Vec<String> = remote.iter().map(|t| t.name.to_string()).collect();
     let missing = unoffered(risks, &offered);
     if !missing.is_empty() {
@@ -189,31 +256,65 @@ pub async fn connect(
         }
         let definition = ToolDefinition {
             risk: pinned_risk(&name, risks),
-            description: t
-                .description
-                .as_deref()
-                .unwrap_or(&name)
-                .chars()
-                .take(limits.max_tool_description_chars)
-                .collect(),
-            parameters: {
-                let schema = compact_schema(
-                    Value::Object((*t.input_schema).clone()),
-                    limits.max_schema_description_chars,
-                );
-                if limits.required_props_only {
-                    required_only(schema)
-                } else {
-                    schema
-                }
-            },
-            name,
+            description: model_description(&t, limits),
+            parameters: model_schema((*t.input_schema).clone(), limits),
+            name: name.clone(),
             sequential: true,
             timeout_secs: limits.tool_timeout_secs,
         };
         tools.push(Arc::new(McpTool {
             peer: peer.clone(),
             definition,
+            remote: name,
+            confirm_arg: false,
+            max_output_chars: limits.max_output_chars,
+        }));
+    }
+    Ok(tools)
+}
+
+/// Connects to the platform MCP server with its machine token and wraps the tools the token allows.
+///
+/// Each tool is named platform_<name> and takes its risk from the server annotations. A tool that
+/// takes confirm loses it from the schema; Policy confirms with the member, and the call sends confirm=true.
+pub async fn connect_platform(
+    url: &str,
+    token: &str,
+    allow: &[String],
+    limits: &McpLimits,
+) -> Result<Vec<Arc<dyn Tool>>, String> {
+    let config = StreamableHttpClientTransportConfig::with_uri(url).auth_header(token);
+    let (peer, remote) = open(config).await?;
+    let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
+    for t in remote {
+        let name = t.name.to_string();
+        if !allow.is_empty() && !allow.iter().any(|a| a == &name) {
+            continue;
+        }
+        let annotations = t.annotations.as_ref();
+        let risk = platform_risk(
+            annotations.and_then(|a| a.read_only_hint),
+            annotations.and_then(|a| a.destructive_hint),
+        );
+        let mut schema = (*t.input_schema).clone();
+        let confirm_arg = take_confirm(&mut schema);
+        let mut description = model_description(&t, limits);
+        if let Some(at) = description.find(CONFIRM_NOTE) {
+            description.truncate(at);
+        }
+        let definition = ToolDefinition {
+            risk,
+            description,
+            parameters: model_schema(schema, limits),
+            name: platform_name(&name),
+            sequential: true,
+            timeout_secs: limits.tool_timeout_secs,
+        };
+        tools.push(Arc::new(McpTool {
+            peer: peer.clone(),
+            definition,
+            remote: name,
+            confirm_arg,
             max_output_chars: limits.max_output_chars,
         }));
     }
@@ -227,7 +328,7 @@ impl Tool for McpTool {
     }
 
     async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        let arguments = match args {
+        let mut arguments = match args {
             Value::Object(map) => Some(map),
             Value::Null => None,
             other => {
@@ -236,7 +337,13 @@ impl Tool for McpTool {
                 )));
             }
         };
-        let mut params = CallToolRequestParams::new(self.definition.name.clone());
+        if self.confirm_arg {
+            // Policy confirmed this call with the member before it reached the tool.
+            arguments
+                .get_or_insert_with(Map::new)
+                .insert(CONFIRM_ARG.to_owned(), Value::Bool(true));
+        }
+        let mut params = CallToolRequestParams::new(self.remote.clone());
         params.arguments = arguments;
         let result = self
             .peer

@@ -428,6 +428,11 @@ enabled = false
 timeout_secs = 10              # one platform call; a live query uses what is left of the request
 embedding_model = ""           # sent with each query vector; empty sends embedding.name
 max_query_chars = 1000         # longest search query sent; the platform refuses longer
+# Platform tools over MCP, with the same token. Set SPARKY_PLATFORM__MCP_URL (for example
+# http://127.0.0.1:8001/mcp) to register them as platform_<name>. The token scopes decide which
+# tools exist. Read tools run for anyone; write tools need policy.write_roles and a confirmation.
+mcp_url = ""
+mcp_tools = []                 # e.g. ["org.info", "events.list"]; empty registers every allowed tool
 
 # ---------------------------------------------------------------- the scraper
 [scraper]
