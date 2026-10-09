@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Prepares the data directories and the database on first boot, then runs supervisord.
 # With SPARKY_PLATFORM__ENABLED=true the stores live on Platform, so the datastores, scraper
-# and search are not started and no database is created.
+# and search are not started and no database is created. With SPARKY_POD_ROLE=models only the two model
+# servers run, for an engine and bot that run elsewhere.
 set -euo pipefail
 
 data="${SPARKY_DATA_DIR:-/workspace}"
@@ -12,6 +13,17 @@ if [ -n "${SPARKY_MODELS_API_KEY:-}" ]; then
         SPARKY_EMBEDDING__API_KEY="$SPARKY_MODELS_API_KEY"
 else
     export SPARKY_MODELS_HOST=127.0.0.1
+fi
+
+export SPARKY_RUN_APPS=true
+if [ "${SPARKY_POD_ROLE:-all}" = "models" ]; then
+    if [ -z "${SPARKY_MODELS_API_KEY:-}" ]; then
+        echo "SPARKY_POD_ROLE=models needs SPARKY_MODELS_API_KEY" >&2
+        exit 1
+    fi
+    export SPARKY_RUN_APPS=false SPARKY_STANDALONE_SERVICES=false
+    mkdir -p "$data/models"
+    exec /usr/bin/supervisord -c /etc/sparky/supervisord.conf
 fi
 
 if [ "${SPARKY_PLATFORM__ENABLED:-false}" = "true" ]; then
