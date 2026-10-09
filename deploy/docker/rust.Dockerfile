@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # One image for the engine and the discord bot; the entrypoint selects the binary.
-FROM rust:1.95-bookworm AS chef
+FROM mirror.gcr.io/library/rust:1.95-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY . .
 RUN cargo build --release -p engine -p discord
 
 # Runtime with the docker client that run_sandbox calls.
-FROM debian:bookworm-slim
+FROM mirror.gcr.io/library/debian:bookworm-slim
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates docker.io \
     && rm -rf /var/lib/apt/lists/*
