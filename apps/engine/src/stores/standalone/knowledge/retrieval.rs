@@ -171,7 +171,8 @@ impl PgRetriever {
                 order by distance limit $3
             ) nearest where distance <= $4"
         );
-        sqlx::query(&sql)
+        // Only constants, placeholder numbers and the quoted, validated config are interpolated.
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(&ctx.tenant_id)
             .bind(vector_literal(&vector))
             .bind(self.tuning.candidates)
@@ -195,7 +196,8 @@ impl PgRetriever {
             "select {COLUMNS} {scoped} and c.tsv @@ websearch_to_tsquery({cfg}, $2)
              order by ts_rank_cd(c.tsv, websearch_to_tsquery({cfg}, $2)) desc limit $3"
         );
-        sqlx::query(&sql)
+        // Only constants, placeholder numbers and the quoted, validated config are interpolated.
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(&ctx.tenant_id)
             .bind(&query.text)
             .bind(self.tuning.candidates)
