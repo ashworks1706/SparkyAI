@@ -208,6 +208,18 @@ pub trait LiveSource: Send + Sync {
     }
 }
 
+/// The sources a registry publishes, plus keep. search_live in platform mode offers these alone.
+pub fn published_only(
+    sources: Vec<Box<dyn LiveSource>>,
+    published: &[QuerySourceInfo],
+    keep: &str,
+) -> Vec<Box<dyn LiveSource>> {
+    sources
+        .into_iter()
+        .filter(|s| s.key() == keep || published.iter().any(|p| p.key == s.key()))
+        .collect()
+}
+
 /// The keys of sources, in catalog order, keeping only those the scraper indexes when stored_only.
 pub fn source_keys(sources: &[Box<dyn LiveSource>], stored_only: bool) -> Vec<&'static str> {
     sources

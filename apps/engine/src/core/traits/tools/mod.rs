@@ -1,5 +1,6 @@
 //! Tool trait.
 
+#[cfg(feature = "standalone")]
 pub mod canvas;
 pub mod files;
 pub mod gcal;

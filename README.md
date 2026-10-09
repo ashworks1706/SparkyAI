@@ -5,71 +5,128 @@
 <h3 align="center">SparkyAI</h3>
 
 <p align="center">
-  <a href="docs/ARCHITECTURE.md">Architecture</a> •
-  <a href="deploy/README.md">Setup</a> •
-  <a href="docs/ROADMAP.md">Roadmap</a> •
-  <a href="docs/blog/sparkyai-v1.md">v1 write-up</a>
+  <a href="docs/ARCHITECTURE.md">Architecture</a> |
+  <a href="docs/ROADMAP.md">Roadmap</a> |
+  <a href="deploy/README.md">Setup</a>
 </p>
 
-SparkyAI is an unofficial, open-source assistant for Arizona State University students, not affiliated with the university. It lives in Discord, answers from official ASU sources with links to them, and runs on open models on infrastructure we operate.
+SparkyAI is an assistant for Arizona State University students in Discord: a Rust agent engine, a Discord bot, a Python ingestion pipeline, and evals. It is an unofficial, open-source student project and is not affiliated with the university.
 
-## Vision
+## Architecture
 
-A student should not have to dig through a dozen ASU sites to find a deadline, a club, an open seat or an office. Sparky does the digging: it searches, reads, and answers with sources, and it asks before it acts on anyone's behalf. Everything is open, from the agent loop to the scrapers to the data the model is later post-trained on.
+The engine runs its own agent loop and calls its tools itself. It runs in one of two modes, chosen by `platform.enabled` in `sparky.toml`:
 
-## What it does
-
-- Answers questions about courses, open seats, prerequisites, clubs, events, dining and library hours, shuttles, scholarships, jobs, news and sports.
-- Searches a stored index of ASU pages and 17 live sources, sending several phrasings of a query at once and searching again until it has the answer.
-- Can read login-gated pages such as Sun Devil Central clubs and events through one operator ASU session. Off by default; see [Data and etiquette](#data-and-etiquette).
-- Reads files a student attaches (PDF, Word, Excel, CSV, scanned pages) and works through long results in a sandboxed Linux container.
-- Remembers what a student tells it in private conversations, and forgets on request.
-- Holds any consequential action until the student approves it.
-
-## How it works
+- **Platform mode.** Conversations, memories, knowledge search, live ASU queries, Canvas, the Sun Devil Central clubs and events, and account linking come from the shared Platform, over its HTTP API and its MCP tools. The engine opens no database.
+- **Standalone mode.** The engine has its own PostgreSQL with pgvector and Redis, and `apps/scraper` fetches and indexes ASU pages through Firecrawl and SearXNG. This mode builds with the cargo feature `standalone`, on by default.
 
 ```mermaid
 flowchart LR
-    D["Discord bot"] --> E["engine: agent loop"]
-    E --> M["llama-server: chat and embed"]
-    E --> K["search_knowledge: Postgres, pgvector + full text"]
-    E --> L["search_live: jobs table"]
-    E --> S["run_sandbox: isolated containers"]
-    L --> SC["scraper: fetch, extract, chunk, embed"]
-    SC --> K
-    E --> R["Redis: live result cache"]
+    U["Student"] --> DC["Discord"]
+    DC --> BOT["discord bot"]
+    BOT -->|"HTTP and SSE"| ENG["engine"]
+    ENG -->|"chat and embeddings"| LLM["llama-server or another OpenAI-compatible API"]
+
+    subgraph platform ["platform mode"]
+        API["Platform HTTP API"]
+        PMCP["Platform MCP tools"]
+    end
+
+    subgraph standalone ["standalone mode"]
+        PG[("PostgreSQL and pgvector")]
+        RD[("Redis")]
+        SCR["scraper"]
+        FC["Firecrawl"]
+        SX["SearXNG"]
+    end
+
+    ENG -.-> API
+    ENG -.-> PMCP
+    ENG -.-> PG
+    ENG -.-> RD
+    SCR -->|"index writes, jobs"| PG
+    SCR --> FC
+    SCR --> SX
 ```
 
-- **engine** (Rust) runs the agent loop: prompt assembly, tool calls, policy, memory, tracing. Nothing is retrieved before the model asks; it calls the search tools itself. See [Agent loop](docs/ARCHITECTURE.md#agent-loop) and [Prompt assembly](docs/ARCHITECTURE.md#prompt-assembly).
-- **scraper** (Python) keeps the index fresh on a schedule and answers live queries from a Postgres job queue, through Firecrawl, SearXNG, or a headless browser. See [Inside scraper](docs/ARCHITECTURE.md#inside-scraper) and [Live source queries](docs/ARCHITECTURE.md#live-source-queries).
-- **discord** is a thin client of the engine's HTTP API that streams progress and renders answers. See [Discord surface](docs/ARCHITECTURE.md#discord-surface).
-- Models are local: Qwen3 4B for chat and Qwen3 embeddings, served by llama-server.
-- Every limit that matters under load is a setting in `sparky.toml`. See [Resource limits](docs/ARCHITECTURE.md#resource-limits).
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the details. Its Store modes section lists which parts each mode runs.
 
 ## Run it
 
-```
-just bootstrap          # tools, .env, deps, infra, migrations
-just cli                # developer console for every unit
+Both modes need [just](https://just.systems), Rust, uv, Docker, a model server, and a Discord bot token and guild id in `.env`.
+
+Platform mode:
+
+```bash
+just env          # creates .env from .env.example
+# In .env set SPARKY_PLATFORM__ENABLED=true, SPARKY_PLATFORM__URL, SPARKY_PLATFORM__TOKEN
+# and SPARKY_PLATFORM__MCP_URL. sparky.toml lists the scopes the token needs.
+just model        # llama-server chat and embed on CUDA; just model-cpu without a GPU
+just engine
+just discord
 ```
 
-`just up` starts the full compose stack. Setup details are in [deploy/README.md](deploy/README.md), and [AGENTS.md](AGENTS.md) lists every recipe. The live bot runs on one RunPod pod; [deploy/README.md#runpod](deploy/README.md#runpod) covers what runs there, what it costs, how to ship a change, and how to debug it.
+Standalone mode:
+
+```bash
+just bootstrap    # .env, git hook, dependencies, postgres, redis, minio, migrations
+just model        # or just model-cpu
+just search       # SearXNG for web search
+just crawl        # Firecrawl for pages that need JavaScript
+just scraper serve
+just engine
+just discord
+```
+
+`just up` starts the whole standalone stack in compose. `just` alone lists every recipe, and [deploy/README.md](deploy/README.md) covers deployment.
+
+## What is in the repo
+
+| Path | Holds |
+| --- | --- |
+| `apps/engine/` | Rust: the agent loop, tools, policy, memory, tracing, and the HTTP API |
+| `apps/discord/` | Rust: the Discord bot, an HTTP client of the engine |
+| `apps/cli/` | Rust: a terminal console that runs and tails every unit |
+| `apps/scraper/` | Python, standalone only: fetches, chunks and embeds ASU pages, and answers live queries |
+| `apps/evals/` | Python: golden cases, scorers, and the baseline gate |
+| `apps/web/` | Vite and React: the static site and admin UI |
+| `deploy/` | Compose files, Dockerfiles, and model server config |
+| `docs/` | `ARCHITECTURE.md` and `ROADMAP.md` |
+
+## Evals
+
+Evals send golden cases from `apps/evals/cases/` to a running engine and score its traces.
+
+```bash
+just eval run                  # every suite
+just eval run --suite voice    # one suite
+just eval baseline             # promote the last report to the baseline
+just eval compare              # compare the last report with the baseline
+```
+
+The promoted baseline in `apps/evals/baseline.json`:
+
+| Suite | Passed |
+| --- | --- |
+| tool_selection | 1 of 2 |
+| tool_args | 1 of 1 |
+| grounding | 2 of 2 |
+| memory | 1 of 1 |
+| permissions | 0 of 1 |
+| clarification | 0 of 1 |
+| refusal | 1 of 3 |
+| latency | 2 of 2 |
 
 ## Data and etiquette
 
-SparkyAI is an unofficial student project, not affiliated with Arizona State University. The scraper reads the same public pages a browser does, and:
+The scraper reads the same public pages a browser does. It identifies itself as `SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)`, obeys robots.txt, waits between requests to one site, and cites the original page. Pages behind a login stay off unless `auth.enabled` is set. To have a site excluded, open an issue.
 
-- identifies itself as `SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)`;
-- checks each site's robots.txt before fetching a page, and skips what it disallows;
-- waits `scraper.host_gap_secs` (5 s) between scheduled fetches to one site, and `scraper.live_host_gap_secs` (1 s) between live ones;
-- refetches a scheduled page only on its interval, hours apart, and caches live results in Redis;
-- answers from stored copies and cites the original page with a link.
+## Docs
 
-Pages behind a login are off unless `auth.enabled` is set in `sparky.toml`. Turn it on only with permission to read those pages through a signed-in account. To have a site excluded, open an issue or contact the maintainer through GitHub.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): crate boundaries, traits, store modes, and invariants
+- [docs/ROADMAP.md](docs/ROADMAP.md): what is built next, and what is out of scope
+- [AGENTS.md](AGENTS.md): commands and rules for contributors and coding agents
 
-## Status
-
-The rebuild is at v0.3. The original 2024 to 2025 prototype is preserved on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1), with its write-up in [docs/blog/sparkyai-v1.md](docs/blog/sparkyai-v1.md).
+The 2024 to 2025 prototype is on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1), with a write-up in [docs/blog/sparkyai-v1.md](docs/blog/sparkyai-v1.md).
 
 ## License
 

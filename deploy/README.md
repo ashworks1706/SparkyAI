@@ -35,6 +35,8 @@ Create the pod with the image, a volume at `/workspace` (database, object store,
 
 With `SPARKY_PLATFORM__ENABLED=true`, `SPARKY_PLATFORM__URL` and `SPARKY_PLATFORM__TOKEN` in the pod environment, the stores, knowledge search, live queries and linked accounts live on Platform. `start.sh` then starts only the two model servers, the engine and the bot; Postgres, Redis, MinIO, SearXNG, the scraper and backups stay off and no database is created. The same image runs both modes. The volume then holds only the model cache.
 
+Set `SPARKY_PLATFORM__MCP_URL` as well to register the platform tools. Canvas (`platform_canvas_*`), the Sun Devil Central clubs and events (`platform_asu_clubs`, `platform_asu_events`) and the `/login` link then come from Platform, so `[canvas]`, `[oauth.*]` and `[auth]` stay off. The scopes the token needs are listed in the `[platform]` section of `sparky.toml`.
+
 `SPARKY_MODELS_API_KEY` makes both model servers listen on every interface and require that key. Expose `8000/http` (chat) and `8001/http` (embed) on the pod to let other apps use them: Platform's `EMBEDDINGS_URL` for indexing, so its vectors match Sparky's queries, and Hermes or another agent for chat. The engine uses the same key.
 
 ### Models only

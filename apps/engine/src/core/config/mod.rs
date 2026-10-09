@@ -393,6 +393,17 @@ fn validate_platform(cfg: &Config) -> Result<(), ConfigError> {
             "agent.confirmation_ttl_secs must be from 1 to {PLATFORM_MAX_TTL_SECS} with platform.enabled"
         ));
     }
+    if cfg.canvas.enabled {
+        return invalid(
+            "canvas.enabled is on, but with platform.enabled Canvas comes from the platform_canvas_* tools; turn it off"
+                .into(),
+        );
+    }
+    if platform.mcp_private.iter().any(|p| p.trim().is_empty()) {
+        return invalid(
+            "platform.mcp_private holds an empty prefix, which would match every tool".into(),
+        );
+    }
     for (name, on) in [
         ("canvas", cfg.oauth.canvas.enabled),
         ("google", cfg.oauth.google.enabled),

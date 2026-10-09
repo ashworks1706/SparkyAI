@@ -171,11 +171,25 @@ The engine runs in one of two modes, chosen by `platform.enabled` and known only
 | `OAuthStore` | `oauth_grants` and `oauth_states`, the engine consent routes | `/api/accounts/members/{user_id}/{provider}/token` and `/login`; the platform runs the login and refreshes tokens |
 | readiness `Probe` | `select 1` on the pool | `GET /health` on the platform |
 
-In platform mode the engine opens no PostgreSQL or Redis connection; it needs the chat and embedding servers and the platform. The platform takes the organization from the machine token (`Authorization: Bearer plat_...`), so `tenant_id` is not sent, and the member is `user_id`, which the platform requires to be a numeric Discord user id. One engine serves one guild, and its token belongs to the platform organization of that guild. The token needs the scopes `agents:read`, `agents:write`, `knowledge:read`, `accounts:link`, and `accounts:token`.
+In platform mode the engine opens no PostgreSQL or Redis connection; it needs the chat and embedding servers and the platform. The platform takes the organization from the machine token (`Authorization: Bearer plat_...`), so `tenant_id` is not sent, and the member is `user_id`, which the platform requires to be a numeric Discord user id. One engine serves one guild, and its token belongs to the platform organization of that guild. The token needs the scopes `agents:read`, `agents:write`, `knowledge:read`, `accounts:link`, `accounts:token`, `asu:read`, and `canvas:read`.
 
 With `platform.mcp_url` set, the engine also registers the platform's MCP tools with the same token (`runtime/tools/mcp.rs`, `connect_platform`). Each tool is named `platform_<name>` with dots as underscores; `platform.mcp_tools` limits the list, and the token scopes decide which tools the platform offers. The risk comes from the MCP annotations: `readOnlyHint` is `ReadPublic`, `destructiveHint` is `Destructive`, and any other tool is `ExternalWrite`, so `Policy` requires `policy.write_roles` and a confirmation for every write. The platform's `confirm` argument is removed from the schema the model sees; the tool sends `confirm=true` after `Policy` confirmed the call.
 
-The self-hosted adapters sit under `stores/standalone/` behind the cargo feature `standalone`, on by default. `cargo build -p engine --no-default-features` builds a platform-only engine without them or `sqlx` and `redis`; `Config::validate` then refuses `platform.enabled = false`. `just check-rust` lints and tests both builds.
+A platform tool whose name starts with a prefix in `platform.mcp_private` (default `canvas.`) returns one member's own data. A read-only one is `ReadAuthenticated`, the tool refuses outside a direct message, and its `discord_id` argument is removed from the schema the model sees; the call sends the caller's `user_id` in its place, so a member reads only their own account (`mcp::Fill`).
+
+What each mode runs:
+
+| Part | Standalone | Platform |
+|---|---|---|
+| ASU knowledge and live queries | `apps/scraper`, PostgreSQL, Redis, Firecrawl, SearXNG, MinIO | the platform `asu` pack; `search_live` offers only the sources the platform registry publishes, plus `tools.live_default_source` |
+| Sun Devil Central clubs and events behind an ASU sign-in | the scraper admin session (`[auth]`, `just scraper login`) | `platform_asu_clubs` and `platform_asu_events` (scope `asu:read`), over the org's ASU sign-in |
+| Canvas | `canvas_*` tools (`[canvas]`, `runtime/tools/account/canvas`), the engine Canvas OAuth client (`[oauth.canvas]`) | `platform_canvas_*` tools (scope `canvas:read`), private as above |
+| `/login` and `/logout` | the engine consent routes and `oauth_states` | the platform accounts link (`accounts:link`) and grant removal |
+| Outlook and Google Calendar | engine tools over grants in `oauth_grants` | the same engine tools over tokens from the platform (`accounts:token`) |
+
+The standalone-only parts stay in the repo and build with the `standalone` feature. `Config::validate` refuses `canvas.enabled` and `oauth.*` with `platform.enabled`, so platform mode never registers the local Canvas tools beside the platform ones. In the compose files, `scraper`, `postgres`, `redis`, `minio` and the `crawl` and `search` profiles serve standalone mode only.
+
+The self-hosted adapters sit under `stores/standalone/`, and the local Canvas tools under `runtime/tools/account/canvas`, behind the cargo feature `standalone`, on by default. `cargo build -p engine --no-default-features` builds a platform-only engine without them or `sqlx` and `redis`; `Config::validate` then refuses `platform.enabled = false`. `just check-rust` lints and tests both builds.
 
 ## Inside scraper
 
@@ -499,7 +513,9 @@ The classes are ordered as listed. `policy.write_roles` gates `ExternalWrite` an
 
 ## Canvas
 
-`runtime/tools/account/canvas` offers read-only Canvas tools, off until `[canvas] enabled` is set: `canvas_courses`, `canvas_assignments`, and `canvas_grades`. Each is `ReadAuthenticated` and refuses outside a direct message, so a user's Canvas data is only ever read in their own channel. The Canvas REST client sits behind the `Canvas` trait in `core/traits/tools/canvas.rs`. Authenticated Canvas content answers the caller and is never indexed, memorized, or traced as evidence.
+`runtime/tools/account/canvas` offers read-only Canvas tools, off until `[canvas] enabled` is set: `canvas_courses`, `canvas_assignments`, `canvas_grades`, `canvas_announcements`, `canvas_calendar`, and `canvas_assignment_grades`. Each is `ReadAuthenticated` and refuses outside a direct message, so a user's Canvas data is only ever read in their own channel. The Canvas REST client sits behind the `Canvas` trait in `core/traits/tools/canvas.rs`. Authenticated Canvas content answers the caller and is never indexed, memorized, or traced as evidence.
+
+These tools are standalone only and build with the `standalone` feature. In platform mode Canvas is the platform's six `canvas.*` tools, registered as `platform_canvas_courses`, `platform_canvas_assignments`, `platform_canvas_grades`, `platform_canvas_announcements`, `platform_canvas_calendar`, and `platform_canvas_assignment_grades`. They keep the same gate: `ReadAuthenticated`, direct message only, and the caller as the member (see Store modes). A member connects Canvas with `/login canvas`, which returns the platform accounts link.
 
 `Credentials` resolves the token for a caller: the caller's own per-user grant first, then the shared `canvas.access_token` fallback (which lives in `.env`, for a single-user or test setup). An expired grant is refreshed with the Canvas client and the new tokens are saved. Grants are keyed by the caller and a fixed user scope, not by the guild, since a Canvas account belongs to the person; they are held in `oauth_grants` by `stores::oauth::PgOAuth` behind the `OAuthStore` trait.
 
@@ -793,7 +809,7 @@ Rust reads the file with figment, Python with tomllib through pydantic-settings.
 
 Sections in `sparky.toml`: `app`, `agent` (with `agent.thinking`), `prompt`, `model` (with `model.sampling`), `embedding`, `summary`, `retrieval`, `policy`, `tools`, `profile` (with `profile.detector`), `sandbox`, `guardrail`, `compaction`, `query` (with `query.cache`), `mcp`, `trace`, `telemetry`, `analytics`, `http`, `bot`, `postgres`, `platform`, `scraper`, `search`, `firecrawl`, `auth`, `oauth` (with `oauth.google`, `oauth.canvas`, and `oauth.microsoft`), `canvas`, `outlook`, `papers`, `wikipedia`, `transit`, `object_store`, `cli`, `evals`. The `engine` and `discord` sections hold only env values: the service token and the guild id.
 
-A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, a zero query poll interval, standalone without `SPARKY_POSTGRES__URL`, or platform mode without its URL and token, with `oauth.*` on, or with `retrieval.top_k`, `retrieval.window`, or `agent.confirmation_ttl_secs` past what the platform accepts. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
+A default belongs to exactly one settings struct; adapters declare no defaults of their own. `Config::validate` rejects at boot any combination the engine cannot serve, for example both retrieval legs off, a section budget above the prompt budget, a sample ratio out of range, two MCP servers with the same name, a text search configuration that is not a plain identifier, a zero query poll interval, standalone without `SPARKY_POSTGRES__URL`, or platform mode without its URL and token, with `oauth.*` or `canvas.enabled` on, with an empty `platform.mcp_private` prefix, or with `retrieval.top_k`, `retrieval.window`, or `agent.confirmation_ttl_secs` past what the platform accepts. An unreadable `prompt.system_file` also stops the boot. Nothing is clamped at runtime.
 
 `prompt` holds the wording the harness writes around every section. `system_file` takes precedence over `system`, which takes precedence over the built-in prompt.
 

@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 
 use crate::core::traits::tools::Tool;
 use crate::core::types::agent::context::RequestContext;
+use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 
 /// Limits applied to the tools of one MCP server.
@@ -103,14 +104,65 @@ pub struct McpTool {
     peer: Peer<RoleClient>,
     definition: ToolDefinition,
     remote: String,
-    confirm_arg: bool,
+    fill: Fill,
     max_output_chars: usize,
+}
+
+/// What a platform tool adds to the arguments of the model, and where it refuses to run.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Fill {
+    /// Sends confirm=true. Policy confirmed the call with the member before it reached the tool.
+    pub confirm: bool,
+    /// Sends the caller as discord_id.
+    pub member: bool,
+    /// Refuses outside a direct message.
+    pub private: bool,
+}
+
+impl Fill {
+    /// The arguments sent to the server: those of the model with confirm and discord_id set.
+    pub fn arguments(
+        self,
+        ctx: &RequestContext,
+        args: Value,
+    ) -> Result<Option<Map<String, Value>>, ToolError> {
+        if self.private && ctx.visibility != Visibility::Private {
+            return Err(ToolError::Failed(
+                "This reads the member's own account, so it is available only in a direct \
+                 message with me, not in a server."
+                    .into(),
+            ));
+        }
+        let mut arguments = match args {
+            Value::Object(map) => Some(map),
+            Value::Null => None,
+            other => {
+                return Err(ToolError::InvalidArguments(format!(
+                    "expected an object, got {other}"
+                )));
+            }
+        };
+        if self.confirm {
+            arguments
+                .get_or_insert_with(Map::new)
+                .insert(CONFIRM_ARG.to_owned(), Value::Bool(true));
+        }
+        if self.member {
+            // The caller replaces any member the model named.
+            arguments
+                .get_or_insert_with(Map::new)
+                .insert(MEMBER_ARG.to_owned(), Value::String(ctx.user_id.clone()));
+        }
+        Ok(arguments)
+    }
 }
 
 /// Prefix of the model-facing name of every platform tool.
 pub const PLATFORM_PREFIX: &str = "platform_";
 /// Argument a platform tool that is hard to undo needs before it runs.
 const CONFIRM_ARG: &str = "confirm";
+/// Argument that names the member whose account a private platform tool reads.
+const MEMBER_ARG: &str = "discord_id";
 /// Sentence the platform appends to the description of a tool that takes confirm.
 const CONFIRM_NOTE: &str = " Runs only with confirm=true";
 
@@ -132,14 +184,31 @@ pub fn platform_risk(read_only: Option<bool>, destructive: Option<bool>) -> Risk
 
 /// Removes the confirm property from a schema. True when it was there.
 pub fn take_confirm(schema: &mut Map<String, Value>) -> bool {
+    take_property(schema, CONFIRM_ARG)
+}
+
+/// Removes the discord_id property from a schema. True when it was there.
+pub fn take_member(schema: &mut Map<String, Value>) -> bool {
+    take_property(schema, MEMBER_ARG)
+}
+
+/// Removes one property from a schema and from its required list. True when it was there.
+fn take_property(schema: &mut Map<String, Value>, name: &str) -> bool {
     let removed = schema
         .get_mut("properties")
         .and_then(Value::as_object_mut)
-        .is_some_and(|props| props.remove(CONFIRM_ARG).is_some());
+        .is_some_and(|props| props.remove(name).is_some());
     if let Some(Value::Array(required)) = schema.get_mut("required") {
-        required.retain(|v| v.as_str() != Some(CONFIRM_ARG));
+        required.retain(|v| v.as_str() != Some(name));
     }
     removed
+}
+
+/// Whether a platform tool returns one member's own data: its remote name starts with a prefix.
+pub fn is_private(remote: &str, prefixes: &[String]) -> bool {
+    prefixes
+        .iter()
+        .any(|p| !p.is_empty() && remote.starts_with(p.as_str()))
 }
 
 /// Risk by name: reads run, interactions are drafts, anything submitting or unknown needs confirm.
@@ -266,7 +335,7 @@ pub async fn connect(
             peer: peer.clone(),
             definition,
             remote: name,
-            confirm_arg: false,
+            fill: Fill::default(),
             max_output_chars: limits.max_output_chars,
         }));
     }
@@ -277,10 +346,13 @@ pub async fn connect(
 ///
 /// Each tool is named platform_<name> and takes its risk from the server annotations. A tool that
 /// takes confirm loses it from the schema; Policy confirms with the member, and the call sends confirm=true.
+/// A tool whose name starts with one of private reads one member's data: a read is ReadAuthenticated,
+/// it runs only in a direct message, and it loses discord_id from the schema and gets the caller.
 pub async fn connect_platform(
     url: &str,
     token: &str,
     allow: &[String],
+    private: &[String],
     limits: &McpLimits,
 ) -> Result<Vec<Arc<dyn Tool>>, String> {
     let config = StreamableHttpClientTransportConfig::with_uri(url).auth_header(token);
@@ -292,12 +364,20 @@ pub async fn connect_platform(
             continue;
         }
         let annotations = t.annotations.as_ref();
-        let risk = platform_risk(
+        let mut risk = platform_risk(
             annotations.and_then(|a| a.read_only_hint),
             annotations.and_then(|a| a.destructive_hint),
         );
         let mut schema = (*t.input_schema).clone();
-        let confirm_arg = take_confirm(&mut schema);
+        let private = is_private(&name, private);
+        if private && risk == RiskClass::ReadPublic {
+            risk = RiskClass::ReadAuthenticated;
+        }
+        let fill = Fill {
+            confirm: take_confirm(&mut schema),
+            member: private && take_member(&mut schema),
+            private,
+        };
         let mut description = model_description(&t, limits);
         if let Some(at) = description.find(CONFIRM_NOTE) {
             description.truncate(at);
@@ -314,7 +394,7 @@ pub async fn connect_platform(
             peer: peer.clone(),
             definition,
             remote: name,
-            confirm_arg,
+            fill,
             max_output_chars: limits.max_output_chars,
         }));
     }
@@ -327,22 +407,8 @@ impl Tool for McpTool {
         self.definition.clone()
     }
 
-    async fn call(&self, _ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
-        let mut arguments = match args {
-            Value::Object(map) => Some(map),
-            Value::Null => None,
-            other => {
-                return Err(ToolError::InvalidArguments(format!(
-                    "expected an object, got {other}"
-                )));
-            }
-        };
-        if self.confirm_arg {
-            // Policy confirmed this call with the member before it reached the tool.
-            arguments
-                .get_or_insert_with(Map::new)
-                .insert(CONFIRM_ARG.to_owned(), Value::Bool(true));
-        }
+    async fn call(&self, ctx: &RequestContext, args: Value) -> Result<ToolOutput, ToolError> {
+        let arguments = self.fill.arguments(ctx, args)?;
         let mut params = CallToolRequestParams::new(self.remote.clone());
         params.arguments = arguments;
         let result = self

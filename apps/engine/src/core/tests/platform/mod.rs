@@ -8,6 +8,7 @@ mod oauth;
 mod profile;
 mod query;
 mod retrieval;
+mod tools;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
