@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Egress proxy for the sandbox network: ports 80 and 443 to public addresses only.
-FROM debian:bookworm-slim
+FROM mirror.gcr.io/library/debian:bookworm-slim
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends squid-openssl ca-certificates \

@@ -6,7 +6,7 @@ ARG LLAMA_IMAGE=ghcr.io/ggml-org/llama.cpp:server-cuda
 ARG SEARXNG_REF=d4f00d15d
 ARG MINIO_REF=RELEASE.2025-10-15T17-29-55Z
 
-FROM rust:1.95-bookworm AS chef
+FROM mirror.gcr.io/library/rust:1.95-bookworm AS chef
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY . .
 RUN cargo build --release -p engine -p discord
 
 # MinIO publishes no binaries or public images; this builds its last release from source.
-FROM golang:1.24-bookworm AS minio
+FROM mirror.gcr.io/library/golang:1.24-bookworm AS minio
 ARG MINIO_REF
 RUN git clone --depth 1 --branch ${MINIO_REF} https://github.com/minio/minio.git /src \
     && cd /src && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /minio .

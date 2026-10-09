@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # The image run_sandbox runs commands in.
-FROM debian:bookworm-slim
+FROM mirror.gcr.io/library/debian:bookworm-slim
 
 # python3 with HTML, table, HTTP and document libraries, OCR, and common shell tools.
 RUN apt-get update \
