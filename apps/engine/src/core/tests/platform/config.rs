@@ -115,3 +115,18 @@ fn platform_on_needs_no_redis_for_the_query_cache() {
     let cached = "[query.cache]\nenabled = true\n";
     assert!(load(&format!("{ON}{cached}")).is_ok());
 }
+
+#[test]
+fn platform_on_refuses_the_local_canvas_tools() {
+    let canvas = "[canvas]\nenabled = true\naccess_token = \"t\"\n";
+    assert!(load(&format!("{ON}{canvas}")).is_err_and(|e| e.contains("canvas.enabled")));
+}
+
+#[test]
+fn platform_canvas_tools_are_private_unless_told_otherwise() {
+    let Ok(cfg) = load(ON) else {
+        unreachable!("a complete platform section is valid")
+    };
+    assert_eq!(cfg.platform.mcp_private, vec!["canvas.".to_owned()]);
+    assert!(load(&format!("{ON}mcp_private = [\"\"]\n")).is_err_and(|e| e.contains("mcp_private")));
+}

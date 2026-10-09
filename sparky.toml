@@ -287,6 +287,7 @@ max_tool_description_chars = 160
 
 # ---------------------------------------------------------------- OAuth
 # Per-user grants. client_secret lives in .env. Off until the per-user sessions of phase 8.
+# Standalone only: with platform.enabled the platform runs every login and Config::validate refuses these on.
 [oauth.google]
 enabled = false
 client_id = ""
@@ -324,6 +325,7 @@ timeout_secs = 30
 # Read-only Canvas tools (courses, assignments, grades), in a direct message only.
 # Off until a Canvas API token is set. access_token lives in .env. When a per-user grant store
 # exists the token becomes per user; until then this one token answers for every caller.
+# Standalone only. In platform mode Canvas is the platform_canvas_* tools; Config::validate refuses this on.
 [canvas]
 enabled = false
 base_url = "https://canvas.asu.edu"
@@ -421,8 +423,16 @@ scraper_pool_max = 8           # scraper pool; covers scraper.live_workers, the 
 # ---------------------------------------------------------------- platform
 # On: conversations, memories, the profile graph, confirmations, knowledge search, live queries and
 # linked accounts come from the platform HTTP API, and the engine opens no PostgreSQL or Redis.
-# url and token live in .env. The token needs agents:read, agents:write, knowledge:read,
-# accounts:link and accounts:token. A build without the standalone feature requires it on.
+# Canvas, the Sun Devil Central clubs and events, and the ASU knowledge come from the platform;
+# canvas, oauth.*, the scraper, postgres and redis are standalone only. url and token live in .env.
+# The token needs these scopes:
+#   agents:read, agents:write   conversations, memories, the profile graph, confirmations
+#   knowledge:read              knowledge search and the live queries
+#   accounts:link               the /login link for a member
+#   accounts:token              the Outlook and Google tokens of a member
+#   asu:read                    platform_asu_clubs and platform_asu_events
+#   canvas:read                 the platform_canvas_* tools
+# A build without the standalone feature requires it on.
 [platform]
 enabled = false
 timeout_secs = 10              # one platform call; a live query uses what is left of the request
@@ -433,8 +443,13 @@ max_query_chars = 1000         # longest search query sent; the platform refuses
 # tools exist. Read tools run for anyone; write tools need policy.write_roles and a confirmation.
 mcp_url = ""
 mcp_tools = []                 # e.g. ["org.info", "events.list"]; empty registers every allowed tool
+# Tool name prefixes whose results belong to one member. Such a tool runs only in a direct
+# message, is ReadAuthenticated, and is sent the caller as discord_id in place of the model's value.
+mcp_private = ["canvas."]
 
 # ---------------------------------------------------------------- the scraper
+# Standalone only: scraper, search, firecrawl, auth and object_store. In platform mode the
+# platform serves the ASU knowledge and live queries, and nothing here runs.
 [scraper]
 tenant_id = "public"           # public ASU content, readable by every guild
 fetcher = "firecrawl"          # firecrawl renders JS and returns markdown; http is plain httpx
@@ -485,7 +500,8 @@ only_main_content = true
 
 # Admin browser session for login-gated sources, captured by just scraper login. Only cookies are saved.
 # Off by default: clubs is not offered and events reads only the public calendar. Turn it on only
-# with permission to read those pages through a signed-in account.
+# with permission to read those pages through a signed-in account. In platform mode the clubs and
+# events come from platform_asu_clubs and platform_asu_events through the org's ASU sign-in.
 [auth]
 enabled = false
 storage_state_path = "../../.sparky/auth/admin_state.json"   # relative to apps/scraper

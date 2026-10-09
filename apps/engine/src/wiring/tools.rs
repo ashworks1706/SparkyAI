@@ -13,8 +13,10 @@ use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
 use crate::core::types::tools::sandbox::Limits as SandboxLimits;
 use crate::runtime::harness::tools::ToolSet;
+#[cfg(feature = "standalone")]
+use crate::runtime::tools::account::canvas;
 use crate::runtime::tools::account::oauth::WebOAuthClient;
-use crate::runtime::tools::account::{canvas, gcal, outlook};
+use crate::runtime::tools::account::{gcal, outlook};
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
 use crate::runtime::tools::knowledge::search::stored::{StoredSearch, Wording as StoredWording};
@@ -31,7 +33,7 @@ type Build<'a> = Box<dyn FnOnce() -> Result<Vec<Arc<dyn Tool>>, String> + 'a>;
 type Integration<'a> = (&'static str, bool, Build<'a>);
 
 /// Every tool the model may call, with tools.disabled removed at registration.
-pub(super) async fn build_tools(
+pub(crate) async fn build_tools(
     cfg: &Config,
     queries: Arc<dyn SourceQueries>,
     retriever: Arc<dyn Retriever>,
@@ -96,6 +98,7 @@ pub(super) async fn build_tools(
             url,
             token.expose_secret(),
             &cfg.platform.mcp_tools,
+            &cfg.platform.mcp_private,
             &McpLimits::from(&cfg.mcp),
         )
         .await
@@ -127,20 +130,23 @@ fn integrations<'a>(
     cfg: &'a Config,
     oauth_store: &'a Arc<dyn OAuthStore>,
     oauth_providers: &'a HashMap<String, Arc<WebOAuthClient>>,
-) -> [Integration<'a>; 6] {
-    [
-        (
-            "canvas",
-            cfg.canvas.enabled,
-            Box::new(move || {
-                canvas::tools(
-                    &cfg.canvas,
-                    oauth_store.clone(),
-                    oauth_providers.get("canvas").cloned(),
-                )
-                .map_err(|e| e.to_string())
-            }),
-        ),
+) -> Vec<Integration<'a>> {
+    let mut all: Vec<Integration<'a>> = Vec::new();
+    // Standalone only. In platform mode Canvas is the platform_canvas_* tools.
+    #[cfg(feature = "standalone")]
+    all.push((
+        "canvas",
+        cfg.canvas.enabled && !cfg.platform.enabled,
+        Box::new(move || {
+            canvas::tools(
+                &cfg.canvas,
+                oauth_store.clone(),
+                oauth_providers.get("canvas").cloned(),
+            )
+            .map_err(|e| e.to_string())
+        }),
+    ));
+    all.extend::<[Integration<'a>; 5]>([
         (
             "outlook",
             cfg.outlook.enabled,
@@ -180,7 +186,8 @@ fn integrations<'a>(
             cfg.transit.enabled,
             Box::new(move || transit::tools(&cfg.transit)),
         ),
-    ]
+    ]);
+    all
 }
 
 /// Adds each built tool that is not disabled to the set, logging how many an integration added.
@@ -233,7 +240,13 @@ async fn search_tools(
         }
     }
     // One line for every unpublished source.
-    if !unpublished.is_empty() {
+    if !unpublished.is_empty() && cfg.platform.enabled {
+        tracing::info!(
+            count = unpublished.len(),
+            sources = %unpublished.join(", "),
+            "the platform publishes no live query for these sources; search_live does not offer them"
+        );
+    } else if !unpublished.is_empty() {
         tracing::warn!(
             count = unpublished.len(),
             sources = %unpublished.join(", "),
@@ -251,8 +264,14 @@ async fn search_tools(
             empty: cfg.tools.nothing_stored.clone(),
         },
     ));
+    // In platform mode search_live offers only the sources the platform publishes, and the fallback.
+    let live_sources = if cfg.platform.enabled {
+        search::published_only(sources, &published, fallback)
+    } else {
+        sources
+    };
     let live: Arc<dyn Tool> = Arc::new(LiveSearch::new(
-        sources,
+        live_sources,
         queries,
         fallback,
         cfg.prompt.utc_offset_hours,

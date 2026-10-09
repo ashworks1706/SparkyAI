@@ -10,7 +10,7 @@ mod platform;
 mod prompt;
 #[cfg(feature = "standalone")]
 mod standalone;
-mod tools;
+pub(crate) mod tools;
 
 use std::collections::HashMap;
 use std::sync::Arc;

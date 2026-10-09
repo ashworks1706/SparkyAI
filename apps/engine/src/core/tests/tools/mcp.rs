@@ -2,9 +2,12 @@
 
 use serde_json::json;
 
-use crate::core::types::tools::RiskClass;
+use crate::core::tests::support::ctx;
+use crate::core::types::conversation::Visibility;
+use crate::core::types::tools::{RiskClass, ToolError};
 use crate::runtime::tools::mcp::{
-    compact_schema, platform_name, platform_risk, required_only, risk_for, take_confirm,
+    Fill, compact_schema, is_private, platform_name, platform_risk, required_only, risk_for,
+    take_confirm, take_member,
 };
 
 #[test]
@@ -162,4 +165,83 @@ fn the_confirm_argument_is_hidden_from_the_model() {
         unreachable!("schema is an object")
     };
     assert!(!take_confirm(map));
+}
+
+#[test]
+fn canvas_platform_tools_are_private_by_default() {
+    let prefixes = crate::core::config::Platform::default().mcp_private;
+    assert!(is_private("canvas.grades", &prefixes));
+    assert!(is_private("canvas.assignment_grades", &prefixes));
+    assert!(!is_private("asu.clubs", &prefixes));
+    assert!(!is_private("org.info", &prefixes));
+    assert!(!is_private("canvas.grades", &[String::new()]));
+}
+
+#[test]
+fn the_member_argument_is_hidden_from_the_model() {
+    let mut schema = json!({
+        "type": "object",
+        "properties": {"discord_id": {"type": "string"}},
+        "required": ["discord_id"],
+        "additionalProperties": false
+    });
+    let Some(map) = schema.as_object_mut() else {
+        unreachable!("schema is an object")
+    };
+    assert!(take_member(map));
+    assert_eq!(
+        schema,
+        json!({"type": "object", "properties": {}, "required": [], "additionalProperties": false})
+    );
+}
+
+#[test]
+fn a_private_platform_tool_refuses_outside_a_direct_message() {
+    let fill = Fill {
+        member: true,
+        private: true,
+        ..Fill::default()
+    };
+    let out = fill.arguments(&ctx(), json!({}));
+    assert!(
+        matches!(&out, Err(ToolError::Failed(m)) if m.contains("direct message")),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn a_private_platform_tool_reads_only_the_caller() {
+    let fill = Fill {
+        member: true,
+        private: true,
+        ..Fill::default()
+    };
+    let dm = ctx().with_visibility(Visibility::Private);
+    let Ok(Some(args)) = fill.arguments(&dm, json!({"discord_id": "999"})) else {
+        unreachable!("a direct message passes the gate")
+    };
+    assert_eq!(args.get("discord_id"), Some(&json!("u")));
+    let Ok(Some(args)) = fill.arguments(&dm, serde_json::Value::Null) else {
+        unreachable!("no arguments still names the caller")
+    };
+    assert_eq!(args.get("discord_id"), Some(&json!("u")));
+}
+
+#[test]
+fn a_public_platform_tool_sends_the_arguments_as_given() {
+    let Ok(args) = Fill::default().arguments(&ctx(), json!({"discord_id": "999"})) else {
+        unreachable!("a public tool runs in a server")
+    };
+    assert_eq!(
+        args.and_then(|a| a.get("discord_id").cloned()),
+        Some(json!("999"))
+    );
+    let confirm = Fill {
+        confirm: true,
+        ..Fill::default()
+    };
+    let Ok(Some(args)) = confirm.arguments(&ctx(), serde_json::Value::Null) else {
+        unreachable!("a confirmed tool gets confirm")
+    };
+    assert_eq!(args.get("confirm"), Some(&json!(true)));
 }

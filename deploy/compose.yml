@@ -1,4 +1,6 @@
 # Memory ceilings are overridable with SPARKY_MEM_<SERVICE> in .env. sandboxd bounds all run_sandbox containers.
+# Services marked standalone only are unused with platform.enabled, where the platform holds the
+# stores, the ASU knowledge, the live queries, Canvas and the ASU sign-in.
 services:
   engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
@@ -7,6 +9,7 @@ services:
     env_file:
       - { path: ../.env, required: false }
     environment:
+      # Standalone only; the engine ignores both with platform.enabled.
       SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
       SPARKY_REDIS__URL: redis://redis:6379
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
@@ -44,6 +47,7 @@ services:
     depends_on: [engine]
     restart: unless-stopped
 
+  # Standalone only: fetches, indexes and answers live queries for the engine through postgres.
   scraper:
     build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
     mem_limit: ${SPARKY_MEM_SCRAPER:-3g}
@@ -148,7 +152,7 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
     restart: unless-stopped
 
-  # SearXNG for the scraper web search. Started by just search.
+  # SearXNG for the scraper web search. Started by just search. Standalone only.
   searxng:
     image: docker.io/searxng/searxng:2026.9.12-d4f00d15d
     mem_limit: ${SPARKY_MEM_SEARXNG:-512m}
@@ -165,7 +169,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Self-hosted Firecrawl for the scraper, without API keys. Started by just crawl.
+  # Self-hosted Firecrawl for the scraper, without API keys. Started by just crawl. Standalone only.
   firecrawl:
     image: ghcr.io/firecrawl/firecrawl:latest
     mem_limit: ${SPARKY_MEM_FIRECRAWL:-2g}
@@ -221,6 +225,7 @@ services:
     volumes: [firecrawldata:/var/lib/postgresql/data]
     restart: unless-stopped
 
+  # Standalone only: conversations, memories, the retrieval index and the jobs queue.
   postgres:
     image: pgvector/pgvector:pg17
     mem_limit: ${SPARKY_MEM_POSTGRES:-2g}
@@ -247,6 +252,7 @@ services:
       postgres: { condition: service_healthy }
     restart: unless-stopped
 
+  # Standalone only: the live query cache and its leases.
   redis:
     image: redis:7-alpine
     mem_limit: ${SPARKY_MEM_REDIS:-384m}
@@ -261,6 +267,7 @@ services:
       timeout: 3s
       retries: 10
 
+  # Standalone only: page snapshots the scraper keeps.
   minio:
     image: quay.io/minio/minio
     mem_limit: ${SPARKY_MEM_MINIO:-1g}
