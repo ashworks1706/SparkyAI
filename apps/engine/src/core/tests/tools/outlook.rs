@@ -7,14 +7,12 @@ use async_trait::async_trait;
 use secrecy::SecretString;
 use serde_json::json;
 
-use crate::core::traits::oauth::OAuthStore;
+use crate::core::tests::support::Linked;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::outlook::Outlook;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
-use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
-use crate::core::types::tools::oauth::{Consent, OAuthTokens};
 use crate::core::types::tools::outlook::{OutlookError, OutlookEvent, OutlookMessage};
 use crate::runtime::tools::account::grant::Credentials;
 use crate::runtime::tools::account::outlook::{OutlookTool, Query};
@@ -36,58 +34,12 @@ impl Outlook for FakeOutlook {
     }
 }
 
-/// A grant store double that always reports a connection through the shared fallback.
-struct NoGrants;
-
-#[async_trait]
-impl OAuthStore for NoGrants {
-    async fn save_grant(
-        &self,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-        _tk: &OAuthTokens,
-    ) -> Result<(), StoreError> {
-        Ok(())
-    }
-    async fn load_grant(
-        &self,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-    ) -> Result<Option<OAuthTokens>, StoreError> {
-        Ok(None)
-    }
-    async fn delete_grant(&self, _t: &str, _u: &str, _p: &str) -> Result<bool, StoreError> {
-        Ok(false)
-    }
-    async fn begin_consent(
-        &self,
-        _s: &str,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-        _ttl: Duration,
-    ) -> Result<(), StoreError> {
-        Ok(())
-    }
-    async fn take_consent(&self, _s: &str) -> Result<Option<Consent>, StoreError> {
-        Ok(None)
-    }
-}
-
 fn dm() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5)).with_visibility(Visibility::Private)
 }
 
 fn tool(query: Query, fake: FakeOutlook, connected: bool) -> OutlookTool {
-    let fallback = if connected { "tok" } else { "" };
-    let creds = Credentials::new(
-        Arc::new(NoGrants),
-        None,
-        "microsoft",
-        SecretString::from(fallback.to_owned()),
-    );
+    let creds = Credentials::new(Arc::new(Linked(connected.then_some("tok"))), "microsoft");
     OutlookTool::new(query, Arc::new(fake), Arc::new(creds), 15)
 }
 

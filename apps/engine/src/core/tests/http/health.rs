@@ -41,12 +41,12 @@ async fn report(probes: Vec<Arc<dyn Probe>>) -> (StatusCode, serde_json::Value) 
 #[tokio::test]
 async fn every_probe_is_reported_by_name_beside_the_model() {
     let (status, body) = report(vec![Arc::new(Fixed {
-        name: "postgres",
+        name: "platform",
         up: true,
     })])
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, serde_json::json!({"postgres": true, "model": true}));
+    assert_eq!(body, serde_json::json!({"platform": true, "model": true}));
 }
 
 #[tokio::test]

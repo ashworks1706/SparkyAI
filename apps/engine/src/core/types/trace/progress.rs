@@ -3,7 +3,6 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::safety::policy::Decision;
 use crate::core::types::tools::{SEARCH_KNOWLEDGE, SEARCH_LIVE};
 use crate::core::types::trace::TraceEvent;
@@ -139,15 +138,6 @@ impl TraceEvent {
                 error: Some(_),
                 ..
             } => Some(format!("\u{1f4ce} could not open `{name}`")),
-            Self::QueryCache {
-                source,
-                outcome: CacheOutcome::Hit | CacheOutcome::Coalesced,
-            } => Some(format!(
-                "\u{267b}\u{fe0f} reused a recent `{source}` result"
-            )),
-            Self::QueryRefused { source, .. } => {
-                Some(format!("\u{1f6a6} `{source}` is busy right now"))
-            }
             Self::PolicyDecision { tool, decision, .. } => match decision {
                 Decision::Deny { .. } => Some(format!("\u{1f6ab} `{tool}` was not allowed")),
                 Decision::Confirm(_) => Some(format!("\u{270b} `{tool}` needs your approval")),
@@ -158,7 +148,6 @@ impl TraceEvent {
             }
             Self::GuardrailRedacted { .. }
             | Self::ToolResultStored { .. }
-            | Self::QueryCache { .. }
             | Self::RequestStarted { .. }
             | Self::ContextAssembled { .. }
             | Self::ModelCall { .. }

@@ -36,7 +36,7 @@ use crate::runtime::tools::knowledge::search::{
     source_help, source_keys,
 };
 
-/// The registry entry the scraper would publish for source.
+/// The registry entry the platform would publish for source.
 fn published(source: &dyn LiveSource) -> QuerySourceInfo {
     QuerySourceInfo {
         key: source.key().into(),
@@ -143,7 +143,7 @@ fn the_source_filter_is_never_required_of_the_model() {
 }
 
 #[test]
-fn the_stored_search_offers_only_the_sources_the_scraper_indexes() {
+fn the_stored_search_offers_only_the_sources_the_platform_indexes() {
     let live = enum_of(&live_tool(FakeQueries::new(Vec::new())));
     let stored = enum_of(&stored_tool(Arc::new(Stored::empty())));
     assert_eq!(live.len(), 17);
@@ -216,13 +216,13 @@ fn a_source_whose_answer_is_never_stored_is_declared_live() {
 }
 
 #[test]
-fn a_source_the_scraper_indexes_differently_is_named_at_boot() {
+fn a_source_the_platform_indexes_differently_is_named_at_boot() {
     let mut served = published(&Shuttles);
     served.indexed = true;
     let drift = conforms(&Shuttles, &served);
     assert!(
         drift.is_err_and(|e| e.contains("shuttles") && e.contains("live")),
-        "a live source the scraper stores is a disagreement"
+        "a live source the platform stores is a disagreement"
     );
 
     let mut served = published(&Courses);
@@ -313,7 +313,7 @@ fn a_date_in_the_query_is_read_and_anything_else_is_not() {
 }
 
 #[test]
-fn a_query_fills_the_parameters_the_scraper_takes() {
+fn a_query_fills_the_parameters_the_platform_takes() {
     let today = NaiveDate::from_ymd_opt(2026, 9, 15).unwrap_or_default();
     let filled = |source: &dyn LiveSource, query: &str| match params_for(source, query, today) {
         Ok(params) => params,
@@ -558,7 +558,7 @@ fn the_local_date_is_the_one_the_offset_puts_the_user_in() {
 }
 
 #[test]
-fn a_tool_that_matches_what_the_scraper_publishes_conforms() {
+fn a_tool_that_matches_what_the_platform_publishes_conforms() {
     for source in catalog() {
         let served = published(source.as_ref());
         assert_eq!(
@@ -571,7 +571,7 @@ fn a_tool_that_matches_what_the_scraper_publishes_conforms() {
 }
 
 #[test]
-fn a_tool_that_drifts_from_the_scraper_is_named_at_boot() {
+fn a_tool_that_drifts_from_the_platform_is_named_at_boot() {
     let mut served = published(&Courses);
     served.params.retain(|p| p.name != "session");
     assert!(conforms(&Courses, &served).is_err_and(|e| e.contains("session")));
@@ -661,7 +661,7 @@ async fn a_bad_argument_never_reaches_the_queue() {
 }
 
 #[tokio::test]
-async fn a_scraper_refusal_comes_back_as_something_the_model_can_fix() {
+async fn a_platform_refusal_comes_back_as_something_the_model_can_fix() {
     let queries = FakeQueries::new(vec![published(&Courses)])
         .rejecting("courses", "courses returned a page with no readable text");
     let tool = live_tool(queries);

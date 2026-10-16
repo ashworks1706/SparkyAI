@@ -1,10 +1,7 @@
-//! Tools: MCP risk mapping, Google OAuth, and the sandbox.
+//! Tools: MCP risk mapping, the account tools, integrations, and the sandbox.
 
-#[cfg(feature = "standalone")]
-mod canvas;
 mod gcal;
 mod integrations;
 mod mcp;
-mod oauth;
 mod outlook;
 mod sandbox;

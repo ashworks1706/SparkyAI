@@ -1,14 +1,10 @@
 //! The prompt token estimator, and the settings the harness types are built from.
 
 use crate::core::config::Agent;
-#[cfg(feature = "standalone")]
-use crate::core::config::Retrieval;
 use crate::core::types::agent::AgentConfig;
 use crate::core::types::agent::assemble::Budget;
 use crate::core::types::conversation::message::Message;
 use crate::core::types::model::tokens::estimate;
-#[cfg(feature = "standalone")]
-use crate::stores::standalone::postgres::RetrievalTuning;
 
 #[test]
 fn assembly_and_a_message_price_the_same_text_the_same_way() {
@@ -67,31 +63,4 @@ fn the_prompt_budget_carries_the_agent_settings_unchanged() {
     assert_eq!(budget.history, settings.history_budget_tokens);
     assert_eq!(budget.memory, settings.memory_budget_tokens);
     assert_eq!(budget.chars_per_token, settings.chars_per_token);
-}
-
-#[cfg(feature = "standalone")]
-#[test]
-fn retrieval_tuning_carries_every_setting_including_the_fusion_constants() {
-    // Candidate count and RRF k come from configuration.
-    let settings = Retrieval {
-        candidates: 40,
-        rrf_k: 20.0,
-        text_search_config: "simple".into(),
-        dense: true,
-        lexical: false,
-        min_score: 0.01,
-        max_distance: 0.5,
-        collapse_tree: true,
-        window: 3,
-        top_k: 9,
-    };
-    let tuning = RetrievalTuning::from(&settings);
-    assert_eq!(tuning.candidates, 40);
-    assert!((tuning.rrf_k - 20.0).abs() < f32::EPSILON);
-    assert_eq!(tuning.text_search_config, "simple");
-    assert!(tuning.dense);
-    assert!(!tuning.lexical);
-    assert!((tuning.min_score - 0.01).abs() < f32::EPSILON);
-    assert!((tuning.max_distance - 0.5).abs() < f32::EPSILON);
-    assert_eq!(tuning.window, 3);
 }

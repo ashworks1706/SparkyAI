@@ -1,6 +1,6 @@
 # Memory ceilings are overridable with SPARKY_MEM_<SERVICE> in .env. sandboxd bounds all run_sandbox containers.
-# Services marked standalone only are unused with platform.enabled, where the platform holds the
-# stores, the ASU knowledge, the live queries, Canvas and the ASU sign-in.
+# The platform holds the stores, the ASU knowledge, the live queries, Canvas and the ASU sign-in;
+# SPARKY_PLATFORM__URL and SPARKY_PLATFORM__TOKEN in .env point the engine at it.
 services:
   engine:
     build: { context: .., dockerfile: deploy/docker/rust.Dockerfile }
@@ -9,9 +9,6 @@ services:
     env_file:
       - { path: ../.env, required: false }
     environment:
-      # Standalone only; the engine ignores both with platform.enabled.
-      SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
-      SPARKY_REDIS__URL: redis://redis:6379
       SPARKY_MODEL__BASE_URL: http://chat:8000/v1
       SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
@@ -19,8 +16,6 @@ services:
       DOCKER_HOST: tcp://sandboxd:2375
     ports: ["8080:8080"]
     depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
       sandboxd: { condition: service_started }
     restart: unless-stopped
 
@@ -45,28 +40,6 @@ services:
       SPARKY_ENGINE__BASE_URL: http://engine:8080
       SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
     depends_on: [engine]
-    restart: unless-stopped
-
-  # Standalone only: fetches, indexes and answers live queries for the engine through postgres.
-  scraper:
-    build: { context: .., dockerfile: deploy/docker/scraper.Dockerfile }
-    mem_limit: ${SPARKY_MEM_SCRAPER:-3g}
-    command: ["serve"]
-    env_file:
-      - { path: ../.env, required: false }
-    environment:
-      SPARKY_POSTGRES__URL: postgres://sparky:sparky@postgres:5432/sparky
-      SPARKY_OBJECT_STORE__ENDPOINT: http://minio:9000
-      SPARKY_EMBEDDING__BASE_URL: http://embed:8001/v1
-      SPARKY_FIRECRAWL__BASE_URL: http://firecrawl:3002
-      SPARKY_SEARCH__BASE_URL: http://searxng:8080
-      SPARKY_TELEMETRY__PHOENIX_URL: ${SPARKY_PHOENIX_URL:-}
-      # Admin session captured by just scraper login; writable for refreshes.
-      SPARKY_AUTH__STORAGE_STATE_PATH: /data/auth/admin_state.json
-    volumes:
-      - ${SPARKY_AUTH_STATE_DIR:-../.sparky/auth}:/data/auth
-    depends_on:
-      postgres: { condition: service_healthy }
     restart: unless-stopped
 
   # One llama-server per model. Started by just model.
@@ -152,132 +125,6 @@ services:
             - { driver: nvidia, count: 1, capabilities: [gpu] }
     restart: unless-stopped
 
-  # SearXNG for the scraper web search. Started by just search. Standalone only.
-  searxng:
-    image: mirror.gcr.io/searxng/searxng:2026.9.12-d4f00d15d
-    mem_limit: ${SPARKY_MEM_SEARXNG:-512m}
-    profiles: [search]
-    environment:
-      SEARXNG_SECRET: ${SPARKY_SEARXNG_SECRET:-local-only-change-me-0000000000000000}
-    volumes:
-      - ./search/settings.yml:/etc/searxng/settings.yml:ro
-    ports: ["127.0.0.1:8888:8080"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  # Self-hosted Firecrawl for the scraper, without API keys. Started by just crawl. Standalone only.
-  firecrawl:
-    image: ghcr.io/firecrawl/firecrawl:latest
-    mem_limit: ${SPARKY_MEM_FIRECRAWL:-2g}
-    profiles: [crawl]
-    environment:
-      HOST: 0.0.0.0
-      PORT: 3002
-      ENV: local
-      USE_DB_AUTHENTICATION: "false"
-      REDIS_URL: redis://firecrawl-redis:6379
-      REDIS_RATE_LIMIT_URL: redis://firecrawl-redis:6379
-      PLAYWRIGHT_MICROSERVICE_URL: http://firecrawl-playwright:3000/scrape
-      NUQ_RABBITMQ_URL: amqp://firecrawl-rabbitmq:5672
-      POSTGRES_HOST: firecrawl-postgres
-      POSTGRES_PORT: 5432
-      # nuq-postgres creates its schema in the default postgres database.
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
-      POSTGRES_DB: postgres
-      NUM_WORKERS_PER_QUEUE: 4
-    ports: ["3002:3002"]
-    depends_on: [firecrawl-redis, firecrawl-rabbitmq, firecrawl-playwright, firecrawl-postgres]
-    restart: unless-stopped
-
-  firecrawl-playwright:
-    image: ghcr.io/firecrawl/playwright-service:latest
-    mem_limit: ${SPARKY_MEM_FIRECRAWL_PLAYWRIGHT:-2g}
-    profiles: [crawl]
-    environment:
-      PORT: 3000
-    restart: unless-stopped
-
-  firecrawl-redis:
-    image: mirror.gcr.io/library/redis:7-alpine
-    mem_limit: ${SPARKY_MEM_FIRECRAWL_REDIS:-256m}
-    profiles: [crawl]
-    restart: unless-stopped
-
-  firecrawl-rabbitmq:
-    image: mirror.gcr.io/library/rabbitmq:3-management
-    mem_limit: ${SPARKY_MEM_FIRECRAWL_RABBITMQ:-512m}
-    profiles: [crawl]
-    restart: unless-stopped
-
-  firecrawl-postgres:
-    image: ghcr.io/firecrawl/nuq-postgres:latest
-    mem_limit: ${SPARKY_MEM_FIRECRAWL_POSTGRES:-512m}
-    profiles: [crawl]
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${SPARKY_FIRECRAWL_DB_PASSWORD:-firecrawl-local-only-change-me-32chars}
-      POSTGRES_DB: postgres
-    volumes: [firecrawldata:/var/lib/postgresql/data]
-    restart: unless-stopped
-
-  # Standalone only: conversations, memories, the retrieval index and the jobs queue.
-  postgres:
-    image: mirror.gcr.io/pgvector/pgvector:pg17
-    mem_limit: ${SPARKY_MEM_POSTGRES:-2g}
-    environment:
-      POSTGRES_USER: sparky
-      POSTGRES_PASSWORD: sparky
-      POSTGRES_DB: sparky
-    volumes: [pgdata:/var/lib/postgresql/data]
-    ports: ["5432:5432"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sparky"]
-      interval: 5s
-      retries: 10
-
-  # Database browser on localhost:8081. Started by just db.
-  pgweb:
-    image: mirror.gcr.io/sosedoff/pgweb:latest
-    mem_limit: ${SPARKY_MEM_PGWEB:-128m}
-    profiles: [db]
-    environment:
-      PGWEB_DATABASE_URL: postgres://sparky:sparky@postgres:5432/sparky?sslmode=disable
-    ports: ["127.0.0.1:8081:8081"]
-    depends_on:
-      postgres: { condition: service_healthy }
-    restart: unless-stopped
-
-  # Standalone only: the live query cache and its leases.
-  redis:
-    image: mirror.gcr.io/library/redis:7-alpine
-    mem_limit: ${SPARKY_MEM_REDIS:-384m}
-    # Cache entries carry a TTL; at the memory cap the least recently used of them go first.
-    command:
-      ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
-    volumes: [redisdata:/data]
-    ports: ["6379:6379"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # Standalone only: page snapshots the scraper keeps.
-  minio:
-    image: quay.io/minio/minio
-    mem_limit: ${SPARKY_MEM_MINIO:-1g}
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    volumes: [miniodata:/data]
-    ports: ["9000:9000", "9001:9001"]
-
   # Trace UI on localhost:6006, without authentication. Started by just phoenix.
   phoenix:
     image: mirror.gcr.io/arizephoenix/phoenix:version-20.11.0
@@ -339,11 +186,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
-  redisdata:
-  miniodata:
   modelcache:
-  firecrawldata:
   phoenixdata:
   promdata:
   sandboxdata:

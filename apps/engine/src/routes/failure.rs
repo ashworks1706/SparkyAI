@@ -65,11 +65,6 @@ impl Failure {
     pub(crate) fn body(&self) -> &ErrorBody {
         &self.body
     }
-
-    /// The status with the message as plain text, for routes that answer without a JSON body.
-    pub(crate) fn into_text(self) -> Response {
-        (self.status, self.body.error).into_response()
-    }
 }
 
 impl IntoResponse for Failure {

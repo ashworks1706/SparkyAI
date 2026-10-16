@@ -1,5 +1,4 @@
 //! SparkyAI engine: agent, HTTP surface, and store adapters behind the harness traits.
-#![cfg_attr(not(feature = "standalone"), allow(dead_code))]
 
 mod core;
 mod routes;

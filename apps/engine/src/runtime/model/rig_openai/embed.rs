@@ -15,7 +15,7 @@ pub struct RigEmbedder {
 }
 
 impl RigEmbedder {
-    /// Wraps model_name on client. dim must match the index the scraper wrote.
+    /// Wraps model_name on client. dim must match the vectors the platform stores.
     pub fn new(client: CompletionsClient, model_name: impl Into<String>, dim: usize) -> Self {
         Self {
             model: GenericEmbeddingModel::new(client, model_name, dim),
@@ -56,9 +56,5 @@ impl Embedder for RigEmbedder {
             out.push(e.vec.into_iter().map(|x| x as f32).collect());
         }
         Ok(out)
-    }
-
-    fn dim(&self) -> usize {
-        self.dim
     }
 }

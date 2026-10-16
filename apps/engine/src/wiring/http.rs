@@ -1,6 +1,5 @@
 //! The HTTP surface: the state each group of routes reads, and the router over them.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,7 +17,6 @@ use crate::routes::oauth::OAuthState;
 use crate::routes::profile::ProfileState;
 use crate::routes::rate_limit::RateLimiter;
 use crate::runtime::harness::agent::Agent;
-use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::sandbox::ContainerSandbox;
 
 /// What the chat routes need, gathered from the settings that describe it.
@@ -72,18 +70,11 @@ pub(super) fn sandbox_state(
     }
 }
 
-/// The state the OAuth routes read: the grant store and the web client of each provider.
-pub(super) fn oauth_state(
-    cfg: &Config,
-    store: Arc<dyn OAuthStore>,
-    providers: HashMap<String, Arc<WebOAuthClient>>,
-) -> OAuthState {
+/// The state the account link routes read: the grant store.
+pub(super) fn oauth_state(cfg: &Config, store: Arc<dyn OAuthStore>) -> OAuthState {
     OAuthState {
         store,
-        providers,
         service_token: cfg.engine.service_token.clone(),
-        // A login link stays valid for ten minutes.
-        state_ttl: Duration::from_mins(10),
     }
 }
 

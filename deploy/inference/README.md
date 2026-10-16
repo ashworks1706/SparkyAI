@@ -1,7 +1,8 @@
 # deploy/inference
 
 Model serving: `llama-server` from llama.cpp, configured here. Every model speaks the
-OpenAI-compatible API, the only surface `apps/engine` and `apps/scraper` use.
+OpenAI-compatible API, the only surface `apps/engine` uses. Platform embeds its index with the
+same embedding model, so its vectors match the engine's queries.
 
 `llama-server` serves one model per process, so each role is its own container.
 
@@ -63,7 +64,9 @@ lower `--n-gpu-layers` to spill to CPU.
 
 ## Deployed
 
-Same two services on a GPU host with a larger chat GGUF. Size the GPU for the weights plus a
+Same two services on a GPU host with a larger chat GGUF. The Runpod image defaults to
+`unsloth/Qwen3.5-9B-GGUF:Q4_K_M` (5.7 GB, reads images) at `--parallel 2 --ctx-size 16384`,
+sized for a 12 GB card such as an RTX 3080 Ti. Size the GPU for the weights plus a
 KV cache proportional to `--ctx-size`. Rough starting points:
 
 | VRAM | `SPARKY_CHAT_PARALLEL` | `SPARKY_CHAT_CTX` |

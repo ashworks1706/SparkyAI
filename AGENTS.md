@@ -10,7 +10,6 @@ Rust rebuild of an ASU student copilot. `docs/ROADMAP.md` says what we build and
 just doctor | env | hooks | bootstrap   # first run
 just check            # the gate: fmt-check, lint, test every unit. CI and the pre-commit hook run the same recipes for the units a change touches
 just check-rust       # cargo fmt --check, clippy -D warnings, test, scripts/check-deps.sh
-just check-scraper    # ruff + pytest in apps/scraper
 just check-evals      # ruff + pytest in apps/evals
 just check-web        # eslint + tsc --noEmit + vitest + vite build in apps/web
 just fmt              # format every unit in place
@@ -18,23 +17,16 @@ just setup            # install every unit's deps
 just clean            # remove build artifacts and virtualenvs
 just engine | discord # run a Rust app (needs .env, see .env.example)
 just cli              # developer console (TUI): every unit, its logs, and tasks
-just scraper ...      # e.g. just scraper run library_hours, just scraper serve, just scraper login
-just scraper-session  # require the admin ASU session; sign in through MyASU and Duo if it is gone
-just migrate
 just eval ...         # run, baseline, compare: golden cases against the engine
-just infra            # postgres, redis, minio
 just phoenix          # Phoenix on :6006: traces, LLM generations, product events
-just db               # pgweb on :8081
 just model            # llama-server chat and embed (CUDA)
 just model-cpu        # the same on the processor, no GPU
-just crawl            # self-hosted Firecrawl for the scraper
-just search           # self-hosted SearXNG on :8888 behind the web source of search_live
 just metrics          # prometheus (:9090) + grafana (:3000)
 just gpu-metrics      # nvidia-smi exporter into prometheus; needs a GPU
 just web              # Vite dev server on :5173
 just sandbox-images   # build the run_sandbox image and its egress proxy
 just sandbox-down     # remove the sandbox containers and egress proxy the engine started
-just images           # build the rust and scraper images locally
+just images           # build the rust image locally
 just ps               # what compose has, across every profile
 just up | down | logs # full compose stack (dev, builds locally)
 just prod-up | prod-down | prod-logs   # GHCR images, SPARKY_IMAGE_TAG
@@ -48,17 +40,16 @@ A change is not done until `just check` passes.
 Everything that runs is under `apps/`. Language is never a folder; ASU domain is never a folder.
 
 ```
-apps/engine/      Rust bin: the agent and HTTP surface. core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores, routes. One concern per file; split a module that grows past that.
+apps/engine/      Rust bin: the agent and HTTP surface. core/{config,telemetry,types,traits,tests}, runtime/{harness,model,tools}, stores (over the Platform HTTP API), routes. One concern per file; split a module that grows past that.
 apps/discord/     Rust bin: serenity bot, HTTP client of engine, never links it. core/{config,telemetry,types,tests}, bot, engine, render, access, analytics. One span per interaction and per product event.
 apps/cli/         Rust bin sparky: developer console (ratatui). Drives just recipes and docker compose and tails their output. Links nothing in-repo. app/{control,keys,ui}, units/{catalog,health,logs,output,runner,sandbox}, core/{config,types,tests}.
-apps/scraper/     Python: fetch, chunk, embed, write the index. scraper serve runs the jobs queue: live search_live jobs, indexing of their results, scheduled source runs. Owns migrations. core/{settings,types,telemetry,tests}, ingest, query, sources, store. One span per source run.
 apps/web/         static frontend + admin UI (Vite + React)
 apps/evals/       Python: eval runners, suites, cases, and the baseline gate. core/{settings,types,tests}, cli, runner, suites, cases.
 deploy/           compose, one Dockerfile per image, inference/ (model serving config)
 docs/             ROADMAP.md, ARCHITECTURE.md
 ```
 
-Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-server, or with `platform.enabled` to llama-server and the platform HTTP API alone (see Store modes in ARCHITECTURE.md); scraper to Firecrawl, SearXNG, PostgreSQL, llama-server embed; every app to Phoenix for spans and events. The scraper never serves a request. It and the engine meet only in the database; live `search_live` jobs reach the scraper through the `jobs` table. Redis is the engine's alone: the live query cache and its leases. `apps/scraper/migrations` is the contract.
+Processes talk only via: discord to engine; engine to llama-server and the Platform HTTP API and MCP (see Platform stores in ARCHITECTURE.md); every app to Phoenix for spans and events. Platform ([asusoda/platform](https://github.com/asusoda/platform), a separate repo) holds conversations, memories, the profile graph, confirmations, knowledge, live ASU queries, and linked accounts. The engine opens no database connection.
 
 ## Dependencies we build on
 
@@ -68,7 +59,7 @@ Processes talk only via: discord to engine; engine to PostgreSQL, Redis, llama-s
 
 ## Config
 
-Two layers, lowest first: `sparky.toml` (committed), then `SPARKY_<SECTION>__<KEY>` env vars from `.env`, which win. Both load into `apps/engine/src/core/config/mod.rs`, `apps/discord/src/core/config.rs`, `apps/cli/src/core/config.rs` (Rust, figment) and `core/settings.py` (Python, tomllib through pydantic-settings). `SPARKY_CONFIG_FILE` points elsewhere.
+Two layers, lowest first: `sparky.toml` (committed), then `SPARKY_<SECTION>__<KEY>` env vars from `.env`, which win. Both load into `apps/engine/src/core/config/mod.rs`, `apps/discord/src/core/config.rs`, `apps/cli/src/core/config.rs` (Rust, figment) and `apps/evals/core/settings.py` (Python, tomllib through pydantic-settings). `SPARKY_CONFIG_FILE` points elsewhere.
 
 **Every tunable value goes in `sparky.toml`**, at its default, in the same change that adds it. That covers every harness knob: loop limits, prompt budgets and their wording, sampling, retrieval tuning, policy, which tools register, tracing, and the HTTP surface. `.env` holds only secrets, per-machine URLs, and what docker compose and the justfile read; a new secret goes in `.env.example` too. Secrets are `SecretString`; never log one. Reject a bad combination in `Config::validate` at boot; never clamp at runtime.
 
@@ -79,7 +70,7 @@ Two layers, lowest first: `sparky.toml` (committed), then `SPARKY_<SECTION>__<KE
 - A crate's public surface is its constructors and the `harness` traits it implements. Nothing reaches into another adapter.
 - No global mutable state. Per-request data goes in `RequestContext`.
 - Every replaceable dependency sits behind a trait in `engine/src/core/traits` with a test double in `core/tests/support`.
-- The engine reads the database; only `apps/scraper` writes the retrieval index and fetches pages for it. With `sandbox.egress` on, `run_sandbox` may read public pages through the egress proxy; nothing it reads is indexed. A live query result answers its caller first; the scraper then indexes the page through the regular pipeline as a queued job, unless its query source sets `index = False`.
+- The engine never writes the retrieval index or fetches pages for it; Platform crawls, indexes, and runs live queries. With `sandbox.egress` on, `run_sandbox` may read public pages through the egress proxy; nothing it reads is indexed.
 - Model output is never written back as retrieval evidence.
 - Write-side tools go through `Policy`; consequential actions require confirmation.
 - Live progress is a `TraceEvent`: give a new variant a line in `TraceEvent::progress` (or `None`) and every watching client shows it. Clients render the `text` the engine sends, never their own copy of the enum.

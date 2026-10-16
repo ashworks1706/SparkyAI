@@ -163,10 +163,6 @@ fn kind_matches_the_name_each_event_serialises_under() {
             result: Ok(String::new()),
             duration_ms: 0,
         },
-        TraceEvent::QueryCache {
-            source: String::new(),
-            outcome: crate::core::types::knowledge::cache::CacheOutcome::Miss,
-        },
         TraceEvent::Completed {
             status: RunStatus::Answered,
             steps: 1,

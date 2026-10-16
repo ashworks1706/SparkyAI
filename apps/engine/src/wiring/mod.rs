@@ -1,18 +1,14 @@
 //! Construct concrete adapters, hand them to the harness, build the router, serve.
 //!
-//! The only place that knows the mode: standalone composes the self-hosted stores, platform the
-//! platform ones. Everything past Stores sees traits alone.
+//! Every store is the platform's; everything past Stores sees traits alone.
 
 mod agent;
 mod boot;
 mod http;
 mod platform;
 mod prompt;
-#[cfg(feature = "standalone")]
-mod standalone;
 pub(crate) mod tools;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,7 +31,6 @@ use crate::runtime::harness::safety::policy::RiskPolicy;
 use crate::runtime::harness::trace::Fanout;
 use crate::runtime::model::limit::Limited;
 use crate::runtime::model::rig_openai::{self, RigChat, RigEmbedder};
-use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::files::HttpFiles;
 
 use self::agent::{agent_config, compactor, guardrail, profile_writer, trace_sink};
@@ -60,31 +55,8 @@ struct Stores {
     profile_graph: Option<Arc<dyn ProfileGraph>>,
     /// Per-user account grants.
     oauth_store: Arc<dyn OAuthStore>,
-    /// The web OAuth client of each provider whose login this engine runs.
-    oauth_providers: HashMap<String, Arc<WebOAuthClient>>,
     /// What readiness checks besides the model.
     probes: Vec<Arc<dyn Probe>>,
-}
-
-/// The platform stores when platform.enabled is set, else the standalone ones.
-#[cfg_attr(not(feature = "standalone"), allow(clippy::unused_async))]
-async fn stores(
-    cfg: &Config,
-    embedder: &Arc<dyn Embedder>,
-    trace: &Arc<dyn TraceSink>,
-) -> anyhow::Result<Stores> {
-    if cfg.platform.enabled {
-        return platform::stores(cfg, embedder);
-    }
-    #[cfg(feature = "standalone")]
-    {
-        standalone::stores(cfg, embedder, trace).await
-    }
-    #[cfg(not(feature = "standalone"))]
-    {
-        let _ = trace;
-        anyhow::bail!("this engine is built without the standalone feature; set platform.enabled")
-    }
 }
 
 /// Serves until shutdown.
@@ -119,7 +91,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
     ));
 
     // Every configured dependency must be reachable at boot.
-    let stores = stores(&cfg, &embedder, &trace).await?;
+    let stores = platform::stores(&cfg, &embedder)?;
     let sandbox = sandbox(&cfg).await?;
     let (tools, mcp_names) = build_tools(
         &cfg,
@@ -127,7 +99,6 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
         Arc::clone(&stores.retriever),
         sandbox.clone(),
         Arc::clone(&stores.oauth_store),
-        stores.oauth_providers.clone(),
     )
     .await?;
     // Measured at boot with every tool offered, which is the largest the section ever gets.
@@ -165,7 +136,7 @@ pub async fn serve(cfg: Config) -> anyhow::Result<()> {
 
     let state = chat_state(&cfg, agent, stores.conversations, stores.confirmations);
     let profile = profile_state(&cfg, profile_graph, state.rate_limit.clone());
-    let oauth = oauth_state(&cfg, stores.oauth_store, stores.oauth_providers);
+    let oauth = oauth_state(&cfg, stores.oauth_store);
     let router = http_router(&cfg, state, profile, oauth, stores.probes, sandbox);
 
     let listener = tokio::net::TcpListener::bind(&cfg.app.http_addr).await?;

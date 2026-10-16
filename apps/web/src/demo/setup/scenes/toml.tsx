@@ -4,7 +4,7 @@ import { EXPLORER, REST, spot } from "../editor";
 import { Editor } from "../kit";
 import { charCount, code, firstChars, type Code } from "../text";
 
-/** sparky.toml: the time zone, the campus name, Canvas on, and an MCP server. */
+/** sparky.toml: the time zone, the campus name, Google Calendar on, and an MCP server. */
 const tomlFile = (t: number): { lines: Code[]; added: number[] } => {
   const server = [
     code(["[[mcp.servers]]", "kw"]),
@@ -32,9 +32,9 @@ const tomlFile = (t: number): { lines: Code[]; added: number[] } => {
     code(["enabled", "key"], " = ", ["true", "num"]),
     code(["egress", "key"], " = ", ["true", "num"]),
     [],
-    code(["[canvas]", "kw"]),
+    code(["[gcal]", "kw"]),
     code(["enabled", "key"], " = ", [t >= 3.6 ? "true" : "false", "num"]),
-    code(["base_url", "key"], " = ", [`"https://${t >= 4.0 ? typed(CAMPUS.canvas, t, 4.0, 4.6) : "canvas.asu.edu"}"`, "str"]),
+    code(["max_items", "key"], " = ", [t >= 4.0 ? typed("25", t, 4.0, 4.6) : "15", "num"]),
     [],
     code(["[papers]", "kw"]),
     code(["enabled", "key"], " = ", ["true", "num"]),
@@ -51,7 +51,7 @@ const tomlFile = (t: number): { lines: Code[]; added: number[] } => {
   return { lines, added };
 };
 
-/** Scene: set the time zone and campus name, turn on Canvas, and add an MCP server in sparky.toml. */
+/** Scene: set the time zone and campus name, turn on Google Calendar, and add an MCP server in sparky.toml. */
 export const toml: Scene = {
   title: "Turn on tools and add an MCP server",
   length: 10.4,

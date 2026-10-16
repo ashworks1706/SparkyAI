@@ -3,39 +3,32 @@
 ## Local
 
 ```bash
-just bootstrap     # .env, git hooks, deps, datastores (postgres, redis, minio), schema
+just bootstrap     # .env, git hooks, deps
 just engine        # then in separate shells: just discord, just web
 just up            # the compose stack, built locally
 ```
 
-`just up` starts engine, discord, scraper, Postgres 17 (pgvector), Redis 7, and MinIO. `engine` and `discord` share one image (`rust.Dockerfile`) with different entrypoints. `just model` starts the chat and embed models (profile `model`). `just crawl` starts self-hosted Firecrawl for the scraper (five containers, API on :3002). `just search` starts SearXNG on :8888.
+The engine needs a running Platform: set `SPARKY_PLATFORM__URL`, `SPARKY_PLATFORM__TOKEN`, and `SPARKY_PLATFORM__MCP_URL` in `.env`. `just up` starts engine, discord and `sandboxd`. `engine` and `discord` share one image (`rust.Dockerfile`) with different entrypoints. `just model` starts the chat and embed models (profile `model`).
 
 ## Production
 
 ```bash
 git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
 cp .env.example .env               # secrets and per-machine URLs; SPARKY_APP__ENV=production
-SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images; datastores have no host ports
+SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images
 just prod-logs engine
 ```
 
-`deploy/compose.prod.yml` overrides `compose.yml` with prebuilt images and no host ports except engine `:8080`. Phoenix, the datastores, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of the engine. Settings live in the committed `sparky.toml`.
+`deploy/compose.prod.yml` overrides `compose.yml` with prebuilt images and no host ports except engine `:8080`. Phoenix, Prometheus, and Grafana are reachable only over a tunnel. Put a reverse proxy with TLS in front of the engine. Settings live in the committed `sparky.toml`.
 
 ## RunPod
 
-`deploy/docker/runpod.Dockerfile` builds `ghcr.io/ashworks1706/sparkyai-runpod`: all of Sparky in one GPU pod. A RunPod pod cannot start containers, so supervisord (`deploy/runpod/supervisord.conf`) runs chat and embed `llama-server`, the engine, the bot, `scraper serve`, Postgres 16 with pgvector (the Ubuntu 24.04 package), Redis, MinIO and SearXNG as processes, and runs `scraper migrate` at each boot. It differs from compose in three ways:
+`deploy/docker/runpod.Dockerfile` builds `ghcr.io/ashworks1706/sparkyai-runpod`: all of Sparky in one GPU pod. A RunPod pod cannot start containers, so supervisord (`deploy/runpod/supervisord.conf`) runs chat and embed `llama-server`, the engine, and the bot as processes. The stores, knowledge search, live queries and linked accounts live on Platform. It differs from compose in two ways:
 
 - `run_sandbox` is off (`SPARKY_SANDBOX__ENABLED=false`).
-- The scraper uses the `http` fetcher; there is no Firecrawl.
 - Phoenix is not included; export stays off until `SPARKY_TELEMETRY__PHOENIX_URL` points at one.
 
-Create the pod with the image, a volume at `/workspace` (database, object store, model cache, admin session, daily `pg_dump` in `backups/`), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SEARXNG_SECRET`, `SPARKY_APP__ENV=production`, and `HF_TOKEN` (a read token; community hosts share an IP that the Hugging Face Hub rate-limits without one). Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`.
-
-### Platform mode
-
-With `SPARKY_PLATFORM__ENABLED=true`, `SPARKY_PLATFORM__URL` and `SPARKY_PLATFORM__TOKEN` in the pod environment, the stores, knowledge search, live queries and linked accounts live on Platform. `start.sh` then starts only the two model servers, the engine and the bot; Postgres, Redis, MinIO, SearXNG, the scraper and backups stay off and no database is created. The same image runs both modes. The volume then holds only the model cache.
-
-Set `SPARKY_PLATFORM__MCP_URL` as well to register the platform tools. Canvas (`platform_canvas_*`), the Sun Devil Central clubs and events (`platform_asu_clubs`, `platform_asu_events`) and the `/login` link then come from Platform, so `[canvas]`, `[oauth.*]` and `[auth]` stay off. The scopes the token needs are listed in the `[platform]` section of `sparky.toml`.
+Create the pod with the image, a volume at `/workspace` (the model cache), a host CUDA version of at least 12.8, and these environment variables: `SPARKY_DISCORD__TOKEN`, `SPARKY_DISCORD__GUILD_ID`, `SPARKY_ENGINE__SERVICE_TOKEN`, `SPARKY_PLATFORM__URL`, `SPARKY_PLATFORM__TOKEN`, `SPARKY_PLATFORM__MCP_URL`, `SPARKY_APP__ENV=production`, and `HF_TOKEN` (a read token; community hosts share an IP that the Hugging Face Hub rate-limits without one). Every service listens on `127.0.0.1`; the pod exposes no port. The first boot downloads the GGUFs into `/workspace/models`. The scopes the Platform token needs are listed in the `[platform]` section of `sparky.toml`.
 
 `SPARKY_MODELS_API_KEY` makes both model servers listen on every interface and require that key. Expose `8000/http` (chat) and `8001/http` (embed) on the pod to let other apps use them: Platform's `EMBEDDINGS_URL` for indexing, so its vectors match Sparky's queries, and Hermes or another agent for chat. The engine uses the same key.
 
@@ -86,17 +79,15 @@ The GPU deploy was one always-on community RTX 3070 pod named `sparky` at $0.13/
 | Deploy a change | Merge to `main`; CD publishes `sparkyai-runpod:<sha>` when its inputs change. Set the pod image to that tag. Changing the image restarts the pod. |
 | Change a secret | Edit the pod environment in the RunPod console. The pod restarts with the new values. |
 | Read logs | Pod logs in the console. Every service writes to the container log; supervisord prefixes its own state changes. |
-| Restart | Restart the pod. `start.sh` reruns, supervisord starts every service, and `scraper migrate` applies new migrations. |
+| Restart | Restart the pod. `start.sh` reruns and supervisord starts every service. |
 | Run a one-off command | Set the container start command to `bash -c "<command>; exec /usr/local/bin/sparky-start"`, restart, read the output at the top of the logs, then clear the start command. The pod has no SSH key registered, so this is the way in. |
 | Check the GPU | Run `nvidia-smi` as above. The console GPU memory reading is not reliable. |
 
-State lives on the host disk under `/workspace`: Postgres, Redis, MinIO, the GGUF cache, and the daily `pg_dump` in `backups/` (the newest `SPARKY_BACKUP_KEEP`, default 7). Community pods cannot attach network volumes, so if the host fails, the pod and its backups are lost together. To recover, create a new pod as above. The first boot initializes an empty database and downloads the models again; the scraper's scheduled sources rebuild the index.
-
-To move to a new host with the data, stop the bot, copy the newest dump out with `runpodctl send` from a pod terminal (SSH or the console web terminal), create the new pod, and restore with `pg_restore --clean --if-exists -d postgres://sparky:sparky@127.0.0.1:5432/sparky`.
+State on the pod is the GGUF cache under `/workspace/models`; conversations, memory and the index live on Platform. If the host fails, create a new pod as above; the first boot downloads the models again.
 
 ### Troubleshooting
 
-Start with the pod logs. Search for `exited:`, `gave up` and `FATAL` to find the failing program; supervisord names it (`chat`, `embed`, `engine`, `discord`, `scraper`, `migrate`, `postgres`, `redis`, `minio`, `searxng`, `backup`), and the lines just before carry its own error.
+Start with the pod logs. Search for `exited:`, `gave up` and `FATAL` to find the failing program; supervisord names it (`chat`, `embed`, `engine`, `discord`), and the lines just before carry its own error.
 
 | Symptom in the logs or Discord | Cause | Fix |
 |---|---|---|
@@ -106,14 +97,12 @@ Start with the pod logs. Search for `exited:`, `gave up` and `FATAL` to find the
 | `chat`/`embed` log `GET failed (429)` from the Hub | No `HF_TOKEN`; the community host shares a rate-limited IP | Set `HF_TOKEN` to a read token. Downloads land in `/workspace/models` and are reused after that. |
 | `chat`/`embed` log `out of memory` or a CUDA allocation error | The models do not fit in 8 GB | Lower `SPARKY_CHAT_CTX`, pick a smaller GGUF, or move to a larger GPU (see GPU deployment). |
 | Answers are very slow; `nvidia-smi` shows no `llama-server` processes | The models run on the CPU | Recreate the pod with a host CUDA of 12.8 or newer. |
-| `engine` exits status 1 at boot | `Config::validate` rejected the configuration | The line before the exit names the field. Fix the pod env or `sparky.toml` and ship a new image. |
-| `scraper` logs `relation ... does not exist` | It started before `migrate` finished | Harmless if it stops after `migrate` logs `exited: migrate (exit status 0; expected)`. Otherwise read the `migrate` lines. |
-| Scraper jobs fail with `Connection refused` | `embed` is down | Fix `embed` first. |
-| Pod is gone, or the console says the machine is unavailable | The community host left | Create a new pod (see Operating the pod). The database starts empty. |
+| `engine` exits status 1 at boot | `Config::validate` rejected the configuration, or Platform is unreachable | The line before the exit names the field or the failed Platform call. Fix the pod env or `sparky.toml` and ship a new image. |
+| Pod is gone, or the console says the machine is unavailable | The community host left | Create a new pod (see Operating the pod). |
 | Pod stuck pulling the image, or `unauthorized` | The GHCR package is private, or the tag does not exist | Make `sparkyai-runpod` public in the GitHub package settings; check the tag in the CD run. |
-| CD `image (runpod)` job fails | A build input moved upstream (MinIO stopped publishing binaries in 2026, for example) | Read the failing step in the Actions log and pin or replace that input in `runpod.Dockerfile`. |
+| CD `image (runpod)` job fails | A build input moved upstream (the llama.cpp server image, for example) | Read the failing step in the Actions log and pin or replace that input in `runpod.Dockerfile`. |
 
-These lines appear on every healthy boot and need no action: SearXNG `ahmia` and `torch` engine registration errors, the Redis memory overcommit warning, the MinIO default credentials warning, one Postgres `the database system is starting up`, the llama.cpp `control-looking token` warning, and `phoenix url is unset`.
+These lines appear on every healthy boot and need no action: the llama.cpp `control-looking token` warning and `phoenix url is unset`.
 
 ## Models
 
@@ -138,13 +127,12 @@ The runtime is probed at boot. `sandbox.required = true` refuses to start withou
 
 ## Images
 
-On push to `main`, CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-scraper`, `sparkyai-sandbox` and `sparkyai-sandbox-proxy`, tagged `<sha>` and `main`, only for images whose inputs changed (`workflow_dispatch` rebuilds all).
+On push to `main`, CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-sandbox`, `sparkyai-sandbox-proxy` and `sparkyai-runpod`, tagged `<sha>` and `main`, only for images whose inputs changed (`workflow_dispatch` rebuilds all).
 
 ## Observability
 
 - Traces, LLM generations, product events: self-hosted Phoenix, below. Every app exports OpenTelemetry to `SPARKY_TELEMETRY__PHOENIX_URL` (compose sets it from `SPARKY_PHOENIX_URL`); an empty URL disables export. Spans land in the project named by `telemetry.project_name`. A Discord conversation is one `session.id`, and each product event is its own span.
 - Logs: pretty in development, JSON to stdout otherwise. The developer console also writes `.sparky/logs/`; deployed logs stay with the platform log driver.
-- Database: `just db` starts pgweb on http://localhost:8081, loopback only. It edits live data. `chunks.embedding` does not render usefully in a table.
 - Metrics: `just metrics` starts Prometheus (:9090) and Grafana (:3000, dashboard **SparkyAI inference**), both on loopback. They scrape `llama-server` (`chat` and `embed` run with `--metrics`). On a GPU host `just gpu-metrics` adds utilisation, VRAM and temperature panels; the exporter runs under the nvidia container runtime with the `utility` driver capability.
 
 Phoenix holds one `llm` span per model call (full prompt, full reply, token counts, latency) inside a trace tree per conversation; [loupe](https://github.com/ashworks1706/loupe) reads these spans for fine-tuning. Prometheus holds server-side time series: throughput, queue depth, batching.

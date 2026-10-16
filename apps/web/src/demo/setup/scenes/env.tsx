@@ -3,18 +3,18 @@ import { EXPLORER, REST, spot } from "../editor";
 import { Editor } from "../kit";
 import { code, type Code } from "../text";
 
-/** .env: the Discord bot and the Canvas token. Secrets show as dots. */
+/** .env: the Discord bot and the Platform token. Secrets show as dots. */
 const envFile = (t: number): { lines: Code[]; added: number[] } => ({
   lines: [
     code(["SPARKY_DISCORD__TOKEN", "key"], "=", [typed("•".repeat(28), t, 0.4, 0.8), "str"]),
     code(["SPARKY_DISCORD__GUILD_ID", "key"], "=", [t >= 0.95 ? "1290457783312334848" : "0", "num"]),
-    ...(t >= 1.2 ? [code(["SPARKY_CANVAS__ACCESS_TOKEN", "key"], "=", [typed("•".repeat(24), t, 1.5, 1.9), "str"])] : []),
+    ...(t >= 1.2 ? [code(["SPARKY_PLATFORM__TOKEN", "key"], "=", [typed("•".repeat(24), t, 1.5, 1.9), "str"])] : []),
     code(["SPARKY_MODEL__BASE_URL", "key"], "=", ["http://localhost:8000/v1", "str"]),
   ],
   added: t >= 1.2 ? [2] : [],
 });
 
-/** Scene: add the Discord and Canvas secrets to .env. */
+/** Scene: add the Discord and Platform secrets to .env. */
 export const env: Scene = {
   title: "Add the secrets",
   length: 3.4,

@@ -1,6 +1,5 @@
 //! The tool set: search, sandbox, MCP servers, and the enabled integrations.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,9 +12,6 @@ use crate::core::traits::oauth::OAuthStore;
 use crate::core::traits::tools::Tool;
 use crate::core::types::tools::sandbox::Limits as SandboxLimits;
 use crate::runtime::harness::tools::ToolSet;
-#[cfg(feature = "standalone")]
-use crate::runtime::tools::account::canvas;
-use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::account::{gcal, outlook};
 use crate::runtime::tools::knowledge::search;
 use crate::runtime::tools::knowledge::search::live::{LiveSearch, Wording as LiveWording};
@@ -24,7 +20,7 @@ use crate::runtime::tools::mcp::{self, McpLimits};
 use crate::runtime::tools::sandbox::{
     ContainerSandbox, SandboxTool, Wording as SandboxWording, reap_sessions,
 };
-use crate::runtime::tools::{papers, transit, wiki};
+use crate::runtime::tools::{papers, wiki};
 
 /// Builds the tools of one integration, or says why it could not.
 type Build<'a> = Box<dyn FnOnce() -> Result<Vec<Arc<dyn Tool>>, String> + 'a>;
@@ -39,7 +35,6 @@ pub(crate) async fn build_tools(
     retriever: Arc<dyn Retriever>,
     sandbox: Option<Arc<ContainerSandbox>>,
     oauth_store: Arc<dyn OAuthStore>,
-    oauth_providers: HashMap<String, Arc<WebOAuthClient>>,
 ) -> anyhow::Result<(ToolSet, Vec<String>)> {
     let disabled = |name: &str| cfg.tools.disabled.iter().any(|d| d == name);
     let mut tools = ToolSet::new();
@@ -114,7 +109,7 @@ pub(crate) async fn build_tools(
         }
         tracing::info!(url = %url, count = registered, "platform mcp tools registered");
     }
-    for (integration, enabled, build) in integrations(cfg, &oauth_store, &oauth_providers) {
+    for (integration, enabled, build) in integrations(cfg, &oauth_store) {
         if !enabled {
             continue;
         }
@@ -126,49 +121,21 @@ pub(crate) async fn build_tools(
 }
 
 /// Every integration that adds tools, in registration order.
-fn integrations<'a>(
-    cfg: &'a Config,
-    oauth_store: &'a Arc<dyn OAuthStore>,
-    oauth_providers: &'a HashMap<String, Arc<WebOAuthClient>>,
-) -> Vec<Integration<'a>> {
+fn integrations<'a>(cfg: &'a Config, oauth_store: &'a Arc<dyn OAuthStore>) -> Vec<Integration<'a>> {
     let mut all: Vec<Integration<'a>> = Vec::new();
-    // Standalone only. In platform mode Canvas is the platform_canvas_* tools.
-    #[cfg(feature = "standalone")]
-    all.push((
-        "canvas",
-        cfg.canvas.enabled && !cfg.platform.enabled,
-        Box::new(move || {
-            canvas::tools(
-                &cfg.canvas,
-                oauth_store.clone(),
-                oauth_providers.get("canvas").cloned(),
-            )
-            .map_err(|e| e.to_string())
-        }),
-    ));
-    all.extend::<[Integration<'a>; 5]>([
+    all.extend::<[Integration<'a>; 4]>([
         (
             "outlook",
             cfg.outlook.enabled,
             Box::new(move || {
-                outlook::tools(
-                    &cfg.outlook,
-                    oauth_store.clone(),
-                    oauth_providers.get("microsoft").cloned(),
-                )
-                .map_err(|e| e.to_string())
+                outlook::tools(&cfg.outlook, oauth_store.clone()).map_err(|e| e.to_string())
             }),
         ),
         (
             "gcal",
             cfg.gcal.enabled,
             Box::new(move || {
-                gcal::tools(
-                    &cfg.gcal,
-                    oauth_store.clone(),
-                    oauth_providers.get("google").cloned(),
-                )
-                .map_err(|e| e.to_string())
+                gcal::tools(&cfg.gcal, oauth_store.clone()).map_err(|e| e.to_string())
             }),
         ),
         (
@@ -180,11 +147,6 @@ fn integrations<'a>(
             "wikipedia",
             cfg.wikipedia.enabled,
             Box::new(move || wiki::tools(&cfg.wikipedia)),
-        ),
-        (
-            "transit",
-            cfg.transit.enabled,
-            Box::new(move || transit::tools(&cfg.transit)),
         ),
     ]);
     all
@@ -235,22 +197,16 @@ async fn search_tools(
             tracing::warn!(
                 source = source.key(),
                 %difference,
-                "the tool and the scraper registry disagree; restart `just scraper serve` if it runs older code"
+                "the tool and the platform registry disagree"
             );
         }
     }
     // One line for every unpublished source.
-    if !unpublished.is_empty() && cfg.platform.enabled {
+    if !unpublished.is_empty() {
         tracing::info!(
             count = unpublished.len(),
             sources = %unpublished.join(", "),
             "the platform publishes no live query for these sources; search_live does not offer them"
-        );
-    } else if !unpublished.is_empty() {
-        tracing::warn!(
-            count = unpublished.len(),
-            sources = %unpublished.join(", "),
-            "the scraper has published no registry for these sources; run `just scraper serve`"
         );
     }
     let stored: Arc<dyn Tool> = Arc::new(StoredSearch::new(
@@ -264,12 +220,8 @@ async fn search_tools(
             empty: cfg.tools.nothing_stored.clone(),
         },
     ));
-    // In platform mode search_live offers only the sources the platform publishes, and the fallback.
-    let live_sources = if cfg.platform.enabled {
-        search::published_only(sources, &published, fallback)
-    } else {
-        sources
-    };
+    // search_live offers only the sources the platform publishes, and the fallback.
+    let live_sources = search::published_only(sources, &published, fallback);
     let live: Arc<dyn Tool> = Arc::new(LiveSearch::new(
         live_sources,
         queries,

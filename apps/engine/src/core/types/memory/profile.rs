@@ -55,9 +55,6 @@ pub enum ProfileError {
     /// The database rejected or could not run the operation.
     #[error("profile graph store: {0}")]
     Store(String),
-    /// A node label could not be embedded.
-    #[error("profile graph embedding: {0}")]
-    Embedding(String),
     /// The model answered with something the extraction shape does not fit.
     #[error("profile extraction malformed: {0}")]
     Malformed(String),

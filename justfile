@@ -20,8 +20,8 @@ hooks:
     git config core.hooksPath .githooks
     @echo "hooks installed: .githooks/pre-commit"
 
-# Set up a fresh clone: .env, hooks, deps, datastores, schema
-bootstrap: env hooks setup infra migrate
+# Set up a fresh clone: .env, hooks, deps
+bootstrap: env hooks setup
     @echo "ready. Next a model, because the engine answers nothing without one:"
     @echo "  GPU:    just model       llama-server on CUDA"
     @echo "  no GPU: just model-cpu   the same models on the processor, slowly"
@@ -31,19 +31,17 @@ bootstrap: env hooks setup infra migrate
 # ---------- everything ----------
 
 # Format, lint, and test every unit
-check: check-rust check-scraper check-evals check-web
+check: check-rust check-evals check-web
     @echo "all units ok"
 
 # Format every unit in place
 fmt:
     cargo fmt --all
-    cd apps/scraper && uvx ruff format . && uvx ruff check --fix .
     cd apps/evals && uvx ruff format . && uvx ruff check --fix .
     cd apps/web      && npx eslint . --fix
 
 # Install every unit's dependencies
 setup:
-    cd apps/scraper && uv sync --extra dev
     cd apps/evals && uv sync --extra dev
     cd apps/web      && npm ci
     cargo fetch
@@ -51,7 +49,7 @@ setup:
 # Remove build artifacts and virtualenvs
 clean:
     cargo clean
-    rm -rf apps/scraper/.venv apps/evals/.venv apps/web/node_modules apps/web/dist
+    rm -rf apps/evals/.venv apps/web/node_modules apps/web/dist
 
 # ---------- rust: engine + discord ----------
 
@@ -59,9 +57,7 @@ clean:
 check-rust:
     cargo fmt --all --check
     cargo clippy --workspace --all-targets -- -D warnings
-    cargo clippy -p engine --no-default-features --all-targets -- -D warnings
     cargo test --workspace
-    cargo test -p engine --no-default-features
     ./scripts/check-deps.sh
 
 # Run the engine
@@ -72,31 +68,15 @@ engine *ARGS:
 discord *ARGS:
     cargo run -p discord -- {{ARGS}}
 
-# Developer console; requires the admin session
-cli: scraper-session
+# Developer console
+cli:
     cargo run -p cli --release
 
-# ---------- python: scraper + evals ----------
-
-# Lint and test the scraper
-check-scraper:
-    cd apps/scraper && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
+# ---------- python: evals ----------
 
 # Lint and test evals
 check-evals:
-    cd apps/evals && uvx ruff check . && uvx ruff format --check . && uv run pytest -q
-
-# Run a scraper command, such as serve, run library_hours, or login
-scraper *ARGS:
-    cd apps/scraper && uv run scraper {{ARGS}}
-
-# Require the admin session; sign in through MyASU and Duo if it is missing
-scraper-session:
-    cd apps/scraper && uv run scraper login --if-needed
-
-# Apply migrations
-migrate:
-    cd apps/scraper && uv run scraper migrate
+    cd apps/evals && uvx ruff check . && uvx ruff format --check . && uv run --extra dev pytest -q
 
 # Run evals
 eval *ARGS:
@@ -114,13 +94,13 @@ web:
 
 # ---------- infra ----------
 
-# Start the dev stack; requires the admin session
-up *ARGS: scraper-session
+# Start the dev stack
+up *ARGS:
     docker compose -f deploy/compose.yml up -d {{ARGS}}
 
 # Stop the dev stack across every profile
 down: sandbox-down
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix down
+    docker compose -f deploy/compose.yml --profile model --profile metrics --profile gpu-metrics --profile phoenix down
 
 # Remove the sandbox containers and egress proxy the engine starts outside compose
 sandbox-down:
@@ -146,10 +126,6 @@ prod-down: sandbox-down
 prod-logs *ARGS:
     docker compose -f deploy/compose.yml -f deploy/compose.prod.yml logs -f {{ARGS}}
 
-# Start postgres, redis, and minio for a host-side engine
-infra *ARGS:
-    docker compose -f deploy/compose.yml up -d --wait {{ARGS}} postgres redis minio
-
 # Phoenix trace UI on localhost:6006
 phoenix *ARGS:
     docker compose -f deploy/compose.yml --profile phoenix up -d {{ARGS}} phoenix
@@ -162,18 +138,6 @@ model-cpu *ARGS:
 model *ARGS:
     docker compose -f deploy/compose.yml --profile model up -d {{ARGS}} chat embed
 
-# SearXNG for the web source of search_live on localhost:8888
-search *ARGS:
-    docker compose -f deploy/compose.yml --profile search up -d {{ARGS}} searxng
-
-# Self-hosted Firecrawl for the scraper on :3002
-crawl *ARGS:
-    docker compose -f deploy/compose.yml --profile crawl up -d {{ARGS}} firecrawl
-
-# pgweb database browser on localhost:8081
-db *ARGS:
-    docker compose -f deploy/compose.yml --profile db up -d {{ARGS}} pgweb
-
 # Prometheus (:9090) and Grafana (:3000); requires SPARKY_GRAFANA_PASSWORD
 metrics *ARGS:
     docker compose -f deploy/compose.yml --profile metrics up -d {{ARGS}} prometheus grafana
@@ -184,16 +148,15 @@ gpu-metrics *ARGS:
 
 # Compose containers across every profile
 ps:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix ps -a
+    docker compose -f deploy/compose.yml --profile model --profile metrics --profile gpu-metrics --profile phoenix ps -a
 
 # Follow dev stack logs across every profile
 logs *ARGS:
-    docker compose -f deploy/compose.yml --profile model --profile crawl --profile db --profile metrics --profile gpu-metrics --profile phoenix logs -f {{ARGS}}
+    docker compose -f deploy/compose.yml --profile model --profile metrics --profile gpu-metrics --profile phoenix logs -f {{ARGS}}
 
-# Build the rust and scraper images locally
+# Build the rust image locally
 images:
     docker build -f deploy/docker/rust.Dockerfile -t sparkyai-rust .
-    docker build -f deploy/docker/scraper.Dockerfile -t sparkyai-scraper .
 
 # Build the sandbox and egress proxy images under the tags the engine runs
 sandbox-images:

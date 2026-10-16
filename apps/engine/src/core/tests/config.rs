@@ -14,10 +14,9 @@ guild_id = 1
 [model]
 base_url = "http://localhost:8000/v1"
 api_key = ""
-[postgres]
-url = "postgres://localhost/x"
-[redis]
-url = "redis://localhost:6379"
+[platform]
+url = "https://platform.example.org"
+token = "plat_x"
 [embedding]
 base_url = "http://localhost:8001/v1"
 api_key = ""
@@ -147,10 +146,9 @@ base_url = "http://localhost:8000/v1"
 api_key = ""
 name = "m"
 max_tokens = 256
-[postgres]
-url = "postgres://localhost/x"
-[redis]
-url = "redis://localhost:6379"
+[platform]
+url = "https://platform.example.org"
+token = "plat_x"
 [embedding]
 base_url = "http://localhost:8001/v1"
 api_key = ""
@@ -192,58 +190,6 @@ fn a_bare_config_is_valid_and_takes_every_default() {
 }
 
 #[test]
-fn the_live_query_cache_needs_somewhere_to_keep_answers() {
-    // The cache is on by default.
-    let without = load("[query.cache]\nenabled = true\n");
-    assert!(without.is_ok(), "the base config names a redis section");
-
-    let e = err("[query]\ntimeout_secs = 90\n[query.cache]\nlease_secs = 30\n");
-    assert!(
-        e.contains("lease_secs") && e.contains("timeout_secs"),
-        "a lease shorter than a fetch lets two requests fetch the same query: {e}"
-    );
-
-    let e = err("[query.cache]\nhandoff_secs = 0\n");
-    assert!(e.contains("handoff_secs"), "{e}");
-
-    // Turning it off needs no redis at all.
-    assert!(load("[query.cache]\nenabled = false\n").is_ok());
-    // Nor does an engine that offers no search tools.
-    assert!(load("[tools]\nsearch = false\n").is_ok());
-}
-
-#[test]
-fn a_redis_url_of_the_wrong_shape_is_named_at_boot() {
-    // http://localhost:6379 reaches the right port and is not a Redis URL.
-    let e = err("[redis]\nurl = \"http://localhost:6379\"\n");
-    assert!(
-        e.contains("SPARKY_REDIS__URL") && e.contains("redis://"),
-        "{e}"
-    );
-}
-
-#[test]
-fn the_wait_between_looks_cannot_shrink() {
-    let e = err("[query]\npoll_ms = 500\npoll_max_ms = 100\n");
-    assert!(e.contains("poll_max_ms") && e.contains("poll_ms"), "{e}");
-}
-
-#[test]
-fn turning_off_both_retrieval_legs_is_rejected() {
-    // With neither leg the engine retrieves no evidence.
-    let e = err("[retrieval]\ndense = false\nlexical = false\n");
-    assert!(e.contains("both off"), "{e}");
-}
-
-#[test]
-fn a_dense_distance_cutoff_outside_the_cosine_range_is_rejected() {
-    let e = err("[retrieval]\nmax_distance = 0.0\n");
-    assert!(e.contains("retrieval.max_distance"), "{e}");
-    let e = err("[retrieval]\nmax_distance = 2.5\n");
-    assert!(e.contains("retrieval.max_distance"), "{e}");
-}
-
-#[test]
 fn a_negative_retrieval_window_is_rejected() {
     // 0 turns widening off; a negative value is a typo, and is not read as 0.
     let e = err("[retrieval]\nwindow = -1\n");
@@ -254,13 +200,6 @@ fn a_negative_retrieval_window_is_rejected() {
 fn a_section_budget_above_the_prompt_budget_is_rejected() {
     let e = err("[agent]\nprompt_budget_tokens = 1000\nhistory_budget_tokens = 4000\n");
     assert!(e.contains("history_budget_tokens"), "{e}");
-}
-
-#[test]
-fn a_text_search_configuration_that_is_not_an_identifier_is_rejected() {
-    // It is interpolated into SQL; only a plain identifier may reach the database.
-    let e = err("[retrieval]\ntext_search_config = \"english'; drop table chunks --\"\n");
-    assert!(e.contains("text_search_config"), "{e}");
 }
 
 #[test]
@@ -489,7 +428,7 @@ fn sandbox_egress_names_its_network_and_proxy() {
 }
 
 #[test]
-fn the_committed_google_calendar_tool_is_off_and_read_only() {
+fn the_committed_google_calendar_tool_is_off() {
     let file = concat!(env!("CARGO_MANIFEST_DIR"), "/../../sparky.toml");
     let cfg: Result<Config, String> = {
         use figment::providers::{Format, Toml};
@@ -503,14 +442,6 @@ fn the_committed_google_calendar_tool_is_off_and_read_only() {
         unreachable!("sparky.toml loads")
     };
     assert!(!cfg.gcal.enabled);
-    assert!(!cfg.oauth.google.enabled);
-    assert!(
-        cfg.oauth
-            .google
-            .scopes
-            .iter()
-            .all(|s| s.ends_with("readonly"))
-    );
     assert!(!cfg.mcp.servers.iter().any(|s| s.name == "google_calendar"));
 }
 
@@ -525,24 +456,8 @@ fn a_risk_pinned_outside_the_exposed_tools_is_rejected() {
 }
 
 #[test]
-fn an_enabled_google_oauth_client_needs_its_credentials() {
-    assert!(!ok("").oauth.google.enabled);
-    let e = err("[oauth.google]\nenabled = true\n");
-    assert!(e.contains("client_id"), "{e}");
-    ok(
-        "[oauth.google]\nenabled = true\nclient_id = \"c\"\nclient_secret = \"s\"\n\
-        redirect_url = \"https://x/cb\"\n",
-    );
-    let e = err(
-        "[oauth.google]\nenabled = true\nclient_id = \"c\"\nclient_secret = \"s\"\n\
-                 redirect_url = \"https://x/cb\"\ntoken_url = \"http://x/token\"\n",
-    );
-    assert!(e.contains("https"), "{e}");
-}
-
-#[test]
-fn platform_tools_need_platform_on_and_an_http_url() {
-    let on = "[platform]\nenabled = true\nurl = \"http://127.0.0.1:8000\"\ntoken = \"plat_x\"\n";
+fn platform_tools_need_an_http_mcp_url() {
+    let on = "[platform]\nurl = \"http://127.0.0.1:8000\"\ntoken = \"plat_x\"\n";
     assert_eq!(ok(on).platform.mcp_endpoint(), None);
     let with = format!("{on}mcp_url = \" http://127.0.0.1:8001/mcp \"\n");
     assert_eq!(
@@ -551,10 +466,4 @@ fn platform_tools_need_platform_on_and_an_http_url() {
     );
     let e = err(&format!("{on}mcp_url = \"127.0.0.1:8001\"\n"));
     assert!(e.contains("platform.mcp_url"), "{e}");
-    assert_eq!(
-        ok("[platform]\nmcp_url = \"http://127.0.0.1:8001/mcp\"\n")
-            .platform
-            .mcp_endpoint(),
-        None
-    );
 }

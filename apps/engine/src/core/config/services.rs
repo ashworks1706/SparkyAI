@@ -160,36 +160,10 @@ impl Model {
     }
 }
 
-/// PostgreSQL connection.
-#[derive(Debug, Deserialize)]
-pub struct Postgres {
-    /// libpq connection URL. Required unless platform.enabled is set.
-    #[serde(default)]
-    pub url: Option<SecretString>,
-    /// Maximum pooled connections.
-    #[serde(default = "default_max_connections")]
-    pub max_connections: u32,
-    /// How long a caller waits for a pooled connection.
-    #[serde(default = "default_acquire_timeout_secs")]
-    pub acquire_timeout_secs: u64,
-}
-
-impl Default for Postgres {
-    fn default() -> Self {
-        Self {
-            url: None,
-            max_connections: default_max_connections(),
-            acquire_timeout_secs: default_acquire_timeout_secs(),
-        }
-    }
-}
-
 /// The platform that holds conversations, memories, the profile, confirmations, knowledge and accounts.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Platform {
-    /// On replaces every self-hosted store with the platform's HTTP API.
-    pub enabled: bool,
     /// Platform root URL, for example https://platform.example.org. Routes sit under /api.
     pub url: Option<String>,
     /// Machine token, plat_ followed by the secret. The platform takes the organization from it.
@@ -212,7 +186,6 @@ pub struct Platform {
 impl Default for Platform {
     fn default() -> Self {
         Self {
-            enabled: false,
             url: None,
             token: None,
             timeout_secs: 10,
@@ -226,27 +199,13 @@ impl Default for Platform {
 }
 
 impl Platform {
-    /// The MCP endpoint when platform tools are on: platform enabled and mcp_url not empty.
+    /// The MCP endpoint when platform tools are on: mcp_url not empty.
     pub fn mcp_endpoint(&self) -> Option<&str> {
         self.mcp_url
             .as_deref()
             .map(str::trim)
-            .filter(|u| self.enabled && !u.is_empty())
+            .filter(|u| !u.is_empty())
     }
-}
-
-/// Redis connection, shared by every engine replica that caches live queries.
-#[derive(Debug, Deserialize)]
-pub struct Redis {
-    /// Connection URL, for example redis://localhost:6379.
-    pub url: SecretString,
-    /// Budget for connecting at boot.
-    #[serde(default = "default_connect_timeout_secs")]
-    pub connect_timeout_secs: u64,
-}
-
-fn default_connect_timeout_secs() -> u64 {
-    5
 }
 
 /// Rejects a model section leaving no room to answer, or with a non-finite sampling value.
@@ -271,14 +230,6 @@ pub fn validate_model(model: &Model) -> Result<(), ConfigError> {
 
 fn default_max_tokens_without_thinking() -> u32 {
     1_024
-}
-
-fn default_max_connections() -> u32 {
-    8
-}
-
-fn default_acquire_timeout_secs() -> u64 {
-    5
 }
 
 /// Embedding endpoint (OpenAI-compatible).

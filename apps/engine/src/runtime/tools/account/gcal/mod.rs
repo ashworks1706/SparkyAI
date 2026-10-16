@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use secrecy::SecretString;
 use serde_json::{Value, json};
 
 use crate::core::config::Gcal as GcalConfig;
@@ -21,7 +20,6 @@ use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput
 use crate::runtime::tools::account::gcal::client::GCalClient;
 use crate::runtime::tools::account::gcal::render::output;
 use crate::runtime::tools::account::grant::Credentials;
-use crate::runtime::tools::account::oauth::WebOAuthClient;
 
 /// The provider key Google grants are stored under.
 const PROVIDER: &str = "google";
@@ -91,19 +89,13 @@ impl Tool for GcalTool {
 pub fn tools(
     cfg: &GcalConfig,
     store: Arc<dyn OAuthStore>,
-    oauth: Option<Arc<WebOAuthClient>>,
 ) -> Result<Vec<Arc<dyn Tool>>, GCalError> {
     let client: Arc<dyn GoogleCalendar> = Arc::new(GCalClient::new(
         &cfg.base_url,
         Duration::from_secs(cfg.timeout_secs),
         cfg.max_items,
     )?);
-    let creds = Arc::new(Credentials::new(
-        store,
-        oauth,
-        PROVIDER,
-        SecretString::from(""),
-    ));
+    let creds = Arc::new(Credentials::new(store, PROVIDER));
     let tool: Arc<dyn Tool> = Arc::new(GcalTool::new(client, creds, cfg.max_items));
     Ok(vec![tool])
 }

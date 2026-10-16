@@ -24,8 +24,6 @@ async fn a_connected_account_yields_its_access_token() {
         unreachable!("the grant loads")
     };
     assert_eq!(grant.access_token.expose_secret(), "tok");
-    assert!(grant.refresh_token.is_none());
-    assert_eq!(grant.scopes, vec!["url:GET|/api/v1/courses"]);
     assert!(grant.expires_at.is_some());
 }
 
@@ -83,18 +81,11 @@ async fn the_platform_runs_the_login_and_hands_back_its_link() {
         json!({"error": "google accounts are not enabled on this platform"}),
     );
     let store = PlatformAccounts::new(client(&fake).await);
-    assert!(store.hosts_login());
     assert!(matches!(
         store.login_link("111", "canvas").await,
         Ok(Some(url)) if url == "https://platform.test/api/accounts/start/abc"
     ));
     assert!(matches!(store.login_link("111", "google").await, Ok(None)));
-    assert!(
-        store
-            .take_consent("anything")
-            .await
-            .is_ok_and(|c| c.is_none())
-    );
 }
 
 #[tokio::test]

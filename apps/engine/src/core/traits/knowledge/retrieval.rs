@@ -22,6 +22,4 @@ pub trait Retriever: Send + Sync {
 pub trait Embedder: Send + Sync {
     /// Embeds one or more texts, one vector each, in order.
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, RetrievalError>;
-    /// Vector dimension.
-    fn dim(&self) -> usize;
 }

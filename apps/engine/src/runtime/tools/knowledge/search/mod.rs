@@ -20,14 +20,14 @@ pub const SOURCE: &str = "source";
 /// How long the answer of a source stays true.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Freshness {
-    /// The answer holds long enough to be worth a stored copy, so the scraper indexes it.
+    /// The answer holds long enough to be worth a stored copy, so the platform indexes it.
     Stored,
     /// The answer goes stale within minutes, so it reaches the model and nothing else.
     Live,
 }
 
 impl Freshness {
-    /// Whether the scraper writes an answer of this kind into the retrieval index.
+    /// Whether the platform writes an answer of this kind into the retrieval index.
     pub fn indexed(self) -> bool {
         self == Self::Stored
     }
@@ -71,10 +71,10 @@ pub enum Accepts {
     Flag,
 }
 
-/// One parameter the scraper takes for a source.
+/// One parameter the platform takes for a source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
-    /// Name the scraper takes.
+    /// Name the platform takes.
     pub name: &'static str,
     /// What it means.
     pub description: &'static str,
@@ -154,7 +154,7 @@ impl Param {
         }
     }
 
-    /// The values the scraper has to accept for this parameter, and whether it takes a list.
+    /// The values the platform has to accept for this parameter, and whether it takes a list.
     fn values(&self) -> Option<(&'static [&'static str], bool)> {
         match self.accepts {
             Accepts::OneOf(choices) => Some((choices, false)),
@@ -167,7 +167,7 @@ impl Param {
 
 /// One live ASU source, reached through the source filter of the two search tools.
 pub trait LiveSource: Send + Sync {
-    /// Registry key the scraper serves it under, and the value of the source filter.
+    /// Registry key the platform serves it under, and the value of the source filter.
     fn key(&self) -> &'static str;
 
     /// A few words naming what it answers, listed beside its key in the source filter.
@@ -176,10 +176,10 @@ pub trait LiveSource: Send + Sync {
     /// Name of the site behind it, as a citation of a live result is labelled.
     fn label(&self) -> &'static str;
 
-    /// The chunks category the scraper writes its pages under.
+    /// The chunks category the platform writes its pages under.
     fn category(&self) -> &'static str;
 
-    /// The parameters the scraper takes.
+    /// The parameters the platform takes.
     fn params(&self) -> &'static [Param];
 
     /// The text parameter the query fills. None takes the first text parameter.
@@ -220,7 +220,7 @@ pub fn published_only(
         .collect()
 }
 
-/// The keys of sources, in catalog order, keeping only those the scraper indexes when stored_only.
+/// The keys of sources, in catalog order, keeping only those the platform indexes when stored_only.
 pub fn source_keys(sources: &[Box<dyn LiveSource>], stored_only: bool) -> Vec<&'static str> {
     sources
         .iter()
@@ -351,7 +351,7 @@ pub fn dated(query: &str) -> Option<NaiveDate> {
         .find_map(|word| NaiveDate::parse_from_str(word, "%Y-%m-%d").ok())
 }
 
-/// The parameters the scraper takes for source, filled from one query. Err names what is missing.
+/// The parameters the platform takes for source, filled from one query. Err names what is missing.
 pub fn params_for(
     source: &dyn LiveSource,
     query: &str,
@@ -415,12 +415,12 @@ pub fn params_for(
     Ok(out)
 }
 
-/// Whether source's parameters match what the scraper published for its key. Err names the diff.
+/// Whether source's parameters match what the platform published for its key. Err names the diff.
 pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<(), String> {
     let name = source.key();
     if published.indexed != source.freshness().indexed() {
         return Err(format!(
-            "{name} is offered as {} but the scraper indexes its answers: {}",
+            "{name} is offered as {} but the platform indexes its answers: {}",
             if source.freshness().indexed() {
                 "stored"
             } else {
@@ -432,20 +432,20 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
     for param in source.params() {
         let Some(served) = published.params.iter().find(|p| p.name == param.name) else {
             return Err(format!(
-                "{name} takes {} but the scraper does not",
+                "{name} takes {} but the platform does not",
                 param.name
             ));
         };
         if served.required != param.required {
             return Err(format!(
-                "{name} and the scraper disagree on whether {} is required",
+                "{name} and the platform disagree on whether {} is required",
                 param.name
             ));
         }
         if let Some((values, many)) = param.values() {
             if served.many != many {
                 return Err(format!(
-                    "{name} and the scraper disagree on whether {} takes a list",
+                    "{name} and the platform disagree on whether {} takes a list",
                     param.name
                 ));
             }
@@ -454,7 +454,7 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
                 .find(|v| !served.choices.iter().any(|c| c.eq_ignore_ascii_case(v)))
             {
                 return Err(format!(
-                    "{name} offers {missing:?} for {} but the scraper does not accept it",
+                    "{name} offers {missing:?} for {} but the platform does not accept it",
                     param.name
                 ));
             }
@@ -466,7 +466,7 @@ pub fn conforms(source: &dyn LiveSource, published: &QuerySourceInfo) -> Result<
         .find(|served| !source.params().iter().any(|p| p.name == served.name))
     {
         return Err(format!(
-            "the scraper takes {} for {} but {name} does not offer it",
+            "the platform takes {} for {} but {name} does not offer it",
             extra.name, published.key
         ));
     }

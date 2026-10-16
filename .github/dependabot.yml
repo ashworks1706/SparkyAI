@@ -15,11 +15,6 @@ updates:
     directory: /deploy
     schedule: { interval: weekly }
   - package-ecosystem: uv
-    directory: /apps/scraper
-    schedule: { interval: weekly }
-    groups:
-      scraper: { patterns: ["*"] }
-  - package-ecosystem: uv
     directory: /apps/evals
     schedule: { interval: weekly }
     groups:
