@@ -43,10 +43,10 @@ export const INBOX: Turn = {
     "Three need you today:\n- **Advising** wants you to confirm your **2 PM** appointment. It is on your calendar.\n- The **CSE 340 TA** answered your Project 1 regrade request.\n- **Career fair** registration closes Friday.\n\nThe rest is newsletters and a Sun Card statement. Nothing to do there.",
 };
 
-/** Midday: food, a place to study, and the train, all live, asked in the server. */
+/** Midday: food and a place to study, both live, asked in the server. */
 export const BETWEEN: Turn = {
-  question: "got 90 min before my 2pm. where can I eat near the MU, where can I study after, and is the light rail running ok?",
-  thought: "Three live reads at once: dining open now at the Memorial Union, library hours today, and Valley Metro trains running now.",
+  question: "got 90 min before my 2pm. where can I eat near the MU, and where can I study after?",
+  thought: "Two live reads at once: dining open now at the Memorial Union and library hours today.",
   calls: [
     {
       tool: "search_live",
@@ -58,11 +58,10 @@ export const BETWEEN: Turn = {
       args: { query: "library hours today", source: LIVE.libraryHours.key },
       output: liveResult(LIVE.libraryHours.label, LIVE.libraryHours.url, "just now", "Hayden Library 7:00am to 12:00am. Noble Library 7:00am to 10:00pm."),
     },
-    { tool: "valley_metro", args: { route: "Valley Metro Rail" }, output: "14 Valley Metro vehicles running now, by route: Valley Metro Rail 14." },
   ],
-  wrap: "Food, then a library, then the train, in the order of the afternoon.",
+  wrap: "Food, then a library, in the order of the afternoon.",
   answer:
-    "Eat at the **Memorial Union** first: Pitchforks, Panda Express and Chick-fil-A are open until 3 PM.\n\nThen study at **Hayden Library**, open until midnight, a few minutes' walk away. The light rail is running normally, with **14 trains** on the line now.",
+    "Eat at the **Memorial Union** first: Pitchforks, Panda Express and Chick-fil-A are open until 3 PM.\n\nThen study at **Hayden Library**, open until midnight, a few minutes' walk away.",
 };
 
 /** Afternoon: book a group study room, held for approval. */

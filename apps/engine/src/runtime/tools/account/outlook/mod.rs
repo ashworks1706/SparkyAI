@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use secrecy::SecretString;
 use serde_json::{Value, json};
 
 use crate::core::config::Outlook as OutlookConfig;
@@ -19,7 +18,6 @@ use crate::core::types::conversation::Visibility;
 use crate::core::types::tools::outlook::OutlookError;
 use crate::core::types::tools::{RiskClass, ToolDefinition, ToolError, ToolOutput};
 use crate::runtime::tools::account::grant::Credentials;
-use crate::runtime::tools::account::oauth::WebOAuthClient;
 use crate::runtime::tools::account::outlook::client::GraphClient;
 use crate::runtime::tools::account::outlook::render::{calendar_output, mail_output};
 
@@ -140,19 +138,13 @@ impl Tool for OutlookTool {
 pub fn tools(
     cfg: &OutlookConfig,
     store: Arc<dyn OAuthStore>,
-    oauth: Option<Arc<WebOAuthClient>>,
 ) -> Result<Vec<Arc<dyn Tool>>, OutlookError> {
     let client: Arc<dyn Outlook> = Arc::new(GraphClient::new(
         &cfg.base_url,
         Duration::from_secs(cfg.timeout_secs),
         cfg.max_items,
     )?);
-    let creds = Arc::new(Credentials::new(
-        store,
-        oauth,
-        PROVIDER,
-        SecretString::from(""),
-    ));
+    let creds = Arc::new(Credentials::new(store, PROVIDER));
     Ok(ALL
         .into_iter()
         .map(|q| {

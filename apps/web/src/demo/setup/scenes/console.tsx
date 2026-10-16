@@ -20,7 +20,7 @@ const ORDER = GROUPS.flatMap(([, units]) => units);
 
 /** The unit selected at time t. */
 const selectedAt = (t: number): string => {
-  if (t < AT.run) return "postgres";
+  if (t < AT.run) return "phoenix";
   if (t < AT.climb) return TASK;
   if (t < AT.discord[0]) {
     const from = ORDER.findIndex((u) => u.id === TASK);
@@ -29,7 +29,7 @@ const selectedAt = (t: number): string => {
     return ORDER[from - steps].id;
   }
   if (t < AT.scraper[0]) return "discord";
-  return "scraper";
+  return "web";
 };
 
 /** The wall clock the log pane prints, counting from the scene start. */
@@ -49,7 +49,7 @@ const consoleAt = (t: number) => {
   const search = t >= AT.search[0] ? typed("mcp", t, AT.search[0], AT.search[1]) : "";
   const hit = t >= AT.hit ? logs.findIndex((l) => l.text.includes("mcp")) : -1;
   const engineUp = t >= AT.engineUp + 0.4;
-  const started = { engine: AT.engine, discord: AT.discord[1], scraper: AT.scraper[1] }[selected];
+  const started = { engine: AT.engine, discord: AT.discord[1], web: AT.scraper[1] }[selected];
   const elapsed = started !== undefined && status !== "stopped" ? ` · ${Math.floor(t - started)}s` : "";
   const label = status === "done" ? "exit 0" : status;
 
@@ -151,7 +151,7 @@ const shellAt = (t: number) => (
   </div>
 );
 
-/** Scene: start the console, run a scraper task, then start the engine, the bot and the scraper. */
+/** Scene: start the console, build the sandbox images, then start the engine, the bot and the web app. */
 export const sparkyConsole: Scene = {
   title: "Run it all from the sparky console",
   length: 13.6,

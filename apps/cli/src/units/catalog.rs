@@ -9,8 +9,7 @@ fn service(id: &str, profile: Option<&str>, hint: &str, url: Option<&str>) -> Un
         id: id.into(),
         group: match profile {
             Some("model") => Group::Models,
-            Some("phoenix" | "metrics" | "gpu-metrics" | "db") | None => Group::Infra,
-            Some(_) => Group::Tools,
+            _ => Group::Infra,
         },
         kind: Kind::Service {
             service: id.into(),
@@ -108,29 +107,10 @@ pub fn catalog() -> Vec<Unit> {
 fn services() -> Vec<Unit> {
     vec![
         service(
-            "postgres",
-            None,
-            "pgvector 17; the retrieval index and conversations",
-            Some("localhost:5432"),
-        ),
-        service(
-            "redis",
-            None,
-            "live query cache, its leases and the cap on fetches",
-            Some("localhost:6379"),
-        ),
-        service("minio", None, "object store", Some("http://localhost:9001")),
-        service(
             "phoenix",
             Some("phoenix"),
             "trace UI: one conversation, its tool calls and timings",
             Some("http://localhost:6006"),
-        ),
-        service(
-            "pgweb",
-            Some("db"),
-            "browse the database in a browser",
-            Some("http://localhost:8081"),
         ),
         service(
             "prometheus",
@@ -162,18 +142,6 @@ fn services() -> Vec<Unit> {
             "llama-server embedding model",
             Some("http://localhost:8001"),
         ),
-        service(
-            "searxng",
-            Some("search"),
-            "self-hosted metasearch behind the web source of search_live",
-            Some("http://localhost:8888"),
-        ),
-        service(
-            "firecrawl",
-            Some("crawl"),
-            "self-hosted Firecrawl for the scraper",
-            Some("http://localhost:3002"),
-        ),
     ]
 }
 
@@ -192,12 +160,6 @@ fn processes() -> Vec<Unit> {
             None,
         ),
         process(
-            "scraper",
-            &["scraper", "serve"],
-            "live searches, their indexing, and scheduled runs, from one queue",
-            None,
-        ),
-        process(
             "web",
             &["web"],
             "Vite dev server",
@@ -211,16 +173,7 @@ fn tasks() -> Vec<Unit> {
     vec![
         task_static(&["doctor"], "required tools, .env, hooks"),
         task_static(&["setup"], "install every unit's deps"),
-        task_static(&["migrate"], "apply scraper migrations"),
-        task_static(
-            &["scraper", "status"],
-            "every source, its last run, and the job queue",
-        ),
         task_static(&["check"], "fmt, lint, test every unit"),
-        task_static(
-            &["scraper", "run", "--all"],
-            "every source and static page, paced per host",
-        ),
         task_static(&["eval", "run"], "golden cases against the engine"),
         task_static(&["eval", "compare"], "fail on regression"),
     ]
@@ -236,7 +189,7 @@ fn deploys() -> Vec<Unit> {
         deploy(&["down"], "stop the whole stack, every profile", false),
         deploy(&["ps"], "what compose has, across every profile", false),
         deploy(&["logs"], "follow every container", true),
-        deploy(&["images"], "build the rust and scraper images", false),
+        deploy(&["images"], "build the rust image", false),
         deploy(
             &["prod-up"],
             "RunPod host: pull GHCR images (SPARKY_IMAGE_TAG) and start",

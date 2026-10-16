@@ -1,4 +1,4 @@
-//! Wire shapes of the per-user OAuth login routes.
+//! Wire shapes of the per-user account link routes.
 
 use serde::{Deserialize, Serialize};
 
@@ -9,10 +9,10 @@ pub struct AuthorizeRequest {
     pub user: String,
 }
 
-/// The consent URL the caller opens.
+/// The login link the caller opens.
 #[derive(Serialize)]
 pub struct AuthorizeResponse {
-    /// The provider consent URL, carrying the login state.
+    /// The link that starts the provider login.
     pub url: String,
 }
 
@@ -21,15 +21,4 @@ pub struct AuthorizeResponse {
 pub struct DisconnectResponse {
     /// True when a grant was there and is now gone.
     pub removed: bool,
-}
-
-/// The query Canvas returns to the callback.
-#[derive(Deserialize)]
-pub struct CallbackQuery {
-    /// The authorization code, present on success.
-    pub code: Option<String>,
-    /// The login state minted by authorize.
-    pub state: Option<String>,
-    /// The error code, present when the user refused or the request was bad.
-    pub error: Option<String>,
 }

@@ -11,6 +11,8 @@ pub struct StepSignals<'a> {
     pub answer_only: bool,
     /// The turns of this request hold a tool result.
     pub tool_results: bool,
+    /// The latest tool call failed or returned nothing.
+    pub tool_failed: bool,
     /// The question of this request. Empty when resuming after an approval.
     pub input: &'a str,
 }
@@ -25,12 +27,14 @@ pub fn decide(rules: &ThinkingRules, step: &StepSignals<'_>) -> ThinkingChoice {
     }
     if step.answer_only {
         choose(false, ThinkingReason::AnswerOnly)
-    } else if step.tool_results {
-        choose(rules.after_tools, ThinkingReason::AfterTools)
+    } else if rules.recover && step.tool_failed {
+        choose(true, ThinkingReason::Recover)
     } else if has_cue(step.input, &rules.cues) {
         choose(true, ThinkingReason::Cue)
     } else if step.input.chars().count() > rules.max_quick_chars {
         choose(true, ThinkingReason::Long)
+    } else if step.tool_results {
+        choose(rules.after_tools, ThinkingReason::AfterTools)
     } else if rules.plan_searches {
         choose(true, ThinkingReason::Plan)
     } else {

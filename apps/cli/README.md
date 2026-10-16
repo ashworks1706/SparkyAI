@@ -3,31 +3,24 @@
 The developer console. It starts services, runs tasks, shows health, and tails output.
 
 ```bash
-just cli          # from anywhere inside the repo; requires the admin ASU session
+just cli          # from anywhere inside the repo
 ```
 
-To chat with the agent, point any OpenAI-compatible client at the engine: base URL `http://localhost:8080/v1`, model `sparky`, API key `SPARKY_ENGINE__SERVICE_TOKEN`. llama-server serves its own web UI for the raw model on http://localhost:8000.
+To chat with the agent, use the Discord bot or `POST /chat` on http://localhost:8080 with the bearer `SPARKY_ENGINE__SERVICE_TOKEN`. llama-server serves its own web UI for the raw model on http://localhost:8000.
 
 ```
  sparky  NORMAL  ● engine ● model ● phoenix                        started engine
 ╭ units ─────────────────╮╭ engine · running · 42s · 318 lines · follow ───────────╮
 │ infra                  ││ 12:01:07 $ setsid just engine                          │
-│  ● postgres     :5432  ││ 12:01:09    Compiling engine v0.1.0                    │
-│  ● redis        :6379  ││ 12:01:31 INFO engine: listening addr=0.0.0.0:8080      │
-│  ○ minio        :9001  ││ 12:01:40 INFO engine::routes::chat: request_id=…       │
-│  ● phoenix      :6006  ││ 12:01:44 INFO engine::runtime: tool search_live 412 ms │
-│  ● prometheus   :9090  ││ 12:01:47 INFO engine::routes::chat: answered 2 steps   │
-│  ● grafana      :3000  ││                                                        │
-│ models                 ││                                                        │
+│  ● phoenix      :6006  ││ 12:01:09    Compiling engine v0.1.0                    │
+│  ● prometheus   :9090  ││ 12:01:31 INFO engine: listening addr=0.0.0.0:8080      │
+│  ● grafana      :3000  ││ 12:01:40 INFO engine::routes::chat: request_id=…       │
+│ models                 ││ 12:01:47 INFO engine::routes::chat: answered 2 steps   │
 │  ● chat         :8000  ││                                                        │
 │  ● embed        :8001  ││                                                        │
-│ tools                  ││                                                        │
-│  ○ searxng      :8888  ││                                                        │
-│  ○ firecrawl    :3002  ││                                                        │
 │ apps                   ││                                                        │
 │  ● engine       :8080  ││                                                        │
 │  ○ discord             ││                                                        │
-│  ○ scraper             ││                                                        │
 │  ○ web          :5173  ││                                                        │
 │ tasks                  ││                                                        │
 │  ✓ check               ││                                                        │
@@ -50,18 +43,17 @@ Modal, like vim. `?` shows this in the console.
 | `:` | command line |
 | `q` | quit; host processes stop, containers stay up |
 
-Commands: `:start engine`, `:stop chat`, `:restart discord`, `:clear`, `:help`, `:q`. Anything else is passed to `just`, so `:eval run` or `:scraper run events` runs as a task under **tasks**.
+Commands: `:start engine`, `:stop chat`, `:restart discord`, `:clear`, `:help`, `:q`. Anything else is passed to `just`, so `:eval run` or `:sandbox-images` runs as a task under **tasks**.
 
 ## What it drives
 
 | Group | Units | How |
 |---|---|---|
-| infra | postgres, redis, minio, phoenix, pgweb, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f`; `--profile phoenix` / `db` / `metrics` / `gpu-metrics` where gated |
+| infra | phoenix, prometheus, grafana, gpu-exporter | `docker compose up -d` / `stop`, logs via `compose logs -f`; `--profile phoenix` / `metrics` / `gpu-metrics` |
 | models | chat, embed | same, `--profile model` |
-| tools | searxng, firecrawl | same, `--profile search` / `crawl` |
-| apps | engine, discord, scraper, web | `setsid just <recipe>`; stop sends SIGTERM to the process group |
+| apps | engine, discord, web | `setsid just <recipe>`; stop sends SIGTERM to the process group |
 | sandboxes | the switch, then one row per live container | read from the engine at `GET /sandbox`. Enter on the switch stops the agent being offered `run_sandbox`; enter on a container removes it. The switch's log pane lists every command the agent ran, the running one included |
-| tasks | doctor, setup, migrate, scraper status, check, scraper run --all, eval run, eval compare | `just <recipe>`, exit code shown as ✓ / ✗. Other recipes run from the command line and appear here while they run |
+| tasks | doctor, setup, check, eval run, eval compare | `just <recipe>`, exit code shown as ✓ / ✗. Other recipes run from the command line and appear here while they run |
 | deploy | up, down, ps, logs, images, prod-up, prod-down, prod-logs | the same recipes as a deploy host; `prod-*` pull GHCR images tagged `SPARKY_IMAGE_TAG` |
 
 Container state comes from `docker compose ps`. The status bar probes the engine, the chat model, and Phoenix.

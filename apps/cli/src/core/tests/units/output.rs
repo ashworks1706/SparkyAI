@@ -39,15 +39,15 @@ fn compose_states_map_onto_statuses() {
 
 #[test]
 fn ps_output_parses_as_array_or_lines() {
-    let array = r#"[{"Service":"postgres","State":"running","Health":"healthy","ExitCode":0}]"#;
+    let array = r#"[{"Service":"phoenix","State":"running","Health":"healthy","ExitCode":0}]"#;
     assert_eq!(
-        parse_ps(array).unwrap_or_default()["postgres"].health,
+        parse_ps(array).unwrap_or_default()["phoenix"].health,
         "healthy"
     );
-    let lines = "{\"Service\":\"redis\",\"State\":\"exited\",\"ExitCode\":1}\n{\"Service\":\"minio\",\"State\":\"running\"}\n";
+    let lines = "{\"Service\":\"engine\",\"State\":\"exited\",\"ExitCode\":1}\n{\"Service\":\"phoenix\",\"State\":\"running\"}\n";
     let parsed = parse_ps(lines).unwrap_or_default();
-    assert_eq!(parsed["redis"].exit_code, 1);
-    assert_eq!(parsed["minio"].status(), Status::Running);
+    assert_eq!(parsed["engine"].exit_code, 1);
+    assert_eq!(parsed["phoenix"].status(), Status::Running);
     assert!(parse_ps("").is_ok_and(|m| m.is_empty()));
     assert!(parse_ps("not json").is_err());
 }

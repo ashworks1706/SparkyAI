@@ -18,7 +18,6 @@
 
 - [ ] run on existing benchmarks
 - [ ] Staging + prod; canary releases; alerting; inference that scales under load
-- [x] Platform mode: every store on the shared platform behind `[platform]`; standalone behind the `standalone` feature
 
 ## 7 — sparky-model-v0.1
 

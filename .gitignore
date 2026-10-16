@@ -12,5 +12,3 @@ uv.lock
 node_modules/
 apps/web/dist/
 
-# Redis snapshot, written where a local redis-server runs for the live cache tests
-dump.rdb

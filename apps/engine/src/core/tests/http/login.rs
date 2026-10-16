@@ -1,8 +1,6 @@
-//! The login routes over a store that runs the login itself.
+//! The account link routes over a store that runs the login itself.
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -26,9 +24,7 @@ fn router() -> axum::Router {
         )
         .with_state(OAuthState {
             store: Arc::new(HostedLogins),
-            providers: HashMap::new(),
             service_token: SecretString::from(TOKEN),
-            state_ttl: Duration::from_mins(10),
         })
 }
 

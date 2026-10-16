@@ -39,7 +39,7 @@ pub const NOTHING_STORED: &str = "The knowledge base holds nothing for that quer
 pub struct Tools {
     /// Tool names never registered, whatever their source.
     pub disabled: Vec<String>,
-    /// Register search_knowledge and search_live over the sources the scraper has published.
+    /// Register search_knowledge and search_live over the sources the platform has published.
     pub search: bool,
     /// Source search_live fetches when a call names none.
     pub live_default_source: String,

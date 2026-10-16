@@ -17,6 +17,7 @@ pub enum ThinkingMode {
 /// Rules deciding thinking per model call, read from agent.thinking. Default lives in core::config.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[expect(clippy::struct_excessive_bools)]
 pub struct ThinkingRules {
     /// How thinking is set.
     pub mode: ThinkingMode,
@@ -26,6 +27,8 @@ pub struct ThinkingRules {
     pub max_quick_chars: usize,
     /// Think on a step with no tool results yet, where the model plans its searches.
     pub plan_searches: bool,
+    /// Think on the step after a tool call that failed or returned nothing.
+    pub recover: bool,
     /// Words or phrases that make a question think, matched whole and case-insensitively.
     pub cues: Vec<String>,
     /// Ask again without thinking when thinking left no answer.
@@ -42,6 +45,8 @@ pub enum ThinkingReason {
     AnswerOnly,
     /// The step has tool results to read.
     AfterTools,
+    /// The latest tool call failed or returned nothing.
+    Recover,
     /// The question holds a cue.
     Cue,
     /// The question is longer than a quick one.
@@ -61,6 +66,7 @@ impl ThinkingReason {
             Self::Mode => "mode",
             Self::AnswerOnly => "answer_only",
             Self::AfterTools => "after_tools",
+            Self::Recover => "recover",
             Self::Cue => "cue",
             Self::Long => "long",
             Self::Plan => "plan",

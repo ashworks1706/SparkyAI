@@ -9,7 +9,6 @@ use tokio::sync::mpsc;
 use crate::core::tests::support::{MemorySink, ctx};
 use crate::core::traits::trace::TraceSink;
 use crate::core::types::agent::context::RequestContext;
-use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::policy::Decision;
 use crate::core::types::trace::progress::{Progress, ProgressStyle};
@@ -81,24 +80,6 @@ fn events_the_caller_should_see_carry_their_own_wording() {
             .unwrap_or_default()
             .contains("`announce` was not allowed"),
         "{denied:?}"
-    );
-
-    let reused = TraceEvent::QueryCache {
-        source: "clubs".into(),
-        outcome: CacheOutcome::Hit,
-    };
-    assert!(
-        line(&reused)
-            .unwrap_or_default()
-            .contains("reused a recent `clubs` result")
-    );
-    let fetched = TraceEvent::QueryCache {
-        source: "clubs".into(),
-        outcome: CacheOutcome::Miss,
-    };
-    assert!(
-        line(&fetched).is_none(),
-        "a fetch writes the tool line only"
     );
 }
 

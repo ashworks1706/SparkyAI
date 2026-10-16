@@ -7,7 +7,7 @@ use serde::Serialize;
 /// Which dependencies answered, each under its probe name.
 #[derive(Debug, Serialize)]
 pub struct Readiness {
-    /// Each store probe by name, for example postgres or platform.
+    /// Each store probe by name, for example platform.
     #[serde(flatten)]
     pub stores: BTreeMap<&'static str, bool>,
     /// The model endpoint listed its models.

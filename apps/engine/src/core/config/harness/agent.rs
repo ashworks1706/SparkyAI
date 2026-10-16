@@ -157,18 +157,19 @@ impl Default for ThinkingRules {
     fn default() -> Self {
         Self {
             mode: ThinkingMode::Auto,
-            after_tools: true,
-            max_quick_chars: 80,
-            plan_searches: true,
+            after_tools: false,
+            max_quick_chars: 160,
+            plan_searches: false,
+            recover: true,
             cues: [
                 "why",
-                "how",
                 "compare",
                 "difference",
-                "should",
-                "plan",
                 "explain",
-                "which",
+                "should i",
+                "recommend",
+                "plan",
+                "pros and cons",
             ]
             .map(str::to_owned)
             .to_vec(),

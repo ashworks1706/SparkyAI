@@ -15,7 +15,7 @@ use crate::runtime::harness::tools::ToolSet;
 
 fn rules() -> ThinkingRules {
     ThinkingRules {
-        plan_searches: false,
+        after_tools: true,
         ..AgentConfig::default().thinking
     }
 }
@@ -25,6 +25,7 @@ fn first(input: &str) -> StepSignals<'_> {
     StepSignals {
         answer_only: false,
         tool_results: false,
+        tool_failed: false,
         input,
     }
 }
@@ -45,16 +46,63 @@ fn a_short_question_answers_without_thinking() {
 
 #[test]
 fn the_step_that_plans_the_searches_thinks() {
-    let plan = decide(&AgentConfig::default().thinking, &first("clubs"));
+    let planning = ThinkingRules {
+        plan_searches: true,
+        ..rules()
+    };
+    let plan = decide(&planning, &first("clubs"));
     assert_eq!((plan.on, plan.reason), (true, ThinkingReason::Plan));
     let after = decide(
-        &AgentConfig::default().thinking,
+        &planning,
         &StepSignals {
             tool_results: true,
             ..first("clubs")
         },
     );
     assert_eq!(after.reason, ThinkingReason::AfterTools);
+}
+
+#[test]
+fn by_default_a_simple_lookup_never_thinks() {
+    let defaults = AgentConfig::default().thinking;
+    let question = "how late is the library open";
+    assert!(!decide(&defaults, &first(question)).on);
+    let after = decide(
+        &defaults,
+        &StepSignals {
+            tool_results: true,
+            ..first(question)
+        },
+    );
+    assert_eq!(
+        (after.on, after.reason),
+        (false, ThinkingReason::AfterTools)
+    );
+}
+
+#[test]
+fn a_failed_or_empty_tool_call_thinks_on_the_next_step() {
+    let failed = StepSignals {
+        tool_results: true,
+        tool_failed: true,
+        ..first("when")
+    };
+    let defaults = AgentConfig::default().thinking;
+    let choice = decide(&defaults, &failed);
+    assert_eq!((choice.on, choice.reason), (true, ThinkingReason::Recover));
+    let off = ThinkingRules {
+        recover: false,
+        ..defaults
+    };
+    assert!(!decide(&off, &failed).on);
+    let forced = decide(
+        &AgentConfig::default().thinking,
+        &StepSignals {
+            answer_only: true,
+            ..failed
+        },
+    );
+    assert_eq!(forced.reason, ThinkingReason::AnswerOnly);
 }
 
 #[test]
@@ -77,13 +125,13 @@ fn a_cue_matches_whole_words_in_any_case() {
 
 #[test]
 fn a_long_question_thinks() {
-    let long = "tell me about ".repeat(10);
+    let long = "tell me about ".repeat(15);
     let choice = decide(&rules(), &first(&long));
     assert_eq!((choice.on, choice.reason), (true, ThinkingReason::Long));
 }
 
 #[test]
-fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
+fn the_question_rules_come_before_tool_results_and_answer_only_before_both() {
     let after = decide(
         &rules(),
         &StepSignals {
@@ -101,6 +149,18 @@ fn tool_results_and_answer_only_steps_come_before_the_question_rules() {
         &StepSignals {
             tool_results: true,
             ..first("why")
+        },
+    );
+    assert_eq!(
+        (after.on, after.reason),
+        (true, ThinkingReason::Cue),
+        "a cue question thinks while it reads results"
+    );
+    let after = decide(
+        &quiet,
+        &StepSignals {
+            tool_results: true,
+            ..first("when")
         },
     );
     assert!(!after.on);
@@ -172,7 +232,14 @@ async fn thinking_that_leaves_no_answer_is_asked_again_without_it() {
         Ok(text("Hayden closes at 2am.")),
     ]);
     let sent = model.sent();
-    let (agent, sink) = agent(model, ToolSet::new(), AgentConfig::default());
+    let cfg = AgentConfig {
+        thinking: ThinkingRules {
+            plan_searches: true,
+            ..rules()
+        },
+        ..AgentConfig::default()
+    };
+    let (agent, sink) = agent(model, ToolSet::new(), cfg);
     let out = agent.run(&ctx(), "when does hayden close").await.ok();
     assert_eq!(
         out.as_ref().map(|answer| answer.text.as_str()),

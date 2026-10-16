@@ -1,6 +1,5 @@
-//! Platform composition: every store over the platform HTTP API; no PostgreSQL or Redis.
+//! Platform composition: every store over the platform HTTP API.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +15,7 @@ use crate::stores::platform::{
 /// Every store over the platform. Config::validate guarantees the url and the token.
 pub(super) fn stores(cfg: &Config, embedder: &Arc<dyn Embedder>) -> anyhow::Result<Stores> {
     let (Some(url), Some(token)) = (cfg.platform.url.as_deref(), cfg.platform.token.clone()) else {
-        anyhow::bail!("platform.enabled needs SPARKY_PLATFORM__URL and SPARKY_PLATFORM__TOKEN");
+        anyhow::bail!("set SPARKY_PLATFORM__URL and SPARKY_PLATFORM__TOKEN");
     };
     let client = PlatformClient::new(url, token, Duration::from_secs(cfg.platform.timeout_secs))
         .map_err(|e| anyhow::anyhow!("platform client: {e}"))?;
@@ -48,7 +47,6 @@ pub(super) fn stores(cfg: &Config, embedder: &Arc<dyn Embedder>) -> anyhow::Resu
         confirmations: Arc::new(PlatformConfirmations::new(client.clone())),
         profile_graph,
         oauth_store: Arc::new(PlatformAccounts::new(client.clone())),
-        oauth_providers: HashMap::new(),
         probes: vec![Arc::new(PlatformProbe::new(client))],
     })
 }

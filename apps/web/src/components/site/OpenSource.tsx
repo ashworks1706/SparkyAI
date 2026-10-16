@@ -10,8 +10,7 @@ import { ARCHITECTURE, REPO } from "./content";
 const STACK = [
   { label: "Engine", value: "Rust, the agent loop and its HTTP surface" },
   { label: "Bot", value: "Rust, a Discord client of the engine" },
-  { label: "Scraper", value: "Python, ingestion and live source queries" },
-  { label: "Stores", value: "PostgreSQL with pgvector, Redis, MinIO" },
+  { label: "Platform", value: "Stores, knowledge and live ASU queries, over HTTP and MCP" },
   { label: "Model", value: "Any OpenAI-compatible server, llama.cpp by default" },
   { label: "Traces", value: "Phoenix over OTLP, every turn as a tree" },
 ];
@@ -100,7 +99,7 @@ const OpenSource = () => (
         <div className="mt-12">
           <DemoVideo
             name="sparky-setup"
-            label="A developer cloning SparkyAI, adding a campus page, a live source, Canvas and an MCP server, starting it from the sparky console, and Sparky answering on their Discord"
+            label="A developer cloning SparkyAI, writing a live source, turning on Google Calendar and an MCP server, starting it from the sparky console, and Sparky answering on their Discord"
           />
         </div>
       </div>

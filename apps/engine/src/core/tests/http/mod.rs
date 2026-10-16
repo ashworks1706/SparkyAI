@@ -1,8 +1,7 @@
-//! The HTTP surface: the OpenAI-compatible API, rate limiting, and the sandbox routes.
+//! The HTTP surface: health, login, rate limiting, and the sandbox routes.
 
 mod health;
 mod login;
-mod openai;
 mod rate_limit;
 mod sandbox;
 

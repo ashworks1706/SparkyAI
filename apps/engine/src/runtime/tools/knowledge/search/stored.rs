@@ -45,7 +45,7 @@ pub struct Wording {
 }
 
 impl StoredSearch {
-    /// Builds the tool over the sources the scraper indexes.
+    /// Builds the tool over the sources the platform indexes.
     pub fn new(
         sources: &[Box<dyn LiveSource>],
         retriever: Arc<dyn Retriever>,

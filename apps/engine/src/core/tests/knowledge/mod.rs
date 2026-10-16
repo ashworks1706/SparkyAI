@@ -1,7 +1,3 @@
-//! Knowledge: the gate in front of retrieval, live source search, its cache and cap.
+//! Knowledge: live source search.
 
-mod admit;
-mod cache;
 mod search;
-#[cfg(feature = "standalone")]
-mod window;

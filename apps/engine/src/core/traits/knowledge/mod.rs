@@ -1,6 +1,4 @@
-//! Knowledge interfaces: retrieval, live source queries, their cache and cap.
+//! Knowledge interfaces: retrieval and live source queries.
 
-pub mod admission;
-pub mod cache;
 pub mod query;
 pub mod retrieval;

@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::core::types::knowledge::cache::CacheOutcome;
 use crate::core::types::model::{FinishReason, Usage};
 use crate::core::types::safety::guardrail::Stage;
 use crate::core::types::safety::policy::Decision;
@@ -184,18 +183,6 @@ pub enum TraceEvent {
         /// Memories recalled.
         count: usize,
     },
-    /// What the query cache did for a live query.
-    QueryCache {
-        /// Registry key of the source asked for.
-        source: String,
-        /// What the cache did.
-        outcome: CacheOutcome,
-    },
-    /// A live query was refused because as many were already running as the engine allows.
-    QueryRefused {
-        /// Registry key of the source asked for.
-        source: String,
-    },
     /// The loop finished.
     Completed {
         /// How it ended.
@@ -234,8 +221,6 @@ impl TraceEvent {
             Self::ToolResultStored { .. } => "tool_result_stored",
             Self::FileAttached { .. } => "file_attached",
             Self::MemoryRecalled { .. } => "memory_recalled",
-            Self::QueryCache { .. } => "query_cache",
-            Self::QueryRefused { .. } => "query_refused",
             Self::Completed { .. } => "completed",
         }
     }

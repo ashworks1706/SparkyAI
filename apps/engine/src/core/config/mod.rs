@@ -32,12 +32,6 @@ pub struct Config {
     pub discord: Discord,
     /// Chat model endpoint.
     pub model: Model,
-    /// PostgreSQL, the source of truth and the retrieval index when platform is off.
-    #[serde(default)]
-    pub postgres: Postgres,
-    /// Redis, the shared cache in front of live queries. Absent turns query.cache off.
-    #[serde(default)]
-    pub redis: Option<Redis>,
     /// Embedding endpoint, used to embed queries at retrieval time.
     pub embedding: Embedding,
     /// OpenTelemetry export.
@@ -82,12 +76,6 @@ pub struct Config {
     /// MCP servers exposed as tools.
     #[serde(default)]
     pub mcp: Mcp,
-    /// OAuth clients for per-user grants.
-    #[serde(default)]
-    pub oauth: OAuth,
-    /// Canvas LMS integration. Off by default.
-    #[serde(default)]
-    pub canvas: Canvas,
     /// Outlook (Microsoft Graph) integration. Off by default.
     #[serde(default)]
     pub outlook: Outlook,
@@ -100,10 +88,7 @@ pub struct Config {
     /// Wikipedia lookups.
     #[serde(default)]
     pub wikipedia: Wikipedia,
-    /// Valley Metro transit. Off by default.
-    #[serde(default)]
-    pub transit: Transit,
-    /// The platform that replaces every self-hosted store when enabled. Off by default.
+    /// The platform that holds every store, the knowledge base, and the linked accounts.
     #[serde(default)]
     pub platform: Platform,
 }
@@ -181,7 +166,7 @@ impl Config {
         }
     }
 
-    /// Loads the TOML layer then SPARKY_* variables, __ separating nesting: SPARKY_POSTGRES__URL.
+    /// Loads the TOML layer then SPARKY_* variables, __ separating nesting: SPARKY_PLATFORM__URL.
     pub fn load() -> Result<Self, ConfigError> {
         Self::reject_renamed(|key| std::env::var_os(key).is_some())?;
         let path =
@@ -198,9 +183,6 @@ impl Config {
     /// Rejects combinations that would leave the engine unable to answer.
     pub fn validate(&self) -> Result<(), ConfigError> {
         let invalid = |m: String| Err(ConfigError::Invalid(m));
-        if !self.retrieval.dense && !self.retrieval.lexical {
-            return invalid("retrieval.dense and retrieval.lexical are both off".into());
-        }
         if !(-14..=14).contains(&self.prompt.utc_offset_hours) {
             return invalid(format!(
                 "prompt.utc_offset_hours must be between -14 and 14, got {}",
@@ -219,51 +201,16 @@ impl Config {
         }
         validate_thinking(&self.agent.thinking)?;
         validate_telemetry(&self.telemetry)?;
-        if self.retrieval.text_search_config.is_empty()
-            || !self
-                .retrieval
-                .text_search_config
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-        {
-            return invalid(format!(
-                "retrieval.text_search_config must be a plain identifier, got {:?}",
-                self.retrieval.text_search_config
-            ));
-        }
         validate_sandbox(&self.sandbox)?;
         validate_model(&self.model)?;
         if self.compaction.enabled && self.compaction.max_tokens == 0 {
             return invalid("compaction.max_tokens must be at least 1".into());
         }
         validate_compaction(&self.compaction, self.agent.history_budget_tokens)?;
-        if self.tools.search && (self.query.poll_ms == 0 || self.query.claim_secs == 0) {
-            return invalid("query.poll_ms and query.claim_secs must be at least 1".into());
-        }
-        if self.tools.search && self.query.poll_max_ms < self.query.poll_ms {
-            return invalid(format!(
-                "query.poll_max_ms ({}) is below query.poll_ms ({})",
-                self.query.poll_max_ms, self.query.poll_ms
-            ));
-        }
         validate_tools(&self.tools)?;
         validate_mcp_risks(&self.mcp)?;
-        validate_oauth(&self.oauth)?;
-        validate_canvas(&self.canvas)?;
         validate_integrations(self)?;
         validate_platform(self)?;
-        if self.retrieval.candidates < 1 {
-            return invalid("retrieval.candidates must be at least 1".into());
-        }
-        if !(self.retrieval.max_distance > 0.0 && self.retrieval.max_distance <= 2.0) {
-            return invalid(format!(
-                "retrieval.max_distance must be above 0 and at most 2, got {}",
-                self.retrieval.max_distance
-            ));
-        }
-        if self.retrieval.rrf_k < 0.0 {
-            return invalid("retrieval.rrf_k must not be negative".into());
-        }
         if self.retrieval.window < 0 {
             return invalid(format!(
                 "retrieval.window must not be negative, got {}",
@@ -331,38 +278,21 @@ const PLATFORM_MAX_QUERY_CHARS: usize = 1000;
 /// Longest hold the platform keeps a pending action, in seconds.
 const PLATFORM_MAX_TTL_SECS: u64 = 86_400;
 
-/// Rejects a mode this build cannot run, standalone stores it cannot reach, or a bad platform section.
+/// Rejects a platform section the engine cannot reach, or settings the platform does not accept.
 fn validate_platform(cfg: &Config) -> Result<(), ConfigError> {
     let invalid = |m: String| Err(ConfigError::Invalid(m));
     let platform = &cfg.platform;
-    if !platform.enabled {
-        if !cfg!(feature = "standalone") {
-            return invalid(
-                "this engine is built without the standalone feature; set platform.enabled = true"
-                    .into(),
-            );
-        }
-        if cfg
-            .postgres
-            .url
-            .as_ref()
-            .is_none_or(|u| u.expose_secret().trim().is_empty())
-        {
-            return invalid("set SPARKY_POSTGRES__URL, or turn on platform.enabled".into());
-        }
-        return validate_query_cache(cfg);
-    }
     let url = platform.url.as_deref().map(str::trim).unwrap_or_default();
     if url::Url::parse(url).is_err() || !(url.starts_with("https://") || url.starts_with("http://"))
     {
-        return invalid("platform.enabled needs SPARKY_PLATFORM__URL, an http or https URL".into());
+        return invalid("set SPARKY_PLATFORM__URL, an http or https URL".into());
     }
     if platform
         .token
         .as_ref()
         .is_none_or(|t| t.expose_secret().trim().is_empty())
     {
-        return invalid("platform.enabled needs SPARKY_PLATFORM__TOKEN".into());
+        return invalid("set SPARKY_PLATFORM__TOKEN, the platform machine token".into());
     }
     if platform.timeout_secs == 0 {
         return invalid("platform.timeout_secs must be at least 1".into());
@@ -380,40 +310,23 @@ fn validate_platform(cfg: &Config) -> Result<(), ConfigError> {
     }
     if !(1..=PLATFORM_MAX_TOP_K).contains(&cfg.retrieval.top_k) {
         return invalid(format!(
-            "retrieval.top_k must be from 1 to {PLATFORM_MAX_TOP_K} with platform.enabled"
+            "retrieval.top_k must be from 1 to {PLATFORM_MAX_TOP_K} on the platform"
         ));
     }
     if cfg.retrieval.window > PLATFORM_MAX_WINDOW {
         return invalid(format!(
-            "retrieval.window must be at most {PLATFORM_MAX_WINDOW} with platform.enabled"
+            "retrieval.window must be at most {PLATFORM_MAX_WINDOW} on the platform"
         ));
     }
     if !(1..=PLATFORM_MAX_TTL_SECS).contains(&cfg.agent.confirmation_ttl_secs) {
         return invalid(format!(
-            "agent.confirmation_ttl_secs must be from 1 to {PLATFORM_MAX_TTL_SECS} with platform.enabled"
+            "agent.confirmation_ttl_secs must be from 1 to {PLATFORM_MAX_TTL_SECS} on the platform"
         ));
-    }
-    if cfg.canvas.enabled {
-        return invalid(
-            "canvas.enabled is on, but with platform.enabled Canvas comes from the platform_canvas_* tools; turn it off"
-                .into(),
-        );
     }
     if platform.mcp_private.iter().any(|p| p.trim().is_empty()) {
         return invalid(
             "platform.mcp_private holds an empty prefix, which would match every tool".into(),
         );
-    }
-    for (name, on) in [
-        ("canvas", cfg.oauth.canvas.enabled),
-        ("google", cfg.oauth.google.enabled),
-        ("microsoft", cfg.oauth.microsoft.enabled),
-    ] {
-        if on {
-            return invalid(format!(
-                "oauth.{name}.enabled is on, but with platform.enabled the platform runs the login; turn it off"
-            ));
-        }
     }
     Ok(())
 }
@@ -490,70 +403,6 @@ fn validate_mcp_risks(mcp: &Mcp) -> Result<(), ConfigError> {
     Ok(())
 }
 
-/// An enabled OAuth client needs its credentials, a redirect, scopes, and https endpoints.
-fn validate_oauth(oauth: &OAuth) -> Result<(), ConfigError> {
-    let google = &oauth.google;
-    if google.enabled {
-        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.google: {m}")));
-        if google.client_id.trim().is_empty() || google.client_secret.expose_secret().is_empty() {
-            return invalid("client_id and client_secret must be set when enabled");
-        }
-        if google.redirect_url.trim().is_empty() {
-            return invalid("redirect_url must be set when enabled");
-        }
-        if google.scopes.is_empty() {
-            return invalid("scopes must name at least one scope");
-        }
-        if !google.authorize_url.starts_with("https://")
-            || !google.token_url.starts_with("https://")
-        {
-            return invalid("authorize_url and token_url must be https");
-        }
-        if google.timeout_secs == 0 {
-            return invalid("timeout_secs must be at least 1");
-        }
-    }
-    let canvas = &oauth.canvas;
-    if canvas.enabled {
-        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.canvas: {m}")));
-        if canvas.client_id.trim().is_empty() || canvas.client_secret.expose_secret().is_empty() {
-            return invalid("client_id and client_secret must be set when enabled");
-        }
-        if canvas.redirect_url.trim().is_empty() {
-            return invalid("redirect_url must be set when enabled");
-        }
-        if !canvas.authorize_url.starts_with("https://")
-            || !canvas.token_url.starts_with("https://")
-        {
-            return invalid("authorize_url and token_url must be https");
-        }
-        if canvas.timeout_secs == 0 {
-            return invalid("timeout_secs must be at least 1");
-        }
-    }
-    let microsoft = &oauth.microsoft;
-    if microsoft.enabled {
-        let invalid = |m: &str| Err(ConfigError::Invalid(format!("oauth.microsoft: {m}")));
-        if microsoft.client_id.trim().is_empty()
-            || microsoft.client_secret.expose_secret().is_empty()
-        {
-            return invalid("client_id and client_secret must be set when enabled");
-        }
-        if microsoft.redirect_url.trim().is_empty() {
-            return invalid("redirect_url must be set when enabled");
-        }
-        if !microsoft.authorize_url.starts_with("https://")
-            || !microsoft.token_url.starts_with("https://")
-        {
-            return invalid("authorize_url and token_url must be https");
-        }
-        if microsoft.timeout_secs == 0 {
-            return invalid("timeout_secs must be at least 1");
-        }
-    }
-    Ok(())
-}
-
 fn validate_integrations(cfg: &Config) -> Result<(), ConfigError> {
     if cfg.outlook.enabled {
         if !cfg.outlook.base_url.starts_with("https://") {
@@ -566,31 +415,6 @@ fn validate_integrations(cfg: &Config) -> Result<(), ConfigError> {
                 "outlook: timeout_secs and max_items must be at least 1".into(),
             ));
         }
-    }
-    if cfg.transit.enabled && cfg.transit.feed_url.expose_secret().trim().is_empty() {
-        return Err(ConfigError::Invalid(
-            "transit: feed_url must be set when enabled".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_canvas(canvas: &Canvas) -> Result<(), ConfigError> {
-    if !canvas.enabled {
-        return Ok(());
-    }
-    let invalid = |m: &str| Err(ConfigError::Invalid(format!("canvas: {m}")));
-    if !canvas.base_url.starts_with("https://") {
-        return invalid("base_url must be https when enabled");
-    }
-    if canvas.access_token.expose_secret().trim().is_empty() {
-        return invalid("access_token must be set when enabled");
-    }
-    if canvas.timeout_secs == 0 {
-        return invalid("timeout_secs must be at least 1");
-    }
-    if canvas.max_items == 0 {
-        return invalid("max_items must be at least 1");
     }
     Ok(())
 }
@@ -616,47 +440,6 @@ fn validate_tools(tools: &Tools) -> Result<(), ConfigError> {
                 "tools.{name} is empty; the model would be given no wording for the search tools"
             )));
         }
-    }
-    Ok(())
-}
-
-/// Rejects a query cache that cannot keep one fetch per query, or that has nowhere to keep it.
-fn validate_query_cache(cfg: &Config) -> Result<(), ConfigError> {
-    let invalid = |m: String| Err(ConfigError::Invalid(m));
-    let cache = &cfg.query.cache;
-    if !(cfg.tools.search && cache.enabled) {
-        return Ok(());
-    }
-    #[cfg_attr(not(feature = "standalone"), allow(unused_variables))]
-    let Some(redis) = &cfg.redis else {
-        return invalid(
-            "query.cache.enabled needs a redis section; set SPARKY_REDIS__URL or turn it off"
-                .into(),
-        );
-    };
-    #[cfg(feature = "standalone")]
-    if let Err(error) = redis::Client::open(redis.url.expose_secret()) {
-        return invalid(format!(
-            "SPARKY_REDIS__URL is not a Redis URL ({error}); it takes the form \
-             redis://host:port, for example redis://localhost:6379"
-        ));
-    }
-    // A lease that expires mid fetch lets a second request fetch the same query.
-    if cache.lease_secs < cfg.query.timeout_secs {
-        return invalid(format!(
-            "query.cache.lease_secs ({}) is below query.timeout_secs ({}), so a lease can expire \
-             while its fetch is still running",
-            cache.lease_secs, cfg.query.timeout_secs
-        ));
-    }
-    if cache.handoff_secs == 0 {
-        return invalid(
-            "query.cache.handoff_secs must be at least 1, or a request that waited reads nothing"
-                .into(),
-        );
-    }
-    if cache.poll_ms == 0 || cache.timeout_ms == 0 {
-        return invalid("query.cache.poll_ms and query.cache.timeout_ms must be at least 1".into());
     }
     Ok(())
 }

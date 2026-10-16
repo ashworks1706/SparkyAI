@@ -34,10 +34,6 @@ jobs:
               - Cargo.toml
               - Cargo.lock
               - deploy/docker/rust.Dockerfile
-            scraper:
-              - *shared
-              - apps/scraper/**
-              - deploy/docker/scraper.Dockerfile
             sandbox:
               - *shared
               - deploy/docker/sandbox.Dockerfile
@@ -49,25 +45,21 @@ jobs:
               - *shared
               - apps/engine/**
               - apps/discord/**
-              - apps/scraper/**
               - Cargo.toml
               - Cargo.lock
               - sparky.toml
               - deploy/docker/runpod.Dockerfile
               - deploy/runpod/**
-              - deploy/search/**
       - id: images
         env:
           ALL: ${{ github.event_name == 'workflow_dispatch' }}
           RUST: ${{ steps.filter.outputs.rust }}
-          SCRAPER: ${{ steps.filter.outputs.scraper }}
           SANDBOX: ${{ steps.filter.outputs.sandbox }}
           SANDBOX_PROXY: ${{ steps.filter.outputs.sandbox-proxy }}
           RUNPOD: ${{ steps.filter.outputs.runpod }}
         run: |
           list=()
           { [ "$ALL" = true ] || [ "$RUST" = true ]; } && list+=(rust)
-          { [ "$ALL" = true ] || [ "$SCRAPER" = true ]; } && list+=(scraper)
           { [ "$ALL" = true ] || [ "$SANDBOX" = true ]; } && list+=(sandbox)
           { [ "$ALL" = true ] || [ "$SANDBOX_PROXY" = true ]; } && list+=(sandbox-proxy)
           { [ "$ALL" = true ] || [ "$RUNPOD" = true ]; } && list+=(runpod)

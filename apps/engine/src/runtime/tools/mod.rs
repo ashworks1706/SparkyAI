@@ -7,7 +7,6 @@ pub mod knowledge;
 pub mod mcp;
 pub mod papers;
 pub mod sandbox;
-pub mod transit;
 pub mod wiki;
 
 /// The structured payload a tool hands back beside its text; unserializable values log, yield None.

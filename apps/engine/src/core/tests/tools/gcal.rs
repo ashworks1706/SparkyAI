@@ -7,15 +7,13 @@ use async_trait::async_trait;
 use secrecy::SecretString;
 use serde_json::json;
 
-use crate::core::traits::oauth::OAuthStore;
+use crate::core::tests::support::Linked;
 use crate::core::traits::tools::Tool;
 use crate::core::traits::tools::gcal::GoogleCalendar;
 use crate::core::types::agent::context::RequestContext;
 use crate::core::types::conversation::Visibility;
-use crate::core::types::store::StoreError;
 use crate::core::types::tools::ToolError;
 use crate::core::types::tools::gcal::{GCalError, GCalEvent};
-use crate::core::types::tools::oauth::{Consent, OAuthTokens};
 use crate::runtime::tools::account::gcal::{GcalTool, tools};
 use crate::runtime::tools::account::grant::Credentials;
 
@@ -32,58 +30,12 @@ impl GoogleCalendar for FakeGCal {
     }
 }
 
-/// A grant store double reporting no per-user grant.
-struct NoGrants;
-
-#[async_trait]
-impl OAuthStore for NoGrants {
-    async fn save_grant(
-        &self,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-        _tk: &OAuthTokens,
-    ) -> Result<(), StoreError> {
-        Ok(())
-    }
-    async fn load_grant(
-        &self,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-    ) -> Result<Option<OAuthTokens>, StoreError> {
-        Ok(None)
-    }
-    async fn delete_grant(&self, _t: &str, _u: &str, _p: &str) -> Result<bool, StoreError> {
-        Ok(false)
-    }
-    async fn begin_consent(
-        &self,
-        _s: &str,
-        _t: &str,
-        _u: &str,
-        _p: &str,
-        _ttl: Duration,
-    ) -> Result<(), StoreError> {
-        Ok(())
-    }
-    async fn take_consent(&self, _s: &str) -> Result<Option<Consent>, StoreError> {
-        Ok(None)
-    }
-}
-
 fn dm() -> RequestContext {
     RequestContext::new("g", "u", Duration::from_secs(5)).with_visibility(Visibility::Private)
 }
 
 fn tool(fake: FakeGCal, connected: bool) -> GcalTool {
-    let fallback = if connected { "tok" } else { "" };
-    let creds = Credentials::new(
-        Arc::new(NoGrants),
-        None,
-        "google",
-        SecretString::from(fallback.to_owned()),
-    );
+    let creds = Credentials::new(Arc::new(Linked(connected.then_some("tok"))), "google");
     GcalTool::new(Arc::new(fake), Arc::new(creds), 15)
 }
 
@@ -131,6 +83,6 @@ async fn events_are_listed_with_summary_and_start() {
 #[test]
 fn the_tool_builds_from_its_config() {
     let cfg = crate::core::config::Gcal::default();
-    let built = tools(&cfg, Arc::new(NoGrants), None);
+    let built = tools(&cfg, Arc::new(Linked(None)));
     assert!(built.is_ok_and(|tools| tools.len() == 1));
 }

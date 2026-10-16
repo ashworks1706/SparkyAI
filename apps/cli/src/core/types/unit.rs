@@ -5,12 +5,10 @@ use super::sandbox::SandboxUnit;
 /// Sidebar section a unit belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Group {
-    /// Datastores, the trace UI, and metrics.
+    /// The trace UI and metrics.
     Infra,
     /// llama-server chat and embed.
     Models,
-    /// Firecrawl.
-    Tools,
     /// Long-running host processes.
     Apps,
     /// Containers the engine runs commands in.
@@ -27,7 +25,6 @@ impl Group {
         match self {
             Self::Infra => "infra",
             Self::Models => "models",
-            Self::Tools => "tools",
             Self::Apps => "apps",
             Self::Sandboxes => "sandboxes",
             Self::Tasks => "tasks",
@@ -36,10 +33,9 @@ impl Group {
     }
 
     /// Display order.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 6] = [
         Self::Infra,
         Self::Models,
-        Self::Tools,
         Self::Apps,
         Self::Sandboxes,
         Self::Tasks,

@@ -1,4 +1,4 @@
-//! Router assembly: /chat, /conversation, /profile, the OpenAI-compatible surface, and /health.
+//! Router assembly: /chat, /conversation, /profile, /sandbox, /oauth, and /health.
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -13,7 +13,6 @@ pub mod conversation;
 pub mod failure;
 pub mod health;
 pub mod oauth;
-pub mod openai;
 pub mod profile;
 pub mod rate_limit;
 pub mod sandbox;
@@ -76,7 +75,6 @@ pub fn router(
         .route("/chat/stream", post(chat::stream))
         .route("/confirm", post(chat::confirm))
         .route("/conversation/reset", post(conversation::reset))
-        .route("/v1/chat/completions", post(openai::completions))
         .with_state(chat_state);
     let profile = Router::new()
         .route("/profile/forget", post(profile::forget))
@@ -90,7 +88,6 @@ pub fn router(
     let oauth = Router::new()
         .route("/oauth/{provider}/authorize", post(oauth::authorize))
         .route("/oauth/{provider}/logout", post(oauth::disconnect))
-        .route("/oauth/{provider}/callback", get(oauth::callback))
         .with_state(oauth_state);
     let mut router = Router::new()
         .merge(health)
@@ -98,7 +95,6 @@ pub fn router(
         .merge(profile)
         .merge(sandbox)
         .merge(oauth)
-        .route("/v1/models", get(openai::models))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
         .layer(TraceLayer::new_for_http());
     if let Some(layer) = cors(cors_origins) {

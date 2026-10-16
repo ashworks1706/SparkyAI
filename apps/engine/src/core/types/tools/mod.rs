@@ -1,7 +1,5 @@
 //! ToolDefinition, RiskClass, ToolOutput, ToolError.
 
-#[cfg(feature = "standalone")]
-pub mod canvas;
 pub mod gcal;
 pub mod oauth;
 pub mod outlook;

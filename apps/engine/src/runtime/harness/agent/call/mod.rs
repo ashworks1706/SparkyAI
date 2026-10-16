@@ -38,6 +38,11 @@ impl Agent {
             &thinking::StepSignals {
                 answer_only: run.force_answer,
                 tool_results: run.new_turns.iter().any(|m| m.role == Role::Tool),
+                tool_failed: run.tool_runs.last().is_some_and(|t| !t.ok)
+                    || run
+                        .new_turns
+                        .last()
+                        .is_some_and(|m| m.role == Role::Tool && m.content.trim().is_empty()),
                 input: run.input,
             },
         )

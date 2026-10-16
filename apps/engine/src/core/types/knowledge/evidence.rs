@@ -36,16 +36,6 @@ pub struct Citation {
     pub url: Option<String>,
 }
 
-impl Citation {
-    /// The citation as one line, for a client that shows text.
-    pub fn line(&self) -> String {
-        match &self.url {
-            Some(url) => format!("{} - {}", self.title, url),
-            None => self.title.clone(),
-        }
-    }
-}
-
 impl Evidence {
     /// The source this chunk credits.
     pub fn citation(&self) -> Citation {

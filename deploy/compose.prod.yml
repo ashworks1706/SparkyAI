@@ -9,15 +9,6 @@ services:
   discord:
     build: !reset null
     image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
-  scraper:
-    build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-scraper:${SPARKY_IMAGE_TAG:-main}
-  postgres:
-    ports: !reset []
-  redis:
-    ports: !reset []
-  minio:
-    ports: !reset []
   # Phoenix has no authentication and is reached over a tunnel.
   phoenix:
     ports: !reset []

@@ -61,12 +61,14 @@ stream_block_chars = 160
 # Whether a model call reasons before it answers. Reasoning shows on the thinking line, never in the answer.
 [agent.thinking]
 mode = "auto"                  # on, off, or auto
-# auto, first match: no tools offered, off; after tool results, after_tools; a cue or over
-# max_quick_chars, on; before any tool has run, plan_searches; else off.
-after_tools = true
-max_quick_chars = 80
-plan_searches = true
-cues = ["why", "how", "compare", "difference", "should", "plan", "explain", "which"]
+# auto, first match: no tools offered, off; the latest tool call failed or returned nothing,
+# recover; a cue or over max_quick_chars, on; after tool results, after_tools; before any tool
+# has run, plan_searches; else off.
+after_tools = false
+max_quick_chars = 160
+plan_searches = false
+recover = true
+cues = ["why", "compare", "difference", "explain", "should i", "recommend", "plan", "pros and cons"]
 # Repeat without thinking a call that thought and returned no answer and no tool call.
 retry_without = true
 
@@ -119,28 +121,12 @@ presence_penalty = 1.0
 [embedding]
 name = "Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0"
 dim = 1024
-batch_size = 32                # apps/scraper only
-timeout_secs = 120.0           # apps/scraper only, one embedding request
-
-# The model that writes tree node summaries. base_url and api_key live in .env.
-[summary]
-name = "Qwen/Qwen3-4B-GGUF:Q4_K_M"
-max_tokens = 512
-temperature = 0.2
-timeout_secs = 120
-thinking = false               # true spends the whole budget on reasoning and returns empty content
 
 # ---------------------------------------------------------------- retrieval
 # Dense and lexical legs fused by reciprocal rank fusion. Both off is rejected at boot.
 [retrieval]
 top_k = 6                      # chunks search_knowledge returns per call
-candidates = 20                # pulled from each leg before fusion
-rrf_k = 60.0
-text_search_config = "english"
-dense = true
-lexical = true
-min_score = 0.0
-max_distance = 0.6             # cosine distance past which a dense match is dropped; 2.0 keeps all
+dense = true                   # send a query vector, so the platform runs its dense leg
 # Rows either side of a hit joined into one passage; overlapping windows merge. 0 returns the hit alone.
 window = 2
 
@@ -152,7 +138,7 @@ write_roles = ["MANAGE_GUILD"]
 allow_authenticated_reads = false
 confirm_from = "external_write"
 
-# search_knowledge reads the stored index; search_live queues a fetch for the scraper.
+# search_knowledge reads the platform knowledge base; search_live runs a live query on the platform.
 # The descriptions are the tool text the model reads. The catalog appends per-source hints
 # to source_description.
 [tools]
@@ -232,42 +218,9 @@ temperature = 0.0
 timeout_secs = 30
 # instructions = "You compact a conversation..."
 
-# Live source queries; they need just scraper serve. The engine polls the jobs row every
-# poll_ms, doubling to poll_max_ms. max_in_flight caps fetches across every replica.
+# Live source queries on the platform. timeout_secs is the whole budget of one.
 [query]
 timeout_secs = 90
-poll_ms = 100
-poll_max_ms = 1000
-max_in_flight = 16             # 0 removes the cap; keep it under postgres.max_connections
-claim_secs = 15                # a query the scraper does not claim in this long reports that it is not running
-
-# Live query cache and per-query fetch leases in Redis. Requires SPARKY_REDIS__URL in .env.
-# handoff_secs is the minimum lifetime of every cached answer.
-[query.cache]
-enabled = true
-default_ttl_secs = 900         # an answer of a source the scraper indexes
-live_ttl_secs = 0              # an answer of a source that is never indexed
-handoff_secs = 5               # floor under every lifetime
-lease_secs = 120               # must cover query.timeout_secs
-poll_ms = 100                  # how often a waiting request looks for the answer
-timeout_ms = 500               # a cache slower than this is treated as absent
-# Words dropped from a query when it is keyed.
-ignore_words = ["asu", "arizona", "state", "university", "the", "a", "an", "at", "in", "of", "for", "on", "to", "and", "near", "me"]
-keep_words = ["web"]           # sources keyed on every word
-
-# Per-source lifetime by registry key. Others take the default for their kind.
-[query.cache.ttl_secs]
-library_hours = 3600
-campus_map = 86400
-course_catalog = 86400
-dining = 3600
-social_media = 1800
-sports_news = 900
-news = 900
-courses = 300
-clubs = 21600
-events = 1800
-web = 600
 
 # ---------------------------------------------------------------- MCP
 # Servers go in [[mcp.servers]] and are not settable from the environment. None is configured.
@@ -285,62 +238,16 @@ max_tool_description_chars = 160
 # tool_timeout_secs = 45
 # risks = { page_snapshot = "read_public" }   # per-tool class in place of the one derived from the name
 
-# ---------------------------------------------------------------- OAuth
-# Per-user grants. client_secret lives in .env. Off until the per-user sessions of phase 8.
-# Standalone only: with platform.enabled the platform runs every login and Config::validate refuses these on.
-[oauth.google]
-enabled = false
-client_id = ""
-redirect_url = ""
-scopes = ["https://www.googleapis.com/auth/calendar.events.readonly"]
-authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
-token_url = "https://oauth2.googleapis.com/token"
-timeout_secs = 30
-
-# Per-user Canvas login. Turn on with the developer key from ASU: set enabled, client_id and
-# redirect_url here, and client_secret in .env. The user signs in through ASU SSO themselves.
-# scopes empty asks for the full access the key allows; name read scopes to narrow it.
-[oauth.canvas]
-enabled = false
-client_id = ""
-redirect_url = ""
-scopes = []
-authorize_url = "https://canvas.asu.edu/login/oauth2/auth"
-token_url = "https://canvas.asu.edu/login/oauth2/token"
-timeout_secs = 30
-
-# Per-user Microsoft login for Outlook. Turn on with an Azure app registration: set enabled,
-# client_id and redirect_url here, and client_secret in .env. Replace common in the URLs with the
-# tenant id to limit sign-in to one org. The user signs in through Microsoft themselves.
-[oauth.microsoft]
-enabled = false
-client_id = ""
-redirect_url = ""
-scopes = ["openid", "profile", "offline_access", "Calendars.Read", "Mail.Read"]
-authorize_url = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
-token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-timeout_secs = 30
-
-# ---------------------------------------------------------------- Canvas
-# Read-only Canvas tools (courses, assignments, grades), in a direct message only.
-# Off until a Canvas API token is set. access_token lives in .env. When a per-user grant store
-# exists the token becomes per user; until then this one token answers for every caller.
-# Standalone only. In platform mode Canvas is the platform_canvas_* tools; Config::validate refuses this on.
-[canvas]
-enabled = false
-base_url = "https://canvas.asu.edu"
-timeout_secs = 30
-max_items = 20
-
-# Outlook calendar and mail, read-only, in a direct message only. On with oauth.microsoft.
+# Outlook calendar and mail, read-only, in a direct message only. Reads the caller's Microsoft
+# account linked on the platform.
 [outlook]
 enabled = false
 base_url = "https://graph.microsoft.com/v1.0"
 timeout_secs = 30
 max_items = 15
 
-# Google Calendar, read-only, in a direct message only. On with oauth.google; each caller reads
-# their own calendar through their per-user grant.
+# Google Calendar, read-only, in a direct message only. Each caller reads their own calendar
+# through the Google account linked on the platform.
 [gcal]
 enabled = false
 base_url = "https://www.googleapis.com/calendar/v3"
@@ -360,15 +267,6 @@ enabled = true
 base_url = "https://en.wikipedia.org/w/api.php"
 timeout_secs = 20
 max_chars = 1500
-
-# Valley Metro realtime. Off until feed_url (a GTFS-realtime JSON feed) is set in .env; it may
-# carry a key, so it is a secret. Reports active vehicles by route. routes_url points at the
-# static GTFS routes.txt so route ids resolve to names; empty leaves ids unresolved.
-[transit]
-enabled = false
-routes_url = ""                # https://gtfs.valleymetro.org/gtfs/routes.txt
-timeout_secs = 20
-max_items = 20
 
 # ---------------------------------------------------------------- traces
 [trace]
@@ -413,18 +311,10 @@ max_images = 4
 max_files = 4
 max_file_bytes = 2000000
 
-# ---------------------------------------------------------------- postgres
-# url carries the password and lives in .env.
-[postgres]
-max_connections = 10
-acquire_timeout_secs = 5
-scraper_pool_max = 8           # scraper pool; covers scraper.live_workers, the background lane and the scheduler
-
 # ---------------------------------------------------------------- platform
-# On: conversations, memories, the profile graph, confirmations, knowledge search, live queries and
-# linked accounts come from the platform HTTP API, and the engine opens no PostgreSQL or Redis.
-# Canvas, the Sun Devil Central clubs and events, and the ASU knowledge come from the platform;
-# canvas, oauth.*, the scraper, postgres and redis are standalone only. url and token live in .env.
+# Conversations, memories, the profile graph, confirmations, knowledge search, live queries and
+# linked accounts come from the platform HTTP API. So do Canvas, the Sun Devil Central clubs and
+# events, and the ASU knowledge. url and token live in .env and are required.
 # The token needs these scopes:
 #   agents:read, agents:write   conversations, memories, the profile graph, confirmations
 #   knowledge:read              knowledge search and the live queries
@@ -432,9 +322,7 @@ scraper_pool_max = 8           # scraper pool; covers scraper.live_workers, the 
 #   accounts:token              the Outlook and Google tokens of a member
 #   asu:read                    platform_asu_clubs and platform_asu_events
 #   canvas:read                 the platform_canvas_* tools
-# A build without the standalone feature requires it on.
 [platform]
-enabled = false
 timeout_secs = 10              # one platform call; a live query uses what is left of the request
 embedding_model = ""           # sent with each query vector; empty sends embedding.name
 max_query_chars = 1000         # longest search query sent; the platform refuses longer
@@ -446,82 +334,6 @@ mcp_tools = []                 # e.g. ["org.info", "events.list"]; empty registe
 # Tool name prefixes whose results belong to one member. Such a tool runs only in a direct
 # message, is ReadAuthenticated, and is sent the caller as discord_id in place of the model's value.
 mcp_private = ["canvas."]
-
-# ---------------------------------------------------------------- the scraper
-# Standalone only: scraper, search, firecrawl, auth and object_store. In platform mode the
-# platform serves the ASU knowledge and live queries, and nothing here runs.
-[scraper]
-tenant_id = "public"           # public ASU content, readable by every guild
-fetcher = "firecrawl"          # firecrawl renders JS and returns markdown; http is plain httpx
-user_agent = "SparkyAI/2.0 (+https://github.com/ashworks1706/SparkyAI)"
-request_timeout_secs = 30.0
-# Chunk size and overlap. Changing either changes chunker_version and reindexes a source on its next run.
-chunk_chars = 300
-chunk_overlap_chars = 0
-index_live_results = true          # index a live result after answering, for sources that allow it
-serve_poll_secs = 0.5              # longest a lane of scraper serve waits before looking again
-live_workers = 4                   # live queries scraper serve answers at once
-browser_skip = "image,media,font"  # resource types the browser drivers never load
-max_browsers = 2                   # Chromium browsers open at once across every lane
-max_page_bytes = 10000000          # largest page a plain HTTP fetch reads
-keep_versions = 5                  # versions kept per source with their snapshots; 0 keeps all
-schedule_every_secs = 60.0         # how often scraper serve queues scheduled runs that fell due
-job_lease_secs = 1800.0            # a background job running longer is queued again
-host_gap_secs = 5.0                # shortest gap between scheduled fetches to one host
-live_host_gap_secs = 1.0           # shortest gap between live fetches to one host, across every live lane
-robots_cache_secs = 3600.0         # how long a site's robots.txt is kept before it is read again
-query_max_chars = 30000            # longest live result sent to the engine
-# Past this many queued live_index jobs a live result is answered but not indexed.
-index_backlog_limit = 500
-job_retention_hours = 72.0         # 0 keeps every finished job forever
-job_prune_batch = 5000             # finished jobs removed per scheduling cycle
-parser_version = "bs4-text-v1"
-# A fetch yielding less than this fraction of the last good run is refused.
-quality_floor_ratio = 0.5
-quality_floor_min_chars = 500     # the floor applies only when the last good run had this many chars
-# RAPTOR style summary tree per source. Costs a model call per cluster per level.
-tree_enabled = false
-tree_max_level = 3
-tree_cluster_size = 5
-tree_min_chunks = 12
-
-# SearXNG behind the web source of search_live. base_url lives in .env.
-[search]
-engines = "google,brave,bing"
-language = "en-US"
-safesearch = 1                     # 0 off, 1 moderate, 2 strict
-max_results = 8
-snippet_chars = 300
-
-[firecrawl]
-timeout_ms = 60000
-wait_for_ms = 5000             # wait after page load
-only_main_content = true
-
-# Admin browser session for login-gated sources, captured by just scraper login. Only cookies are saved.
-# Off by default: clubs is not offered and events reads only the public calendar. Turn it on only
-# with permission to read those pages through a signed-in account. In platform mode the clubs and
-# events come from platform_asu_clubs and platform_asu_events through the org's ASU sign-in.
-[auth]
-enabled = false
-storage_state_path = "../../.sparky/auth/admin_state.json"   # relative to apps/scraper
-login_url = "https://my.asu.edu/"
-service_login_url = "https://sundevilcentral.eoss.asu.edu/webapp/auth/login"
-service_sso_text = "SSO Login"
-check_url = "https://sundevilcentral.eoss.asu.edu/events"
-sso_hosts = "weblogin.asu.edu,duosecurity.com,campusgroups.com"
-login_hosts = "weblogin.asu.edu,cas.asu.edu,login.microsoftonline.com,idp.asu.edu"
-login_paths = "/webapp/auth/login"
-login_headless = true
-login_attempts = 3
-duo_timeout_secs = 120.0
-nav_timeout_secs = 60.0
-fetch_attempts = 3
-
-# endpoint and keys are per-machine and live in .env.
-[object_store]
-bucket = "sparky"
-region = "us-east-1"
 
 # ---------------------------------------------------------------- the developer console
 [cli]

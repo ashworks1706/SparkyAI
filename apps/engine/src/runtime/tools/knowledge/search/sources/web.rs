@@ -1,4 +1,4 @@
-//! Web results from Google, Brave and Bing through self-hosted SearXNG.
+//! Web results from Google, Brave and Bing through the platform's SearXNG.
 
 use crate::runtime::tools::knowledge::search::{Freshness, LiveSource, Param};
 
