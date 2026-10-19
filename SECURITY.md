@@ -4,7 +4,7 @@ SparkyAI answers from ASU sources Platform indexes and queries, calls tools on a
 
 ## Reporting
 
-Use [GitHub private vulnerability reporting](https://github.com/ashworks1706/SparkyAI/security/advisories/new), not a public issue. Expect an acknowledgement within a week. SparkyAI is pre-1.0; only the latest release and `main` are supported.
+Use [GitHub private vulnerability reporting](https://github.com/theaisocietyasu/sparky/security/advisories/new), not a public issue. Expect an acknowledgement within a week. SparkyAI is pre-1.0; only the latest release and `main` are supported.
 
 ## In scope
 

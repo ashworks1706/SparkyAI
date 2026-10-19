@@ -2,13 +2,13 @@
 services:
   engine:
     build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
+    image: ghcr.io/theaisocietyasu/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
     environment:
       # The engine refuses to boot without its sandbox.
       SPARKY_SANDBOX__REQUIRED: "true"
   discord:
     build: !reset null
-    image: ghcr.io/ashworks1706/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
+    image: ghcr.io/theaisocietyasu/sparkyai-rust:${SPARKY_IMAGE_TAG:-main}
   # Phoenix has no authentication and is reached over a tunnel.
   phoenix:
     ports: !reset []

@@ -4,7 +4,7 @@ import { Terminal, type Line } from "../kit";
 
 /** Clone the repository and bootstrap it. Output is what git and the justfile print. */
 const CLONE: Line[] = [
-  { at: 0.5, to: 2.0, text: "git clone https://github.com/ashworks1706/SparkyAI && cd SparkyAI" },
+  { at: 0.5, to: 2.0, text: "git clone https://github.com/theaisocietyasu/sparky && cd sparky" },
   { at: 2.2, text: "Cloning into 'SparkyAI'...", tone: "dim" },
   { at: 2.5, text: "Receiving objects: 100% (9418/9418), 6.12 MiB | 18.4 MiB/s, done.", tone: "dim" },
   { at: 2.8, text: "Resolving deltas: 100% (5873/5873), done.", tone: "dim" },

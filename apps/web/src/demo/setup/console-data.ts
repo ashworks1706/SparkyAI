@@ -91,13 +91,13 @@ type Log = { at: number; text: string; meta?: boolean };
 export const LOGS: Record<string, Log[]> = {
   [TASK]: [
     { at: AT.run + 0.05, text: `$ just ${TASK}`, meta: true },
-    { at: AT.indexed, text: "naming to ghcr.io/ashworks1706/sparkyai-sandbox:main done" },
+    { at: AT.indexed, text: "naming to ghcr.io/theaisocietyasu/sparkyai-sandbox:main done" },
     { at: AT.exited, text: "exited with 0", meta: true },
   ],
   engine: [
     { at: AT.engine + 0.05, text: "$ just engine", meta: true },
     { at: 6.8, text: "INFO engine::wiring: search tools registered, fallback: web" },
-    { at: 7.0, text: "INFO engine::wiring: sandbox registered, runtime: docker, image: ghcr.io/ashworks1706/sparkyai-sandbox:main" },
+    { at: 7.0, text: "INFO engine::wiring: sandbox registered, runtime: docker, image: ghcr.io/theaisocietyasu/sparkyai-sandbox:main" },
     { at: 7.25, text: `INFO engine::wiring: mcp tools registered, server: ${MCP.name}, url: ${MCP.url}, count: ${MCP.tools.length}` },
     { at: 7.45, text: "INFO engine::wiring: platform mcp tools registered, url: https://platform.example.edu/mcp, count: 14" },
     { at: 7.6, text: "INFO engine::wiring: tools registered, integration: papers, count: 1" },

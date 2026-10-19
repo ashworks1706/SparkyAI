@@ -90,7 +90,11 @@ Platform fetches the public ASU pages SparkyAI answers from, and SparkyAI cites 
 - [docs/ROADMAP.md](docs/ROADMAP.md): what is built next, and what is out of scope
 - [AGENTS.md](AGENTS.md): commands and rules for contributors and coding agents
 
-The 2024 to 2025 prototype is on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1), with a write-up in [docs/blog/sparkyai-v1.md](docs/blog/sparkyai-v1.md).
+The 2024 to 2025 prototype is on [`archive/v1`](https://github.com/theaisocietyasu/sparky/tree/archive/v1), with a write-up in [docs/blog/sparkyai-v1.md](docs/blog/sparkyai-v1.md).
+
+## Maintainer
+
+Created and maintained by [@ashworks1706](https://github.com/ashworks1706). The repository is owned by [The AI Society at ASU](https://github.com/theaisocietyasu).
 
 ## License
 

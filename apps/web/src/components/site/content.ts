@@ -1,5 +1,5 @@
 /** The repository every source link on the site points to. */
-export const REPO = "https://github.com/ashworks1706/SparkyAI";
+export const REPO = "https://github.com/theaisocietyasu/sparky";
 
 /** How to run it, in the README. */
 export const RUN = `${REPO}#run-it`;

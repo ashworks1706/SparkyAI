@@ -722,7 +722,7 @@ async fn egress_reaches_the_public_web_and_nothing_private() {
         timeout: Duration::from_mins(1),
         egress: Some(Egress {
             network: "sparky-sandbox-test".into(),
-            proxy_image: "ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main".into(),
+            proxy_image: "ghcr.io/theaisocietyasu/sparkyai-sandbox-proxy:main".into(),
             proxy_name: "sparky-sandbox-proxy-test".into(),
         }),
         ..Limits::default()
