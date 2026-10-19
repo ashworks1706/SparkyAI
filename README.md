@@ -10,6 +10,11 @@
   <a href="deploy/README.md">Setup</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/theaisocietyasu/sparky/stargazers"><img src="https://img.shields.io/github/stars/theaisocietyasu/sparky?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/theaisocietyasu/sparky/forks"><img src="https://img.shields.io/github/forks/theaisocietyasu/sparky?style=social" alt="GitHub forks"></a>
+</p>
+
 SparkyAI is an assistant for Arizona State University students in Discord: a Rust agent engine, a Discord bot, a developer console, and evals. It is an unofficial, open-source student project and is not affiliated with the university.
 
 ## Architecture
