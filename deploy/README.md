@@ -13,7 +13,7 @@ The engine needs a running Platform: set `SPARKY_PLATFORM__URL`, `SPARKY_PLATFOR
 ## Production
 
 ```bash
-git clone https://github.com/ashworks1706/SparkyAI.git && cd SparkyAI
+git clone https://github.com/theaisocietyasu/sparky.git && cd sparky
 cp .env.example .env               # secrets and per-machine URLs; SPARKY_APP__ENV=production
 SPARKY_IMAGE_TAG=main just prod-up # pulls ghcr.io images
 just prod-logs engine
@@ -23,7 +23,7 @@ just prod-logs engine
 
 ## RunPod
 
-`deploy/docker/runpod.Dockerfile` builds `ghcr.io/ashworks1706/sparkyai-runpod`: all of Sparky in one GPU pod. A RunPod pod cannot start containers, so supervisord (`deploy/runpod/supervisord.conf`) runs chat and embed `llama-server`, the engine, and the bot as processes. The stores, knowledge search, live queries and linked accounts live on Platform. It differs from compose in two ways:
+`deploy/docker/runpod.Dockerfile` builds `ghcr.io/theaisocietyasu/sparkyai-runpod`: all of Sparky in one GPU pod. A RunPod pod cannot start containers, so supervisord (`deploy/runpod/supervisord.conf`) runs chat and embed `llama-server`, the engine, and the bot as processes. The stores, knowledge search, live queries and linked accounts live on Platform. It differs from compose in two ways:
 
 - `run_sandbox` is off (`SPARKY_SANDBOX__ENABLED=false`).
 - Phoenix is not included; export stays off until `SPARKY_TELEMETRY__PHOENIX_URL` points at one.
@@ -121,13 +121,13 @@ Details: `deploy/inference/README.md`.
 
 `run_sandbox` needs a container runtime. Compose provides `sandboxd`, a `docker:27-dind` daemon with no host port; the engine reaches it over `DOCKER_HOST=tcp://sandboxd:2375`, and the engine image carries only the client. On a developer host running `just engine`, the local `docker` serves.
 
-Commands run in `ghcr.io/ashworks1706/sparkyai-sandbox` (`deploy/docker/sandbox.Dockerfile`) with a read-only root, dropped capabilities, a non-root user, and a `noexec` workspace, so `python3 script.py` runs but `./script` does not. With `sandbox.egress` off a container has no network; with it on, it reaches public HTTP and HTTPS only through `sparkyai-sandbox-proxy` (`deploy/sandbox/squid.conf`). `just sandbox-images` builds both images locally; `just sandbox-down` removes the containers the engine started.
+Commands run in `ghcr.io/theaisocietyasu/sparkyai-sandbox` (`deploy/docker/sandbox.Dockerfile`) with a read-only root, dropped capabilities, a non-root user, and a `noexec` workspace, so `python3 script.py` runs but `./script` does not. With `sandbox.egress` off a container has no network; with it on, it reaches public HTTP and HTTPS only through `sparkyai-sandbox-proxy` (`deploy/sandbox/squid.conf`). `just sandbox-images` builds both images locally; `just sandbox-down` removes the containers the engine started.
 
 The runtime is probed at boot. `sandbox.required = true` refuses to start without one; `false` leaves `run_sandbox` unregistered.
 
 ## Images
 
-On push to `main`, CD builds and pushes `ghcr.io/ashworks1706/sparkyai-rust`, `sparkyai-sandbox`, `sparkyai-sandbox-proxy` and `sparkyai-runpod`, tagged `<sha>` and `main`, only for images whose inputs changed (`workflow_dispatch` rebuilds all).
+On push to `main`, CD builds and pushes `ghcr.io/theaisocietyasu/sparkyai-rust`, `sparkyai-sandbox`, `sparkyai-sandbox-proxy` and `sparkyai-runpod`, tagged `<sha>` and `main`, only for images whose inputs changed (`workflow_dispatch` rebuilds all).
 
 ## Observability
 

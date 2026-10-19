@@ -160,8 +160,8 @@ images:
 
 # Build the sandbox and egress proxy images under the tags the engine runs
 sandbox-images:
-    docker build -f deploy/docker/sandbox.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox:main .
-    docker build -f deploy/docker/sandbox-proxy.Dockerfile -t ghcr.io/ashworks1706/sparkyai-sandbox-proxy:main .
+    docker build -f deploy/docker/sandbox.Dockerfile -t ghcr.io/theaisocietyasu/sparkyai-sandbox:main .
+    docker build -f deploy/docker/sandbox-proxy.Dockerfile -t ghcr.io/theaisocietyasu/sparkyai-sandbox-proxy:main .
 
 # ---------- docs ----------
 

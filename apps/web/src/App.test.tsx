@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
 
-const REPO = "https://github.com/ashworks1706/SparkyAI";
+const REPO = "https://github.com/theaisocietyasu/sparky";
 
 describe("website routes", () => {
   beforeEach(() => {

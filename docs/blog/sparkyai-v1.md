@@ -1,6 +1,6 @@
 # SparkyAI v1: a multi-agent university copilot (2024 to 2025)
 
-*This is the write-up of the original 2024 to 2025 prototype, kept for reference. The code lives on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/tree/archive/v1). The current rebuild is described in the [README](../../README.md) and [ARCHITECTURE.md](../ARCHITECTURE.md).*
+*This is the write-up of the original 2024 to 2025 prototype, kept for reference. The code lives on [`archive/v1`](https://github.com/theaisocietyasu/sparky/tree/archive/v1). The current rebuild is described in the [README](../../README.md) and [ARCHITECTURE.md](../ARCHITECTURE.md).*
 
 The original SparkyAI was a Discord-native university copilot for ASU students who need fast, context-aware access to courses, scholarships, events, jobs, campus services, and official updates. It combined retrieval-augmented generation (RAG), specialized tool-using agents, and persistent conversational memory so that responses were not only fluent but grounded in retrievable evidence and institutional context. The repository was made public after credential hardening and infrastructure cleanup from an older private development history.
 
@@ -87,7 +87,7 @@ SparkyAI is implemented primarily in Python and deploys on a containerized stack
 
 ## Setup and Local Execution
 
-Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/ashworks1706/SparkyAI/blob/archive/v1/README.md).
+Setup instructions for the original Python/Docker implementation are in the README on [`archive/v1`](https://github.com/theaisocietyasu/sparky/blob/archive/v1/README.md).
 
 ## Research Lineage and Citations
 

@@ -87,7 +87,7 @@ jobs:
           file: deploy/docker/${{ matrix.name }}.Dockerfile
           push: true
           tags: |
-            ghcr.io/ashworks1706/sparkyai-${{ matrix.name }}:${{ github.sha }}
-            ghcr.io/ashworks1706/sparkyai-${{ matrix.name }}:main
+            ghcr.io/theaisocietyasu/sparkyai-${{ matrix.name }}:${{ github.sha }}
+            ghcr.io/theaisocietyasu/sparkyai-${{ matrix.name }}:main
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
